@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Expo Control Panel</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+    .sidebar {
+      width: 220px;
+      background-color: #2c3e50;
+      color: white;
+      display: flex;
+      flex-direction: column;
+      padding: 1rem;
+    }
+    .sidebar h2 {
+      font-size: 1.2rem;
+      margin-bottom: 1.5rem;
+    }
+    .sidebar button {
+      background: none;
+      color: white;
+      border: none;
+      text-align: left;
+      padding: 0.5rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    .sidebar button:hover {
+      background-color: #34495e;
+    }
+    .content {
+      flex-grow: 1;
+      padding: 1.5rem;
+      background-color: #f4f4f4;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: #e53935;
+      color: white;
+      padding: 0.5rem 1rem;
+    }
+    header .logo {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header img {
+      height: 120px;
+    }
+    header .expo-info {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.9rem;
+    }
+    header .expo-info strong {
+      font-size: 1.1rem;
+    }
+    header button {
+      background: white;
+      color: #e53935;
+      border: none;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.9rem;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-left: 0.5rem;
+    }
+    iframe {
+      width: 100%;
+      height: calc(100vh - 60px - 3rem);
+      border: none;
+      background: white;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Control Panel</h2>
+    <button onclick="loadModule('visitors')">Visitors</button>
+    <button onclick="loadModule('checkins')">Check-ins</button>
+    <button onclick="loadModule('badge')">Badge Print</button>
+    <button onclick="loadModule('email-templates')">Email Templates</button>
+    <button onclick="loadModule('import')">Import Excel</button>
+    <button onclick="loadModule('reports')">Reports</button>
+    <button onclick="loadModule('form-builder')">Form Builder</button>
+    <button onclick="loadModule('form-list')">Form List</button>
+  </div>
+
+  <div class="content">
+    <header>
+      <div class="logo">
+        <img src="logo.png" alt="Leena Logo" />
+        <div class="expo-info">
+          <strong id="expoName">Expo Panel</strong>
+          <span id="organizerEmailLabel"></span>
+        </div>
+      </div>
+      <div>
+        <button onclick="goBack()">Back to Expo List</button>
+        <button onclick="logout()">Logout</button>
+      </div>
+    </header>
+    <iframe id="moduleFrame" src=""></iframe>
+  </div>
+
+  <script>
+    const expoId = localStorage.getItem('selectedExpoId');
+    const expoName = localStorage.getItem('selectedExpoName') || 'Expo Panel';
+    const organizerEmail = localStorage.getItem('organizerEmail') || '';
+
+    document.getElementById('expoName').textContent = expoName;
+    document.getElementById('organizerEmailLabel').textContent = organizerEmail;
+
+    function loadModule(module) {
+      const iframe = document.getElementById('moduleFrame');
+      switch (module) {
+        case 'visitors':
+          iframe.src = 'visitors.html';
+          break;
+        case 'checkins':
+          iframe.src = 'checkins.html';
+          break;
+        case 'badge':
+          iframe.src = 'badge.html';
+          break;
+        case 'email-templates':
+          iframe.src = 'email-templates.html';
+          break;
+        case 'import':
+          iframe.src = 'import.html';
+          break;
+        case 'reports':
+          iframe.src = 'reports.html';
+          break;
+        case 'form-builder':
+          iframe.src = 'form-builder.html';
+          break;
+        case 'form-list':
+          iframe.src = 'form-list.html';
+          break;
+        default:
+          iframe.src = '';
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      localStorage.removeItem('selectedExpoId');
+      localStorage.removeItem('selectedExpoName');
+      localStorage.removeItem('organizerEmail');
+      window.location.href = 'login.html';
+    }
+
+    function goBack() {
+      window.location.href = 'dashboard.html';
+    }
+  </script>
+</body>
+</html>

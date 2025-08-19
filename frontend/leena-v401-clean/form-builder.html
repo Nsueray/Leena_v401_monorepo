@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Visitor Registration Form Builder</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background-color: #f9f9f9;
+    }
+    h1 {
+      color: #d32f2f;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-weight: bold;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.5rem;
+      margin-top: 0.25rem;
+    }
+    .field-option {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    .field-list {
+      border: 1px solid #ccc;
+      padding: 1rem;
+      background: white;
+      margin-bottom: 1rem;
+    }
+    button {
+      background-color: #2e7d32;
+      color: white;
+      padding: 0.6rem 1.2rem;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #1b5e20;
+    }
+  </style>
+</head>
+<body>
+  <h1>Visitor Registration Form Builder</h1>
+
+  <div class="form-group">
+    <label>Form Name</label>
+    <input type="text" id="formName" placeholder="Example: Siema Morocco 2025 Registration" />
+  </div>
+
+  <div class="form-group">
+    <label>Form Slug (URL)</label>
+    <input type="text" id="formSlug" placeholder="Example: onsite, meta, vip" />
+  </div>
+
+  <div class="form-group">
+    <label>Source</label>
+    <input type="text" id="source" placeholder="e.g. meta-ads, onsite-table" />
+  </div>
+
+  <div class="form-group">
+    <label>Origin</label>
+    <input type="text" id="origin" placeholder="e.g. online-form, mobile-popup" />
+  </div>
+
+  <div class="form-group">
+    <label>Top Banner Image URL (Suggested: 1200x200px)</label>
+    <input type="text" id="topBanner" />
+  </div>
+
+  <div class="form-group">
+    <label>Bottom Banner Image URL (Suggested: 1200x150px)</label>
+    <input type="text" id="bottomBanner" />
+  </div>
+
+  <div class="field-list" id="fieldList">
+    <label>Fields to include</label>
+  </div>
+
+  <div class="form-group">
+    <input type="text" id="customFieldName" placeholder="e.g. Product Interest, Referral Code..." />
+    <button onclick="addCustomField()">Add Custom Field</button>
+  </div>
+
+  <button onclick="submitForm()">Create Form</button>
+
+  <script>
+    const defaultFields = [
+      { key: 'firstName', label: 'First Name' },
+      { key: 'lastName', label: 'Last Name' },
+      { key: 'email', label: 'Email' },
+      { key: 'company', label: 'Company' },
+      { key: 'country', label: 'Country' },
+      { key: 'jobTitle', label: 'Job Title' },
+      { key: 'phone', label: 'Phone' },
+    ];
+
+    const fieldList = document.getElementById('fieldList');
+
+    function createFieldRow(field) {
+      const row = document.createElement('div');
+      row.className = 'field-option';
+      row.innerHTML = `
+        <label style="width: 150px;">${field.label}</label>
+        <label><input type="checkbox" data-key="${field.key}" class="include" /> Include</label>
+        <label><input type="checkbox" data-key="${field.key}" class="required" /> Required</label>
+      `;
+      fieldList.appendChild(row);
+    }
+
+    defaultFields.forEach(createFieldRow);
+
+    function addCustomField() {
+      const name = document.getElementById('customFieldName').value.trim();
+      if (!name) return alert('Enter custom field name.');
+      const key = name.toLowerCase().replace(/\s+/g, '_');
+      createFieldRow({ key, label: name });
+      document.getElementById('customFieldName').value = '';
+    }
+
+    async function submitForm() {
+      const token = localStorage.getItem('token');
+      const expoSlug = localStorage.getItem('selectedExpoSlug') || '';
+      const formName = document.getElementById('formName').value.trim();
+      const formSlug = document.getElementById('formSlug').value.trim();
+      const source = document.getElementById('source').value.trim();
+      const origin = document.getElementById('origin').value.trim();
+      const topBanner = document.getElementById('topBanner').value.trim();
+      const bottomBanner = document.getElementById('bottomBanner').value.trim();
+
+      const includes = document.querySelectorAll('.include');
+      const requireds = document.querySelectorAll('.required');
+      const fields = [];
+
+      includes.forEach((box, idx) => {
+        const key = box.getAttribute('data-key');
+        const include = box.checked;
+        const required = requireds[idx].checked;
+        if (include) {
+          fields.push({ key, required });
+        }
+      });
+
+      if (!formName || !expoSlug || !formSlug || fields.length === 0) {
+        alert('Missing required fields');
+        return;
+      }
+
+      const payload = {
+        formName,
+        expoSlug,
+        formSlug,
+        source,
+        origin,
+        topBanner,
+        bottomBanner,
+        fields
+      };
+
+      console.log("Final Payload:", payload);
+
+      try {
+        const res = await fetch('http://localhost:3000/api/forms', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert('Form created successfully.');
+        } else {
+          alert(data.error || 'Error occurred.');
+        }
+      } catch (err) {
+        alert('Network error');
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>

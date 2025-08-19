@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Visitor Registration</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 2rem;
+      background-color: #f5f5f5;
+    }
+    .form-container {
+      max-width: 600px;
+      margin: auto;
+      background: white;
+      padding: 2rem;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .form-container h2 {
+      text-align: center;
+      margin-bottom: 1.5rem;
+      color: #e53935;
+    }
+    .form-container label {
+      display: block;
+      margin-bottom: 0.3rem;
+      font-weight: 600;
+    }
+    .form-container input {
+      width: 100%;
+      padding: 0.7rem;
+      margin-bottom: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .form-container button {
+      background-color: #e53935;
+      color: white;
+      padding: 0.75rem;
+      width: 100%;
+      border: none;
+      font-size: 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .form-container button:hover {
+      background-color: #d32f2f;
+    }
+    .top-banner, .bottom-banner {
+      width: 100%;
+      margin-bottom: 2rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="form-container">
+    <img id="topBanner" class="top-banner" style="display:none" />
+    <h2 id="formTitle">Loading...</h2>
+    <form id="visitorForm"></form>
+    <img id="bottomBanner" class="bottom-banner" style="display:none" />
+  </div>
+
+  <script>
+    const queryParams = new URLSearchParams(window.location.search);
+    const expoSlug = queryParams.get('expo');
+    const formSlug = queryParams.get('slug');
+
+    const formEl = document.getElementById('visitorForm');
+    const formTitle = document.getElementById('formTitle');
+
+    async function loadForm() {
+      try {
+        const res = await fetch(`http://localhost:3000/api/forms/slug/${expoSlug}/${formSlug}`);
+        if (!res.ok) throw new Error('Form not found');
+        const form = await res.json();
+
+        formTitle.textContent = form.form_name;
+        if (form.top_banner) {
+          const top = document.getElementById('topBanner');
+          top.src = form.top_banner;
+          top.style.display = 'block';
+        }
+        if (form.bottom_banner) {
+          const bottom = document.getElementById('bottomBanner');
+          bottom.src = form.bottom_banner;
+          bottom.style.display = 'block';
+        }
+
+        const parsedFields = typeof form.fields === 'string' ? JSON.parse(form.fields) : form.fields;
+
+        parsedFields.forEach(f => {
+          const label = document.createElement('label');
+          label.textContent = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/_/g, ' ');
+          const input = document.createElement('input');
+          input.name = f.key;
+          input.required = f.required;
+          formEl.appendChild(label);
+          formEl.appendChild(input);
+        });
+
+        const submitBtn = document.createElement('button');
+        submitBtn.textContent = 'Register';
+        formEl.appendChild(submitBtn);
+
+        formEl.addEventListener('submit', async (e) => {
+          e.preventDefault();
+
+          const payload = {
+            expo_id: form.expo_id,
+            organizer_id: form.organizer_id,
+            source: form.source,
+            origin: form.origin
+          };
+
+          parsedFields.forEach(f => {
+            payload[f.key] = formEl[f.key]?.value?.trim() || '';
+          });
+
+          console.log("Payload:", payload);
+
+          const submitRes = await fetch('http://localhost:3000/api/visitors/public', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (submitRes.ok) {
+            alert('Thank you for registering!');
+            formEl.reset();
+          } else {
+            alert('Registration failed.');
+          }
+        });
+
+      } catch (err) {
+        formTitle.textContent = 'Form not found or error occurred.';
+        formEl.innerHTML = '';
+      }
+    }
+
+    loadForm();
+  </script>
+</body>
+</html>

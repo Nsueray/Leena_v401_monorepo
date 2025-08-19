@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Visitors List</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f7f7f7;
+    }
+    h2 {
+      color: #333;
+      margin-top: 0;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .logo img {
+      height: 200px;
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 8px;
+      margin-bottom: 10px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background-color: white;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #e53935;
+      color: white;
+    }
+    tr:hover {
+      background-color: #f2f2f2;
+    }
+    #exportBtn {
+      margin-top: 10px;
+      padding: 6px 12px;
+      background-color: #e53935;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <img src="logo.png" alt="Leena Logo" />
+  </div>
+
+  <h2>Visitors</h2>
+  <input type="text" id="searchInput" placeholder="Search by name, email or company..." onkeyup="filterTable()" />
+  <table id="visitorTable">
+    <thead>
+      <tr>
+        <th>Full Name</th>
+        <th>Email</th>
+        <th>Company</th>
+        <th>Country</th>
+        <th>Registered At</th>
+      </tr>
+    </thead>
+    <tbody id="visitorBody">
+      <!-- JS ile doldurulacak -->
+    </tbody>
+  </table>
+  <button id="exportBtn" onclick="exportCSV()">Export to CSV</button>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const expoId = localStorage.getItem('selectedExpoId');
+
+    async function fetchVisitors() {
+      const res = await fetch(`http://localhost:3000/api/visitors?expoId=${expoId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const visitors = await res.json();
+      const tbody = document.getElementById('visitorBody');
+      tbody.innerHTML = '';
+      visitors.forEach(v => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${v.name} ${v.last_name}</td>
+          <td>${v.email}</td>
+          <td>${v.company}</td>
+          <td>${v.country}</td>
+          <td>${new Date(v.created_at).toLocaleString()}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterTable() {
+      const filter = document.getElementById('searchInput').value.toLowerCase();
+      const rows = document.querySelectorAll('#visitorBody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(filter) ? '' : 'none';
+      });
+    }
+
+    function exportCSV() {
+      const rows = [...document.querySelectorAll("table tr")];
+      const csv = rows.map(row => {
+        return [...row.children].map(cell => `"${cell.textContent}"`).join(",");
+      }).join("\n");
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "visitors.csv";
+      link.click();
+    }
+
+    fetchVisitors();
+  </script>
+</body>
+</html>

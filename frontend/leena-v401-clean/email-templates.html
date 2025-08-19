@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Email Templates</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background: #f5f5f5;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .logo img {
+      height: 200px;
+    }
+    h2 {
+      color: #d32f2f;
+    }
+    label, input, textarea, button, select {
+      display: block;
+      margin-top: 0.5rem;
+      margin-bottom: 1rem;
+      width: 100%;
+    }
+    textarea {
+      height: 100px;
+    }
+    .template-list {
+      margin-top: 2rem;
+      background: #fff;
+      padding: 1rem;
+      border: 1px solid #ccc;
+    }
+    .template-item {
+      border-bottom: 1px solid #eee;
+      padding: 0.5rem 0;
+    }
+    .template-item:last-child {
+      border-bottom: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <img src="logo.png" alt="Leena Logo" />
+  </div>
+
+  <h2>Email Template Editor</h2>
+  <label>Subject</label>
+  <input type="text" id="subject" />
+  <label>Body (you can use [NAME], [COMPANY], [QR])</label>
+  <textarea id="body"></textarea>
+  <button onclick="saveTemplate()">Save Template</button>
+  <p id="message" style="color: red;"></p>
+
+  <div class="template-list">
+    <h3>Saved Templates</h3>
+    <div id="templateList"></div>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const expoId = localStorage.getItem('selectedExpoId');
+
+    async function saveTemplate() {
+      const subject = document.getElementById('subject').value.trim();
+      const body = document.getElementById('body').value.trim();
+      const message = document.getElementById('message');
+
+      if (!subject || !body) {
+        message.textContent = 'Subject and body are required.';
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:3000/api/templates', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ expoId, subject, body })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          message.style.color = 'green';
+          message.textContent = 'Template saved successfully.';
+          loadTemplates();
+        } else {
+          message.style.color = 'red';
+          message.textContent = data.error || 'Error saving template';
+        }
+      } catch (err) {
+        message.textContent = 'Server error';
+        console.error(err);
+      }
+    }
+
+    async function loadTemplates() {
+      const list = document.getElementById('templateList');
+      list.innerHTML = '';
+
+      try {
+        const res = await fetch(`http://localhost:3000/api/templates?expoId=${expoId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        const templates = await res.json();
+
+        if (Array.isArray(templates)) {
+          templates.forEach(tpl => {
+            const div = document.createElement('div');
+            div.className = 'template-item';
+            div.innerHTML = `<strong>${tpl.subject}</strong><br>${tpl.body}`;
+            list.appendChild(div);
+          });
+        }
+      } catch (err) {
+        console.error('Error loading templates:', err);
+      }
+    }
+
+    loadTemplates();
+  </script>
+</body>
+</html>
