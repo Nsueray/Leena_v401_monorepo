@@ -180,9 +180,9 @@ router.post('/public', async (req, res) => {
 });
 
 /**
- * POST /api/visitors
- * Create visitor (authenticated - for admin/import use)
- */
+* POST /api/visitors
+* Create visitor (authenticated - for admin/import use)
+*/
 router.post('/', authenticateToken, async (req, res) => {
     const { expo_id, source = 'admin', origin = 'dashboard', custom_fields = {} } = req.body;
 
@@ -191,6 +191,12 @@ router.post('/', authenticateToken, async (req, res) => {
     }
 
     try {
+        // --- DEBUG CODE STARTS HERE ---
+        console.log('--- DEBUG: Checking Ownership ---');
+        console.log(`Expo ID from Body: ${req.body.expo_id} (Type: ${typeof req.body.expo_id})`);
+        console.log(`Organizer ID from Token: ${req.organizer_id} (Type: ${typeof req.organizer_id})`);
+        // --- DEBUG CODE ENDS HERE ---
+
         const expoCheck = await pool.query(
             'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
             [expo_id, req.organizer_id]

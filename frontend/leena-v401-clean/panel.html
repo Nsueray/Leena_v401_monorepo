@@ -1,168 +1,200 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Expo Control Panel</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      display: flex;
-      height: 100vh;
-    }
-    .sidebar {
-      width: 220px;
-      background-color: #2c3e50;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      padding: 1rem;
-    }
-    .sidebar h2 {
-      font-size: 1.2rem;
-      margin-bottom: 1.5rem;
-    }
-    .sidebar button {
-      background: none;
-      color: white;
-      border: none;
-      text-align: left;
-      padding: 0.5rem;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    .sidebar button:hover {
-      background-color: #34495e;
-    }
-    .content {
-      flex-grow: 1;
-      padding: 1.5rem;
-      background-color: #f4f4f4;
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background-color: #e53935;
-      color: white;
-      padding: 0.5rem 1rem;
-    }
-    header .logo {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-    }
-    header img {
-      height: 120px;
-    }
-    header .expo-info {
-      display: flex;
-      flex-direction: column;
-      font-size: 0.9rem;
-    }
-    header .expo-info strong {
-      font-size: 1.1rem;
-    }
-    header button {
-      background: white;
-      color: #e53935;
-      border: none;
-      padding: 0.4rem 0.75rem;
-      font-size: 0.9rem;
-      border-radius: 5px;
-      cursor: pointer;
-      margin-left: 0.5rem;
-    }
-    iframe {
-      width: 100%;
-      height: calc(100vh - 60px - 3rem);
-      border: none;
-      background: white;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expo Panel</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; background-color: #f4f7f6; }
+        .main-container { display: flex; }
+        .sidebar { width: 220px; background-color: #2c3e50; color: white; height: 100vh; padding-top: 20px; }
+        .sidebar a { display: block; color: white; padding: 15px 20px; text-decoration: none; }
+        .sidebar a:hover, .sidebar a.active { background-color: #34495e; }
+        .sidebar h3 { padding: 0 20px 10px 20px; margin: 0; border-bottom: 1px solid #34495e; }
+        .content-area { flex-grow: 1; padding: 2rem; }
+        #main-content { background: white; padding: 2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        header { background-color: #e53935; color: white; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+        .organizer-info span { font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { border: 1px solid #ddd; padding: 0.75rem; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .action-bar input { padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; }
+        .action-bar button { background-color: #e53935; color: white; padding: 0.5rem 1rem; border: none; border-radius: 5px; cursor: pointer; }
+    </style>
 </head>
 <body>
-  <div class="sidebar">
-    <h2>Control Panel</h2>
-    <button onclick="loadModule('visitors')">Visitors</button>
-    <button onclick="loadModule('checkins')">Check-ins</button>
-    <button onclick="loadModule('badge')">Badge Print</button>
-    <button onclick="loadModule('email-templates')">Email Templates</button>
-    <button onclick="loadModule('import')">Import Excel</button>
-    <button onclick="loadModule('reports')">Reports</button>
-    <button onclick="loadModule('form-builder')">Form Builder</button>
-    <button onclick="loadModule('form-list')">Form List</button>
-  </div>
-
-  <div class="content">
     <header>
-      <div class="logo">
-        <img src="logo.png" alt="Leena Logo" />
-        <div class="expo-info">
-          <strong id="expoName">Expo Panel</strong>
-          <span id="organizerEmailLabel"></span>
+        <span id="headerExpoName"></span>
+        <div class="organizer-info">
+            <span id="organizerName"></span>
+            <a href="dashboard.html" style="color: white; font-size: 0.8rem;">Back to Dashboard</a>
         </div>
-      </div>
-      <div>
-        <button onclick="goBack()">Back to Expo List</button>
-        <button onclick="logout()">Logout</button>
-      </div>
     </header>
-    <iframe id="moduleFrame" src=""></iframe>
-  </div>
 
-  <script>
-    const expoId = localStorage.getItem('selectedExpoId');
-    const expoName = localStorage.getItem('selectedExpoName') || 'Expo Panel';
-    const organizerEmail = localStorage.getItem('organizerEmail') || '';
+    <div class="main-container">
+        <div class="sidebar">
+            <h3 id="sidebarExpoName"></h3>
+            <a href="#" onclick="loadDashboard()">Dashboard</a>
+            <a href="#" onclick="loadVisitors()" class="active">Visitors</a>
+            <a href="#" onclick="loadForms()">Forms</a>
+            <a href="#" onclick="loadCheckins()">Check-ins</a>
+            <a href="#" onclick="loadEmailTemplates()">Email Templates</a>
+            <a href="#" onclick="loadReports()">Reports</a>
+        </div>
+        <div class="content-area">
+            <div id="main-content">
+                </div>
+        </div>
+    </div>
 
-    document.getElementById('expoName').textContent = expoName;
-    document.getElementById('organizerEmailLabel').textContent = organizerEmail;
+    <script>
+        // Global variables from localStorage
+        const token = localStorage.getItem('token');
+        const organizerName = localStorage.getItem('organizerName');
+        const selectedExpoId = localStorage.getItem('selectedExpoId');
 
-    function loadModule(module) {
-      const iframe = document.getElementById('moduleFrame');
-      switch (module) {
-        case 'visitors':
-          iframe.src = 'visitors.html';
-          break;
-        case 'checkins':
-          iframe.src = 'checkins.html';
-          break;
-        case 'badge':
-          iframe.src = 'badge.html';
-          break;
-        case 'email-templates':
-          iframe.src = 'email-templates.html';
-          break;
-        case 'import':
-          iframe.src = 'import.html';
-          break;
-        case 'reports':
-          iframe.src = 'reports.html';
-          break;
-        case 'form-builder':
-          iframe.src = 'form-builder.html';
-          break;
-        case 'form-list':
-          iframe.src = 'form-list.html';
-          break;
-        default:
-          iframe.src = '';
-      }
-    }
+        // Function to fetch expo details to get the name
+        async function fetchExpoDetails() {
+            if (!selectedExpoId) return 'Expo';
+            try {
+                const res = await fetch(`http://localhost:3000/api/expos/${selectedExpoId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return 'Expo';
+                const expo = await res.json();
+                return expo.name;
+            } catch (error) {
+                return 'Expo';
+            }
+        }
 
-    function logout() {
-      localStorage.removeItem('token');
-      localStorage.removeItem('selectedExpoId');
-      localStorage.removeItem('selectedExpoName');
-      localStorage.removeItem('organizerEmail');
-      window.location.href = 'login.html';
-    }
+        // --- NAVIGATION ---
+        function loadDashboard() {
+            document.getElementById('main-content').innerHTML = `<h2>Dashboard for this Expo</h2><p>Overview and key stats will be shown here.</p>`;
+        }
 
-    function goBack() {
-      window.location.href = 'dashboard.html';
-    }
-  </script>
+        async function loadVisitors() {
+            const mainContent = document.getElementById('main-content');
+            mainContent.innerHTML = `
+                <div class="action-bar">
+                    <input type="text" id="searchInput" placeholder="Search visitors...">
+                    <div>
+                        <button onclick="goToImport()">Import</button>
+                        <button onclick="exportVisitors()">Export</button>
+                    </div>
+                </div>
+                <table id="visitorsTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Company</th>
+                            <th>Country</th>
+                            <th>Checked-in</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        </tbody>
+                </table>
+                <div id="pagination"></div>
+            `;
+
+            // Add event listener for the new search input
+            document.getElementById('searchInput').addEventListener('keyup', (event) => {
+                if (event.key === "Enter") {
+                    fetchVisitors(1, event.target.value);
+                }
+            });
+
+            // Fetch and display visitors
+            await fetchVisitors();
+        }
+
+        function loadForms() {
+            document.getElementById('main-content').innerHTML = `<h2>Forms for this Expo</h2><p>Form builder and form list will be displayed here.</p>`;
+        }
+        function loadCheckins() {
+            document.getElementById('main-content').innerHTML = `<h2>Check-ins for this Expo</h2><p>Live check-in feed and list will be displayed here.</p>`;
+        }
+        function loadEmailTemplates() {
+            document.getElementById('main-content').innerHTML = `<h2>Email Templates for this Expo</h2><p>Template list and editor will be displayed here.</p>`;
+        }
+        function loadReports() {
+            document.getElementById('main-content').innerHTML = `<h2>Reports for this Expo</h2><p>Detailed reports and analytics will be displayed here.</p>`;
+        }
+
+        // --- VISITOR-SPECIFIC FUNCTIONS ---
+        async function fetchVisitors(page = 1, searchQuery = '') {
+            if (!selectedExpoId) {
+                alert('No expo selected. Please go back to the dashboard.');
+                return;
+            }
+
+            const limit = 15;
+            const offset = (page - 1) * limit;
+
+            // *** BUG FIX: Using dynamic selectedExpoId instead of hardcoded '1' ***
+            const url = `http://localhost:3000/api/visitors?expoId=${selectedExpoId}&search=${searchQuery}&limit=${limit}&offset=${offset}`;
+
+            try {
+                const res = await fetch(url, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await res.json();
+
+                const tableBody = document.querySelector('#visitorsTable tbody');
+                tableBody.innerHTML = ''; // Clear existing rows
+
+                if (data && data.visitors) {
+                    data.visitors.forEach(visitor => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${visitor.custom_fields?.name || ''} ${visitor.custom_fields?.last_name || ''}</td>
+                            <td>${visitor.custom_fields?.email || ''}</td>
+                            <td>${visitor.custom_fields?.company || ''}</td>
+                            <td>${visitor.custom_fields?.country || ''}</td>
+                            <td>${visitor.checked_in ? 'Yes' : 'No'}</td>
+                        `;
+                        tableBody.appendChild(row);
+                    });
+                    renderPagination(data.pagination);
+                } else {
+                     tableBody.innerHTML = '<tr><td colspan="5">No visitors found.</td></tr>';
+                }
+            } catch (err) {
+                console.error('Failed to fetch visitors:', err);
+                alert('Error loading visitors.');
+            }
+        }
+
+        function renderPagination(pagination) {
+            const paginationDiv = document.getElementById('pagination');
+            paginationDiv.innerHTML = ''; // Clear old buttons
+            // Simple pagination logic will be added here later
+        }
+
+        function goToImport() { alert('Import function to be implemented.'); }
+        function exportVisitors() { alert('Export function to be implemented.'); }
+
+        // --- PAGE INITIALIZATION ---
+        window.onload = async function() {
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            document.getElementById('organizerName').textContent = organizerName;
+            const expoName = await fetchExpoDetails();
+            document.getElementById('headerExpoName').textContent = `Panel: ${expoName}`;
+            document.getElementById('sidebarExpoName').textContent = expoName;
+
+            // Load initial content
+            loadVisitors();
+        };
+    </script>
 </body>
 </html>
