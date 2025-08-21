@@ -1,81 +1,196 @@
+// index.js - Main Server File (FIXED VERSION)
 const express = require('express');
 const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const { Pool } = require('pg');
+const path = require('path');
 require('dotenv').config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// --- Veritabanı ve Middleware'i Doğrudan Bu Dosyada Tanımlıyoruz ---
+// --- Global Middleware (ORDER MATTERS!) ---
+app.use(cors({
+    origin: '*', // In production, specify your frontend URL
+    credentials: true
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-const pool = new Pool({
-    user: process.env.PGUSER,
-    host: process.env.PGHOST,
-    database: process.env.PGDATABASE,
-    password: process.env.PGPASSWORD,
-    port: process.env.PGPORT,
+// --- Debug Middleware ---
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
 });
 
-function authenticateToken(req, res, next) {
-    console.log('>>> [DEBUG] Authenticate Token Middleware çalıştı.');
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
+// --- Static Files (if needed) ---
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-    jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
-        if (err) {
-            console.error('>>> [DEBUG] Token doğrulama hatası:', err.message);
-            return res.sendStatus(403);
-        }
-        req.organizer_id = decoded.organizer_id;
-        console.log(`>>> [DEBUG] Token doğrulandı. Organizer ID: ${req.organizer_id}`);
-        next();
-    });
+// --- Health Check ---
+app.get('/health', (req, res) => {
+    res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// --- Import Route Modules ---
+let authRoutes, organizerRoutes, expoRoutes, visitorRoutes;
+let formRoutes, checkinRoutes, emailTemplateRoutes, emailRoutes, reportRoutes;
+
+try {
+    authRoutes = require('./routes/auth');
+    console.log('✓ Auth routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load auth routes:', err.message);
 }
 
-// --- Ana Uygulama ---
-app.use(cors());
-app.use(express.json());
+try {
+    organizerRoutes = require('./routes/organizers');
+    console.log('✓ Organizer routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load organizer routes:', err.message);
+}
 
-// --- Ziyaretçi Ekleme API'sini Doğrudan Tanımlıyoruz ---
-app.post('/api/visitors', authenticateToken, async (req, res) => {
-    console.log('>>> [DEBUG] /api/visitors endpointi çalıştı.');
-    const { expo_id, custom_fields = {} } = req.body;
+try {
+    expoRoutes = require('./routes/expos');
+    console.log('✓ Expo routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load expo routes:', err.message);
+}
 
-    if (!expo_id) {
-        return res.status(400).json({ error: 'expo_id is required' });
-    }
+try {
+    visitorRoutes = require('./routes/visitors');
+    console.log('✓ Visitor routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load visitor routes:', err.message);
+}
 
-    try {
-        console.log(`>>> [DEBUG] Sahiplik kontrol ediliyor: expo_id=${expo_id}, organizer_id=${req.organizer_id}`);
-        const expoCheck = await pool.query(
-            'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
-            [expo_id, req.organizer_id]
-        );
+try {
+    formRoutes = require('./routes/forms');
+    console.log('✓ Form routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load form routes:', err.message);
+}
 
-        console.log(`>>> [DEBUG] Sahiplik sorgusu sonucu: ${expoCheck.rowCount} satır bulundu.`);
-        if (expoCheck.rowCount === 0) {
-            return res.status(403).json({ error: 'Access denied to this expo' });
+try {
+    checkinRoutes = require('./routes/checkins');
+    console.log('✓ Checkin routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load checkin routes:', err.message);
+}
+
+try {
+    emailTemplateRoutes = require('./routes/emailTemplates');
+    console.log('✓ Email template routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load email template routes:', err.message);
+}
+
+try {
+    emailRoutes = require('./routes/emails');
+    console.log('✓ Email routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load email routes:', err.message);
+}
+
+try {
+    reportRoutes = require('./routes/reports');
+    console.log('✓ Report routes loaded');
+} catch (err) {
+    console.error('✗ Failed to load report routes:', err.message);
+}
+
+// --- Mount Routes (only if successfully loaded) ---
+if (authRoutes) app.use('/api/auth', authRoutes);
+if (organizerRoutes) app.use('/api/organizers', organizerRoutes);
+if (expoRoutes) app.use('/api/expos', expoRoutes);
+if (visitorRoutes) app.use('/api/visitors', visitorRoutes);
+if (formRoutes) app.use('/api/forms', formRoutes);
+if (checkinRoutes) app.use('/api/checkins', checkinRoutes);
+if (emailTemplateRoutes) app.use('/api/templates', emailTemplateRoutes);
+if (emailRoutes) app.use('/api/emails', emailRoutes);
+if (reportRoutes) app.use('/api/reports', reportRoutes);
+
+// --- Root Endpoint ---
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Leena.app v401 API is running',
+        version: '4.0.1',
+        port: PORT,
+        endpoints: {
+            auth: '/api/auth',
+            organizers: '/api/organizers',
+            expos: '/api/expos',
+            visitors: '/api/visitors',
+            forms: '/api/forms',
+            checkins: '/api/checkins',
+            templates: '/api/templates',
+            emails: '/api/emails',
+            reports: '/api/reports'
         }
-
-        // Bu testte QR kodu şimdilik önemli değil, sabit bir değer verelim
-        const qrCode = 'test-qr-' + Date.now(); 
-        const result = await pool.query(
-            `INSERT INTO visitors (expo_id, organizer_id, qr_code, custom_fields)
-             VALUES ($1, $2, $3, $4) RETURNING *`,
-            [expo_id, req.organizer_id, qrCode, custom_fields]
-        );
-
-        console.log('>>> [DEBUG] Ziyaretçi başarıyla eklendi.');
-        res.status(201).json({ message: 'Visitor created successfully (Single File Test)', visitor: result.rows[0] });
-
-    } catch (err) {
-        console.error('>>> [DEBUG] Ziyaretçi eklerken HATA:', err);
-        res.status(500).json({ error: 'Failed to create visitor' });
-    }
+    });
 });
 
-app.listen(PORT, () => {
-    console.log(`✅ Leena.app v401 backend (TEK DOSYA TEST MODU) çalışıyor http://localhost:${PORT}`);
+// --- List All Routes (Debug Endpoint) ---
+app.get('/api/routes', (req, res) => {
+    const routes = [];
+    app._router.stack.forEach((middleware) => {
+        if (middleware.route) {
+            routes.push({
+                path: middleware.route.path,
+                methods: Object.keys(middleware.route.methods)
+            });
+        } else if (middleware.name === 'router') {
+            middleware.handle.stack.forEach((handler) => {
+                if (handler.route) {
+                    const path = middleware.regexp.source.match(/\\\/([^\\]+)/);
+                    routes.push({
+                        path: (path ? '/' + path[1] : '') + handler.route.path,
+                        methods: Object.keys(handler.route.methods)
+                    });
+                }
+            });
+        }
+    });
+    res.json(routes);
 });
+
+// --- 404 Handler (must be AFTER all routes) ---
+app.use((req, res, next) => {
+    console.log(`404 - Route not found: ${req.method} ${req.url}`);
+    res.status(404).json({
+        error: 'Not Found',
+        message: `Route ${req.method} ${req.url} not found`,
+        availableEndpoints: {
+            auth: '/api/auth/login, /api/auth/register',
+            visitors: '/api/visitors',
+            expos: '/api/expos'
+        }
+    });
+});
+
+// --- Error Handler (must be LAST) ---
+app.use((err, req, res, next) => {
+    console.error('Error:', err);
+    res.status(err.status || 500).json({
+        error: err.message || 'Internal Server Error',
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+});
+
+// --- Server Startup ---
+const server = app.listen(PORT, () => {
+    console.log('═══════════════════════════════════════════');
+    console.log(`✅ Leena.app v401 backend is running`);
+    console.log(`📍 URL: http://localhost:${PORT}`);
+    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📝 View all routes: http://localhost:${PORT}/api/routes`);
+    console.log('═══════════════════════════════════════════');
+});
+
+// --- Graceful Shutdown ---
+process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received: closing HTTP server');
+    server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+    });
+});
+
+module.exports = app;

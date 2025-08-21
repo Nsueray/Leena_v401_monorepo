@@ -1,198 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Leena Dashboard</title>
-  <script src="public/countries.js"></script>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      margin: 0;
-      background-color: #f9fafb;
-    }
-    header {
-      background-color: #e53935;
-      color: white;
-      padding: 1rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-    header img {
-      height: 200px;
-    }
-    .organizer-info {
-      text-align: right;
-    }
-    .organizer-info span {
-      display: block;
-      font-weight: bold;
-    }
-    .organizer-info small {
-      font-size: 0.8rem;
-      color: #eee;
-    }
-    .container {
-      max-width: 900px;
-      margin: 2rem auto;
-      padding: 0 1rem;
-    }
-    h2 {
-      margin-bottom: 1rem;
-      color: #333;
-    }
-    .expo-card {
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 1rem;
-      margin-bottom: 1rem;
-      background-color: white;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .expo-card h3 {
-      margin: 0;
-    }
-    .expo-card button {
-      background-color: #e53935;
-      border: none;
-      color: white;
-      padding: 0.5rem 1rem;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    .add-expo {
-      margin-bottom: 2rem;
-      background: white;
-      padding: 1rem;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-    }
-    .add-expo input, .add-expo select {
-      width: 100%;
-      padding: 0.5rem;
-      margin-bottom: 0.75rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    .add-expo button {
-      background-color: #2e7d32;
-      color: white;
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Expo - Leena EMS</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8f9fa; margin: 0; padding: 40px; }
+        .container { max-width: 900px; margin: auto; }
+        h1 { text-align: center; color: #343a40; margin-bottom: 40px; }
+        .expo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .expo-card { background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); padding: 20px; text-align: center; }
+        .expo-card h2 { font-size: 1.2em; margin-bottom: 10px; }
+        .expo-card p { color: #6c757d; margin-bottom: 20px; }
+        .enter-btn { background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 1em; }
+        .loader { text-align: center; }
+    </style>
 </head>
 <body>
-  <header>
-    <img src="logo.png" alt="Leena Logo" />
-    <span>Organizer Dashboard</span>
-    <div class="organizer-info">
-      <span id="organizerName"></span>
-      <small id="organizerId"></small>
-    </div>
-  </header>
-
-  <div class="container">
-    <div class="add-expo">
-      <h2>Create New Expo</h2>
-      <input type="text" id="expoName" placeholder="Expo Name" />
-      <label for="startDate">Start Date</label>
-      <input type="date" id="startDate" />
-      <label for="endDate">End Date</label>
-      <input type="date" id="endDate" />
-      <select id="location"></select>
-      <button onclick="createExpo()">Create Expo</button>
+    <div class="container">
+        <h1>Select an Expo to Manage</h1>
+        <div id="expo-list" class="expo-grid">
+            <div class="loader">Loading your expos...</div>
+        </div>
     </div>
 
-    <div id="expoList"></div>
-  </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
 
-  <script>
-    const token = localStorage.getItem('token');
-    const organizerName = localStorage.getItem('organizerName') || 'Organizer';
-    const organizerId = localStorage.getItem('organizerId') || '';
-    document.getElementById('organizerName').innerText = organizerName;
-    document.getElementById('organizerId').innerText = organizerId ? 'ID: ' + organizerId : '';
+            try {
+                const response = await fetch('/api/expos', {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (!response.ok) throw new Error('Could not fetch expos.');
 
-    window.onload = function () {
-      populateCountrySelect('location');
-    }
+                const expos = await response.json();
+                const expoListDiv = document.getElementById('expo-list');
+                expoListDiv.innerHTML = ''; // Clear loader
 
-    async function fetchExpos() {
-      try {
-        const res = await fetch('http://localhost:3000/api/expos', {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
+                if (expos.length === 0) {
+                    expoListDiv.innerHTML = '<p>No expos found. You can create one in the panel.</p>'; // Bu özellik daha sonra eklenecek
+                } else {
+                    expos.forEach(expo => {
+                        const card = document.createElement('div');
+                        card.className = 'expo-card';
+                        card.innerHTML = `
+                            <h2>${expo.name}</h2>
+                            <p>${new Date(expo.start_date).toLocaleDateString()} - ${new Date(expo.end_date).toLocaleDateString()}</p>
+                            <button class="enter-btn" onclick="enterExpo('${expo.id}', '${expo.name}')">Enter</button>
+                        `;
+                        expoListDiv.appendChild(card);
+                    });
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('expo-list').innerHTML = '<p>Error loading expos. Please try logging in again.</p>';
+            }
         });
-        const data = await res.json();
-        const expoList = document.getElementById('expoList');
-        expoList.innerHTML = '';
-        if (Array.isArray(data)) {
-          data.forEach(expo => {
-            const card = document.createElement('div');
-            card.className = 'expo-card';
-            card.innerHTML = `
-              <div>
-                <h3>${expo.name}</h3>
-                <p>${expo.location} — ${new Date(expo.start_date).toLocaleDateString()} to ${new Date(expo.end_date).toLocaleDateString()}</p>
-              </div>
-              <button onclick="enterExpo(${expo.id}, '${expo.slug}')">Enter</button>
-            `;
-            expoList.appendChild(card);
-          });
-        } else {
-          alert(data.error || 'Failed to fetch expos.');
+
+        function enterExpo(expoId, expoName) {
+            // Seçilen fuarın bilgilerini tarayıcı hafızasına kaydet
+            localStorage.setItem('selectedExpoId', expoId);
+            localStorage.setItem('selectedExpoName', expoName);
+
+            // Şimdi main-panel'e yönlendir
+            window.location.href = 'main-panel.html';
         }
-      } catch (err) {
-        alert('Could not load expos.');
-      }
-    }
-
-    async function createExpo() {
-      const name = document.getElementById('expoName').value.trim();
-      const start_date = document.getElementById('startDate').value;
-      const end_date = document.getElementById('endDate').value;
-      const location = document.getElementById('location').value;
-
-      if (!name || !start_date || !end_date || !location) {
-        alert('Please fill in all fields');
-        return;
-      }
-
-      const res = await fetch('http://localhost:3000/api/expos', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name, start_date, end_date, location, logo_url: '' })
-      });
-
-      if (res.ok) {
-        await fetchExpos();
-        document.getElementById('expoName').value = '';
-        document.getElementById('startDate').value = '';
-        document.getElementById('endDate').value = '';
-        document.getElementById('location').value = '';
-      } else {
-        alert('Failed to create expo');
-      }
-    }
-
-    function enterExpo(id, slug) {
-      localStorage.setItem('selectedExpoId', id);
-      localStorage.setItem('selectedExpoSlug', slug);
-      window.location.href = 'panel.html';
-    }
-
-    fetchExpos();
-  </script>
+    </script>
 </body>
 </html>
