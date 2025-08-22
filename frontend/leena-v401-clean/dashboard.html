@@ -33,7 +33,7 @@
             }
 
             try {
-                const response = await fetch('/api/expos', {
+                const response = await fetch('http://localhost:3000/api/expos', {
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
@@ -46,7 +46,7 @@
                 expoListDiv.innerHTML = ''; // Clear loader
 
                 if (expos.length === 0) {
-                    expoListDiv.innerHTML = '<p>No expos found. You can create one in the panel.</p>'; // Bu özellik daha sonra eklenecek
+                    expoListDiv.innerHTML = '<p>No expos found. You can create one in the panel.</p>';
                 } else {
                     expos.forEach(expo => {
                         const card = document.createElement('div');

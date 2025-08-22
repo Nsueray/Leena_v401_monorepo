@@ -81,7 +81,7 @@
   <script>
     document.getElementById('loginForm').addEventListener('submit', async function(event) {
         event.preventDefault(); // Formun sayfayı yeniden yüklemesini engelle
-        
+
         const email = document.getElementById('email').value.trim();
         const password = document.getElementById('password').value.trim();
         const errorMessage = document.getElementById('errorMessage');
@@ -93,19 +93,19 @@
         }
 
         try {
-            const response = await fetch('/api/auth/login', {
+            const response = await fetch('http://localhost:3000/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password }),
             });
 
             const data = await response.json();
-            
+
             if (response.ok && data.token) {
                 // Token'ı ve organizatör bilgilerini hafızaya kaydet
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('organizer', JSON.stringify(data.organizer));
-                
+
                 // FUAR SEÇİMİ İÇİN DASHBOARD'A YÖNLENDİR
                 window.location.href = 'dashboard.html';
             } else {

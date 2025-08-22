@@ -109,7 +109,7 @@
     </div>
 
     <script>
-        const API_BASE_URL = '/api';
+        const API_BASE_URL = 'http://localhost:3000/api';
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', async () => {
@@ -122,7 +122,7 @@
             }
             if (!expoId) {
                 alert('No expo selected. Redirecting...');
-                window.location.href = 'login.html'; 
+                window.location.href = 'login.html';
                 return;
             }
 
@@ -161,9 +161,9 @@
                 document.getElementById('expo-title').textContent = 'Expo Not Found';
             }
         }
-        
+
         // --- MODULE LOADERS ---
-        
+
         /**
          * 1. DASHBOARD MODULE
          * Displays a summary of the expo.
@@ -179,7 +179,7 @@
                 const response = await fetch(`${API_BASE_URL}/reports/summary?expo_id=${expoId}`, { headers: getAuthHeaders() });
                 if(!response.ok) throw new Error('Could not fetch report data.');
                 const report = await response.json();
-                
+
                 const metrics = report.visitor_metrics;
                 const checkins = report.checkin_metrics;
 
@@ -224,7 +224,7 @@
             try {
                 const response = await fetch(`${API_BASE_URL}/visitors?expo_id=${expoId}`, { headers: getAuthHeaders() });
                 if (!response.ok) throw new Error('Could not fetch visitor data.');
-                
+
                 const data = await response.json();
                 const visitors = data.visitors;
 
@@ -232,7 +232,7 @@
                     contentArea.innerHTML = `<h2>Visitors</h2><p>No registered visitors found for this expo yet.</p>`;
                     return;
                 }
-                
+
                 let tableRows = '';
                 visitors.forEach(v => {
                     const fields = v.custom_fields || v.form_data || {};
@@ -270,7 +270,7 @@
                 contentArea.innerHTML = `<p>Could not load the visitor list. Please try again.</p>`;
             }
         }
-        
+
         /**
          * PLACEHOLDER MODULES
          * These can be implemented later.

@@ -1,10 +1,10 @@
-// routes/visitors.js - TEMPLATE FOR ALL ROUTE FILES
+// routes/visitors.js
 const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
 const authenticateToken = require('../middleware/authMiddleware');
+const { v4: uuidv4 } = require('uuid');
 
-// Debug log to confirm this file is loaded
 console.log('Loading visitors routes...');
 
 // GET all visitors for an expo
@@ -29,15 +29,12 @@ router.get('/', authenticateToken, async (req, res) => {
 
         // Get visitors for this expo
         const result = await pool.query(
-            `SELECT v.*, 
-                    f.name as form_name,
-                    v.created_at,
-                    v.updated_at
-             FROM visitors v
-             LEFT JOIN forms f ON v.form_id = f.id
-             WHERE v.expo_id = $1
-             ORDER BY v.created_at DESC`,
-            [expo_id]
+            `SELECT id, expo_id, organizer_id, badge_id, source, origin, 
+                    custom_fields, qr_code, created_at, updated_at
+             FROM visitors
+             WHERE expo_id = $1 AND organizer_id = $2
+             ORDER BY created_at DESC`,
+            [expo_id, req.organizer_id]
         );
 
         res.json({
@@ -52,20 +49,24 @@ router.get('/', authenticateToken, async (req, res) => {
 });
 
 // POST - Create a new visitor
-router.post('/', async (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     console.log('POST /api/visitors called');
-    const { expo_id, form_id, form_data, email, name, phone } = req.body;
+    const { expo_id, custom_fields, source, origin } = req.body;
     
     try {
-        if (!expo_id || !form_id) {
-            return res.status(400).json({ error: 'expo_id and form_id are required' });
+        if (!expo_id || !custom_fields) {
+            return res.status(400).json({ error: 'expo_id and custom_fields are required' });
         }
 
+        // Generate unique badge_id and qr_code
+        const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const qr_code = uuidv4();
+
         const result = await pool.query(
-            `INSERT INTO visitors (expo_id, form_id, form_data, email, name, phone, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            `INSERT INTO visitors (expo_id, organizer_id, badge_id, source, origin, custom_fields, qr_code)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
              RETURNING *`,
-            [expo_id, form_id, JSON.stringify(form_data || {}), email, name, phone]
+            [expo_id, req.organizer_id, badge_id, source || 'manual', origin || 'backend', custom_fields, qr_code]
         );
 
         res.status(201).json({
@@ -85,10 +86,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
     
     try {
         const result = await pool.query(
-            `SELECT v.*, e.organizer_id
-             FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
+            `SELECT * FROM visitors
+             WHERE id = $1 AND organizer_id = $2`,
             [id, req.organizer_id]
         );
 
@@ -110,15 +109,13 @@ router.get('/:id', authenticateToken, async (req, res) => {
 router.put('/:id', authenticateToken, async (req, res) => {
     console.log(`PUT /api/visitors/${req.params.id} called`);
     const { id } = req.params;
-    const { form_data, email, name, phone } = req.body;
+    const { custom_fields, source, origin } = req.body;
     
     try {
         // Verify ownership
         const ownerCheck = await pool.query(
-            `SELECT v.id
-             FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
+            `SELECT id FROM visitors
+             WHERE id = $1 AND organizer_id = $2`,
             [id, req.organizer_id]
         );
 
@@ -128,10 +125,10 @@ router.put('/:id', authenticateToken, async (req, res) => {
 
         const result = await pool.query(
             `UPDATE visitors 
-             SET form_data = $1, email = $2, name = $3, phone = $4, updated_at = NOW()
-             WHERE id = $5
+             SET custom_fields = $1, source = $2, origin = $3, updated_at = NOW()
+             WHERE id = $4
              RETURNING *`,
-            [JSON.stringify(form_data || {}), email, name, phone, id]
+            [custom_fields, source, origin, id]
         );
 
         res.json({
@@ -152,10 +149,8 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     try {
         // Verify ownership
         const ownerCheck = await pool.query(
-            `SELECT v.id
-             FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
+            `SELECT id FROM visitors
+             WHERE id = $1 AND organizer_id = $2`,
             [id, req.organizer_id]
         );
 
@@ -175,5 +170,4 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 });
 
-// IMPORTANT: Export the router!
 module.exports = router;
