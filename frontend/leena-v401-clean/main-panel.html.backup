@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leena EMS - Management Panel</title>
+    <style>
+        :root {
+            --primary-bg: #f8f9fa;
+            --sidebar-bg: #2c3e50;
+            --sidebar-text: #ecf0f1;
+            --sidebar-hover: #34495e;
+            --header-border: #dee2e6;
+            --card-bg: #ffffff;
+            --card-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            --text-primary: #212529;
+            --text-secondary: #6c757d;
+            --accent-color: #3498db;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--primary-bg);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 240px;
+            background-color: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        .sidebar-header {
+            padding: 0 20px 20px 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            border-bottom: 1px solid var(--sidebar-hover);
+        }
+        .sidebar-menu { list-style-type: none; margin-top: 20px; }
+        .sidebar-menu a {
+            display: block;
+            color: var(--sidebar-text);
+            text-decoration: none;
+            padding: 15px 20px;
+            transition: background-color 0.2s;
+        }
+        .sidebar-menu a:hover, .sidebar-menu a.active { background-color: var(--sidebar-hover); }
+        .main-wrapper { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background-color: var(--card-bg);
+            border-bottom: 1px solid var(--header-border);
+            flex-shrink: 0;
+        }
+        .main-header h1 { font-size: 1.8em; color: var(--text-primary); }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        .btn {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-back {
+            background-color: #6c757d;
+            color: white;
+        }
+        .btn-back:hover {
+            background-color: #5a6268;
+        }
+        #logout-btn {
+            background-color: #e74c3c; 
+            color: white;
+        }
+        #logout-btn:hover {
+            background-color: #c0392b;
+        }
+        #content-area {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+        #content-area h2 { margin-bottom: 20px; }
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--header-border); }
+        th { background-color: var(--primary-bg); }
+        .loader { text-align: center; padding: 40px; font-size: 1.2em; }
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .stat-card {
+            background-color: var(--card-bg); padding: 20px;
+            border-radius: 8px; box-shadow: var(--card-shadow);
+        }
+        .stat-card .value { font-size: 2.5em; font-weight: bold; color: var(--accent-color); }
+        .stat-card .label { font-size: 1em; color: var(--text-secondary); margin-top: 5px;}
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar">
+        <div class="sidebar-header">Leena EMS</div>
+        <ul class="sidebar-menu" id="sidebar-menu">
+            <li><a href="#" onclick="loadDashboard(event)" class="active">📊 Dashboard</a></li>
+            <li><a href="#" onclick="loadVisitors(event)">👥 Visitors</a></li>
+            <li><a href="form-list.html">📝 Forms</a></li>
+            <li><a href="checkins.html">✅ Check-ins</a></li>
+            <li><a href="email-templates.html">📧 Email Templates</a></li>
+            <li><a href="reports.html">📈 Reports</a></li>
+            <li><a href="import.html">📥 Import</a></li>
+        </ul>
+    </nav>
+
+    <div class="main-wrapper">
+        <header class="main-header">
+            <h1 id="expo-title">Loading...</h1>
+            <div class="header-buttons">
+                <button class="btn btn-back" onclick="goToDashboard()">
+                    ← Back to All Expos
+                </button>
+                <button id="logout-btn" class="btn" onclick="logout()">
+                    Logout
+                </button>
+            </div>
+        </header>
+        <main id="content-area">
+            <div class="loader">Initializing Panel...</div>
+        </main>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3000/api';
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const token = localStorage.getItem('token');
+            const expoId = localStorage.getItem('selectedExpoId');
+
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+            if (!expoId) {
+                alert('No expo selected. Redirecting to dashboard...');
+                window.location.href = 'dashboard.html';
+                return;
+            }
+
+            await fetchExpoDetails(expoId);
+            loadDashboard();
+        });
+
+        // --- HELPER FUNCTIONS ---
+        function getAuthHeaders() {
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            };
+        }
+
+        function setActiveMenu(clickedElement) {
+            document.querySelectorAll('#sidebar-menu a').forEach(a => a.classList.remove('active'));
+            if(clickedElement) {
+                 clickedElement.classList.add('active');
+            }
+        }
+
+        function goToDashboard() {
+            window.location.href = 'dashboard.html';
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'login.html';
+        }
+
+        async function fetchExpoDetails(expoId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/expos/${expoId}`, { headers: getAuthHeaders() });
+                if (!response.ok) throw new Error('Could not fetch expo details.');
+                const expo = await response.json();
+                document.getElementById('expo-title').textContent = expo.name;
+            } catch (error) {
+                console.error(error);
+                document.getElementById('expo-title').textContent = 'Expo Not Found';
+            }
+        }
+
+        // --- MODULE LOADERS ---
+
+        /**
+         * 1. DASHBOARD MODULE
+         * Displays a summary of the expo.
+         */
+        async function loadDashboard(event) {
+            if (event) event.preventDefault();
+            setActiveMenu(event ? event.target : document.querySelector('#sidebar-menu a'));
+            const contentArea = document.getElementById('content-area');
+            contentArea.innerHTML = `<div class="loader">Loading Dashboard...</div>`;
+            const expoId = localStorage.getItem('selectedExpoId');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/reports/summary?expo_id=${expoId}`, { headers: getAuthHeaders() });
+                if(!response.ok) throw new Error('Could not fetch report data.');
+                const report = await response.json();
+
+                const metrics = report.visitor_metrics;
+                const checkins = report.checkin_metrics;
+
+                contentArea.innerHTML = `
+                    <h2>Dashboard Overview</h2>
+                    <div class="action-buttons">
+                        <a href="form-builder.html" class="btn btn-primary">
+                            ➕ Create Form
+                        </a>
+                        <a href="import.html" class="btn btn-primary">
+                            📥 Import Visitors
+                        </a>
+                        <a href="badge.html" class="btn btn-primary">
+                            🎫 Generate Badge
+                        </a>
+                    </div>
+                    <div class="dashboard-grid">
+                        <div class="stat-card">
+                            <div class="value">${metrics.total_visitors || 0}</div>
+                            <div class="label">Total Visitors</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="value">${checkins.total_checkins || 0}</div>
+                            <div class="label">Total Check-ins</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="value">${checkins.checkins_today || 0}</div>
+                            <div class="label">Check-ins Today</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="value">${metrics.unique_countries || 0}</div>
+                            <div class="label">Unique Countries</div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                contentArea.innerHTML = `
+                    <h2>Dashboard Overview</h2>
+                    <p>Could not load the dashboard. Please try again.</p>
+                    <button class="btn btn-primary" onclick="loadDashboard()">Retry</button>
+                `;
+            }
+        }
+
+        /**
+         * 2. VISITORS MODULE
+         * Lists all visitors for the selected expo.
+         */
+        async function loadVisitors(event) {
+            if (event) event.preventDefault();
+            setActiveMenu(event.target);
+            const contentArea = document.getElementById('content-area');
+            contentArea.innerHTML = `<div class="loader">Loading Visitors...</div>`;
+            const expoId = localStorage.getItem('selectedExpoId');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/visitors?expo_id=${expoId}`, { headers: getAuthHeaders() });
+                if (!response.ok) throw new Error('Could not fetch visitor data.');
+
+                const data = await response.json();
+                const visitors = data.visitors;
+
+                if (visitors.length === 0) {
+                    contentArea.innerHTML = `
+                        <h2>Visitors</h2>
+                        <div class="action-buttons">
+                            <a href="form-builder.html" class="btn btn-primary">
+                                ➕ Create Registration Form
+                            </a>
+                            <a href="import.html" class="btn btn-primary">
+                                📥 Import Visitors
+                            </a>
+                        </div>
+                        <p>No registered visitors found for this expo yet.</p>
+                    `;
+                    return;
+                }
+
+                let tableRows = '';
+                visitors.forEach(v => {
+                    const fields = v.custom_fields || v.form_data || {};
+                    tableRows += `
+                        <tr>
+                            <td>${v.name || fields.name || 'N/A'} ${fields.last_name || ''}</td>
+                            <td>${v.email || fields.email || 'N/A'}</td>
+                            <td>${v.company || fields.company || 'N/A'}</td>
+                            <td>${fields.country || 'N/A'}</td>
+                            <td>${new Date(v.created_at).toLocaleDateString()}</td>
+                            <td>
+                                <button class="btn btn-sm btn-primary" onclick="viewVisitor('${v.id}')">View</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                contentArea.innerHTML = `
+                    <h2>Visitors (${visitors.length})</h2>
+                    <div class="action-buttons">
+                        <a href="form-builder.html" class="btn btn-primary">
+                            ➕ Create Registration Form
+                        </a>
+                        <a href="import.html" class="btn btn-primary">
+                            📥 Import Visitors
+                        </a>
+                        <button class="btn btn-primary" onclick="exportVisitors()">
+                            📤 Export to CSV
+                        </button>
+                    </div>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Company</th>
+                                    <th>Country</th>
+                                    <th>Registration Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('Error loading visitors:', error);
+                contentArea.innerHTML = `
+                    <h2>Visitors</h2>
+                    <p>Could not load the visitor list. Please try again.</p>
+                    <button class="btn btn-primary" onclick="loadVisitors()">Retry</button>
+                `;
+            }
+        }
+
+        // Helper functions for visitor actions
+        function viewVisitor(visitorId) {
+            // Implement visitor detail view
+            alert('Visitor detail view coming soon for ID: ' + visitorId);
+        }
+
+        function exportVisitors() {
+            // Implement CSV export
+            alert('Export functionality coming soon');
+        }
+    </script>
+</body>
+</html>

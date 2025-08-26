@@ -19,7 +19,7 @@
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--primary-bg);
             display: flex;
             height: 100vh;
@@ -76,33 +76,44 @@
             display: inline-flex;
             align-items: center;
             gap: 5px;
-            background-color: var(--accent-color);
-            color: white;
-        }
-        .btn:hover {
-            background-color: #2980b9;
         }
         .btn-back {
             background-color: #6c757d;
+            color: white;
         }
         .btn-back:hover {
             background-color: #5a6268;
         }
         #logout-btn {
             background-color: #e74c3c; 
+            color: white;
         }
         #logout-btn:hover {
             background-color: #c0392b;
         }
         #content-area {
             flex-grow: 1;
-            overflow-y: auto;
-            padding: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+        .content-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
         }
         .loader { 
             text-align: center; 
             padding: 40px; 
             font-size: 1.2em;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .dashboard-content {
+            padding: 20px;
+            overflow-y: auto;
+            height: 100%;
         }
         .dashboard-grid { 
             display: grid; 
@@ -131,13 +142,19 @@
             gap: 10px;
             margin-bottom: 20px;
         }
+        .btn-primary {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
         .table-container { 
             overflow-x: auto;
             background: white;
             border-radius: 8px;
             padding: 20px;
             margin-top: 20px;
-            box-shadow: var(--card-shadow);
         }
         table { 
             width: 100%; 
@@ -154,26 +171,6 @@
         }
         tr:hover {
             background-color: #f8f9fa;
-        }
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            background: white;
-            border-radius: 10px;
-            margin: 20px 0;
-        }
-        .empty-state-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-        .debug-info {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 12px;
         }
     </style>
 </head>
@@ -205,7 +202,7 @@
             </div>
         </header>
         <main id="content-area">
-            <div class="loader">Loading...</div>
+            <div class="loader" id="mainLoader">Loading...</div>
         </main>
     </div>
 
@@ -218,10 +215,6 @@
         document.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('token');
             currentExpoId = localStorage.getItem('selectedExpoId');
-
-            console.log('🚀 Main Panel Initialization');
-            console.log('Token exists:', !!token);
-            console.log('Selected Expo ID:', currentExpoId);
 
             if (!token) {
                 window.location.href = 'login.html';
@@ -265,20 +258,13 @@
 
         async function fetchExpoDetails(expoId) {
             try {
-                console.log(`📋 Fetching expo details for ID: ${expoId}`);
                 const response = await fetch(`${API_BASE_URL}/expos/${expoId}`, { headers: getAuthHeaders() });
-                
-                if (!response.ok) {
-                    console.error('Failed to fetch expo details:', response.status);
-                    throw new Error('Could not fetch expo details.');
-                }
-                
+                if (!response.ok) throw new Error('Could not fetch expo details.');
                 const expo = await response.json();
-                console.log('✅ Expo details received:', expo);
                 currentExpoName = expo.name;
                 document.getElementById('expo-title').textContent = expo.name;
             } catch (error) {
-                console.error('❌ Error fetching expo:', error);
+                console.error(error);
                 document.getElementById('expo-title').textContent = 'Expo Not Found';
             }
         }
@@ -302,43 +288,44 @@
                 const checkins = report.checkin_metrics || {};
 
                 document.getElementById('content-area').innerHTML = `
-                    <h2>Dashboard Overview</h2>
-                    <div class="debug-info">
-                        📊 Current Expo ID: ${currentExpoId} | Expo Name: ${currentExpoName || 'Loading...'}
-                    </div>
-                    <div class="action-buttons">
-                        <button class="btn" onclick="loadFormBuilder()">
-                            ➕ Create Form
-                        </button>
-                        <button class="btn" onclick="loadImport()">
-                            📥 Import Visitors
-                        </button>
-                    </div>
-                    <div class="dashboard-grid">
-                        <div class="stat-card">
-                            <div class="value">${metrics.total_visitors || 0}</div>
-                            <div class="label">Total Visitors</div>
+                    <div class="dashboard-content">
+                        <h2>Dashboard Overview</h2>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary" onclick="loadFormBuilder()">
+                                ➕ Create Form
+                            </button>
+                            <button class="btn btn-primary" onclick="loadImport()">
+                                📥 Import Visitors
+                            </button>
                         </div>
-                        <div class="stat-card">
-                            <div class="value">${checkins.total_checkins || 0}</div>
-                            <div class="label">Total Check-ins</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="value">${checkins.checkins_today || 0}</div>
-                            <div class="label">Check-ins Today</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="value">${metrics.unique_countries || 0}</div>
-                            <div class="label">Unique Countries</div>
+                        <div class="dashboard-grid">
+                            <div class="stat-card">
+                                <div class="value">${metrics.total_visitors || 0}</div>
+                                <div class="label">Total Visitors</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">${checkins.total_checkins || 0}</div>
+                                <div class="label">Total Check-ins</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">${checkins.checkins_today || 0}</div>
+                                <div class="label">Check-ins Today</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="value">${metrics.unique_countries || 0}</div>
+                                <div class="label">Unique Countries</div>
+                            </div>
                         </div>
                     </div>
                 `;
             } catch (error) {
                 console.error('Error loading dashboard:', error);
                 document.getElementById('content-area').innerHTML = `
-                    <h2>Dashboard Overview</h2>
-                    <p>Could not load the dashboard. Please try again.</p>
-                    <button class="btn" onclick="loadDashboard()">Retry</button>
+                    <div class="dashboard-content">
+                        <h2>Dashboard Overview</h2>
+                        <p>Could not load the dashboard. Please try again.</p>
+                        <button class="btn btn-primary" onclick="loadDashboard()">Retry</button>
+                    </div>
                 `;
             }
         }
@@ -346,74 +333,39 @@
         async function loadVisitors() {
             setActiveMenu('Visitors');
             showLoader();
-            
-            console.log('🔍 Loading visitors for expo:', currentExpoId);
-            console.log('Auth headers:', getAuthHeaders());
 
             try {
-                const url = `${API_BASE_URL}/visitors?expo_id=${currentExpoId}`;
-                console.log('📡 Fetching from:', url);
-                
-                const response = await fetch(url, { headers: getAuthHeaders() });
-                
-                console.log('Response status:', response.status);
-                console.log('Response ok:', response.ok);
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    console.error('❌ API Error:', error);
-                    throw new Error(error.error || 'Could not fetch visitor data.');
-                }
+                const response = await fetch(`${API_BASE_URL}/visitors?expo_id=${currentExpoId}`, { headers: getAuthHeaders() });
+                if (!response.ok) throw new Error('Could not fetch visitor data.');
 
                 const data = await response.json();
-                console.log('✅ Visitors data received:', data);
-                console.log('Number of visitors:', data.count);
-                
                 const visitors = data.visitors || [];
 
                 let content = `
-                    <h2>Visitors (${visitors.length})</h2>
-                    <div class="debug-info">
-                        🔍 Expo ID: ${currentExpoId} | Total Visitors: ${visitors.length}
-                    </div>
-                    <div class="action-buttons">
-                        <button class="btn" onclick="loadFormBuilder()">
-                            ➕ Create Registration Form
-                        </button>
-                        <button class="btn" onclick="loadImport()">
-                            📥 Import Visitors
-                        </button>
-                        <button class="btn" onclick="refreshVisitors()">
-                            🔄 Refresh
-                        </button>
-                    </div>
+                    <div class="dashboard-content">
+                        <h2>Visitors (${visitors.length})</h2>
+                        <div class="action-buttons">
+                            <button class="btn btn-primary" onclick="loadFormBuilder()">
+                                ➕ Create Registration Form
+                            </button>
+                            <button class="btn btn-primary" onclick="loadImport()">
+                                📥 Import Visitors
+                            </button>
+                        </div>
                 `;
 
                 if (visitors.length === 0) {
-                    content += `
-                        <div class="empty-state">
-                            <div class="empty-state-icon">👥</div>
-                            <h3>No Visitors Yet</h3>
-                            <p>No registered visitors found for this expo yet.</p>
-                            <p style="color: #dc3545; margin-top: 20px;">
-                                ⚠️ Expo ID ${currentExpoId} has no visitors. 
-                                Check if forms are using the correct expo_id.
-                            </p>
-                        </div>
-                    `;
+                    content += `<p>No registered visitors found for this expo yet.</p>`;
                 } else {
                     content += `
                         <div class="table-container">
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
                                         <th>Name</th>
                                         <th>Email</th>
                                         <th>Company</th>
                                         <th>Country</th>
-                                        <th>Source</th>
-                                        <th>Organizer ID</th>
                                         <th>Registration Date</th>
                                     </tr>
                                 </thead>
@@ -421,28 +373,13 @@
                     `;
 
                     visitors.forEach(v => {
-                        // Parse custom_fields if it's a string
-                        let fields = {};
-                        if (typeof v.custom_fields === 'string') {
-                            try {
-                                fields = JSON.parse(v.custom_fields);
-                            } catch (e) {
-                                console.error('Failed to parse custom_fields for visitor', v.id);
-                                fields = {};
-                            }
-                        } else {
-                            fields = v.custom_fields || {};
-                        }
-
+                        const fields = v.custom_fields || {};
                         content += `
                             <tr>
-                                <td>${v.id}</td>
                                 <td>${v.name || fields.name || fields.full_name || 'N/A'}</td>
                                 <td>${v.email || fields.email || 'N/A'}</td>
                                 <td>${v.company || fields.company || 'N/A'}</td>
                                 <td>${fields.country || 'N/A'}</td>
-                                <td>${v.source || 'N/A'}</td>
-                                <td>${v.organizer_id || 'N/A'}</td>
                                 <td>${new Date(v.created_at).toLocaleDateString()}</td>
                             </tr>
                         `;
@@ -455,31 +392,26 @@
                     `;
                 }
 
+                content += `</div>`;
                 document.getElementById('content-area').innerHTML = content;
 
             } catch (error) {
-                console.error('❌ Error loading visitors:', error);
+                console.error('Error loading visitors:', error);
                 document.getElementById('content-area').innerHTML = `
-                    <h2>Visitors</h2>
-                    <div class="debug-info" style="background: #f8d7da; border-color: #dc3545;">
-                        ❌ Error: ${error.message}<br>
-                        Expo ID: ${currentExpoId}
+                    <div class="dashboard-content">
+                        <h2>Visitors</h2>
+                        <p>Error: ${error.message}</p>
+                        <button class="btn btn-primary" onclick="loadVisitors()">Retry</button>
                     </div>
-                    <p>Error: ${error.message}</p>
-                    <button class="btn" onclick="loadVisitors()">Retry</button>
                 `;
             }
         }
 
-        function refreshVisitors() {
-            console.log('🔄 Refreshing visitors...');
-            loadVisitors();
-        }
-
         function loadForms() {
             setActiveMenu('Forms');
-            // Forms sayfasını direkt olarak aç
-            window.location.href = 'form-list.html';
+            document.getElementById('content-area').innerHTML = `
+                <iframe src="form-list.html" class="content-frame"></iframe>
+            `;
         }
 
         function loadFormBuilder() {
@@ -488,26 +420,30 @@
 
         function loadCheckins() {
             setActiveMenu('Check-ins');
-            // Checkins sayfasını direkt olarak aç
-            window.location.href = 'checkins.html';
+            document.getElementById('content-area').innerHTML = `
+                <iframe src="checkins.html" class="content-frame"></iframe>
+            `;
         }
 
         function loadEmailTemplates() {
             setActiveMenu('Email');
-            // Email templates sayfasını direkt olarak aç
-            window.location.href = 'email-templates.html';
+            document.getElementById('content-area').innerHTML = `
+                <iframe src="email-templates.html" class="content-frame"></iframe>
+            `;
         }
 
         function loadReports() {
             setActiveMenu('Reports');
-            // Reports sayfasını direkt olarak aç
-            window.location.href = 'reports.html';
+            document.getElementById('content-area').innerHTML = `
+                <iframe src="reports.html" class="content-frame"></iframe>
+            `;
         }
 
         function loadImport() {
             setActiveMenu('Import');
-            // Import sayfasını direkt olarak aç
-            window.location.href = 'import.html';
+            document.getElementById('content-area').innerHTML = `
+                <iframe src="import.html" class="content-frame"></iframe>
+            `;
         }
     </script>
 </body>

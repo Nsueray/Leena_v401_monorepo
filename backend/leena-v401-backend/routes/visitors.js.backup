@@ -1,69 +1,41 @@
 // routes/visitors.js
 const express = require('express');
 const router = express.Router();
-const pool = require('../utils/db');
+const pool = require('../config/database');
 const authenticateToken = require('../middleware/authMiddleware');
 const { v4: uuidv4 } = require('uuid');
 
-// QR ve E-posta yardımcıları (eğer bu dosyalar mevcutsa)
-let generateQRCode, generateBadgeUrl, sendRegistrationEmail;
-
-try {
-    const qrcodeUtils = require('../utils/qrcode');
-    generateQRCode = qrcodeUtils.generateQRCode;
-    generateBadgeUrl = qrcodeUtils.generateBadgeUrl;
-} catch (err) {
-    console.log('QR code utils not found, using defaults');
-    generateQRCode = async (data) => `data:image/png;base64,QR_${data}`;
-    generateBadgeUrl = (qr) => `http://localhost:3000/badge.html?qr=${qr}`;
-}
-
-try {
-    const emailUtils = require('../utils/email');
-    sendRegistrationEmail = emailUtils.sendRegistrationEmail;
-} catch (err) {
-    console.log('Email utils not found, email sending disabled');
-    sendRegistrationEmail = async () => false;
-}
+// ✅ QR ve E-posta yardımcıları
+const { generateQRCode, generateBadgeUrl } = require('../utils/qrcode');
+const { sendRegistrationEmail } = require('../utils/email');
 
 console.log('Loading visitors routes...');
 
-// GET all visitors for an expo - DÜZELTME: organizer_id kontrolünü kaldırdık
+// GET all visitors for an expo
 router.get('/', authenticateToken, async (req, res) => {
     const { expo_id } = req.query;
-    
-    console.log(`📊 Fetching visitors for expo ${expo_id} by organizer ${req.organizer_id}`);
-    
     try {
         if (!expo_id) {
             return res.status(400).json({ error: 'expo_id is required' });
         }
 
-        // Önce expo'nun varlığını ve sahipliğini kontrol et
         const expoCheck = await pool.query(
-            'SELECT id, name FROM expos WHERE id = $1 AND organizer_id = $2',
+            'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
             [expo_id, req.organizer_id]
         );
-        
         if (expoCheck.rows.length === 0) {
-            console.log(`❌ Expo ${expo_id} not found or not owned by organizer ${req.organizer_id}`);
             return res.status(403).json({ error: 'Access denied to this expo' });
         }
 
-        console.log(`✅ Expo found: ${expoCheck.rows[0].name}`);
-
-        // Visitors'ları getir - sadece expo_id ile
         const result = await pool.query(
             `SELECT id, expo_id, organizer_id, badge_id, source, origin,
                     custom_fields, qr_code, created_at, updated_at,
                     name, email, phone, company, form_id
              FROM visitors
-             WHERE expo_id = $1
+             WHERE expo_id = $1 AND organizer_id = $2
              ORDER BY created_at DESC`,
-            [expo_id]
+            [expo_id, req.organizer_id]
         );
-
-        console.log(`📋 Found ${result.rows.length} visitors for expo ${expo_id}`);
 
         res.json({
             success: true,
@@ -130,8 +102,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query(
-            `SELECT * FROM visitors WHERE id = $1`,
-            [id]
+            `SELECT * FROM visitors WHERE id = $1 AND organizer_id = $2`,
+            [id, req.organizer_id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Visitor not found' });
@@ -148,11 +120,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { custom_fields, source, origin, name, email, phone, company } = req.body;
     try {
-        // Sadece expo sahipliği kontrolü yap
         const ownerCheck = await pool.query(
-            `SELECT v.id FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
+            `SELECT id FROM visitors WHERE id = $1 AND organizer_id = $2`,
             [id, req.organizer_id]
         );
         if (ownerCheck.rows.length === 0) {
@@ -180,11 +149,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
-        // Sadece expo sahipliği kontrolü yap
         const ownerCheck = await pool.query(
-            `SELECT v.id FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
+            `SELECT id FROM visitors WHERE id = $1 AND organizer_id = $2`,
             [id, req.organizer_id]
         );
         if (ownerCheck.rows.length === 0) {
@@ -232,7 +198,7 @@ router.get('/badge/:qr_code', async (req, res) => {
     }
 });
 
-// POST /api/visitors/public - Public visitor form submission
+// POST /api/visitors/public - Public visitor form submission with full debug
 router.post('/public', async (req, res) => {
     try {
         const {
@@ -243,8 +209,6 @@ router.post('/public', async (req, res) => {
             custom_fields = {}
         } = req.body;
 
-        console.log('📝 Received public form submission:', { form_id, expo_id, custom_fields });
-
         if (!form_id || !expo_id) {
             return res.status(400).json({
                 success: false,
@@ -252,7 +216,6 @@ router.post('/public', async (req, res) => {
             });
         }
 
-        // Extract common fields
         const visitorName = custom_fields.full_name || custom_fields.name || 'Anonymous';
         const visitorEmail = custom_fields.email || null;
         const visitorPhone = custom_fields.phone || custom_fields.tel || null;
@@ -263,23 +226,6 @@ router.post('/public', async (req, res) => {
 
         console.log(`📋 Creating visitor with QR Code: ${qr_code}`);
 
-        // First, get the organizer_id from the expo (daha güvenilir)
-        const expoResult = await pool.query(
-            'SELECT organizer_id FROM expos WHERE id = $1',
-            [expo_id]
-        );
-
-        if (expoResult.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Expo not found'
-            });
-        }
-
-        const organizer_id = expoResult.rows[0].organizer_id;
-        console.log(`🏢 Using organizer_id ${organizer_id} from expo ${expo_id}`);
-
-        // Insert visitor
         const result = await pool.query(
             `INSERT INTO visitors (
                 name, email, phone, company, form_id, expo_id,
@@ -288,7 +234,7 @@ router.post('/public', async (req, res) => {
             ) VALUES (
                 $1, $2, $3, $4, $5, $6,
                 $7, $8, $9, $10, $11, NOW(),
-                $12
+                (SELECT organizer_id FROM forms WHERE id = $5)
             )
             RETURNING id, name, email, badge_id, qr_code, created_at`,
             [
@@ -302,35 +248,31 @@ router.post('/public', async (req, res) => {
                 qr_code,
                 source,
                 origin,
-                JSON.stringify(custom_fields),
-                organizer_id
+                JSON.stringify(custom_fields)
             ]
         );
 
         const visitor = result.rows[0];
         console.log(`✅ Public visitor registered: ${visitor.id} with QR: ${visitor.qr_code}`);
 
-        // Try to send email asynchronously (don't wait for it)
-        if (visitorEmail && sendRegistrationEmail) {
-            setImmediate(async () => {
-                try {
-                    const qrCodeDataUrl = await generateQRCode(visitor.qr_code);
-                    console.log(`🎫 QR Code generated for visitor ${visitor.id}`);
+        setImmediate(async () => {
+            try {
+                const qrCodeDataUrl = await generateQRCode(visitor.qr_code);
+                console.log(`🎫 QR Code generated for visitor ${visitor.id}`);
 
-                    const badgeUrl = generateBadgeUrl(visitor.qr_code);
-                    console.log(`🔗 Badge URL: ${badgeUrl}`);
+                const badgeUrl = generateBadgeUrl(visitor.qr_code);
+                console.log(`🔗 Badge URL: ${badgeUrl}`);
 
-                    const sent = await sendRegistrationEmail(visitor, qrCodeDataUrl, badgeUrl);
-                    if (sent) {
-                        console.log(`📧 Email sent to ${visitorEmail}`);
-                    } else {
-                        console.log(`⚠️ Email not sent (missing config or email)`);
-                    }
-                } catch (err) {
-                    console.error('❌ Error sending email:', err);
+                const sent = await sendRegistrationEmail(visitor, qrCodeDataUrl, badgeUrl);
+                if (sent) {
+                    console.log(`📧 Email sent to ${visitorEmail}`);
+                } else {
+                    console.log(`⚠️ Email not sent (missing config or email)`);
                 }
-            });
-        }
+            } catch (err) {
+                console.error('❌ Error sending email:', err);
+            }
+        });
 
         res.status(201).json({
             success: true,
@@ -341,7 +283,7 @@ router.post('/public', async (req, res) => {
                 email: visitor.email,
                 badge_id: visitor.badge_id,
                 qr_code: visitor.qr_code,
-                badge_url: `http://localhost:3000/badge-print.html?qr=${visitor.qr_code}`
+                badge_url: `http://localhost:8080/badge-print.html?qr=${visitor.qr_code}`
             }
         });
     } catch (error) {

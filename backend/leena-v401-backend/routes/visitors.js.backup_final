@@ -1,11 +1,11 @@
 // routes/visitors.js
 const express = require('express');
 const router = express.Router();
-const pool = require('../utils/db');
+const pool = require('../utils/db'); // ✅ DÜZELTME: config/database yerine utils/db
 const authenticateToken = require('../middleware/authMiddleware');
 const { v4: uuidv4 } = require('uuid');
 
-// QR ve E-posta yardımcıları (eğer bu dosyalar mevcutsa)
+// ✅ QR ve E-posta yardımcıları (eğer bu dosyalar mevcutsa)
 let generateQRCode, generateBadgeUrl, sendRegistrationEmail;
 
 try {
@@ -28,42 +28,31 @@ try {
 
 console.log('Loading visitors routes...');
 
-// GET all visitors for an expo - DÜZELTME: organizer_id kontrolünü kaldırdık
+// GET all visitors for an expo
 router.get('/', authenticateToken, async (req, res) => {
     const { expo_id } = req.query;
-    
-    console.log(`📊 Fetching visitors for expo ${expo_id} by organizer ${req.organizer_id}`);
-    
     try {
         if (!expo_id) {
             return res.status(400).json({ error: 'expo_id is required' });
         }
 
-        // Önce expo'nun varlığını ve sahipliğini kontrol et
         const expoCheck = await pool.query(
-            'SELECT id, name FROM expos WHERE id = $1 AND organizer_id = $2',
+            'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
             [expo_id, req.organizer_id]
         );
-        
         if (expoCheck.rows.length === 0) {
-            console.log(`❌ Expo ${expo_id} not found or not owned by organizer ${req.organizer_id}`);
             return res.status(403).json({ error: 'Access denied to this expo' });
         }
 
-        console.log(`✅ Expo found: ${expoCheck.rows[0].name}`);
-
-        // Visitors'ları getir - sadece expo_id ile
         const result = await pool.query(
             `SELECT id, expo_id, organizer_id, badge_id, source, origin,
                     custom_fields, qr_code, created_at, updated_at,
                     name, email, phone, company, form_id
              FROM visitors
-             WHERE expo_id = $1
+             WHERE expo_id = $1 AND organizer_id = $2
              ORDER BY created_at DESC`,
-            [expo_id]
+            [expo_id, req.organizer_id]
         );
-
-        console.log(`📋 Found ${result.rows.length} visitors for expo ${expo_id}`);
 
         res.json({
             success: true,
@@ -130,8 +119,8 @@ router.get('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query(
-            `SELECT * FROM visitors WHERE id = $1`,
-            [id]
+            `SELECT * FROM visitors WHERE id = $1 AND organizer_id = $2`,
+            [id, req.organizer_id]
         );
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Visitor not found' });
@@ -148,11 +137,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { custom_fields, source, origin, name, email, phone, company } = req.body;
     try {
-        // Sadece expo sahipliği kontrolü yap
         const ownerCheck = await pool.query(
-            `SELECT v.id FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
+            `SELECT id FROM visitors WHERE id = $1 AND organizer_id = $2`,
             [id, req.organizer_id]
         );
         if (ownerCheck.rows.length === 0) {
@@ -180,11 +166,8 @@ router.put('/:id', authenticateToken, async (req, res) => {
 router.delete('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
     try {
-        // Sadece expo sahipliği kontrolü yap
         const ownerCheck = await pool.query(
-            `SELECT v.id FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
+            `SELECT id FROM visitors WHERE id = $1 AND organizer_id = $2`,
             [id, req.organizer_id]
         );
         if (ownerCheck.rows.length === 0) {
@@ -263,21 +246,20 @@ router.post('/public', async (req, res) => {
 
         console.log(`📋 Creating visitor with QR Code: ${qr_code}`);
 
-        // First, get the organizer_id from the expo (daha güvenilir)
-        const expoResult = await pool.query(
-            'SELECT organizer_id FROM expos WHERE id = $1',
-            [expo_id]
+        // First, get the organizer_id from the form
+        const formResult = await pool.query(
+            'SELECT organizer_id FROM forms WHERE id = $1',
+            [form_id]
         );
 
-        if (expoResult.rows.length === 0) {
+        if (formResult.rows.length === 0) {
             return res.status(404).json({
                 success: false,
-                message: 'Expo not found'
+                message: 'Form not found'
             });
         }
 
-        const organizer_id = expoResult.rows[0].organizer_id;
-        console.log(`🏢 Using organizer_id ${organizer_id} from expo ${expo_id}`);
+        const organizer_id = formResult.rows[0].organizer_id;
 
         // Insert visitor
         const result = await pool.query(

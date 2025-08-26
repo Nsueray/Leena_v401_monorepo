@@ -7,9 +7,20 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// --- Test Database Connection ---
+const pool = require('./utils/db');
+pool.query('SELECT NOW()', (err, res) => {
+    if (err) {
+        console.error('❌ Database connection failed:', err);
+    } else {
+        console.log('✓ Database connected successfully');
+        console.log('✓ Database connection verified at:', res.rows[0].now);
+    }
+});
+
 // --- Global Middleware (ORDER MATTERS!) ---
 app.use(cors({
-    origin: '*', // In production, specify your frontend URL
+    origin: '*',
     credentials: true
 }));
 app.use(express.json());
@@ -21,8 +32,9 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- Static Files (if needed) ---
+// --- Static Files ---
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use(express.static(path.join(__dirname, '../../frontend/leena-v401-clean')));
 
 // --- Health Check ---
 app.get('/health', (req, res) => {
@@ -96,7 +108,7 @@ try {
     console.error('✗ Failed to load report routes:', err.message);
 }
 
-// --- Mount Routes (only if successfully loaded) ---
+// --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
 if (organizerRoutes) app.use('/api/organizers', organizerRoutes);
 if (expoRoutes) app.use('/api/expos', expoRoutes);
@@ -127,7 +139,7 @@ app.get('/', (req, res) => {
     });
 });
 
-// --- List All Routes (Debug Endpoint) ---
+// --- Debug Endpoint ---
 app.get('/api/routes', (req, res) => {
     const routes = [];
     app._router.stack.forEach((middleware) => {
@@ -151,7 +163,7 @@ app.get('/api/routes', (req, res) => {
     res.json(routes);
 });
 
-// --- 404 Handler (must be AFTER all routes) ---
+// --- 404 Handler ---
 app.use((req, res, next) => {
     console.log(`404 - Route not found: ${req.method} ${req.url}`);
     res.status(404).json({
@@ -160,12 +172,15 @@ app.use((req, res, next) => {
         availableEndpoints: {
             auth: '/api/auth/login, /api/auth/register',
             visitors: '/api/visitors',
-            expos: '/api/expos'
+            expos: '/api/expos',
+            forms: '/api/forms',
+            checkins: '/api/checkins',
+            reports: '/api/reports'
         }
     });
 });
 
-// --- Error Handler (must be LAST) ---
+// --- Error Handler ---
 app.use((err, req, res, next) => {
     console.error('Error:', err);
     res.status(err.status || 500).json({
@@ -174,7 +189,7 @@ app.use((err, req, res, next) => {
     });
 });
 
-// --- Server Startup ---
+// --- Server Start ---
 const server = app.listen(PORT, () => {
     console.log('═══════════════════════════════════════════');
     console.log(`✅ Leena.app v401 backend is running`);

@@ -166,15 +166,6 @@
             font-size: 64px;
             margin-bottom: 20px;
         }
-        .debug-info {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 5px;
-            font-family: monospace;
-            font-size: 12px;
-        }
     </style>
 </head>
 <body>
@@ -219,10 +210,6 @@
             const token = localStorage.getItem('token');
             currentExpoId = localStorage.getItem('selectedExpoId');
 
-            console.log('🚀 Main Panel Initialization');
-            console.log('Token exists:', !!token);
-            console.log('Selected Expo ID:', currentExpoId);
-
             if (!token) {
                 window.location.href = 'login.html';
                 return;
@@ -265,20 +252,13 @@
 
         async function fetchExpoDetails(expoId) {
             try {
-                console.log(`📋 Fetching expo details for ID: ${expoId}`);
                 const response = await fetch(`${API_BASE_URL}/expos/${expoId}`, { headers: getAuthHeaders() });
-                
-                if (!response.ok) {
-                    console.error('Failed to fetch expo details:', response.status);
-                    throw new Error('Could not fetch expo details.');
-                }
-                
+                if (!response.ok) throw new Error('Could not fetch expo details.');
                 const expo = await response.json();
-                console.log('✅ Expo details received:', expo);
                 currentExpoName = expo.name;
                 document.getElementById('expo-title').textContent = expo.name;
             } catch (error) {
-                console.error('❌ Error fetching expo:', error);
+                console.error(error);
                 document.getElementById('expo-title').textContent = 'Expo Not Found';
             }
         }
@@ -303,9 +283,6 @@
 
                 document.getElementById('content-area').innerHTML = `
                     <h2>Dashboard Overview</h2>
-                    <div class="debug-info">
-                        📊 Current Expo ID: ${currentExpoId} | Expo Name: ${currentExpoName || 'Loading...'}
-                    </div>
                     <div class="action-buttons">
                         <button class="btn" onclick="loadFormBuilder()">
                             ➕ Create Form
@@ -346,36 +323,19 @@
         async function loadVisitors() {
             setActiveMenu('Visitors');
             showLoader();
-            
-            console.log('🔍 Loading visitors for expo:', currentExpoId);
-            console.log('Auth headers:', getAuthHeaders());
 
             try {
-                const url = `${API_BASE_URL}/visitors?expo_id=${currentExpoId}`;
-                console.log('📡 Fetching from:', url);
-                
-                const response = await fetch(url, { headers: getAuthHeaders() });
-                
-                console.log('Response status:', response.status);
-                console.log('Response ok:', response.ok);
-                
+                const response = await fetch(`${API_BASE_URL}/visitors?expo_id=${currentExpoId}`, { headers: getAuthHeaders() });
                 if (!response.ok) {
                     const error = await response.json();
-                    console.error('❌ API Error:', error);
                     throw new Error(error.error || 'Could not fetch visitor data.');
                 }
 
                 const data = await response.json();
-                console.log('✅ Visitors data received:', data);
-                console.log('Number of visitors:', data.count);
-                
                 const visitors = data.visitors || [];
 
                 let content = `
                     <h2>Visitors (${visitors.length})</h2>
-                    <div class="debug-info">
-                        🔍 Expo ID: ${currentExpoId} | Total Visitors: ${visitors.length}
-                    </div>
                     <div class="action-buttons">
                         <button class="btn" onclick="loadFormBuilder()">
                             ➕ Create Registration Form
@@ -395,10 +355,6 @@
                             <div class="empty-state-icon">👥</div>
                             <h3>No Visitors Yet</h3>
                             <p>No registered visitors found for this expo yet.</p>
-                            <p style="color: #dc3545; margin-top: 20px;">
-                                ⚠️ Expo ID ${currentExpoId} has no visitors. 
-                                Check if forms are using the correct expo_id.
-                            </p>
                         </div>
                     `;
                 } else {
@@ -407,13 +363,11 @@
                             <table>
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
                                         <th>Name</th>
                                         <th>Email</th>
                                         <th>Company</th>
                                         <th>Country</th>
                                         <th>Source</th>
-                                        <th>Organizer ID</th>
                                         <th>Registration Date</th>
                                     </tr>
                                 </thead>
@@ -427,7 +381,6 @@
                             try {
                                 fields = JSON.parse(v.custom_fields);
                             } catch (e) {
-                                console.error('Failed to parse custom_fields for visitor', v.id);
                                 fields = {};
                             }
                         } else {
@@ -436,13 +389,11 @@
 
                         content += `
                             <tr>
-                                <td>${v.id}</td>
                                 <td>${v.name || fields.name || fields.full_name || 'N/A'}</td>
                                 <td>${v.email || fields.email || 'N/A'}</td>
                                 <td>${v.company || fields.company || 'N/A'}</td>
                                 <td>${fields.country || 'N/A'}</td>
                                 <td>${v.source || 'N/A'}</td>
-                                <td>${v.organizer_id || 'N/A'}</td>
                                 <td>${new Date(v.created_at).toLocaleDateString()}</td>
                             </tr>
                         `;
@@ -458,13 +409,9 @@
                 document.getElementById('content-area').innerHTML = content;
 
             } catch (error) {
-                console.error('❌ Error loading visitors:', error);
+                console.error('Error loading visitors:', error);
                 document.getElementById('content-area').innerHTML = `
                     <h2>Visitors</h2>
-                    <div class="debug-info" style="background: #f8d7da; border-color: #dc3545;">
-                        ❌ Error: ${error.message}<br>
-                        Expo ID: ${currentExpoId}
-                    </div>
                     <p>Error: ${error.message}</p>
                     <button class="btn" onclick="loadVisitors()">Retry</button>
                 `;
@@ -472,7 +419,6 @@
         }
 
         function refreshVisitors() {
-            console.log('🔄 Refreshing visitors...');
             loadVisitors();
         }
 

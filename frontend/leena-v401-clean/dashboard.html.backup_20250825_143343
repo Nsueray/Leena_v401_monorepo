@@ -377,8 +377,12 @@
             localStorage.setItem('selectedExpoId', expoId);
             localStorage.setItem('selectedExpoName', expoName);
             
-            // Always redirect to main-panel.html - this is the main management interface
-            window.location.href = 'main-panel.html';
+            // Try main-panel first, fallback to visitors
+            if (window.location.href.includes('main-panel.html')) {
+                window.location.href = 'main-panel.html';
+            } else {
+                window.location.href = 'visitors.html?expo_id=' + expoId;
+            }
         }
 
         function editExpo(expoId) {

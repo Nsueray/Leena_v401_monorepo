@@ -1,147 +1,443 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Visitor Registration</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      margin: 0;
-      padding: 2rem;
-      background-color: #f5f5f5;
-    }
-    .form-container {
-      max-width: 600px;
-      margin: auto;
-      background: white;
-      padding: 2rem;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-    }
-    .form-container h2 {
-      text-align: center;
-      margin-bottom: 1.5rem;
-      color: #e53935;
-    }
-    .form-container label {
-      display: block;
-      margin-bottom: 0.3rem;
-      font-weight: 600;
-    }
-    .form-container input {
-      width: 100%;
-      padding: 0.7rem;
-      margin-bottom: 1rem;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    .form-container button {
-      background-color: #e53935;
-      color: white;
-      padding: 0.75rem;
-      width: 100%;
-      border: none;
-      font-size: 1rem;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .form-container button:hover {
-      background-color: #d32f2f;
-    }
-    .top-banner, .bottom-banner {
-      width: 100%;
-      margin-bottom: 2rem;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registration Form</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .form-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+            width: 100%;
+            overflow: hidden;
+        }
+        
+        .form-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .form-header h2 {
+            margin: 0;
+            font-weight: 600;
+        }
+        
+        .form-header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+        }
+        
+        .form-body {
+            padding: 30px;
+        }
+        
+        .form-label {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .form-control, .form-select {
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            padding: 10px 15px;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus, .form-select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+        
+        .btn-submit {
+            background: var(--primary-gradient);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 30px;
+            font-weight: 600;
+            width: 100%;
+            transition: all 0.3s;
+        }
+        
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+            color: white;
+        }
+        
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .error-state i {
+            font-size: 80px;
+            color: #dc3545;
+            margin-bottom: 20px;
+        }
+        
+        .success-message {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .success-message i {
+            font-size: 80px;
+            color: #28a745;
+            margin-bottom: 20px;
+        }
+        
+        .required-mark {
+            color: #dc3545;
+        }
+        
+        .expo-badge {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            display: inline-block;
+            margin-top: 10px;
+        }
+        
+        .form-footer {
+            background: #f8f9fa;
+            padding: 20px 30px;
+            text-align: center;
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+    </style>
 </head>
 <body>
-  <div class="form-container">
-    <img id="topBanner" class="top-banner" style="display:none" />
-    <h2 id="formTitle">Loading...</h2>
-    <form id="visitorForm"></form>
-    <img id="bottomBanner" class="bottom-banner" style="display:none" />
-  </div>
+    <div class="form-container">
+        <div id="formContent">
+            <div class="loading-spinner">
+                <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
-  <script>
-    const queryParams = new URLSearchParams(window.location.search);
-    const expoSlug = queryParams.get('expo');
-    const formSlug = queryParams.get('slug');
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+        let formData = null;
+        let submitting = false;
 
-    const formEl = document.getElementById('visitorForm');
-    const formTitle = document.getElementById('formTitle');
-
-    async function loadForm() {
-      try {
-        const res = await fetch(`http://localhost:3000/api/forms/slug/${expoSlug}/${formSlug}`);
-        if (!res.ok) throw new Error('Form not found');
-        const form = await res.json();
-
-        formTitle.textContent = form.form_name;
-        if (form.top_banner) {
-          const top = document.getElementById('topBanner');
-          top.src = form.top_banner;
-          top.style.display = 'block';
-        }
-        if (form.bottom_banner) {
-          const bottom = document.getElementById('bottomBanner');
-          bottom.src = form.bottom_banner;
-          bottom.style.display = 'block';
-        }
-
-        const parsedFields = typeof form.fields === 'string' ? JSON.parse(form.fields) : form.fields;
-
-        parsedFields.forEach(f => {
-          const label = document.createElement('label');
-          label.textContent = f.key.charAt(0).toUpperCase() + f.key.slice(1).replace(/_/g, ' ');
-          const input = document.createElement('input');
-          input.name = f.key;
-          input.required = f.required;
-          formEl.appendChild(label);
-          formEl.appendChild(input);
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadForm();
         });
 
-        const submitBtn = document.createElement('button');
-        submitBtn.textContent = 'Register';
-        formEl.appendChild(submitBtn);
+        // Get form ID from URL
+        function getFormId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('id');
+        }
 
-        formEl.addEventListener('submit', async (e) => {
-          e.preventDefault();
+        // Load form
+        async function loadForm() {
+            const formId = getFormId();
+            
+            if (!formId) {
+                showError('Invalid form link');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_URL}/forms/public/${formId}`);
+                
+                if (!response.ok) {
+                    if (response.status === 404) {
+                        showError('Form not found or inactive');
+                    } else {
+                        showError('Failed to load form');
+                    }
+                    return;
+                }
+                
+                const data = await response.json();
+                formData = data.form;
+                renderForm();
+            } catch (error) {
+                console.error('Error loading form:', error);
+                showError('Failed to load form. Please try again later.');
+            }
+        }
 
-          const payload = {
-            expo_id: form.expo_id,
-            organizer_id: form.organizer_id,
-            source: form.source,
-            origin: form.origin
-          };
+        // Render form
+        function renderForm() {
+            if (!formData) return;
+            
+            const container = document.getElementById('formContent');
+            container.innerHTML = `
+                <div class="form-header">
+                    <h2>${formData.name}</h2>
+                    ${formData.description ? `<p>${formData.description}</p>` : ''}
+                    ${formData.expo_name ? `<span class="expo-badge">${formData.expo_name}</span>` : ''}
+                </div>
+                <div class="form-body">
+                    <form id="registrationForm" onsubmit="submitForm(event)">
+                        ${(formData.fields || []).map(field => renderField(field)).join('')}
+                        <button type="submit" class="btn btn-submit mt-4" id="submitBtn">
+                            <i class="bi bi-send me-2"></i> Submit Registration
+                        </button>
+                    </form>
+                </div>
+                <div class="form-footer">
+                    Powered by Leena v401 &copy; ${new Date().getFullYear()}
+                </div>
+            `;
+        }
 
-          parsedFields.forEach(f => {
-            payload[f.key] = formEl[f.key]?.value?.trim() || '';
-          });
+        // Render individual field
+        function renderField(field) {
+            let input = '';
+            const fieldId = `field_${field.name}`;
+            
+            switch(field.type) {
+                case 'select':
+                    input = `
+                        <select class="form-select" 
+                                id="${fieldId}" 
+                                name="${field.name}" 
+                                ${field.required ? 'required' : ''}>
+                            <option value="">Choose...</option>
+                            ${(field.options || []).map(opt => 
+                                `<option value="${opt}">${opt}</option>`
+                            ).join('')}
+                        </select>
+                    `;
+                    break;
+                    
+                case 'textarea':
+                    input = `
+                        <textarea class="form-control" 
+                                  id="${fieldId}" 
+                                  name="${field.name}" 
+                                  rows="3" 
+                                  placeholder="${field.placeholder || ''}" 
+                                  ${field.required ? 'required' : ''}></textarea>
+                    `;
+                    break;
+                    
+                case 'checkbox':
+                    return `
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input type="checkbox" 
+                                       class="form-check-input" 
+                                       id="${fieldId}" 
+                                       name="${field.name}"
+                                       ${field.required ? 'required' : ''}>
+                                <label class="form-check-label" for="${fieldId}">
+                                    ${field.label}
+                                    ${field.required ? '<span class="required-mark">*</span>' : ''}
+                                </label>
+                            </div>
+                            ${field.helpText ? `<small class="text-muted d-block mt-1">${field.helpText}</small>` : ''}
+                        </div>
+                    `;
+                    
+                case 'radio':
+                    input = `
+                        <div>
+                            ${(field.options || []).map((opt, idx) => `
+                                <div class="form-check">
+                                    <input type="radio" 
+                                           class="form-check-input" 
+                                           id="${fieldId}_${idx}" 
+                                           name="${field.name}" 
+                                           value="${opt}"
+                                           ${field.required && idx === 0 ? 'required' : ''}>
+                                    <label class="form-check-label" for="${fieldId}_${idx}">
+                                        ${opt}
+                                    </label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                    break;
+                    
+                default:
+                    input = `
+                        <input type="${field.type}" 
+                               class="form-control" 
+                               id="${fieldId}" 
+                               name="${field.name}" 
+                               placeholder="${field.placeholder || ''}" 
+                               ${field.required ? 'required' : ''}>
+                    `;
+            }
+            
+            if (field.type === 'checkbox') {
+                return input; // Already formatted
+            }
+            
+            return `
+                <div class="mb-3">
+                    <label for="${fieldId}" class="form-label">
+                        ${field.label}
+                        ${field.required ? '<span class="required-mark">*</span>' : ''}
+                    </label>
+                    ${input}
+                    ${field.helpText ? `<small class="text-muted">${field.helpText}</small>` : ''}
+                </div>
+            `;
+        }
 
-          console.log("Payload:", payload);
+        // Submit form
+        async function submitForm(event) {
+            event.preventDefault();
+            
+            if (submitting) return;
+            submitting = true;
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Submitting...';
+            
+            try {
+                const formElement = document.getElementById('registrationForm');
+                const formDataToSend = new FormData(formElement);
+                
+                // Build visitor data
+                const visitorData = {
+                    form_id: formData.id,
+                    expo_id: formData.expo_id,
+                    source: 'public_form',
+                    custom_fields: {}
+                };
+                
+                // Process form fields
+                for (const field of formData.fields) {
+                    const value = formDataToSend.get(field.name);
+                    
+                    if (field.type === 'checkbox') {
+                        visitorData.custom_fields[field.name] = formDataToSend.get(field.name) === 'on';
+                    } else {
+                        visitorData.custom_fields[field.name] = value || '';
+                    }
+                    
+                    // Map common fields to visitor table columns
+                    if (field.name === 'full_name' || field.name === 'name') {
+                        visitorData.name = value;
+                    } else if (field.name === 'email') {
+                        visitorData.email = value;
+                    } else if (field.name === 'phone' || field.name === 'tel') {
+                        visitorData.phone = value;
+                    } else if (field.name === 'company') {
+                        visitorData.company = value;
+                    }
+                }
+                
+                // Submit to visitors endpoint
+                const response = await fetch(`${API_URL}/visitors/public`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(visitorData)
+                });
+                
+                if (response.ok) {
+                    showSuccess();
+                } else {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Failed to submit form');
+                }
+            } catch (error) {
+                console.error('Error submitting form:', error);
+                alert(error.message || 'Failed to submit form. Please try again.');
+                
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-send me-2"></i> Submit Registration';
+                submitting = false;
+            }
+        }
 
-          const submitRes = await fetch('http://localhost:3000/api/visitors/public', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
+        // Show success message
+        function showSuccess() {
+            const container = document.getElementById('formContent');
+            container.innerHTML = `
+                <div class="form-header">
+                    <h2>Thank You!</h2>
+                </div>
+                <div class="form-body">
+                    <div class="success-message">
+                        <i class="bi bi-check-circle"></i>
+                        <h4>Registration Successful</h4>
+                        <p class="text-muted">Your registration has been received. We'll contact you soon with more information.</p>
+                        <button class="btn btn-submit mt-3" onclick="location.reload()">
+                            <i class="bi bi-arrow-clockwise me-2"></i> Submit Another Registration
+                        </button>
+                    </div>
+                </div>
+                <div class="form-footer">
+                    Powered by Leena v401 &copy; ${new Date().getFullYear()}
+                </div>
+            `;
+        }
 
-          if (submitRes.ok) {
-            alert('Thank you for registering!');
-            formEl.reset();
-          } else {
-            alert('Registration failed.');
-          }
-        });
-
-      } catch (err) {
-        formTitle.textContent = 'Form not found or error occurred.';
-        formEl.innerHTML = '';
-      }
-    }
-
-    loadForm();
-  </script>
+        // Show error message
+        function showError(message) {
+            const container = document.getElementById('formContent');
+            container.innerHTML = `
+                <div class="form-header">
+                    <h2>Oops!</h2>
+                </div>
+                <div class="form-body">
+                    <div class="error-state">
+                        <i class="bi bi-exclamation-circle"></i>
+                        <h4>Error Loading Form</h4>
+                        <p class="text-muted">${message}</p>
+                        <button class="btn btn-submit mt-3" onclick="location.reload()">
+                            <i class="bi bi-arrow-clockwise me-2"></i> Try Again
+                        </button>
+                    </div>
+                </div>
+                <div class="form-footer">
+                    Powered by Leena v401 &copy; ${new Date().getFullYear()}
+                </div>
+            `;
+        }
+    </script>
 </body>
 </html>
