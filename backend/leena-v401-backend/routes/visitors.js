@@ -1,254 +1,65 @@
-// routes/visitors.js
-const express = require('express');
-const router = express.Router();
-const pool = require('../utils/db');
-const authenticateToken = require('../middleware/authMiddleware');
-const { v4: uuidv4 } = require('uuid');
-
-// QR ve E-posta yardımcıları (eğer bu dosyalar mevcutsa)
-let generateQRCode, generateBadgeUrl, sendRegistrationEmail;
-
-try {
-    const qrcodeUtils = require('../utils/qrcode');
-    generateQRCode = qrcodeUtils.generateQRCode;
-    generateBadgeUrl = qrcodeUtils.generateBadgeUrl;
-} catch (err) {
-    console.log('QR code utils not found, using defaults');
-    generateQRCode = async (data) => `data:image/png;base64,QR_${data}`;
-    generateBadgeUrl = (qr) => `http://localhost:3000/badge.html?qr=${qr}`;
-}
-
-try {
-    const emailUtils = require('../utils/email');
-    sendRegistrationEmail = emailUtils.sendRegistrationEmail;
-} catch (err) {
-    console.log('Email utils not found, email sending disabled');
-    sendRegistrationEmail = async () => false;
-}
-
-console.log('Loading visitors routes...');
-
-// GET all visitors for an expo - DÜZELTME: organizer_id kontrolünü kaldırdık
-router.get('/', authenticateToken, async (req, res) => {
-    const { expo_id } = req.query;
-    
-    console.log(`📊 Fetching visitors for expo ${expo_id} by organizer ${req.organizer_id}`);
-    
-    try {
-        if (!expo_id) {
-            return res.status(400).json({ error: 'expo_id is required' });
-        }
-
-        // Önce expo'nun varlığını ve sahipliğini kontrol et
-        const expoCheck = await pool.query(
-            'SELECT id, name FROM expos WHERE id = $1 AND organizer_id = $2',
-            [expo_id, req.organizer_id]
-        );
-        
-        if (expoCheck.rows.length === 0) {
-            console.log(`❌ Expo ${expo_id} not found or not owned by organizer ${req.organizer_id}`);
-            return res.status(403).json({ error: 'Access denied to this expo' });
-        }
-
-        console.log(`✅ Expo found: ${expoCheck.rows[0].name}`);
-
-        // Visitors'ları getir - sadece expo_id ile
-        const result = await pool.query(
-            `SELECT id, expo_id, organizer_id, badge_id, source, origin,
-                    custom_fields, qr_code, created_at, updated_at,
-                    name, email, phone, company, form_id
-             FROM visitors
-             WHERE expo_id = $1
-             ORDER BY created_at DESC`,
-            [expo_id]
-        );
-
-        console.log(`📋 Found ${result.rows.length} visitors for expo ${expo_id}`);
-
-        res.json({
-            success: true,
-            count: result.rows.length,
-            visitors: result.rows
-        });
-    } catch (err) {
-        console.error('Error fetching visitors:', err);
-        res.status(500).json({ error: 'Failed to fetch visitors' });
-    }
-});
-
-// POST - Create a new visitor (internal)
-router.post('/', authenticateToken, async (req, res) => {
-    const { expo_id, custom_fields, source, origin, name, email, phone, company } = req.body;
-
-    try {
-        if (!expo_id || !custom_fields) {
-            return res.status(400).json({ error: 'expo_id and custom_fields are required' });
-        }
-
-        const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const qr_code = uuidv4();
-
-        const visitorName = name || custom_fields.full_name || custom_fields.name || 'Anonymous';
-        const visitorEmail = email || custom_fields.email || null;
-        const visitorPhone = phone || custom_fields.phone || null;
-        const visitorCompany = company || custom_fields.company || null;
-
-        const result = await pool.query(
-            `INSERT INTO visitors (
-                expo_id, organizer_id, badge_id, source, origin, 
-                custom_fields, qr_code, name, email, phone, company
-            )
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-             RETURNING *`,
-            [
-                expo_id,
-                req.organizer_id,
-                badge_id,
-                source || 'manual',
-                origin || 'backend',
-                custom_fields,
-                qr_code,
-                visitorName,
-                visitorEmail,
-                visitorPhone,
-                visitorCompany
-            ]
-        );
-
-        res.status(201).json({
-            success: true,
-            visitor: result.rows[0]
-        });
-    } catch (err) {
-        console.error('Error creating visitor:', err);
-        res.status(500).json({ error: 'Failed to create visitor' });
-    }
-});
-
-// GET single visitor
-router.get('/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        const result = await pool.query(
-            `SELECT * FROM visitors WHERE id = $1`,
-            [id]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Visitor not found' });
-        }
-        res.json({ success: true, visitor: result.rows[0] });
-    } catch (err) {
-        console.error('Error fetching visitor:', err);
-        res.status(500).json({ error: 'Failed to fetch visitor' });
-    }
-});
-
-// PUT - Update visitor
-router.put('/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    const { custom_fields, source, origin, name, email, phone, company } = req.body;
-    try {
-        // Sadece expo sahipliği kontrolü yap
-        const ownerCheck = await pool.query(
-            `SELECT v.id FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
-            [id, req.organizer_id]
-        );
-        if (ownerCheck.rows.length === 0) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        const result = await pool.query(
-            `UPDATE visitors
-             SET custom_fields = $1, source = $2, origin = $3, 
-                 name = $4, email = $5, phone = $6, company = $7,
-                 updated_at = NOW()
-             WHERE id = $8
-             RETURNING *`,
-            [custom_fields, source, origin, name, email, phone, company, id]
-        );
-
-        res.json({ success: true, visitor: result.rows[0] });
-    } catch (err) {
-        console.error('Error updating visitor:', err);
-        res.status(500).json({ error: 'Failed to update visitor' });
-    }
-});
-
-// DELETE visitor
-router.delete('/:id', authenticateToken, async (req, res) => {
-    const { id } = req.params;
-    try {
-        // Sadece expo sahipliği kontrolü yap
-        const ownerCheck = await pool.query(
-            `SELECT v.id FROM visitors v
-             JOIN expos e ON v.expo_id = e.id
-             WHERE v.id = $1 AND e.organizer_id = $2`,
-            [id, req.organizer_id]
-        );
-        if (ownerCheck.rows.length === 0) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-
-        await pool.query('DELETE FROM visitors WHERE id = $1', [id]);
-        res.json({ success: true, message: 'Visitor deleted successfully' });
-    } catch (err) {
-        console.error('Error deleting visitor:', err);
-        res.status(500).json({ error: 'Failed to delete visitor' });
-    }
-});
-
-// GET /api/visitors/badge/:qr_code - Public QR badge lookup
-router.get('/badge/:qr_code', async (req, res) => {
-    try {
-        const { qr_code } = req.params;
-        
-        const result = await pool.query(
-            `SELECT 
-                id, name, email, phone, company, badge_id, qr_code,
-                created_at, custom_fields
-             FROM visitors 
-             WHERE qr_code = $1`,
-            [qr_code]
-        );
-        
-        if (result.rows.length === 0) {
-            return res.status(404).json({ success: false, error: 'Visitor not found' });
-        }
-        
-        const visitor = result.rows[0];
-
-        if (!visitor.name && visitor.custom_fields) {
-            visitor.name = visitor.custom_fields.full_name || 
-                          visitor.custom_fields.name || 
-                          'Guest';
-        }
-
-        res.json({ success: true, visitor });
-    } catch (err) {
-        console.error('Error fetching visitor by QR code:', err);
-        res.status(500).json({ success: false, error: 'Failed to fetch visitor' });
-    }
-});
-
-// POST /api/visitors/public - Public visitor form submission
+// POST /api/visitors/public - Public visitor form submission (UPDATED)
 router.post('/public', async (req, res) => {
     try {
         const {
             form_id,
-            expo_id,
-            source = 'public_form',
-            origin = 'public',
             custom_fields = {}
         } = req.body;
 
-        console.log('📝 Received public form submission:', { form_id, expo_id, custom_fields });
+        console.log('📝 Received public form submission:', { 
+            form_id, 
+            custom_fields: Object.keys(custom_fields) 
+        });
 
-        if (!form_id || !expo_id) {
+        if (!form_id) {
             return res.status(400).json({
                 success: false,
-                message: 'Form ID and Expo ID are required'
+                message: 'Form ID is required'
+            });
+        }
+
+        // Get form details including email template and visitor type
+        const formQuery = `
+            SELECT f.id, f.expo_id, f.organizer_id, f.is_active, f.name,
+                   f.email_template_id, f.visitor_type, f.source, f.origin,
+                   e.name as expo_name,
+                   et.subject as email_subject,
+                   et.html_content as email_html
+            FROM forms f
+            LEFT JOIN expos e ON e.id = f.expo_id
+            LEFT JOIN email_templates et ON et.id = f.email_template_id
+            WHERE f.id = $1 AND f.is_active = true
+        `;
+        const formResult = await pool.query(formQuery, [form_id]);
+        
+        if (formResult.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Form not found or inactive' 
+            });
+        }
+        
+        const form = formResult.rows[0];
+        const expo_id = form.expo_id;
+        const organizer_id = form.organizer_id;
+        const visitor_type = form.visitor_type || 'visitor';
+        const source = form.source || 'public_form';
+        const origin = form.origin || 'form-public';
+        
+        console.log('✅ Form validated:', {
+            form_id: form.id,
+            form_name: form.name,
+            expo_id: expo_id,
+            expo_name: form.expo_name,
+            organizer_id: organizer_id,
+            visitor_type: visitor_type,
+            email_template_id: form.email_template_id
+        });
+
+        if (!expo_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'This form is not associated with a specific expo. Please contact the organizer.'
             });
         }
 
@@ -261,70 +72,134 @@ router.post('/public', async (req, res) => {
         const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const qr_code = uuidv4();
 
-        console.log(`📋 Creating visitor with QR Code: ${qr_code}`);
+        console.log(`📋 Creating ${visitor_type} with QR Code: ${qr_code} for expo: ${expo_id}`);
 
-        // First, get the organizer_id from the expo (daha güvenilir)
-        const expoResult = await pool.query(
-            'SELECT organizer_id FROM expos WHERE id = $1',
-            [expo_id]
-        );
-
-        if (expoResult.rows.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Expo not found'
-            });
+        let result;
+        
+        // Insert into appropriate table based on visitor_type
+        if (visitor_type === 'exhibitor') {
+            // Insert into exhibitors table
+            result = await pool.query(
+                `INSERT INTO exhibitors (
+                    name, email, phone, company, form_id, expo_id,
+                    badge_id, qr_code, source, origin, custom_fields, created_at,
+                    organizer_id, booth_number
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6,
+                    $7, $8, $9, $10, $11, NOW(),
+                    $12, $13
+                )
+                RETURNING id, name, email, badge_id, qr_code, created_at`,
+                [
+                    visitorName,
+                    visitorEmail,
+                    visitorPhone,
+                    visitorCompany,
+                    form_id,
+                    expo_id,
+                    badge_id,
+                    qr_code,
+                    source,
+                    origin,
+                    JSON.stringify(custom_fields),
+                    organizer_id,
+                    custom_fields.booth_number || null
+                ]
+            );
+            console.log(`✅ Exhibitor registered: ${result.rows[0].id} for expo ${expo_id}`);
+        } else {
+            // Insert into visitors table (default)
+            result = await pool.query(
+                `INSERT INTO visitors (
+                    name, email, phone, company, form_id, expo_id,
+                    badge_id, qr_code, source, origin, custom_fields, created_at,
+                    organizer_id
+                ) VALUES (
+                    $1, $2, $3, $4, $5, $6,
+                    $7, $8, $9, $10, $11, NOW(),
+                    $12
+                )
+                RETURNING id, name, email, badge_id, qr_code, created_at`,
+                [
+                    visitorName,
+                    visitorEmail,
+                    visitorPhone,
+                    visitorCompany,
+                    form_id,
+                    expo_id,
+                    badge_id,
+                    qr_code,
+                    source,
+                    origin,
+                    JSON.stringify(custom_fields),
+                    organizer_id
+                ]
+            );
+            console.log(`✅ Visitor registered: ${result.rows[0].id} for expo ${expo_id}`);
         }
 
-        const organizer_id = expoResult.rows[0].organizer_id;
-        console.log(`🏢 Using organizer_id ${organizer_id} from expo ${expo_id}`);
+        const registrant = result.rows[0];
 
-        // Insert visitor
-        const result = await pool.query(
-            `INSERT INTO visitors (
-                name, email, phone, company, form_id, expo_id,
-                badge_id, qr_code, source, origin, custom_fields, created_at,
-                organizer_id
-            ) VALUES (
-                $1, $2, $3, $4, $5, $6,
-                $7, $8, $9, $10, $11, NOW(),
-                $12
-            )
-            RETURNING id, name, email, badge_id, qr_code, created_at`,
-            [
-                visitorName,
-                visitorEmail,
-                visitorPhone,
-                visitorCompany,
-                form_id,
-                expo_id,
-                badge_id,
-                qr_code,
-                source,
-                origin,
-                JSON.stringify(custom_fields),
-                organizer_id
-            ]
-        );
-
-        const visitor = result.rows[0];
-        console.log(`✅ Public visitor registered: ${visitor.id} with QR: ${visitor.qr_code}`);
-
-        // Try to send email asynchronously (don't wait for it)
-        if (visitorEmail && sendRegistrationEmail) {
+        // Send email if template is configured and email is available
+        if (visitorEmail && form.email_template_id && form.email_html) {
             setImmediate(async () => {
                 try {
-                    const qrCodeDataUrl = await generateQRCode(visitor.qr_code);
-                    console.log(`🎫 QR Code generated for visitor ${visitor.id}`);
-
-                    const badgeUrl = generateBadgeUrl(visitor.qr_code);
-                    console.log(`🔗 Badge URL: ${badgeUrl}`);
-
-                    const sent = await sendRegistrationEmail(visitor, qrCodeDataUrl, badgeUrl);
+                    // Generate QR code
+                    const qrCodeDataUrl = await generateQRCode(qr_code);
+                    const badgeUrl = generateBadgeUrl(qr_code);
+                    
+                    // Prepare email data
+                    const emailData = {
+                        name: visitorName,
+                        email: visitorEmail,
+                        company: visitorCompany || '',
+                        phone: visitorPhone || '',
+                        expo_name: form.expo_name || '',
+                        badge_id: badge_id,
+                        qr_code: qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="QR Code" style="max-width: 200px;">` : '',
+                        badge_url: badgeUrl,
+                        date: new Date().toLocaleDateString(),
+                        // Add all custom fields as well
+                        ...custom_fields
+                    };
+                    
+                    // Process email template
+                    let emailHtml = form.email_html;
+                    let emailSubject = form.email_subject || 'Registration Confirmation';
+                    
+                    // Replace placeholders
+                    Object.keys(emailData).forEach(key => {
+                        const regex = new RegExp(`{{${key}}}|\\[${key}\\]`, 'gi');
+                        emailHtml = emailHtml.replace(regex, emailData[key] || '');
+                        emailSubject = emailSubject.replace(regex, emailData[key] || '');
+                    });
+                    
+                    // Send email using your email utility
+                    const sent = await sendEmail(visitorEmail, emailSubject, emailHtml);
+                    
                     if (sent) {
-                        console.log(`📧 Email sent to ${visitorEmail}`);
+                        console.log(`📧 Email sent to ${visitorEmail} using template ${form.email_template_id}`);
+                        
+                        // Log email sending
+                        await pool.query(
+                            `INSERT INTO email_logs (
+                                organizer_id, template_id, expo_id, 
+                                recipient_email, recipient_name, subject, 
+                                status, visitor_id, created_at
+                            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())`,
+                            [
+                                organizer_id,
+                                form.email_template_id,
+                                expo_id,
+                                visitorEmail,
+                                visitorName,
+                                emailSubject,
+                                'sent',
+                                registrant.id
+                            ]
+                        );
                     } else {
-                        console.log(`⚠️ Email not sent (missing config or email)`);
+                        console.log(`⚠️ Email not sent to ${visitorEmail}`);
                     }
                 } catch (err) {
                     console.error('❌ Error sending email:', err);
@@ -336,22 +211,21 @@ router.post('/public', async (req, res) => {
             success: true,
             message: 'Registration successful! Your badge ID is: ' + badge_id,
             visitor: {
-                id: visitor.id,
-                name: visitor.name,
-                email: visitor.email,
-                badge_id: visitor.badge_id,
-                qr_code: visitor.qr_code,
-                badge_url: `http://localhost:3000/badge-print.html?qr=${visitor.qr_code}`
+                id: registrant.id,
+                name: registrant.name,
+                email: registrant.email,
+                badge_id: registrant.badge_id,
+                qr_code: registrant.qr_code,
+                badge_url: `http://localhost:3000/badge-print.html?qr=${registrant.qr_code}`,
+                type: visitor_type
             }
         });
     } catch (error) {
-        console.error('Error in public visitor submission:', error);
+        console.error('Error in public form submission:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to register visitor',
+            message: 'Failed to register',
             error: error.message
         });
     }
 });
-
-module.exports = router;

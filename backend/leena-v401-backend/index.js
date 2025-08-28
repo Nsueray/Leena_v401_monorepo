@@ -43,7 +43,7 @@ app.get('/health', (req, res) => {
 
 // --- Import Route Modules ---
 let authRoutes, organizerRoutes, expoRoutes, visitorRoutes;
-let formRoutes, checkinRoutes, emailTemplateRoutes, emailRoutes, reportRoutes;
+let formRoutes, checkinRoutes, emailTemplateRoutes, emailSendRoutes, reportRoutes;
 
 try {
     authRoutes = require('./routes/auth');
@@ -95,10 +95,10 @@ try {
 }
 
 try {
-    emailRoutes = require('./routes/emails');
-    console.log('✓ Email routes loaded');
+    emailSendRoutes = require('./routes/emailSend');
+    console.log('✓ Email send routes loaded');
 } catch (err) {
-    console.error('✗ Failed to load email routes:', err.message);
+    console.error('✗ Failed to load email send routes:', err.message);
 }
 
 try {
@@ -115,8 +115,8 @@ if (expoRoutes) app.use('/api/expos', expoRoutes);
 if (visitorRoutes) app.use('/api/visitors', visitorRoutes);
 if (formRoutes) app.use('/api/forms', formRoutes);
 if (checkinRoutes) app.use('/api/checkins', checkinRoutes);
-if (emailTemplateRoutes) app.use('/api/templates', emailTemplateRoutes);
-if (emailRoutes) app.use('/api/emails', emailRoutes);
+if (emailTemplateRoutes) app.use('/api/email-templates', emailTemplateRoutes);
+if (emailSendRoutes) app.use('/api/email-send', emailSendRoutes);
 if (reportRoutes) app.use('/api/reports', reportRoutes);
 
 // --- Root Endpoint ---
@@ -132,8 +132,8 @@ app.get('/', (req, res) => {
             visitors: '/api/visitors',
             forms: '/api/forms',
             checkins: '/api/checkins',
-            templates: '/api/templates',
-            emails: '/api/emails',
+            email_templates: '/api/email-templates',
+            email_send: '/api/email-send',
             reports: '/api/reports'
         }
     });
@@ -175,7 +175,9 @@ app.use((req, res, next) => {
             expos: '/api/expos',
             forms: '/api/forms',
             checkins: '/api/checkins',
-            reports: '/api/reports'
+            reports: '/api/reports',
+            email_templates: '/api/email-templates',
+            email_send: '/api/email-send'
         }
     });
 });
@@ -191,12 +193,12 @@ app.use((err, req, res, next) => {
 
 // --- Server Start ---
 const server = app.listen(PORT, () => {
-    console.log('═══════════════════════════════════════════');
+    console.log('═══════════════════════════════════════');
     console.log(`✅ Leena.app v401 backend is running`);
     console.log(`📍 URL: http://localhost:${PORT}`);
     console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`📝 View all routes: http://localhost:${PORT}/api/routes`);
-    console.log('═══════════════════════════════════════════');
+    console.log('═══════════════════════════════════════');
 });
 
 // --- Graceful Shutdown ---

@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Form Builder - Leena v401</title>
+    <title>Form Builder - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <style>
-        /* Mevcut stiller aynı kalacak */
         :root {
             --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             --primary-color: #667eea;
             --secondary-color: #764ba2;
+            --sidebar-bg: #2c3e50;
         }
         
         body {
@@ -29,6 +29,9 @@
             transition: all 0.3s;
             border-radius: 8px;
             margin: 2px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
         
         .nav-link:hover, .nav-link.active {
@@ -51,11 +54,6 @@
         .field-item:hover {
             border-color: var(--primary-color);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.1);
-        }
-        
-        .field-item.dragging {
-            opacity: 0.5;
-            transform: rotate(2deg);
         }
         
         .field-type-badge {
@@ -124,6 +122,53 @@
             border-radius: 5px;
             margin-bottom: 15px;
         }
+        
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .expo-badge {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            display: inline-block;
+        }
+
+        .visitor-type-selector {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .visitor-type-selector .form-check {
+            padding: 10px 20px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .visitor-type-selector .form-check:hover {
+            border-color: var(--primary-color);
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .visitor-type-selector .form-check-input:checked + .form-check-label {
+            color: var(--primary-color);
+            font-weight: 600;
+        }
+
+        .visitor-type-selector .form-check-input:checked ~ * {
+            background: rgba(102, 126, 234, 0.1);
+        }
     </style>
 </head>
 <body>
@@ -132,42 +177,42 @@
             <!-- Sidebar -->
             <nav class="col-md-3 col-lg-2 d-md-block sidebar text-white p-3">
                 <h3 class="mb-4">
-                    <i class="bi bi-box-seam"></i> Leena v401
+                    <i class="bi bi-box-seam"></i> Leena EMS
                 </h3>
                 <ul class="nav flex-column">
                     <li class="nav-item">
-                        <a class="nav-link" href="dashboard.html">
-                            <i class="bi bi-speedometer2 me-2"></i> Dashboard
+                        <a class="nav-link" href="main-panel.html">
+                            <i class="bi bi-speedometer2"></i> Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="visitors.html">
-                            <i class="bi bi-people me-2"></i> Visitors
+                        <a class="nav-link" href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')">
+                            <i class="bi bi-people"></i> Visitors
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link active" href="form-list.html">
-                            <i class="bi bi-card-list me-2"></i> Forms
+                        <a class="nav-link active" href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')">
+                            <i class="bi bi-card-list"></i> Forms
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="checkins.html">
-                            <i class="bi bi-check2-square me-2"></i> Check-ins
+                            <i class="bi bi-check2-square"></i> Check-ins
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="email-templates.html">
-                            <i class="bi bi-envelope me-2"></i> Email
+                            <i class="bi bi-envelope"></i> Email
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="reports.html">
-                            <i class="bi bi-graph-up me-2"></i> Reports
+                            <i class="bi bi-graph-up"></i> Reports
                         </a>
                     </li>
                     <li class="nav-item mt-4">
                         <a class="nav-link" href="#" onclick="logout()">
-                            <i class="bi bi-box-arrow-right me-2"></i> Logout
+                            <i class="bi bi-box-arrow-right"></i> Logout
                         </a>
                     </li>
                 </ul>
@@ -180,7 +225,7 @@
                         <i class="bi bi-hammer text-primary"></i> Form Builder
                     </h1>
                     <div class="btn-toolbar mb-2 mb-md-0">
-                        <button class="btn btn-outline-secondary me-2" onclick="window.location.href='form-list.html'">
+                        <button class="btn btn-outline-secondary me-2" onclick="goBackToForms()">
                             <i class="bi bi-arrow-left"></i> Back to Forms
                         </button>
                         <button class="btn btn-success" onclick="saveForm()">
@@ -207,12 +252,16 @@
                                                placeholder="e.g., Registration Form" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label class="form-label">Expo *</label>
-                                        <select class="form-select" id="expoSelect" required>
-                                            <option value="">Select Expo...</option>
-                                            <!-- Expo options will be loaded dynamically -->
-                                        </select>
-                                        <small class="text-muted">Form will be available for selected expo</small>
+                                        <label class="form-label">Expo</label>
+                                        <div class="input-group">
+                                            <select class="form-select" id="expoSelect" disabled>
+                                                <option value="">Loading...</option>
+                                            </select>
+                                            <span class="input-group-text" id="expoLockIcon">
+                                                <i class="bi bi-lock"></i>
+                                            </span>
+                                        </div>
+                                        <small class="text-muted">Current expo is automatically selected</small>
                                     </div>
                                 </div>
                                 <div class="mb-3">
@@ -220,6 +269,61 @@
                                     <textarea class="form-control" id="formDescription" rows="2" 
                                               placeholder="Brief description of this form"></textarea>
                                 </div>
+                                
+                                <!-- New: Visitor Type Selection -->
+                                <div class="mb-3">
+                                    <label class="form-label">Registration Type *</label>
+                                    <div class="visitor-type-selector">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="visitorType" 
+                                                   id="visitorTypeVisitor" value="visitor" checked>
+                                            <label class="form-check-label" for="visitorTypeVisitor">
+                                                <i class="bi bi-person"></i> Visitor Registration
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="visitorType" 
+                                                   id="visitorTypeExhibitor" value="exhibitor">
+                                            <label class="form-check-label" for="visitorTypeExhibitor">
+                                                <i class="bi bi-shop"></i> Exhibitor Registration
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- New: Email Template Selection -->
+                                <div class="mb-3">
+                                    <label class="form-label">Email Template</label>
+                                    <select class="form-select" id="emailTemplateSelect">
+                                        <option value="">No email (silent registration)</option>
+                                        <option value="loading">Loading templates...</option>
+                                    </select>
+                                    <small class="text-muted">Select which email template to send after registration</small>
+                                </div>
+
+                                <!-- New: Source and Origin Fields -->
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Source</label>
+                                        <input type="text" class="form-control" id="formSource" 
+                                               placeholder="e.g., website, campaign-2024">
+                                        <small class="text-muted">Track where registrations come from</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label class="form-label">Origin</label>
+                                        <select class="form-select" id="formOrigin">
+                                            <option value="form-public">Public Form</option>
+                                            <option value="form-onsite">On-site Registration</option>
+                                            <option value="manual">Manual Entry</option>
+                                            <option value="imported">Imported Data</option>
+                                            <option value="admin-panel">Admin Panel</option>
+                                            <option value="scanner">QR Scanner</option>
+                                            <option value="email-campaign">Email Campaign</option>
+                                        </select>
+                                        <small class="text-muted">Registration method</small>
+                                    </div>
+                                </div>
+
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="form-check form-switch">
@@ -268,12 +372,12 @@
                         <div class="sticky-top" style="top: 20px;">
                             <div class="preview-section">
                                 <div class="preview-header">
-                                    <h5 class="mb-0">
+                                    <h5 class="mb-1">
                                         <i class="bi bi-eye"></i> Live Preview
                                     </h5>
-                                </div>
-                                <div id="selectedExpoInfo" class="alert alert-info d-none">
-                                    <small><i class="bi bi-info-circle"></i> <span id="expoInfoText"></span></small>
+                                    <span class="expo-badge" id="previewExpoBadge">
+                                        Loading...
+                                    </span>
                                 </div>
                                 <div id="formPreview">
                                     <div class="text-center text-muted py-5">
@@ -289,7 +393,7 @@
         </div>
     </div>
 
-    <!-- Field Modal (aynı kalacak) -->
+    <!-- Field Modal -->
     <div class="modal fade" id="fieldModal" tabindex="-1">
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
@@ -369,15 +473,19 @@
         let formFields = [];
         let editingFieldIndex = null;
         let formId = null;
-        let expos = [];
+        let currentExpoId = null;
+        let currentExpoName = null;
+        let emailTemplates = [];
 
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
-            loadExpos();
+            loadCurrentExpo();
+            loadEmailTemplates();
             checkEditMode();
             setupAutoSave();
             setupExpoToggle();
+            setupVisitorTypeToggle();
         });
 
         // Check authentication
@@ -390,40 +498,106 @@
             return true;
         }
 
-        // Load available expos
-        async function loadExpos() {
+        // Load email templates
+        async function loadEmailTemplates() {
             try {
                 const token = localStorage.getItem('token');
-                const response = await fetch(`${API_URL}/expos`, {
+                const expoId = localStorage.getItem('selectedExpoId');
+                
+                const response = await fetch(`${API_URL}/templates?expo_id=${expoId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
-
-                if (!response.ok) {
-                    throw new Error('Failed to load expos');
+                
+                if (response.ok) {
+                    emailTemplates = await response.json();
+                    const select = document.getElementById('emailTemplateSelect');
+                    
+                    select.innerHTML = '<option value="">No email (silent registration)</option>';
+                    
+                    emailTemplates.forEach(template => {
+                        const option = document.createElement('option');
+                        option.value = template.id;
+                        option.textContent = template.name || `Template ${template.id}`;
+                        select.appendChild(option);
+                    });
+                } else {
+                    console.error('Failed to load email templates');
+                    document.getElementById('emailTemplateSelect').innerHTML = 
+                        '<option value="">No email templates available</option>';
                 }
-
-                const data = await response.json();
-                expos = data.data || [];
-                
-                const expoSelect = document.getElementById('expoSelect');
-                expoSelect.innerHTML = '<option value="">Select Expo...</option>';
-                
-                expos.forEach(expo => {
-                    const option = document.createElement('option');
-                    option.value = expo.id;
-                    option.textContent = expo.name;
-                    expoSelect.appendChild(option);
-                });
-
-                // Add event listener for expo selection
-                expoSelect.addEventListener('change', updateExpoInfo);
             } catch (error) {
-                console.error('Error loading expos:', error);
-                // If expos can't be loaded, show a default option
+                console.error('Error loading email templates:', error);
+                document.getElementById('emailTemplateSelect').innerHTML = 
+                    '<option value="">Error loading templates</option>';
+            }
+        }
+
+        // Setup visitor type toggle
+        function setupVisitorTypeToggle() {
+            const visitorRadio = document.getElementById('visitorTypeVisitor');
+            const exhibitorRadio = document.getElementById('visitorTypeExhibitor');
+            
+            // Add specific fields based on type
+            [visitorRadio, exhibitorRadio].forEach(radio => {
+                radio.addEventListener('change', function() {
+                    updatePreview();
+                    // If switching to exhibitor, suggest adding booth_number field
+                    if (this.value === 'exhibitor' && !formFields.find(f => f.name === 'booth_number')) {
+                        if (confirm('Would you like to add a Booth Number field for exhibitors?')) {
+                            formFields.push({
+                                name: 'booth_number',
+                                label: 'Booth Number',
+                                type: 'text',
+                                required: false,
+                                placeholder: 'Enter your booth number',
+                                helpText: 'Your assigned booth location',
+                                options: []
+                            });
+                            renderFields();
+                            updatePreview();
+                        }
+                    }
+                });
+            });
+        }
+
+        // Load current expo from localStorage
+        async function loadCurrentExpo() {
+            currentExpoId = localStorage.getItem('selectedExpoId');
+            
+            if (!currentExpoId) {
+                alert('No expo selected. Please select an expo first.');
+                window.location.href = 'dashboard.html';
+                return;
+            }
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/expos/${currentExpoId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const expo = await response.json();
+                    currentExpoName = expo.name;
+                    
+                    // Update UI
+                    const expoSelect = document.getElementById('expoSelect');
+                    expoSelect.innerHTML = `<option value="${currentExpoId}">${currentExpoName}</option>`;
+                    document.getElementById('previewExpoBadge').textContent = currentExpoName;
+                } else {
+                    throw new Error('Failed to load expo details');
+                }
+            } catch (error) {
+                console.error('Error loading expo:', error);
+                currentExpoName = 'Current Expo';
                 const expoSelect = document.getElementById('expoSelect');
-                expoSelect.innerHTML = '<option value="15">Test Expo 2025</option>';
+                expoSelect.innerHTML = `<option value="${currentExpoId}">Expo ${currentExpoId}</option>`;
+                document.getElementById('previewExpoBadge').textContent = `Expo ${currentExpoId}`;
             }
         }
 
@@ -431,41 +605,21 @@
         function setupExpoToggle() {
             const allExposCheckbox = document.getElementById('formAllExpos');
             const expoSelect = document.getElementById('expoSelect');
+            const expoLockIcon = document.getElementById('expoLockIcon');
+            const previewExpoBadge = document.getElementById('previewExpoBadge');
             
             allExposCheckbox.addEventListener('change', function() {
                 if (this.checked) {
                     expoSelect.disabled = true;
-                    expoSelect.removeAttribute('required');
-                    updateExpoInfo();
+                    expoLockIcon.innerHTML = '<i class="bi bi-globe"></i>';
+                    previewExpoBadge.textContent = 'All Expos';
                 } else {
-                    expoSelect.disabled = false;
-                    expoSelect.setAttribute('required', '');
-                    updateExpoInfo();
+                    expoSelect.disabled = true; // Always disabled, just for display
+                    expoLockIcon.innerHTML = '<i class="bi bi-lock"></i>';
+                    previewExpoBadge.textContent = currentExpoName || 'Current Expo';
                 }
+                updatePreview();
             });
-        }
-
-        // Update expo info in preview
-        function updateExpoInfo() {
-            const expoSelect = document.getElementById('expoSelect');
-            const allExposCheckbox = document.getElementById('formAllExpos');
-            const expoInfoDiv = document.getElementById('selectedExpoInfo');
-            const expoInfoText = document.getElementById('expoInfoText');
-            
-            if (allExposCheckbox.checked) {
-                expoInfoDiv.classList.remove('d-none');
-                expoInfoText.textContent = 'This form will be available for all expos';
-            } else if (expoSelect.value) {
-                const selectedExpo = expos.find(e => e.id == expoSelect.value);
-                if (selectedExpo) {
-                    expoInfoDiv.classList.remove('d-none');
-                    expoInfoText.textContent = `Form for: ${selectedExpo.name}`;
-                }
-            } else {
-                expoInfoDiv.classList.add('d-none');
-            }
-            
-            updatePreview();
         }
 
         // Check if editing existing form
@@ -492,6 +646,15 @@
                         type: 'email',
                         required: true,
                         placeholder: 'your@email.com',
+                        helpText: '',
+                        options: []
+                    },
+                    {
+                        name: 'company',
+                        label: 'Company',
+                        type: 'text',
+                        required: false,
+                        placeholder: 'Your company name',
                         helpText: '',
                         options: []
                     }
@@ -522,16 +685,28 @@
                 document.getElementById('formDescription').value = data.description || '';
                 document.getElementById('formActive').checked = data.is_active;
                 
-                // Set expo selection
-                if (data.expo_id === null) {
-                    document.getElementById('formAllExpos').checked = true;
-                    document.getElementById('expoSelect').disabled = true;
+                // Load visitor type
+                if (data.visitor_type === 'exhibitor') {
+                    document.getElementById('visitorTypeExhibitor').checked = true;
                 } else {
-                    document.getElementById('expoSelect').value = data.expo_id;
-                    document.getElementById('formAllExpos').checked = false;
+                    document.getElementById('visitorTypeVisitor').checked = true;
                 }
                 
-                updateExpoInfo();
+                // Load email template
+                if (data.email_template_id) {
+                    document.getElementById('emailTemplateSelect').value = data.email_template_id;
+                }
+                
+                // Load source and origin
+                document.getElementById('formSource').value = data.source || '';
+                document.getElementById('formOrigin').value = data.origin || 'form-public';
+                
+                // Check if form is for all expos
+                if (data.expo_id === null) {
+                    document.getElementById('formAllExpos').checked = true;
+                    document.getElementById('previewExpoBadge').textContent = 'All Expos';
+                    document.getElementById('expoLockIcon').innerHTML = '<i class="bi bi-globe"></i>';
+                }
                 
                 // Load fields
                 formFields = data.fields || [];
@@ -540,11 +715,98 @@
             } catch (error) {
                 console.error('Error loading form:', error);
                 alert('Failed to load form. Redirecting to forms list.');
-                window.location.href = 'form-list.html';
+                goBackToForms();
             }
         }
 
-        // Show field modal
+        // Navigation
+        function goBackToForms() {
+            localStorage.setItem('loadPage', 'forms');
+            window.location.href = 'main-panel.html';
+        }
+
+        // Save form
+        async function saveForm() {
+            const formName = document.getElementById('formName').value.trim();
+            const formDescription = document.getElementById('formDescription').value.trim();
+            const isActive = document.getElementById('formActive').checked;
+            const allExpos = document.getElementById('formAllExpos').checked;
+            const emailTemplateId = document.getElementById('emailTemplateSelect').value;
+            const visitorType = document.querySelector('input[name="visitorType"]:checked').value;
+            const source = document.getElementById('formSource').value.trim();
+            const origin = document.getElementById('formOrigin').value;
+            
+            let expoId = null;
+            if (!allExpos && currentExpoId) {
+                expoId = parseInt(currentExpoId);
+            }
+            
+            console.log('Saving form with:', {
+                expo_id: expoId,
+                visitor_type: visitorType,
+                email_template_id: emailTemplateId,
+                source: source,
+                origin: origin
+            });
+            
+            // Validation
+            if (!formName) {
+                alert('Please enter a form name');
+                document.getElementById('formName').focus();
+                return;
+            }
+            
+            if (formFields.length === 0) {
+                alert('Please add at least one field to the form');
+                return;
+            }
+            
+            // Prepare data
+            const formData = {
+                name: formName,
+                description: formDescription,
+                expo_id: expoId,
+                fields: formFields,
+                is_active: isActive,
+                email_template_id: emailTemplateId ? parseInt(emailTemplateId) : null,
+                visitor_type: visitorType,
+                source: source || null,
+                origin: origin
+            };
+            
+            console.log('Form data being sent:', formData);
+            
+            try {
+                const token = localStorage.getItem('token');
+                const url = formId ? `${API_URL}/forms/${formId}` : `${API_URL}/forms`;
+                const method = formId ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showSuccess(result.message || 'Form saved successfully');
+                    setTimeout(() => {
+                        goBackToForms();
+                    }, 1500);
+                } else {
+                    throw new Error(result.message || 'Failed to save form');
+                }
+            } catch (error) {
+                console.error('Error saving form:', error);
+                showError(error.message || 'Failed to save form. Please try again.');
+            }
+        }
+
+        // Field management functions
         function showFieldModal(index = null) {
             editingFieldIndex = index;
             const modal = new bootstrap.Modal(document.getElementById('fieldModal'));
@@ -559,7 +821,6 @@
             document.getElementById('fieldOptions').value = '';
             
             if (index !== null && formFields[index]) {
-                // Edit mode
                 const field = formFields[index];
                 document.getElementById('fieldModalTitle').textContent = 'Edit Field';
                 document.getElementById('fieldModalAction').textContent = 'Update';
@@ -575,7 +836,6 @@
                     document.getElementById('fieldOptions').value = field.options.join('\n');
                 }
             } else {
-                // Add mode
                 document.getElementById('fieldModalTitle').textContent = 'Add Field';
                 document.getElementById('fieldModalAction').textContent = 'Add';
             }
@@ -584,7 +844,6 @@
             modal.show();
         }
 
-        // Update field options visibility
         function updateFieldOptions() {
             const type = document.getElementById('fieldType').value;
             const optionsContainer = document.getElementById('optionsContainer');
@@ -596,7 +855,6 @@
             }
         }
 
-        // Add or update field
         function addField() {
             const type = document.getElementById('fieldType').value;
             const label = document.getElementById('fieldLabel').value.trim();
@@ -605,7 +863,6 @@
             const helpText = document.getElementById('fieldHelpText').value.trim();
             const required = document.getElementById('fieldRequired').checked;
             
-            // Validation
             if (!label || !name) {
                 alert('Field label and name are required');
                 return;
@@ -616,7 +873,6 @@
                 return;
             }
             
-            // Check for duplicate field names (except when editing)
             const isDuplicate = formFields.some((field, index) => 
                 field.name === name && index !== editingFieldIndex
             );
@@ -626,11 +882,10 @@
                 return;
             }
             
-            // Process options
             let options = [];
             if (type === 'select' || type === 'radio') {
                 options = document.getElementById('fieldOptions').value
-                    .split('\n')
+.split('\n')
                     .map(opt => opt.trim())
                     .filter(opt => opt);
                     
@@ -651,21 +906,17 @@
             };
             
             if (editingFieldIndex !== null) {
-                // Update existing field
                 formFields[editingFieldIndex] = field;
             } else {
-                // Add new field
                 formFields.push(field);
             }
             
             renderFields();
             updatePreview();
             
-            // Close modal
             bootstrap.Modal.getInstance(document.getElementById('fieldModal')).hide();
         }
 
-        // Remove field
         function removeField(index) {
             if (confirm('Remove this field?')) {
                 formFields.splice(index, 1);
@@ -674,7 +925,6 @@
             }
         }
 
-        // Move field up
         function moveFieldUp(index) {
             if (index > 0) {
                 [formFields[index], formFields[index - 1]] = [formFields[index - 1], formFields[index]];
@@ -683,7 +933,6 @@
             }
         }
 
-        // Move field down
         function moveFieldDown(index) {
             if (index < formFields.length - 1) {
                 [formFields[index], formFields[index + 1]] = [formFields[index + 1], formFields[index]];
@@ -692,7 +941,6 @@
             }
         }
 
-        // Render fields list
         function renderFields() {
             const container = document.getElementById('fieldsContainer');
             
@@ -744,11 +992,11 @@
             document.getElementById('fieldCount').textContent = `${formFields.length} field${formFields.length !== 1 ? 's' : ''}`;
         }
 
-        // Update preview
         function updatePreview() {
             const preview = document.getElementById('formPreview');
             const formName = document.getElementById('formName').value || 'Untitled Form';
             const formDescription = document.getElementById('formDescription').value;
+            const visitorType = document.querySelector('input[name="visitorType"]:checked').value;
             
             if (formFields.length === 0) {
                 preview.innerHTML = `
@@ -763,19 +1011,22 @@
             preview.innerHTML = `
                 <h5 class="mb-2">${formName}</h5>
                 ${formDescription ? `<p class="text-muted small">${formDescription}</p>` : ''}
+                <p class="badge bg-info text-dark">
+                    <i class="bi bi-${visitorType === 'exhibitor' ? 'shop' : 'person'}"></i>
+                    ${visitorType === 'exhibitor' ? 'Exhibitor' : 'Visitor'} Registration
+                </p>
                 <hr>
                 <form onsubmit="event.preventDefault();">
                     ${formFields.map(field => renderFieldPreview(field)).join('')}
                     <div class="d-grid mt-4">
                         <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-send"></i> Submit
+                            <i class="bi bi-send"></i> Submit Registration
                         </button>
                     </div>
                 </form>
             `;
         }
 
-        // Render field preview
         function renderFieldPreview(field) {
             let input = '';
             
@@ -838,7 +1089,7 @@
             }
             
             if (field.type === 'checkbox') {
-                return input; // Already formatted
+                return input;
             }
             
             return `
@@ -853,78 +1104,10 @@
             `;
         }
 
-        // Save form
-        async function saveForm() {
-            const formName = document.getElementById('formName').value.trim();
-            const formDescription = document.getElementById('formDescription').value.trim();
-            const isActive = document.getElementById('formActive').checked;
-            const allExpos = document.getElementById('formAllExpos').checked;
-            const expoId = allExpos ? null : document.getElementById('expoSelect').value;
-            
-            // Validation
-            if (!formName) {
-                alert('Please enter a form name');
-                document.getElementById('formName').focus();
-                return;
-            }
-            
-            if (!allExpos && !expoId) {
-                alert('Please select an expo or check "Available for all expos"');
-                document.getElementById('expoSelect').focus();
-                return;
-            }
-            
-            if (formFields.length === 0) {
-                alert('Please add at least one field to the form');
-                return;
-            }
-            
-            // Prepare data
-            const formData = {
-                name: formName,
-                description: formDescription,
-                expo_id: expoId ? parseInt(expoId) : null,
-                fields: formFields,
-                is_active: isActive
-            };
-            
-            try {
-                const token = localStorage.getItem('token');
-                const url = formId ? `${API_URL}/forms/${formId}` : `${API_URL}/forms`;
-                const method = formId ? 'PUT' : 'POST';
-                
-                const response = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(formData)
-                });
-                
-                const result = await response.json();
-                
-                if (response.ok) {
-                    showSuccess(result.message || 'Form saved successfully');
-                    setTimeout(() => {
-                        window.location.href = 'form-list.html';
-                    }, 1500);
-                } else {
-                    throw new Error(result.message || 'Failed to save form');
-                }
-            } catch (error) {
-                console.error('Error saving form:', error);
-                showError(error.message || 'Failed to save form. Please try again.');
-            }
-        }
-
-        // Setup auto-save (optional)
         function setupAutoSave() {
-            // Auto-update preview when form name or description changes
             document.getElementById('formName').addEventListener('input', updatePreview);
             document.getElementById('formDescription').addEventListener('input', updatePreview);
             
-            // Add keyboard shortcut for save (Ctrl+S or Cmd+S)
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                     e.preventDefault();
@@ -933,7 +1116,6 @@
             });
         }
 
-        // Show success message
         function showSuccess(message) {
             const alertDiv = document.createElement('div');
             alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
@@ -950,7 +1132,6 @@
             }, 3000);
         }
 
-        // Show error message
         function showError(message) {
             const alertDiv = document.createElement('div');
             alertDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
@@ -967,7 +1148,6 @@
             }, 5000);
         }
 
-        // Logout
         function logout() {
             localStorage.clear();
             window.location.href = 'login.html';
