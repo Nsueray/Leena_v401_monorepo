@@ -1,6 +1,6 @@
 // utils/db.js
 const { Pool } = require('pg');
-require('dotenv').config({ path: '../.env' }); // Ensure .env from backend root is loaded
+require('dotenv').config(); // ✅ sadece bu satır yeterli
 
 const pool = new Pool({
   user: process.env.PGUSER || 'postgres',
