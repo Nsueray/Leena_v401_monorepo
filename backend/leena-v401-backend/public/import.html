@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Import Visitors</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f8f8;
+      padding: 20px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .logo img {
+      height: 200px;
+    }
+    h2 {
+      color: #333;
+    }
+    input[type="file"], input[type="text"], select {
+      margin-top: 10px;
+      margin-bottom: 10px;
+      width: 100%;
+      padding: 6px;
+    }
+    button {
+      background-color: #e53935;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #c62828;
+    }
+    #result {
+      margin-top: 15px;
+      font-size: 0.95rem;
+      color: #444;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <img src="logo.png" alt="Leena Logo" />
+  </div>
+
+  <h2>Import Visitors via CSV or Excel</h2>
+  <input type="file" id="csvFile" accept=".csv, .xlsx" />
+
+  <label>Override Source (optional)</label>
+  <input type="text" id="source" placeholder="e.g. import-upload" />
+
+  <label>Override Origin (optional)</label>
+  <input type="text" id="origin" placeholder="e.g. massimport" />
+
+  <label><input type="checkbox" id="sendEmail" /> Send Email to imported visitors</label>
+
+  <label>Email Template</label>
+  <select id="templateSelect">
+    <option value="">Select template</option>
+  </select>
+
+  <br />
+  <button onclick="uploadFile()">Upload</button>
+  <div id="result"></div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const expoId = localStorage.getItem('selectedExpoId');
+
+    async function loadTemplates() {
+      const dropdown = document.getElementById('templateSelect');
+      try {
+        const res = await fetch(`http://localhost:3000/api/templates/all?expoId=${expoId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const templates = await res.json();
+        if (Array.isArray(templates)) {
+          templates.forEach(tpl => {
+            const option = document.createElement('option');
+            option.value = tpl.id;
+            option.textContent = tpl.subject;
+            dropdown.appendChild(option);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load templates', err);
+      }
+    }
+
+    async function uploadFile() {
+      const fileInput = document.getElementById('csvFile');
+      const file = fileInput.files[0];
+      const source = document.getElementById('source').value.trim();
+      const origin = document.getElementById('origin').value.trim();
+      const sendEmail = document.getElementById('sendEmail').checked;
+      const templateId = document.getElementById('templateSelect').value;
+      const result = document.getElementById('result');
+
+      if (!file) {
+        result.textContent = 'Please select a file.';
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('expoId', expoId);
+      if (source) formData.append('source', source);
+      if (origin) formData.append('origin', origin);
+      if (sendEmail) formData.append('sendEmail', 'true');
+      if (templateId) formData.append('templateId', templateId);
+
+      try {
+        const res = await fetch('http://localhost:3000/api/import', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
+        });
+        const data = await res.json();
+        if (res.ok) {
+          result.textContent = `✅ Imported ${data.successCount} records. ${data.failedCount} failed.`;
+        } else {
+          result.textContent = '❌ Error: ' + (data.error || 'Upload failed.');
+        }
+      } catch (err) {
+        console.error(err);
+        result.textContent = '❌ Upload error.';
+      }
+    }
+
+    loadTemplates();
+  </script>
+</body>
+</html>

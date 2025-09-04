@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard - Leena</title>
+  <style>
+    body {
+      background-color: #f3f4f6;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 2rem;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    .form-section, .table-section {
+      background: white;
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+    input {
+      padding: 0.75rem;
+      margin-bottom: 1rem;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background-color: #2e7d32;
+      color: white;
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-right: 0.5rem;
+    }
+    button:hover {
+      background-color: #1b5e20;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 0.75rem;
+      text-align: left;
+    }
+    th {
+      background-color: #e53935;
+      color: white;
+    }
+    .delete-btn {
+      background-color: #c62828;
+    }
+    .delete-btn:hover {
+      background-color: #b71c1c;
+    }
+  </style>
+</head>
+<body>
+  <h1>Super Admin Panel</h1>
+
+  <div class="form-section">
+    <h2>Create New Organizer</h2>
+    <input type="text" id="orgName" placeholder="Organizer Name" />
+    <input type="email" id="orgEmail" placeholder="Email (login)" />
+    <input type="password" id="orgPassword" placeholder="Password" />
+    <input type="text" id="orgLogo" placeholder="Logo URL (optional)" />
+    <button onclick="createOrganizer()">Create Organizer</button>
+    <div id="createMessage" style="color: green; margin-top: 1rem;"></div>
+  </div>
+
+  <div class="table-section">
+    <h2>All Organizers</h2>
+    <table id="organizerTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Logo</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Organizer rows will go here -->
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function fetchOrganizers() {
+      try {
+        const res = await fetch('http://localhost:3000/api/organizers');
+        const data = await res.json();
+        const tbody = document.querySelector('#organizerTable tbody');
+        tbody.innerHTML = '';
+
+        data.forEach(org => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${org.id}</td>
+            <td>${org.name}</td>
+            <td>${org.email}</td>
+            <td>${org.logo_url || ''}</td>
+            <td>${new Date(org.created_at).toLocaleString()}</td>
+            <td>
+              <button onclick="exportVisitors(${org.id})">Export</button>
+              <button class="delete-btn" onclick="deleteOrganizer(${org.id})">Delete</button>
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (err) {
+        console.error('Failed to load organizers', err);
+      }
+    }
+
+    async function createOrganizer() {
+      const name = document.getElementById('orgName').value.trim();
+      const email = document.getElementById('orgEmail').value.trim();
+      const password = document.getElementById('orgPassword').value.trim();
+      const logo = document.getElementById('orgLogo').value.trim();
+      const message = document.getElementById('createMessage');
+
+      message.textContent = '';
+
+      if (!name || !email || !password) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      try {
+        const res = await fetch('http://localhost:3000/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password, logo_url: logo })
+        });
+
+        if (res.ok) {
+          message.textContent = 'Organizer created successfully!';
+          document.getElementById('orgName').value = '';
+          document.getElementById('orgEmail').value = '';
+          document.getElementById('orgPassword').value = '';
+          document.getElementById('orgLogo').value = '';
+          fetchOrganizers();
+        } else {
+          alert('Failed to create organizer');
+        }
+      } catch (err) {
+        alert('Server error. Try again.');
+      }
+    }
+
+    async function deleteOrganizer(id) {
+      if (!confirm('Are you sure you want to delete this organizer?')) return;
+
+      try {
+        const res = await fetch(`http://localhost:3000/api/organizers/${id}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          fetchOrganizers();
+        } else {
+          alert('Failed to delete organizer');
+        }
+      } catch (err) {
+        alert('Error deleting organizer');
+      }
+    }
+
+    function exportVisitors(organizerId) {
+      window.open(`http://localhost:3000/api/visitors/export/${organizerId}`, '_blank');
+    }
+
+    fetchOrganizers();
+  </script>
+</body>
+</html>
+
