@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { processEmailTemplate, sendEmail } = require('../utils/email');
+const { generateQRCode } = require('../utils/qrcode');
 const { v4: uuidv4 } = require('uuid');
 
 // Send single email
@@ -34,7 +35,10 @@ router.post('/single', authMiddleware, async (req, res) => {
         if (save_to_database) {
             const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
             qrCode = generate_qr ? uuidv4() : null;
-            badgeUrl = qrCode ? `${process.env.BASE_URL}/badge-print.html?qr=${qrCode}` : null;
+
+            if (qrCode) {
+                badgeUrl = `${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/badge-print.html?qr=${qrCode}`;
+            }
 
             if (record_type === 'visitor') {
                 const result = await pool.query(`
@@ -60,7 +64,7 @@ router.post('/single', authMiddleware, async (req, res) => {
             email: recipient.email,
             company: recipient.company || '',
             expo_name: expo.name,
-            qr_code: qrCode ? `<img src="${process.env.BASE_URL}/api/qr/${qrCode}" alt="QR Code">` : '',
+            qr_code: qrCode ? `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qrCode}" alt="QR Code" style="max-width: 200px;">` : '',
             badge_url: badgeUrl || '',
             date: new Date().toLocaleDateString()
         };
@@ -71,12 +75,13 @@ router.post('/single', authMiddleware, async (req, res) => {
         const success = await sendEmail(recipient.email, subject, html);
 
         await pool.query(`
-            INSERT INTO email_logs (organizer_id, template_id, expo_id, recipient_email, recipient_name, subject, status, visitor_id, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+            INSERT INTO email_logs (organizer_id, template_id, expo_id, recipient, recipient_email, recipient_name, subject, status, visitor_id, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
         `, [
             organizerId,
             template_id,
             expo_id,
+            recipient.email,
             recipient.email,
             recipient.name,
             subject,
@@ -129,7 +134,10 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                 if (save_to_database) {
                     const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
                     qrCode = generate_qr ? uuidv4() : null;
-                    badgeUrl = qrCode ? `${process.env.BASE_URL}/badge-print.html?qr=${qrCode}` : null;
+
+                    if (qrCode) {
+                        badgeUrl = `${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/badge-print.html?qr=${qrCode}`;
+                    }
 
                     if (record_type === 'visitor') {
                         const existing = await pool.query(`SELECT id FROM visitors WHERE email = $1 AND expo_id = $2`, [recipient.email, expo_id]);
@@ -159,7 +167,7 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                     email: recipient.email,
                     company: recipient.company || '',
                     expo_name: expo.name,
-                    qr_code: qrCode ? `<img src="${process.env.BASE_URL}/api/qr/${qrCode}" alt="QR Code">` : '',
+                    qr_code: qrCode ? `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qrCode}" alt="QR Code" style="max-width: 200px;">` : '',
                     badge_url: badgeUrl || '',
                     date: new Date().toLocaleDateString()
                 };
@@ -171,12 +179,13 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                 if (success) sent++;
 
                 await pool.query(`
-                    INSERT INTO email_logs (organizer_id, template_id, expo_id, recipient_email, recipient_name, subject, status, visitor_id, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+                    INSERT INTO email_logs (organizer_id, template_id, expo_id, recipient, recipient_email, recipient_name, subject, status, visitor_id, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
                 `, [
                     organizerId,
                     template_id,
                     expo_id,
+                    recipient.email,
                     recipient.email,
                     recipient.name,
                     subject,

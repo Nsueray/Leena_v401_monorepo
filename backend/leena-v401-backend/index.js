@@ -1,4 +1,3 @@
-// index.js - Main Server File (FIXED VERSION)
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -19,10 +18,7 @@ pool.query('SELECT NOW()', (err, res) => {
 });
 
 // --- Global Middleware (ORDER MATTERS!) ---
-app.use(cors({
-    origin: '*',
-    credentials: true
-}));
+app.use(cors({ origin: '*', credentials: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -45,68 +41,15 @@ app.get('/health', (req, res) => {
 let authRoutes, organizerRoutes, expoRoutes, visitorRoutes;
 let formRoutes, checkinRoutes, emailTemplateRoutes, emailSendRoutes, reportRoutes;
 
-try {
-    authRoutes = require('./routes/auth');
-    console.log('✓ Auth routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load auth routes:', err.message);
-}
-
-try {
-    organizerRoutes = require('./routes/organizers');
-    console.log('✓ Organizer routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load organizer routes:', err.message);
-}
-
-try {
-    expoRoutes = require('./routes/expos');
-    console.log('✓ Expo routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load expo routes:', err.message);
-}
-
-try {
-    visitorRoutes = require('./routes/visitors');
-    console.log('✓ Visitor routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load visitor routes:', err.message);
-}
-
-try {
-    formRoutes = require('./routes/forms');
-    console.log('✓ Form routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load form routes:', err.message);
-}
-
-try {
-    checkinRoutes = require('./routes/checkins');
-    console.log('✓ Checkin routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load checkin routes:', err.message);
-}
-
-try {
-    emailTemplateRoutes = require('./routes/emailTemplates');
-    console.log('✓ Email template routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load email template routes:', err.message);
-}
-
-try {
-    emailSendRoutes = require('./routes/emailSend');
-    console.log('✓ Email send routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load email send routes:', err.message);
-}
-
-try {
-    reportRoutes = require('./routes/reports');
-    console.log('✓ Report routes loaded');
-} catch (err) {
-    console.error('✗ Failed to load report routes:', err.message);
-}
+try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
+try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
+try { expoRoutes = require('./routes/expos'); console.log('✓ Expo routes loaded'); } catch (err) { console.error('✗ Failed to load expo routes:', err.message); }
+try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
+try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
+try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
+try { emailTemplateRoutes = require('./routes/emailTemplates'); console.log('✓ Email template routes loaded'); } catch (err) { console.error('✗ Failed to load email template routes:', err.message); }
+try { emailSendRoutes = require('./routes/emailSend'); console.log('✓ Email send routes loaded'); } catch (err) { console.error('✗ Failed to load email send routes:', err.message); }
+try { reportRoutes = require('./routes/reports'); console.log('✓ Report routes loaded'); } catch (err) { console.error('✗ Failed to load report routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -118,6 +61,43 @@ if (checkinRoutes) app.use('/api/checkins', checkinRoutes);
 if (emailTemplateRoutes) app.use('/api/email-templates', emailTemplateRoutes);
 if (emailSendRoutes) app.use('/api/email-send', emailSendRoutes);
 if (reportRoutes) app.use('/api/reports', reportRoutes);
+
+// --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
+const authMiddleware = require('./middleware/authMiddleware');
+app.get('/api/templates', authMiddleware, async (req, res) => {
+    try {
+        const organizerId = req.organizer_id;
+        const query = `
+            SELECT id, name, subject
+            FROM email_templates
+            WHERE organizer_id = $1 AND is_active = true
+            ORDER BY created_at DESC
+        `;
+        const result = await pool.query(query, [organizerId]);
+        res.json(result.rows); // ✅ SADECE ARRAY döndür
+    } catch (error) {
+        console.error('Error fetching /api/templates:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch templates'
+        });
+    }
+});
+
+// ✅ --- QR Code dynamic image endpoint ---
+app.get('/api/qr-image/:qrcode', async (req, res) => {
+    try {
+        const QRCode = require('qrcode');
+        const buffer = await QRCode.toBuffer(req.params.qrcode, {
+            width: 300,
+            margin: 2
+        });
+        res.setHeader('Content-Type', 'image/png');
+        res.send(buffer);
+    } catch (error) {
+        res.status(500).send('QR Error');
+    }
+});
 
 // --- Root Endpoint ---
 app.get('/', (req, res) => {

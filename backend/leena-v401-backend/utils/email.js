@@ -1,4 +1,5 @@
 const sgMail = require('@sendgrid/mail');
+const { generateQRCode, generateBadgeUrl } = require('./qrcode');
 
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
@@ -52,13 +53,15 @@ async function sendEmail(to, subject, html) {
 }
 
 /**
- * Send registration confirmation
+ * Send registration confirmation with generated QR and badge link
  * @param {object} visitor
- * @param {string} qrCodeDataUrl
- * @param {string} badgeUrl
  * @returns {Promise<boolean>}
  */
-async function sendRegistrationEmail(visitor, qrCodeDataUrl, badgeUrl) {
+async function sendRegistrationEmail(visitor) {
+    const qr_code = visitor.qr_code || visitor.qrCode || visitor.badge_id || '';
+    const badgeUrl = generateBadgeUrl(qr_code);
+    const qrCodeDataUrl = await generateQRCode(qr_code);
+
     const template = `
         <!DOCTYPE html>
         <html>
@@ -67,8 +70,8 @@ async function sendRegistrationEmail(visitor, qrCodeDataUrl, badgeUrl) {
                 body { font-family: Arial, sans-serif; }
                 .container { max-width: 600px; margin: 0 auto; padding: 20px; }
                 .header { background: #667eea; color: white; padding: 30px; text-align: center; }
-                .content { padding: 30px; background: #f8f9fa; }
-                .button { padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; }
+                .content { padding: 30px; background: #f8f9fa; text-align: center; }
+                .button { padding: 10px 20px; background: #667eea; color: white; text-decoration: none; border-radius: 5px; display: inline-block; }
             </style>
         </head>
         <body>
