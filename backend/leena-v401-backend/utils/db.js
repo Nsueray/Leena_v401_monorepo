@@ -8,6 +8,9 @@ const pool = new Pool({
   database: process.env.PGDATABASE || 'leena_v401',
   password: process.env.PGPASSWORD || '',
   port: process.env.PGPORT || 5432,
+  ssl: {
+    rejectUnauthorized: false
+  }
 });
 
 module.exports = pool;
