@@ -18,7 +18,20 @@ pool.query('SELECT NOW()', (err, res) => {
 });
 
 // --- Global Middleware (ORDER MATTERS!) ---
-app.use(cors({ origin: '*', credentials: true }));
+const allowedOrigins = ['https://leena.app', 'https://www.leena.app'];
+app.use(cors({
+    origin: function (origin, callback) {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('CORS not allowed from this origin: ' + origin));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -30,7 +43,7 @@ app.use((req, res, next) => {
 
 // --- Static Files ---
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-app.use(express.static(path.join(__dirname, '../../frontend/leena-v401-clean')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Health Check ---
 app.get('/health', (req, res) => {
@@ -74,7 +87,7 @@ app.get('/api/templates', authMiddleware, async (req, res) => {
             ORDER BY created_at DESC
         `;
         const result = await pool.query(query, [organizerId]);
-        res.json(result.rows); // ✅ SADECE ARRAY döndür
+        res.json(result.rows);
     } catch (error) {
         console.error('Error fetching /api/templates:', error);
         res.status(500).json({
