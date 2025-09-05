@@ -1,4 +1,4 @@
--- initial.sql - Leena EMS v401 (full schema with all columns used by API)
+-- initial.sql - Leena EMS v401 (clean schema with password fix)
 
 -- Drop all tables (safe cascade)
 DROP TABLE IF EXISTS checkins, visitors, forms, expos, organizers, email_templates, email_queue, email_logs CASCADE;
@@ -8,8 +8,7 @@ CREATE TABLE IF NOT EXISTS organizers (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT UNIQUE NOT NULL,
-  password TEXT NOT NULL,
-  password_hash TEXT,
+  password_hash TEXT NOT NULL,
   logo_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
