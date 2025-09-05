@@ -184,6 +184,32 @@ app.use((err, req, res, next) => {
     });
 });
 
+// --- TEMP: RUN MIGRATION FROM initial.sql ---
+const fs = require('fs');
+const { Pool } = require('pg');
+
+(async () => {
+    const sqlPath = path.join(__dirname, 'initial.sql');
+    if (fs.existsSync(sqlPath)) {
+        const sql = fs.readFileSync(sqlPath, 'utf8');
+        const client = new Pool({
+            connectionString: process.env.DATABASE_URL,
+            ssl: { rejectUnauthorized: false }
+        });
+        try {
+            console.log('🚀 Running migration from initial.sql...');
+            await client.query(sql);
+            console.log('✅ Migration completed.');
+        } catch (err) {
+            console.error('❌ Migration failed:', err.message);
+        } finally {
+            await client.end();
+        }
+    } else {
+        console.log('⚠️ No migration file found: initial.sql');
+    }
+})();
+
 // --- Server Start ---
 const server = app.listen(PORT, () => {
     console.log('═══════════════════════════════════════');
