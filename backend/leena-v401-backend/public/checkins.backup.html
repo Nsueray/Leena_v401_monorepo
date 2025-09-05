@@ -72,12 +72,8 @@
     const expoId = localStorage.getItem('selectedExpoId');
 
     async function fetchCheckins() {
-      // Use relative path that works both locally and in production
-      const res = await fetch(`/api/checkins?expoId=${expoId}`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const res = await fetch(`http://localhost:3000/api/checkins?expoId=${expoId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const checkins = await res.json();
       const body = document.getElementById('checkinBody');

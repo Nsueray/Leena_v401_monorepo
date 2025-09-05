@@ -53,12 +53,8 @@
     const expoId = localStorage.getItem('selectedExpoId');
 
     async function loadReport() {
-      // Use relative path that works both locally and in production
-      const res = await fetch(`/api/reports?expoId=${expoId}`, {
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+      const res = await fetch(`http://localhost:3000/api/reports?expoId=${expoId}`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       const report = await res.json();
