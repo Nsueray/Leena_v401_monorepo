@@ -553,7 +553,7 @@
                 if (!response.ok) throw new Error('Could not fetch visitors');
 
                 const data = await response.json();
-                const visitors = data.data || [];
+                const visitors = data.visitors || [];
 
                 let content = `
                     <h2 class="mb-4">
