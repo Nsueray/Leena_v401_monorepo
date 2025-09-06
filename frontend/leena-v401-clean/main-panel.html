@@ -616,7 +616,7 @@
                                 <td>${v.name || fields.name || fields.full_name || '-'}</td>
                                 <td>${v.email || fields.email || '-'}</td>
                                 <td>${v.company || fields.company || '-'}</td>
-                                <td>${fields.country || '-'}</td>
+                                <td>${v.country || fields.country || '-'}</td>
                                 <td>${v.source || '-'}</td>
                                 <td>${new Date(v.created_at).toLocaleDateString()}</td>
                             </tr>
