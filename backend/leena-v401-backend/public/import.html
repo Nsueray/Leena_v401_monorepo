@@ -1,139 +1,542 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Import Visitors</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background-color: #f8f8f8;
-      padding: 20px;
-    }
-    .logo {
-      text-align: center;
-      margin-bottom: 1rem;
-    }
-    .logo img {
-      height: 200px;
-    }
-    h2 {
-      color: #333;
-    }
-    input[type="file"], input[type="text"], select {
-      margin-top: 10px;
-      margin-bottom: 10px;
-      width: 100%;
-      padding: 6px;
-    }
-    button {
-      background-color: #e53935;
-      color: white;
-      border: none;
-      padding: 8px 14px;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    button:hover {
-      background-color: #c62828;
-    }
-    #result {
-      margin-top: 15px;
-      font-size: 0.95rem;
-      color: #444;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visitor Import Panel - Leena EMS v401</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #2A0845 0%, #6441A5 100%);
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }
+        
+        .main-container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .header-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px 15px 0 0;
+            padding: 20px;
+            color: white;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .content-panel {
+            background: white;
+            border-radius: 0 0 15px 15px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+        
+        .upload-zone {
+            border: 3px dashed #6441A5;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            background: #f8f9fa;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-zone:hover {
+            background: #e9ecef;
+            border-color: #2A0845;
+        }
+        
+        .upload-zone.dragover {
+            background: #e3d5ff;
+            border-color: #2A0845;
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #6441A5 0%, #2A0845 100%);
+            border: none;
+            padding: 12px 30px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(100, 65, 165, 0.3);
+        }
+        
+        .result-item {
+            padding: 10px;
+            margin: 5px 0;
+            border-left: 4px solid #28a745;
+            background: #f8f9fa;
+        }
+        
+        .result-item.error {
+            border-left-color: #dc3545;
+            background: #fff5f5;
+        }
+        
+        .spinner-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .spinner-overlay.active {
+            display: flex;
+        }
+        
+        .file-info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .file-info.active {
+            display: block;
+        }
+        
+        .unauthorized-message {
+            text-align: center;
+            color: white;
+            padding: 50px;
+        }
+    </style>
 </head>
 <body>
-  <div class="logo">
-    <img src="logo.png" alt="Leena Logo" />
-  </div>
+    <div class="spinner-overlay" id="loadingSpinner">
+        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
 
-  <h2>Import Visitors via CSV or Excel</h2>
-  <input type="file" id="csvFile" accept=".csv, .xlsx" />
+    <div class="main-container">
+        <div class="header-panel">
+            <h2 class="mb-0">
+                <i class="bi bi-cloud-upload"></i> Visitor Import Panel
+            </h2>
+            <p class="mb-0 mt-2 opacity-75">Leena EMS v401 - Bulk Import System</p>
+        </div>
+        
+        <div class="content-panel" id="mainContent">
+            <!-- Content will be loaded dynamically -->
+        </div>
+    </div>
 
-  <label>Override Source (optional)</label>
-  <input type="text" id="source" placeholder="e.g. import-upload" />
+    <script>
+        const API_URL = 'https://leena.app/api';
+        let selectedFile = null;
+        let expos = [];
+        let templates = [];
 
-  <label>Override Origin (optional)</label>
-  <input type="text" id="origin" placeholder="e.g. massimport" />
-
-  <label><input type="checkbox" id="sendEmail" /> Send Email to imported visitors</label>
-
-  <label>Email Template</label>
-  <select id="templateSelect">
-    <option value="">Select template</option>
-  </select>
-
-  <br />
-  <button onclick="uploadFile()">Upload</button>
-  <div id="result"></div>
-
-  <script>
-    const token = localStorage.getItem('token');
-    const expoId = localStorage.getItem('selectedExpoId');
-
-    async function loadTemplates() {
-      const dropdown = document.getElementById('templateSelect');
-      try {
-        const res = await fetch(`http://localhost:3000/api/templates/all?expoId=${expoId}`, {
-          headers: { Authorization: `Bearer ${token}` }
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
         });
-        const templates = await res.json();
-        if (Array.isArray(templates)) {
-          templates.forEach(tpl => {
-            const option = document.createElement('option');
-            option.value = tpl.id;
-            option.textContent = tpl.subject;
-            dropdown.appendChild(option);
-          });
+
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                showUnauthorized();
+                return;
+            }
+            loadMainContent();
+            loadExpos();
+            loadTemplates();
         }
-      } catch (err) {
-        console.error('Failed to load templates', err);
-      }
-    }
 
-    async function uploadFile() {
-      const fileInput = document.getElementById('csvFile');
-      const file = fileInput.files[0];
-      const source = document.getElementById('source').value.trim();
-      const origin = document.getElementById('origin').value.trim();
-      const sendEmail = document.getElementById('sendEmail').checked;
-      const templateId = document.getElementById('templateSelect').value;
-      const result = document.getElementById('result');
-
-      if (!file) {
-        result.textContent = 'Please select a file.';
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('expoId', expoId);
-      if (source) formData.append('source', source);
-      if (origin) formData.append('origin', origin);
-      if (sendEmail) formData.append('sendEmail', 'true');
-      if (templateId) formData.append('templateId', templateId);
-
-      try {
-        const res = await fetch('http://localhost:3000/api/import', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
-        });
-        const data = await res.json();
-        if (res.ok) {
-          result.textContent = `✅ Imported ${data.successCount} records. ${data.failedCount} failed.`;
-        } else {
-          result.textContent = '❌ Error: ' + (data.error || 'Upload failed.');
+        function showUnauthorized() {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="unauthorized-message">
+                    <i class="bi bi-lock display-1"></i>
+                    <h3 class="mt-3">Unauthorized Access</h3>
+                    <p>Please login to access the import panel.</p>
+                </div>
+            `;
         }
-      } catch (err) {
-        console.error(err);
-        result.textContent = '❌ Upload error.';
-      }
-    }
 
-    loadTemplates();
-  </script>
+        function loadMainContent() {
+            document.getElementById('mainContent').innerHTML = `
+                <div class="row">
+                    <div class="col-12">
+                        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                            <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;" onchange="handleFileSelect(event)">
+                            <i class="bi bi-file-earmark-excel display-1 text-primary"></i>
+                            <h4 class="mt-3">Click to Upload Excel File</h4>
+                            <p class="text-muted">or drag and drop here (Max: 10MB)</p>
+                            <p class="small text-muted">Accepted formats: .xlsx, .xls</p>
+                        </div>
+                        
+                        <div class="file-info" id="fileInfo">
+                            <strong>Selected File:</strong> <span id="fileName"></span> 
+                            (<span id="fileSize"></span>)
+                            <button class="btn btn-sm btn-danger float-end" onclick="clearFile()">
+                                <i class="bi bi-x"></i> Remove
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-calendar-event"></i> Select Expo
+                        </label>
+                        <select class="form-select" id="expoSelect">
+                            <option value="">Loading expos...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-person-badge"></i> Visitor Type
+                        </label>
+                        <select class="form-select" id="visitorType">
+                            <option value="visitor">Visitor</option>
+                            <option value="exhibitor">Exhibitor</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-tag"></i> Source (Optional)
+                        </label>
+                        <input type="text" class="form-control" id="sourceInput" 
+                               placeholder="Will use 'manual' if not in Excel">
+                        <small class="text-muted">Leave empty to use value from Excel or default</small>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-geo-alt"></i> Origin
+                        </label>
+                        <input type="text" class="form-control" id="originInput" 
+                               value="massimport" readonly disabled>
+                        <small class="text-muted">Fixed value for bulk imports</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12 mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="sendEmailCheck" onchange="toggleEmailTemplate()">
+                            <label class="form-check-label" for="sendEmailCheck">
+                                <i class="bi bi-envelope"></i> Send confirmation email to imported visitors
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="col-12 mb-3" id="templateSection" style="display: none;">
+                        <label class="form-label">
+                            <i class="bi bi-file-text"></i> Email Template
+                        </label>
+                        <select class="form-select" id="templateSelect">
+                            <option value="">Select a template...</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <a href="#" onclick="downloadSampleExcel()" class="text-decoration-none">
+                                <i class="bi bi-download"></i> Download Sample Excel
+                            </a>
+                            <button class="btn btn-primary" onclick="startImport()">
+                                <i class="bi bi-upload"></i> Start Import
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4" id="resultsSection" style="display: none;">
+                    <div class="col-12">
+                        <h5>Import Results</h5>
+                        <div id="resultsList"></div>
+                    </div>
+                </div>
+            `;
+            
+            setupDragDrop();
+        }
+
+        function setupDragDrop() {
+            const zone = document.getElementById('uploadZone');
+            if (!zone) return;
+            
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                zone.classList.add('dragover');
+            });
+            
+            zone.addEventListener('dragleave', () => {
+                zone.classList.remove('dragover');
+            });
+            
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            });
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            // Check file size (10MB limit)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('File size exceeds 10MB limit');
+                return;
+            }
+            
+            // Check file type
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                alert('Please select an Excel file (.xlsx or .xls)');
+                return;
+            }
+            
+            selectedFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileSize').textContent = formatFileSize(file.size);
+            document.getElementById('fileInfo').classList.add('active');
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').classList.remove('active');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            else if (bytes < 1048576) return Math.round(bytes / 1024) + ' KB';
+            else return Math.round(bytes / 1048576) + ' MB';
+        }
+
+        async function loadExpos() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/expos`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    expos = await response.json();
+                    const select = document.getElementById('expoSelect');
+                    select.innerHTML = '<option value="">Select an expo...</option>';
+                    
+                    expos.forEach(expo => {
+                        const option = document.createElement('option');
+                        option.value = expo.id;
+                        option.textContent = expo.name;
+                        select.appendChild(option);
+                    });
+                    
+                    // Auto-select if there's a selected expo in localStorage
+                    const selectedExpoId = localStorage.getItem('selectedExpoId');
+                    if (selectedExpoId) {
+                        select.value = selectedExpoId;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading expos:', error);
+            }
+        }
+
+        async function loadTemplates() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_URL}/email-templates`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    templates = data.templates || [];
+                    const select = document.getElementById('templateSelect');
+                    select.innerHTML = '<option value="">Select a template...</option>';
+                    
+                    templates.forEach(template => {
+                        if (template.is_active) {
+                            const option = document.createElement('option');
+                            option.value = template.id;
+                            option.textContent = template.name;
+                            select.appendChild(option);
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading templates:', error);
+            }
+        }
+
+        function toggleEmailTemplate() {
+            const checked = document.getElementById('sendEmailCheck').checked;
+            document.getElementById('templateSection').style.display = checked ? 'block' : 'none';
+        }
+
+        async function startImport() {
+            if (!selectedFile) {
+                alert('Please select an Excel file');
+                return;
+            }
+            
+            const expoId = document.getElementById('expoSelect').value;
+            if (!expoId) {
+                alert('Please select an expo');
+                return;
+            }
+            
+            const sendEmail = document.getElementById('sendEmailCheck').checked;
+            const templateId = document.getElementById('templateSelect').value;
+            
+            if (sendEmail && !templateId) {
+                alert('Please select an email template');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('loadingSpinner').classList.add('active');
+            
+            try {
+                const token = localStorage.getItem('token');
+                const formData = new FormData();
+                
+                formData.append('file', selectedFile);
+                formData.append('expo_id', expoId);
+                formData.append('visitor_type', document.getElementById('visitorType').value);
+                formData.append('origin', 'massimport'); // Always massimport
+                
+                const sourceInput = document.getElementById('sourceInput').value.trim();
+                if (sourceInput) {
+                    formData.append('source_override', sourceInput);
+                }
+                
+                if (sendEmail) {
+                    formData.append('send_email', 'true');
+                    formData.append('template_id', templateId);
+                }
+                
+                const response = await fetch(`${API_URL}/visitors/import`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showResults(result);
+                } else {
+                    alert(result.message || 'Import failed');
+                }
+            } catch (error) {
+                console.error('Import error:', error);
+                alert('Import failed. Please try again.');
+            } finally {
+                document.getElementById('loadingSpinner').classList.remove('active');
+            }
+        }
+
+        function showResults(result) {
+            const resultsSection = document.getElementById('resultsSection');
+            const resultsList = document.getElementById('resultsList');
+            
+            resultsSection.style.display = 'block';
+            
+            let html = `
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle"></i> 
+                    Import completed: ${result.success_count || 0} successful, 
+                    ${result.failed_count || 0} failed
+                </div>
+            `;
+            
+            if (result.errors && result.errors.length > 0) {
+                html += '<h6>Errors:</h6>';
+                result.errors.forEach(error => {
+                    html += `<div class="result-item error">Row ${error.row}: ${error.message}</div>`;
+                });
+            }
+            
+            if (result.imported && result.imported.length > 0) {
+                html += '<h6>Successfully Imported:</h6>';
+                result.imported.forEach(item => {
+                    html += `
+                        <div class="result-item">
+                            ${item.name} - ${item.email} 
+                            ${item.badge_id ? `(Badge: ${item.badge_id})` : ''}
+                        </div>
+                    `;
+                });
+            }
+            
+            resultsList.innerHTML = html;
+        }
+
+        function downloadSampleExcel() {
+            const sampleData = [
+                ['name', 'email', 'company', 'phone', 'country', 'job_title'],
+                ['John Doe', 'john@example.com', 'ABC Corp', '+1234567890', 'USA', 'Manager'],
+                ['Jane Smith', 'jane@example.com', 'XYZ Ltd', '+9876543210', 'UK', 'Director']
+            ];
+            
+            // Create CSV content
+            const csvContent = sampleData.map(row => row.join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sample_import.csv';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+    </script>
 </body>
 </html>
