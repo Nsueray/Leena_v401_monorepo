@@ -141,4 +141,36 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
     }
 });
 
+// ✅ GET /api/visitors?expo_id=...
+router.get('/', authMiddleware, async (req, res) => {
+    try {
+        const { expo_id } = req.query;
+
+        if (!expo_id) {
+            return res.status(400).json({
+                success: false,
+                message: 'expo_id is required'
+            });
+        }
+
+        const result = await pool.query(`
+            SELECT id, name, email, company, country, badge_id, qr_code, created_at, source
+            FROM visitors
+            WHERE expo_id = $1
+            ORDER BY created_at DESC
+        `, [expo_id]);
+
+        res.json({
+            success: true,
+            visitors: result.rows
+        });
+    } catch (error) {
+        console.error('❌ Error fetching visitors:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to load visitors'
+        });
+    }
+});
+
 module.exports = router;
