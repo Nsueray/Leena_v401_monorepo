@@ -2,11 +2,8 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
 const { v4: uuidv4 } = require('uuid');
-const { generateQRCode, generateBadgeUrl } = require('../utils/qrcode');
-const { sendEmail } = require('../utils/email');
-const fs = require('fs').promises;
-const path = require('path');
-const QRCode = require('qrcode');
+const { generateBadgeUrl } = require('../utils/qrcode');
+const { sendEmail, processEmailTemplate } = require('../utils/email');
 
 // GET /api/visitors?expo_id=...
 router.get('/', async (req, res) => {
@@ -38,7 +35,7 @@ router.get('/', async (req, res) => {
     }
 });
 
-// POST /api/visitors/public - Public visitor form submission (UPDATED)
+// POST /api/visitors/public - Public visitor form submission (FIXED QR)
 router.post('/public', async (req, res) => {
     try {
         const {
@@ -111,6 +108,7 @@ router.post('/public', async (req, res) => {
 
         const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const qr_code = uuidv4();
+        const badge_url = generateBadgeUrl(qr_code);
 
         console.log(`📋 Creating ${visitor_type} with QR Code: ${qr_code} for expo: ${expo_id}`);
 
@@ -122,12 +120,12 @@ router.post('/public', async (req, res) => {
             result = await pool.query(
                 `INSERT INTO exhibitors (
                     name, email, phone, company, form_id, expo_id,
-                    badge_id, qr_code, source, origin, custom_fields, created_at,
+                    badge_id, qr_code, badge_url, source, origin, custom_fields, created_at,
                     organizer_id, booth_number
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6,
-                    $7, $8, $9, $10, $11, NOW(),
-                    $12, $13
+                    $7, $8, $9, $10, $11, $12, NOW(),
+                    $13, $14
                 )
                 RETURNING id, name, email, badge_id, qr_code, created_at`,
                 [
@@ -139,6 +137,7 @@ router.post('/public', async (req, res) => {
                     expo_id,
                     badge_id,
                     qr_code,
+                    badge_url,
                     source,
                     origin,
                     JSON.stringify(custom_fields),
@@ -152,12 +151,12 @@ router.post('/public', async (req, res) => {
             result = await pool.query(
                 `INSERT INTO visitors (
                     name, email, phone, company, form_id, expo_id,
-                    badge_id, qr_code, source, origin, custom_fields, created_at,
+                    badge_id, qr_code, badge_url, source, origin, custom_fields, created_at,
                     organizer_id
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6,
-                    $7, $8, $9, $10, $11, NOW(),
-                    $12
+                    $7, $8, $9, $10, $11, $12, NOW(),
+                    $13
                 )
                 RETURNING id, name, email, badge_id, qr_code, created_at`,
                 [
@@ -169,6 +168,7 @@ router.post('/public', async (req, res) => {
                     expo_id,
                     badge_id,
                     qr_code,
+                    badge_url,
                     source,
                     origin,
                     JSON.stringify(custom_fields),
@@ -184,28 +184,8 @@ router.post('/public', async (req, res) => {
         if (visitorEmail && form.email_template_id && form.email_html) {
             setImmediate(async () => {
                 try {
-                    // Create QR directory if it doesn't exist
-                    const qrDir = path.join(__dirname, '../uploads/qr');
-                    try {
-                        await fs.mkdir(qrDir, { recursive: true });
-                    } catch (err) {
-                        // Directory might already exist, that's fine
-                    }
-                    
-                    // Save QR code as file
-                    const qrFilename = `${qr_code}.png`;
-                    const qrPath = path.join(qrDir, qrFilename);
-                    await QRCode.toFile(qrPath, qr_code, {
-                        width: 300,
-                        margin: 2
-                    });
-                    
-                    console.log(`📁 QR saved to: /uploads/qr/${qrFilename}`);
-                    
-                    // Generate badge URL
-                    const badgeUrl = generateBadgeUrl(qr_code);
-                    
-                    // Prepare email data with relative URL for QR
+                    // IMPORTANT: Use the same approach as emailSend.js
+                    // QR code as API endpoint URL, not base64
                     const emailData = {
                         name: visitorName,
                         email: visitorEmail,
@@ -213,39 +193,21 @@ router.post('/public', async (req, res) => {
                         phone: visitorPhone || '',
                         expo_name: form.expo_name || '',
                         badge_id: badge_id,
-                        qr_code: `<img src="/uploads/qr/${qrFilename}" alt="QR Code" style="max-width: 200px;">`,
-                        badge_url: badgeUrl,
+                        // ✅ FIXED: Using same format as emailSend.js
+                        qr_code: `<img src="${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/api/qr-image/${qr_code}" alt="QR Code" style="max-width: 200px;">`,
+                        badge_url: badge_url,
                         date: new Date().toLocaleDateString(),
                         // Add all custom fields as well
                         ...custom_fields
                     };
                     
-                    console.log('🔍 QR in emailData:', emailData.qr_code);
+                    console.log('📧 Preparing email with QR endpoint:', `/api/qr-image/${qr_code}`);
                     
-                    // Process email template
-                    let emailHtml = form.email_html;
-                    let emailSubject = form.email_subject || 'Registration Confirmation';
+                    // Process email template using the same function as emailSend.js
+                    const emailHtml = processEmailTemplate(form.email_html, emailData);
+                    const emailSubject = processEmailTemplate(form.email_subject || 'Registration Confirmation', emailData);
                     
-                    // Debug: Check template before replace
-                    console.log('🔍 Template has {{qr_code}}?', emailHtml.includes('{{qr_code}}'));
-                    
-                    // Replace placeholders
-                    Object.keys(emailData).forEach(key => {
-                        const placeholder = `{{${key}}}`;
-                        const regex = new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
-                        
-                        if (key === 'qr_code') {
-                            console.log(`🔍 Replacing ${placeholder} with QR image tag`);
-                        }
-                        
-                        emailHtml = emailHtml.replace(regex, emailData[key] || '');
-                        emailSubject = emailSubject.replace(regex, emailData[key] || '');
-                    });
-                    
-                    // Debug: Check if QR image is in final HTML
-                    console.log('🔍 Final HTML has QR image path?', emailHtml.includes('/uploads/qr/'));
-                    
-                    // Send email using your email utility
+                    // Send email using the same function
                     const sent = await sendEmail(visitorEmail, emailSubject, emailHtml);
                     
                     if (sent) {
@@ -262,9 +224,9 @@ router.post('/public', async (req, res) => {
                                 organizer_id,
                                 form.email_template_id,
                                 expo_id,
-                                visitorEmail,  // recipient
-                                visitorEmail,  // recipient_email
-                                visitorName,   // recipient_name
+                                visitorEmail,
+                                visitorEmail,
+                                visitorName,
                                 emailSubject,
                                 'sent',
                                 registrant.id
@@ -288,7 +250,7 @@ router.post('/public', async (req, res) => {
                 email: registrant.email,
                 badge_id: registrant.badge_id,
                 qr_code: registrant.qr_code,
-                badge_url: `http://localhost:3000/badge-print.html?qr=${registrant.qr_code}`,
+                badge_url: badge_url,
                 type: visitor_type
             }
         });
@@ -299,6 +261,32 @@ router.post('/public', async (req, res) => {
             message: 'Failed to register',
             error: error.message
         });
+    }
+});
+
+// GET /api/qr-image/:code - QR Code Image Endpoint
+router.get('/qr-image/:code', async (req, res) => {
+    try {
+        const { code } = req.params;
+        const QRCode = require('qrcode');
+        
+        // Generate QR code as buffer
+        const buffer = await QRCode.toBuffer(code, {
+            width: 300,
+            margin: 2,
+            color: {
+                dark: '#000000',
+                light: '#FFFFFF'
+            }
+        });
+        
+        // Return as PNG image
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+        res.send(buffer);
+    } catch (error) {
+        console.error('QR generation error:', error);
+        res.status(500).send('Error generating QR code');
     }
 });
 
