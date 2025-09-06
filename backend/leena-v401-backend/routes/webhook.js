@@ -80,7 +80,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       country,
       phone,
       website,
-      visitorSource || 'zoho',
+      visitorSource ?? req.body.source ?? 'zoho',
       origin || 'zohoform',
       form_id,
       qr_code,
