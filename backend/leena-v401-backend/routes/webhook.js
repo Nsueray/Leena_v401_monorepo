@@ -8,19 +8,23 @@ const { sendEmail, processEmailTemplate } = require('../utils/email');
 // Webhook token güvenlik kontrolü
 const ZOHO_TOKEN = '98uy237fbiweuhr8h23g9rg239';
 
-router.post('/zoho', async (req, res) => {
+/**
+ * POST /api/webhook/zoho/:organizerId/:expoId
+ * Form ID opsiyoneldir
+ */
+router.post('/zoho/:organizerId/:expoId', async (req, res) => {
   try {
     const token = req.headers['x-webhook-token'];
     if (token !== ZOHO_TOKEN) {
       return res.status(403).json({ success: false, message: 'Invalid token' });
     }
 
+    const { organizerId, expoId } = req.params;
     const {
       name,
       lastName,
       email,
       company,
-      expoName,
       badgeNumber,
       sector,
       visitorCategory,
@@ -31,23 +35,29 @@ router.post('/zoho', async (req, res) => {
       country,
       phone,
       website,
+      expoName,
       form_id
     } = req.body;
 
     console.log('📥 Incoming Zoho webhook:', req.body);
 
     // Expo bilgilerini al
-    const expoResult = await pool.query(`SELECT id, organizer_id FROM expos WHERE name = $1 LIMIT 1`, [expoName]);
+    const expoResult = await pool.query(
+      `SELECT id, name FROM expos WHERE id = $1 AND organizer_id = $2 LIMIT 1`,
+      [expoId, organizerId]
+    );
+
     if (expoResult.rows.length === 0) {
-      return res.status(400).json({ success: false, message: 'Expo not found' });
+      return res.status(400).json({ success: false, message: 'Expo not found for this organizer' });
     }
 
-    const { id: expo_id, organizer_id } = expoResult.rows[0];
+    const { id: expo_id, name: expo_name } = expoResult.rows[0];
 
     const badge_id = badgeNumber || `BADGE-${Date.now()}`;
     const qr_code = uuidv4();
     const badge_url = generateBadgeUrl(qr_code);
 
+    // Visitor ekleme
     const insertQuery = `
       INSERT INTO visitors (
         name, last_name, email, company, badge_id, expo_name,
@@ -71,7 +81,7 @@ router.post('/zoho', async (req, res) => {
       email,
       company,
       badge_id,
-      expoName,
+      expoName || expo_name,
       sector,
       visitorCategory,
       visitorStatus,
@@ -82,24 +92,24 @@ router.post('/zoho', async (req, res) => {
       website,
       visitorSource || 'zoho',
       'zohoform',
-      form_id,
+      form_id || null,
       qr_code,
       badge_url,
       expo_id,
-      organizer_id
+      organizerId
     ];
 
     const result = await pool.query(insertQuery, values);
     const visitor = result.rows[0];
 
-    // Email gönder
+    // Eğer form_id varsa ve email varsa → template varsa email gönder
     if (form_id && email) {
       const templateResult = await pool.query(`
         SELECT et.subject, et.html_content
         FROM forms f
         JOIN email_templates et ON et.id = f.email_template_id
         WHERE f.id = $1 AND f.organizer_id = $2
-      `, [form_id, organizer_id]);
+      `, [form_id, organizerId]);
 
       if (templateResult.rows.length > 0) {
         const { subject, html_content } = templateResult.rows[0];
@@ -110,7 +120,7 @@ router.post('/zoho', async (req, res) => {
           company,
           email,
           badge_id,
-          expo_name: expoName,
+          expo_name: expoName || expo_name,
           qr_code: `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qr_code}" alt="QR Code" style="max-width:200px;">`,
           badge_url: badge_url
         };
@@ -121,15 +131,15 @@ router.post('/zoho', async (req, res) => {
         await sendEmail(email, subjectLine, html);
         console.log('📧 Email sent to:', email);
       } else {
-        console.log('ℹ️ No template found for form', form_id);
+        console.log(`ℹ️ No email template found for form_id=${form_id}`);
       }
     }
 
-    res.status(200).json({ success: true, message: 'Visitor saved from Zoho' });
+    res.status(200).json({ success: true, message: 'Visitor saved from Zoho webhook' });
 
   } catch (err) {
     console.error('❌ Webhook error:', err);
-    res.status(500).json({ success: false, message: 'Server error' });
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 });
 

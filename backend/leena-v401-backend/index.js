@@ -52,7 +52,7 @@ app.get('/health', (req, res) => {
 
 // --- Import Route Modules ---
 let authRoutes, organizerRoutes, expoRoutes, visitorRoutes;
-let formRoutes, checkinRoutes, emailTemplateRoutes, emailSendRoutes, reportRoutes;
+let formRoutes, checkinRoutes, emailTemplateRoutes, emailSendRoutes, reportRoutes, webhookRoutes;
 
 try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
 try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
@@ -63,6 +63,7 @@ try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin rou
 try { emailTemplateRoutes = require('./routes/emailTemplates'); console.log('✓ Email template routes loaded'); } catch (err) { console.error('✗ Failed to load email template routes:', err.message); }
 try { emailSendRoutes = require('./routes/emailSend'); console.log('✓ Email send routes loaded'); } catch (err) { console.error('✗ Failed to load email send routes:', err.message); }
 try { reportRoutes = require('./routes/reports'); console.log('✓ Report routes loaded'); } catch (err) { console.error('✗ Failed to load report routes:', err.message); }
+try { webhookRoutes = require('./routes/webhook'); console.log('✓ Webhook route loaded'); } catch (err) { console.error('✗ Failed to load webhook route:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -74,7 +75,7 @@ if (checkinRoutes) app.use('/api/checkins', checkinRoutes);
 if (emailTemplateRoutes) app.use('/api/email-templates', emailTemplateRoutes);
 if (emailSendRoutes) app.use('/api/email-send', emailSendRoutes);
 if (reportRoutes) app.use('/api/reports', reportRoutes);
-try { app.use('/api/webhook', require('./routes/webhook')); console.log('✓ Webhook route loaded'); } catch (err) { console.error('✗ Failed to load webhook route:', err.message); }
+if (webhookRoutes) app.use('/api/webhook', webhookRoutes);
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
@@ -128,7 +129,8 @@ app.get('/', (req, res) => {
             checkins: '/api/checkins',
             email_templates: '/api/email-templates',
             email_send: '/api/email-send',
-            reports: '/api/reports'
+            reports: '/api/reports',
+            webhook: '/api/webhook/zoho/:organizerId/:expoId'
         }
     });
 });
@@ -171,7 +173,8 @@ app.use((req, res, next) => {
             checkins: '/api/checkins',
             reports: '/api/reports',
             email_templates: '/api/email-templates',
-            email_send: '/api/email-send'
+            email_send: '/api/email-send',
+            webhook: '/api/webhook/zoho/:organizerId/:expoId'
         }
     });
 });
