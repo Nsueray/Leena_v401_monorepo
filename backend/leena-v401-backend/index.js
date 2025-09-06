@@ -74,6 +74,7 @@ if (checkinRoutes) app.use('/api/checkins', checkinRoutes);
 if (emailTemplateRoutes) app.use('/api/email-templates', emailTemplateRoutes);
 if (emailSendRoutes) app.use('/api/email-send', emailSendRoutes);
 if (reportRoutes) app.use('/api/reports', reportRoutes);
+try { app.use('/api/webhook', require('./routes/webhook')); console.log('✓ Webhook route loaded'); } catch (err) { console.error('✗ Failed to load webhook route:', err.message); }
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
