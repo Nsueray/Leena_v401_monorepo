@@ -1,310 +1,502 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Print Your Event Badge</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
-    }
-    .container {
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      max-width: 600px;
-      width: 100%;
-      overflow: hidden;
-    }
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
-      text-align: center;
-    }
-    .header h1 { font-size: 28px; margin-bottom: 10px; }
-    .badge-container { padding: 40px; text-align: center; }
-    .badge {
-      border: 3px solid #e0e0e0;
-      border-radius: 15px;
-      padding: 30px;
-      display: inline-block;
-      background: white;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    .badge-header { margin-bottom: 20px; }
-    .badge-title {
-      font-size: 18px;
-      color: #333;
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    .badge-subtitle { font-size: 14px; color: #666; }
-    .visitor-info { margin: 20px 0; text-align: left; }
-    .info-row {
-      padding: 10px;
-      border-bottom: 1px solid #f0f0f0;
-    }
-    .info-label {
-      font-weight: 600;
-      color: #666;
-      font-size: 12px;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-    .info-value { color: #333; font-size: 16px; }
-    .qr-section {
-      margin: 30px 0;
-      padding: 20px;
-      background: #f8f9fa;
-      border-radius: 10px;
-    }
-    .qr-code {
-      width: 200px;
-      height: 200px;
-      margin: 0 auto;
-      padding: 10px;
-      background: white;
-      border-radius: 10px;
-    }
-    .badge-footer {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 2px dashed #e0e0e0;
-      font-size: 12px;
-      color: #999;
-    }
-    .actions {
-      padding: 30px;
-      background: #f8f9fa;
-      display: flex;
-      justify-content: center;
-      gap: 15px;
-    }
-    .btn {
-      padding: 12px 30px;
-      border: none;
-      border-radius: 25px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s;
-      text-decoration: none;
-      display: inline-block;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-    }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
-    .btn-secondary {
-      background: white;
-      color: #667eea;
-      border: 2px solid #667eea;
-    }
-    .btn-secondary:hover {
-      background: #667eea;
-      color: white;
-    }
-    .loading {
-      text-align: center;
-      padding: 60px;
-    }
-    .loading-spinner {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #667eea;
-      border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 20px;
-    }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    .error {
-      text-align: center;
-      padding: 60px;
-      color: #dc3545;
-    }
-    .error i {
-      font-size: 60px;
-      margin-bottom: 20px;
-    }
-    @media print {
-      body { background: white; padding: 0; }
-      .container {
-        box-shadow: none;
-        max-width: 100%;
-      }
-      .header, .actions { display: none; }
-      .badge-container { padding: 0; }
-      .badge {
-        border: 2px solid #333;
-        box-shadow: none;
-      }
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Print Badge - Leena EMS v401</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        /* Screen View Container */
+        .screen-container {
+            text-align: center;
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        .screen-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 20px;
+            border-radius: 15px 15px 0 0;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .screen-header h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        
+        .preview-container {
+            background: white;
+            padding: 30px;
+            border-radius: 0 0 15px 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+        
+        .badge-preview-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        /* Badge Styles - 100mm x 50mm */
+        .badge {
+            width: 100mm;
+            height: 50mm;
+            background: white;
+            border: 2px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            padding: 5mm;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .badge-content {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            gap: 5mm;
+        }
+        
+        .badge-qr {
+            flex-shrink: 0;
+            width: 35mm;
+            height: 35mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 3mm;
+            padding: 2mm;
+        }
+        
+        .badge-qr img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+        
+        .badge-info {
+            flex-grow: 1;
+            text-align: left;
+            padding: 0 3mm;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .badge-name {
+            font-size: 6mm;
+            font-weight: bold;
+            color: #212529;
+            line-height: 1.2;
+            margin-bottom: 2mm;
+            letter-spacing: 0.2mm;
+        }
+        
+        .badge-company {
+            font-size: 4.5mm;
+            color: var(--primary-color);
+            line-height: 1.3;
+            font-weight: 500;
+        }
+        
+        .badge-decoration {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 30mm;
+            height: 100%;
+            background: var(--primary-gradient);
+            opacity: 0.05;
+            transform: skewX(-20deg);
+            transform-origin: top right;
+        }
+        
+        /* Control Buttons */
+        .control-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 30px;
+            border-radius: 10px;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        
+        /* Status Messages */
+        .status-message {
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .status-message.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+        
+        .status-message.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+        
+        .status-message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            display: block;
+        }
+        
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3rem;
+            color: var(--primary-color);
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+            
+            .screen-container,
+            .screen-header,
+            .preview-container,
+            .badge-preview-wrapper,
+            .control-buttons,
+            .status-message {
+                display: none !important;
+            }
+            
+            .badge {
+                display: flex !important;
+                position: fixed;
+                top: 0;
+                left: 0;
+                border: none;
+                box-shadow: none;
+                margin: 0;
+                page-break-after: avoid;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            
+            .badge-decoration {
+                display: block !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+        
+        @page {
+            size: 100mm 50mm;
+            margin: 0;
+        }
+        
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .screen-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .badge-preview-wrapper {
+                overflow-x: auto;
+                padding: 10px;
+            }
+            
+            .control-buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>🎫 Your Event Badge</h1>
-      <p>Print or save your badge for the event</p>
+    <div class="screen-container">
+        <div class="screen-header">
+            <h1>
+                <i class="bi bi-printer"></i>
+                Badge Print System
+            </h1>
+        </div>
+        
+        <div class="preview-container">
+            <div id="statusMessage" class="status-message"></div>
+            
+            <div id="loadingState" class="loading">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading badge data...</span>
+                </div>
+                <p class="mt-3">Loading badge information...</p>
+            </div>
+            
+            <div id="badgeContent" style="display: none;">
+                <h3 class="mb-4">Badge Preview</h3>
+                
+                <div class="badge-preview-wrapper">
+                    <div class="badge" id="badge">
+                        <div class="badge-decoration"></div>
+                        <div class="badge-content">
+                            <div class="badge-qr">
+                                <img id="qrCodeImage" src="" alt="QR Code">
+                            </div>
+                            <div class="badge-info">
+                                <div class="badge-name" id="visitorName">Loading...</div>
+                                <div class="badge-company" id="visitorCompany">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="control-buttons">
+                    <button class="btn btn-primary" onclick="printBadge()">
+                        <i class="bi bi-printer"></i> Print Badge
+                    </button>
+                    <button class="btn btn-secondary" onclick="goBack()">
+                        <i class="bi bi-arrow-left"></i> Back to Scanner
+                    </button>
+                </div>
+                
+                <div class="mt-4 text-muted">
+                    <small>
+                        <i class="bi bi-info-circle"></i> 
+                        Badge will be printed in 100mm x 50mm format
+                    </small>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="content">
-      <div class="loading">
-        <div class="loading-spinner"></div>
-        <p>Loading your badge...</p>
-      </div>
+    <!-- Hidden badge for printing -->
+    <div class="badge" id="printBadge" style="display: none;">
+        <div class="badge-decoration"></div>
+        <div class="badge-content">
+            <div class="badge-qr">
+                <img id="printQrCodeImage" src="" alt="QR Code">
+            </div>
+            <div class="badge-info">
+                <div class="badge-name" id="printVisitorName">Loading...</div>
+                <div class="badge-company" id="printVisitorCompany">Loading...</div>
+            </div>
+        </div>
     </div>
-  </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-  <script>
-    const API_URL = 'http://localhost:3000/api';
-
-    function getQRFromURL() {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('qr');
-    }
-
-    async function loadBadge() {
-      const qrCode = getQRFromURL();
-
-      if (!qrCode) {
-        showError('Invalid badge link');
-        return;
-      }
-
-      displayBadge({
-        qr_code: qrCode,
-        name: 'Loading...',
-        company: '',
-        badge_id: 'Loading...'
-      });
-
-      fetchVisitorData(qrCode);
-    }
-
-    async function fetchVisitorData(qrCode) {
-      try {
-        const response = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
-        if (response.ok) {
-          const data = await response.json();
-          displayBadge(data.visitor);
+    <script>
+        const API_BASE_URL = '/api';
+        let visitorData = null;
+        let qrCode = null;
+        let autoPrint = false;
+        
+        // Get QR code from URL
+        const urlParams = new URLSearchParams(window.location.search);
+        qrCode = urlParams.get('qr');
+        autoPrint = urlParams.get('autoprint') === 'true';
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!qrCode) {
+                showError('No QR code provided. Redirecting to scanner...');
+                setTimeout(() => {
+                    window.location.href = 'qrscanner.html';
+                }, 2000);
+                return;
+            }
+            
+            await loadBadgeData();
+        });
+        
+        // Load badge data from API
+        async function loadBadgeData() {
+            try {
+                // Fetch visitor data
+                const response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`);
+                
+                if (!response.ok) {
+                    throw new Error('Badge not found');
+                }
+                
+                visitorData = await response.json();
+                
+                // Display badge data
+                displayBadge();
+                
+                // Auto print if requested
+                if (autoPrint) {
+                    setTimeout(() => {
+                        printBadge();
+                    }, 500);
+                }
+                
+            } catch (error) {
+                console.error('Error loading badge:', error);
+                showError('Failed to load badge data. Please try again.');
+                setTimeout(() => {
+                    window.location.href = 'qrscanner.html';
+                }, 3000);
+            }
         }
-      } catch (error) {
-        console.log('Could not fetch visitor data, using QR code only');
-      }
-    }
-
-    function displayBadge(visitor) {
-      const content = document.getElementById('content');
-      const qrCodeValue = visitor.qr_code || getQRFromURL();
-      const visitorName = visitor.name && visitor.name !== 'Loading...' ? visitor.name : 'Guest';
-      const badgeId = visitor.badge_id || qrCodeValue.substr(0, 8).toUpperCase();
-
-      content.innerHTML = `
-        <div class="badge-container">
-          <div class="badge">
-            <div class="badge-header">
-              <div class="badge-title">EVENT BADGE</div>
-              <div class="badge-subtitle">Leena Events 2025</div>
-            </div>
-            <div class="visitor-info">
-              <div class="info-row">
-                <div class="info-label">Name</div>
-                <div class="info-value">${visitorName}</div>
-              </div>
-              ${visitor.company ? `
-              <div class="info-row">
-                <div class="info-label">Company</div>
-                <div class="info-value">${visitor.company}</div>
-              </div>` : ''}
-              <div class="info-row">
-                <div class="info-label">Badge ID</div>
-                <div class="info-value">${badgeId}</div>
-              </div>
-            </div>
-            <div class="qr-section">
-              <div class="qr-code" id="qrcode"></div>
-              <p style="margin-top: 10px; color: #666; font-size: 12px;">
-                Scan for quick check-in
-              </p>
-            </div>
-            <div class="badge-footer">
-              <p>Please wear this badge at all times during the event</p>
-              <p style="margin-top: 5px;">© ${new Date().getFullYear()} Leena Events</p>
-            </div>
-          </div>
-        </div>
-        <div class="actions">
-          <button class="btn btn-primary" onclick="window.print()">
-            🖨️ Print Badge
-          </button>
-          <button class="btn btn-secondary" onclick="downloadBadge()">
-            💾 Save as Image
-          </button>
-        </div>
-      `;
-
-      // ✅ FIXED QR CODE GENERATION
-      QRCode.toDataURL(qrCodeValue, {
-        width: 180,
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
+        
+        // Display badge with visitor data
+        function displayBadge() {
+            if (!visitorData) return;
+            
+            // Construct full name
+            const fullName = `${visitorData.name || ''} ${visitorData.last_name || ''}`.trim() || 'Guest';
+            const company = visitorData.company || 'Visitor';
+            
+            // Generate QR code image URL
+            const qrImageUrl = `${API_BASE_URL}/qr-image/${qrCode}`;
+            
+            // Update preview badge
+            document.getElementById('visitorName').textContent = fullName;
+            document.getElementById('visitorCompany').textContent = company;
+            document.getElementById('qrCodeImage').src = qrImageUrl;
+            
+            // Update print badge
+            document.getElementById('printVisitorName').textContent = fullName;
+            document.getElementById('printVisitorCompany').textContent = company;
+            document.getElementById('printQrCodeImage').src = qrImageUrl;
+            
+            // Show badge content
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('badgeContent').style.display = 'block';
+            
+            showSuccess('Badge loaded successfully. Ready to print.');
         }
-      }, function (error, url) {
-        if (error) {
-          console.error('QR Code generation error:', error);
-          document.getElementById('qrcode').innerHTML = '<p>QR Code generation failed</p>';
-        } else {
-          const img = document.createElement('img');
-          img.src = url;
-          img.alt = 'QR Code';
-          img.width = 180;
-          img.height = 180;
-          document.getElementById('qrcode').appendChild(img);
+        
+        // Print badge
+        function printBadge() {
+            // Show print badge
+            document.getElementById('printBadge').style.display = 'flex';
+            
+            // Trigger print
+            window.print();
+            
+            // Hide print badge after print dialog
+            setTimeout(() => {
+                document.getElementById('printBadge').style.display = 'none';
+            }, 100);
+            
+            // Set up after print handler
+            window.onafterprint = () => {
+                showSuccess('Badge printed successfully!');
+                setTimeout(() => {
+                    // Return to scanner after successful print
+                    window.location.href = 'qrscanner.html';
+                }, 2000);
+            };
         }
-      });
-    }
-
-    function showError(message) {
-      const content = document.getElementById('content');
-      content.innerHTML = `
-        <div class="error">
-          <p style="font-size: 60px;">⚠️</p>
-          <h3>Oops!</h3>
-          <p>${message}</p>
-          <p style="margin-top: 20px;">
-            <a href="/" class="btn btn-primary">Go to Homepage</a>
-          </p>
-        </div>
-      `;
-    }
-
-    function downloadBadge() {
-      alert('Save feature coming soon! Please use Print > Save as PDF for now.');
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      loadBadge();
-    });
-  </script>
+        
+        // Go back to scanner
+        function goBack() {
+            window.location.href = 'qrscanner.html';
+        }
+        
+        // Show status messages
+        function showSuccess(message) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = 'status-message success';
+            statusDiv.innerHTML = `<i class="bi bi-check-circle"></i> ${message}`;
+        }
+        
+        function showError(message) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = 'status-message error';
+            statusDiv.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${message}`;
+        }
+        
+        function showInfo(message) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.className = 'status-message info';
+            statusDiv.innerHTML = `<i class="bi bi-info-circle"></i> ${message}`;
+        }
+        
+        // Handle keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+P or Cmd+P for print
+            if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+                e.preventDefault();
+                printBadge();
+            }
+            // Escape to go back
+            if (e.key === 'Escape') {
+                goBack();
+            }
+        });
+    </script>
 </body>
 </html>
