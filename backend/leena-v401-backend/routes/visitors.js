@@ -173,4 +173,76 @@ router.get('/', authMiddleware, async (req, res) => {
     }
 });
 
+// ✅ Paginated visitor log endpoint
+router.get('/paginated', authMiddleware, async (req, res) => {
+    try {
+        const { expo_id, page = 1, limit = 100, search, startDate, endDate, source, origin } = req.query;
+        
+        if (!expo_id) {
+            return res.status(400).json({ success: false, message: 'expo_id is required' });
+        }
+        
+        const offset = (page - 1) * limit;
+        const filters = ['expo_id = $1'];
+        const values = [expo_id];
+        let idx = 2;
+        
+        if (search) {
+            filters.push(`(LOWER(name) LIKE $${idx} OR LOWER(email) LIKE $${idx} OR LOWER(company) LIKE $${idx})`);
+            values.push(`%${search.toLowerCase()}%`);
+            idx++;
+        }
+        
+        if (startDate) {
+            filters.push(`created_at >= $${idx}`);
+            values.push(startDate);
+            idx++;
+        }
+        
+        if (endDate) {
+            filters.push(`created_at <= $${idx}`);
+            values.push(endDate + ' 23:59:59');
+            idx++;
+        }
+        
+        if (source) {
+            const sourceList = source.split(',');
+            filters.push(`source = ANY($${idx})`);
+            values.push(sourceList);
+            idx++;
+        }
+        
+        if (origin) {
+            const originList = origin.split(',');
+            filters.push(`origin = ANY($${idx})`);
+            values.push(originList);
+            idx++;
+        }
+        
+        const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+        
+        const totalResult = await pool.query(`SELECT COUNT(*) FROM visitors ${whereClause}`, values);
+        const total = parseInt(totalResult.rows[0].count);
+        
+        const dataResult = await pool.query(`
+            SELECT id, name, last_name, company, country, email, source, origin, created_at
+            FROM visitors
+            ${whereClause}
+            ORDER BY created_at DESC
+            LIMIT $${idx} OFFSET $${idx + 1}
+        `, [...values, limit, offset]);
+        
+        res.json({
+            success: true,
+            total,
+            totalPages: Math.ceil(total / limit),
+            visitors: dataResult.rows
+        });
+        
+    } catch (err) {
+        console.error('❌ Paginated visitor fetch error:', err);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
 module.exports = router;
