@@ -1,0 +1,933 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visitor Log - Leena EMS v401</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f7fa;
+            min-height: 100vh;
+        }
+        
+        /* Header */
+        .page-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 30px 0;
+            margin-bottom: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .page-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .page-header .subtitle {
+            opacity: 0.9;
+            margin-top: 8px;
+        }
+        
+        /* Main Container */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 20px 40px;
+        }
+        
+        /* Stats Cards */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-left: 4px solid var(--primary-color);
+            transition: transform 0.2s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        /* Filter Panel */
+        .filter-panel {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+        }
+        
+        .filter-section {
+            margin-bottom: 20px;
+        }
+        
+        .filter-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .filter-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .search-box {
+            position: relative;
+        }
+        
+        .search-box input {
+            padding-left: 40px;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            transition: border-color 0.2s;
+        }
+        
+        .search-box input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+        }
+        
+        .search-box i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #6c757d;
+        }
+        
+        .filter-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .filter-pill {
+            padding: 8px 15px;
+            border-radius: 20px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 0.9rem;
+        }
+        
+        .filter-pill:hover {
+            background: #e9ecef;
+        }
+        
+        .filter-pill input[type="checkbox"] {
+            margin-right: 6px;
+        }
+        
+        .filter-pill.active {
+            background: var(--primary-gradient);
+            color: white;
+            border-color: transparent;
+        }
+        
+        /* Table */
+        .table-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        
+        .table-header {
+            padding: 20px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .table-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #212529;
+        }
+        
+        .results-info {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        thead th {
+            background: #f8f9fa;
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #495057;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid #dee2e6;
+        }
+        
+        tbody td {
+            padding: 15px;
+            border-bottom: 1px solid #f1f3f5;
+            color: #495057;
+        }
+        
+        tbody tr:hover {
+            background: #f8f9fa;
+        }
+        
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .badge-pill {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .badge-source {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+        
+        .badge-origin {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+        
+        /* Pagination */
+        .pagination-container {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid #dee2e6;
+        }
+        
+        .pagination {
+            margin: 0;
+        }
+        
+        .page-link {
+            color: var(--primary-color);
+            border-radius: 8px;
+            margin: 0 2px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .page-link:hover {
+            background: var(--primary-gradient);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .page-item.active .page-link {
+            background: var(--primary-gradient);
+            border-color: transparent;
+        }
+        
+        .page-info {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        
+        /* Loading State */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(255, 255, 255, 0.9);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+        
+        .loading-overlay.active {
+            display: flex;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3rem;
+            color: var(--primary-color);
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .empty-state-icon {
+            font-size: 80px;
+            color: #dee2e6;
+            margin-bottom: 20px;
+        }
+        
+        .empty-state h3 {
+            color: #495057;
+            margin-bottom: 10px;
+        }
+        
+        .empty-state p {
+            color: #6c757d;
+        }
+        
+        /* Buttons */
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-secondary {
+            background: #6c757d;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 500;
+        }
+        
+        .btn-export {
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .btn-export:hover {
+            background: #218838;
+        }
+        
+        /* Responsive */
+        @media (max-width: 768px) {
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .filter-panel {
+                padding: 15px;
+            }
+            
+            .table-container {
+                overflow-x: auto;
+            }
+            
+            table {
+                min-width: 700px;
+            }
+            
+            .pagination-container {
+                flex-direction: column;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <div class="page-header">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1>
+                        <i class="bi bi-people-fill"></i>
+                        Visitor Log
+                    </h1>
+                    <div class="subtitle">High-performance paginated view</div>
+                </div>
+                <div>
+                    <button class="btn btn-light" onclick="goBack()">
+                        <i class="bi bi-arrow-left"></i> Back to Panel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Stats Cards -->
+        <div class="stats-row">
+            <div class="stat-card">
+                <div class="stat-value" id="totalVisitors">0</div>
+                <div class="stat-label">Total Visitors</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="todayVisitors">0</div>
+                <div class="stat-label">Today's Registrations</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="filteredCount">0</div>
+                <div class="stat-label">Filtered Results</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="currentPage">1</div>
+                <div class="stat-label">Current Page</div>
+            </div>
+        </div>
+
+        <!-- Filter Panel -->
+        <div class="filter-panel">
+            <div class="row">
+                <!-- Search Box -->
+                <div class="col-md-6 filter-section">
+                    <div class="filter-title">Search</div>
+                    <div class="search-box">
+                        <i class="bi bi-search"></i>
+                        <input type="text" class="form-control" id="searchInput" 
+                               placeholder="Search by name, email, or company...">
+                    </div>
+                </div>
+
+                <!-- Date Range -->
+                <div class="col-md-6 filter-section">
+                    <div class="filter-title">Date Range</div>
+                    <div class="d-flex gap-2">
+                        <input type="date" class="form-control" id="startDate">
+                        <input type="date" class="form-control" id="endDate">
+                    </div>
+                </div>
+
+                <!-- Source Filter -->
+                <div class="col-md-6 filter-section">
+                    <div class="filter-title">Source</div>
+                    <div class="filter-pills" id="sourceFilters">
+                        <label class="filter-pill">
+                            <input type="checkbox" value="manual"> Manual
+                        </label>
+                        <label class="filter-pill">
+                            <input type="checkbox" value="form"> Form
+                        </label>
+                        <label class="filter-pill">
+                            <input type="checkbox" value="import"> Import
+                        </label>
+                        <label class="filter-pill">
+                            <input type="checkbox" value="api"> API
+                        </label>
+                        <label class="filter-pill">
+                            <input type="checkbox" value="webhook"> Webhook
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Origin Filter -->
+                <div class="col-md-6 filter-section">
+                    <div class="filter-title">Origin</div>
+                    <div class="filter-pills" id="originFilters">
+                        <label class="filter-pill">
+                            <input type="checkbox" value="massimport"> Mass Import
+                        </label>
+                        <label class="filter-pill">
+                            <input type="checkbox" value="manual_entry"> Manual Entry
+                        </label>
+                        <label class="filter-pill">
+                            <input type="checkbox" value="zoho"> Zoho
+                        </label>
+                        <label class="filter-pill">
+                            <input type="checkbox" value="api"> API
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="col-12 mt-3 d-flex gap-2">
+                    <button class="btn btn-primary" onclick="applyFilters()">
+                        <i class="bi bi-funnel"></i> Apply Filters
+                    </button>
+                    <button class="btn btn-secondary" onclick="clearFilters()">
+                        <i class="bi bi-x-circle"></i> Clear All
+                    </button>
+                    <button class="btn btn-export ms-auto" onclick="exportData()">
+                        <i class="bi bi-download"></i> Export to Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="table-container">
+            <div class="table-header">
+                <div class="table-title">Visitor Records</div>
+                <div class="results-info" id="resultsInfo">
+                    Showing 0 of 0 results
+                </div>
+            </div>
+
+            <div id="tableContent">
+                <table id="visitorsTable">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Last Name</th>
+                            <th>Company</th>
+                            <th>Country</th>
+                            <th>Email</th>
+                            <th>Source</th>
+                            <th>Origin</th>
+                            <th>Registered</th>
+                        </tr>
+                    </thead>
+                    <tbody id="visitorsTableBody">
+                        <!-- Data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Empty State -->
+            <div class="empty-state" id="emptyState" style="display: none;">
+                <div class="empty-state-icon">
+                    <i class="bi bi-inbox"></i>
+                </div>
+                <h3>No Visitors Found</h3>
+                <p>Try adjusting your filters or search criteria</p>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination-container" id="paginationContainer">
+                <div class="page-info" id="pageInfo">
+                    Page 1 of 1
+                </div>
+                <nav>
+                    <ul class="pagination" id="pagination">
+                        <!-- Pagination will be generated here -->
+                    </ul>
+                </nav>
+                <div>
+                    <select class="form-select form-select-sm" id="limitSelect" style="width: auto;">
+                        <option value="50">50 per page</option>
+                        <option value="100" selected>100 per page</option>
+                        <option value="200">200 per page</option>
+                        <option value="500">500 per page</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = '/api';
+        let currentPage = 1;
+        let totalPages = 1;
+        let totalRecords = 0;
+        let recordsPerPage = 100;
+        let currentFilters = {};
+        let currentExpoId = localStorage.getItem('selectedExpoId') || 1;
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeEventListeners();
+            loadVisitors();
+            updateStats();
+        });
+
+        // Initialize Event Listeners
+        function initializeEventListeners() {
+            // Search on Enter key
+            document.getElementById('searchInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    applyFilters();
+                }
+            });
+
+            // Limit change
+            document.getElementById('limitSelect').addEventListener('change', (e) => {
+                recordsPerPage = parseInt(e.target.value);
+                currentPage = 1;
+                loadVisitors();
+            });
+
+            // Filter pill clicks
+            document.querySelectorAll('.filter-pill').forEach(pill => {
+                pill.addEventListener('click', function() {
+                    const checkbox = this.querySelector('input[type="checkbox"]');
+                    if (checkbox.checked) {
+                        this.classList.add('active');
+                    } else {
+                        this.classList.remove('active');
+                    }
+                });
+            });
+
+            // Date inputs
+            document.getElementById('startDate').addEventListener('change', validateDateRange);
+            document.getElementById('endDate').addEventListener('change', validateDateRange);
+        }
+
+        // Validate date range
+        function validateDateRange() {
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (startDate && endDate && startDate > endDate) {
+                alert('Start date cannot be after end date');
+                document.getElementById('endDate').value = '';
+            }
+        }
+
+        // Load visitors from API
+        async function loadVisitors() {
+            showLoading(true);
+            
+            try {
+                // Build query parameters
+                const params = new URLSearchParams({
+                    expo_id: currentExpoId,
+                    page: currentPage,
+                    limit: recordsPerPage,
+                    ...currentFilters
+                });
+
+                const response = await fetch(`${API_BASE_URL}/visitors/paginated?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to fetch visitors');
+                }
+
+                const data = await response.json();
+                
+                // Update global variables
+                totalRecords = data.total || 0;
+                totalPages = data.totalPages || Math.ceil(totalRecords / recordsPerPage);
+                
+                // Render table
+                renderTable(data.visitors || []);
+                
+                // Update UI
+                updateResultsInfo();
+                renderPagination();
+                updateStats();
+                
+            } catch (error) {
+                console.error('Error loading visitors:', error);
+                showError('Failed to load visitors. Please try again.');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Render table
+        function renderTable(visitors) {
+            const tbody = document.getElementById('visitorsTableBody');
+            const emptyState = document.getElementById('emptyState');
+            const tableContent = document.getElementById('tableContent');
+            
+            if (visitors.length === 0) {
+                tableContent.style.display = 'none';
+                emptyState.style.display = 'block';
+                document.getElementById('paginationContainer').style.display = 'none';
+                return;
+            }
+            
+            tableContent.style.display = 'block';
+            emptyState.style.display = 'none';
+            document.getElementById('paginationContainer').style.display = 'flex';
+            
+            tbody.innerHTML = visitors.map(visitor => {
+                const createdAt = new Date(visitor.created_at);
+                const formattedDate = createdAt.toLocaleDateString();
+                const formattedTime = createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                
+                return `
+                    <tr>
+                        <td>${visitor.id}</td>
+                        <td>${escapeHtml(visitor.name || '-')}</td>
+                        <td>${escapeHtml(visitor.lastName || visitor.last_name || '-')}</td>
+                        <td>${escapeHtml(visitor.company || '-')}</td>
+                        <td>${escapeHtml(visitor.country || '-')}</td>
+                        <td>${escapeHtml(visitor.email || '-')}</td>
+                        <td><span class="badge-pill badge-source">${visitor.source || 'unknown'}</span></td>
+                        <td><span class="badge-pill badge-origin">${visitor.origin || 'unknown'}</span></td>
+                        <td>
+                            <small>${formattedDate}<br>${formattedTime}</small>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Render pagination
+        function renderPagination() {
+            const pagination = document.getElementById('pagination');
+            const pageInfo = document.getElementById('pageInfo');
+            
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('currentPage').textContent = currentPage;
+            
+            let html = '';
+            
+            // Previous button
+            html += `
+                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">
+                        <i class="bi bi-chevron-left"></i>
+                    </a>
+                </li>
+            `;
+            
+            // Page numbers
+            const maxVisiblePages = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+            
+            if (endPage - startPage < maxVisiblePages - 1) {
+                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            }
+            
+            if (startPage > 1) {
+                html += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="goToPage(1); return false;">1</a>
+                    </li>
+                `;
+                if (startPage > 2) {
+                    html += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+                }
+            }
+            
+            for (let i = startPage; i <= endPage; i++) {
+                html += `
+                    <li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+                    </li>
+                `;
+            }
+            
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    html += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
+                }
+                html += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>
+                    </li>
+                `;
+            }
+            
+            // Next button
+            html += `
+                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                    <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">
+                        <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+            `;
+            
+            pagination.innerHTML = html;
+        }
+
+        // Go to page
+        function goToPage(page) {
+            if (page < 1 || page > totalPages) return;
+            currentPage = page;
+            loadVisitors();
+        }
+
+        // Apply filters
+        function applyFilters() {
+            currentFilters = {};
+            
+            // Search
+            const search = document.getElementById('searchInput').value.trim();
+            if (search) {
+                currentFilters.search = search;
+            }
+            
+            // Date range
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            if (startDate) currentFilters.startDate = startDate;
+            if (endDate) currentFilters.endDate = endDate;
+            
+            // Source filters
+            const sourceFilters = [];
+            document.querySelectorAll('#sourceFilters input[type="checkbox"]:checked').forEach(cb => {
+                sourceFilters.push(cb.value);
+            });
+            if (sourceFilters.length > 0) {
+                currentFilters.source = sourceFilters.join(',');
+            }
+            
+            // Origin filters
+            const originFilters = [];
+            document.querySelectorAll('#originFilters input[type="checkbox"]:checked').forEach(cb => {
+                originFilters.push(cb.value);
+            });
+            if (originFilters.length > 0) {
+                currentFilters.origin = originFilters.join(',');
+            }
+            
+            // Reset to first page when applying filters
+            currentPage = 1;
+            loadVisitors();
+        }
+
+        // Clear filters
+        function clearFilters() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            
+            document.querySelectorAll('.filter-pill input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+                cb.closest('.filter-pill').classList.remove('active');
+            });
+            
+            currentFilters = {};
+            currentPage = 1;
+            loadVisitors();
+        }
+
+        // Update results info
+        function updateResultsInfo() {
+            const start = (currentPage - 1) * recordsPerPage + 1;
+            const end = Math.min(currentPage * recordsPerPage, totalRecords);
+            
+            document.getElementById('resultsInfo').textContent = 
+                `Showing ${start}-${end} of ${totalRecords.toLocaleString()} results`;
+            
+            document.getElementById('filteredCount').textContent = totalRecords.toLocaleString();
+        }
+
+        // Update stats
+        async function updateStats() {
+            try {
+                // This would typically come from a stats endpoint
+                document.getElementById('totalVisitors').textContent = totalRecords.toLocaleString();
+                
+                // Calculate today's visitors (mock - replace with actual API call)
+                const today = new Date().toISOString().split('T')[0];
+                const todayParams = new URLSearchParams({
+                    expo_id: currentExpoId,
+                    startDate: today,
+                    endDate: today
+                });
+                
+                // Mock value - replace with actual API call
+                document.getElementById('todayVisitors').textContent = '42';
+                
+            } catch (error) {
+                console.error('Error updating stats:', error);
+            }
+        }
+
+        // Export data
+        async function exportData() {
+            if (!confirm('Export all filtered results to Excel?')) return;
+            
+            showLoading(true);
+            try {
+                const params = new URLSearchParams({
+                    expo_id: currentExpoId,
+                    format: 'excel',
+                    ...currentFilters
+                });
+                
+                window.location.href = `${API_BASE_URL}/visitors/export?${params}`;
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('Failed to export data');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Utility functions
+        function showLoading(show) {
+            document.getElementById('loadingOverlay').classList.toggle('active', show);
+        }
+
+        function showError(message) {
+            alert(message); // Replace with better error handling
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function goBack() {
+            window.location.href = 'main-panel.html';
+        }
+    </script>
+</body>
+</html>
