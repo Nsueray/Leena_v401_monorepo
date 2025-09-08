@@ -2,34 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Badge Print</title>
+  <title>Print Badge</title>
+  <meta name="viewport" content="width=100mm, height=50mm, initial-scale=1.0">
   <style>
-    * { 
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box; 
-    }
-    
     body {
-      width: 100mm;
-      height: 50mm;
       margin: 0;
-      padding: 0;
-      font-family: Arial, sans-serif;
-      background: white;
-    }
-    
-    .badge-wrapper {
       width: 100mm;
       height: 50mm;
-      display: flex;
-      align-items: center;
-      padding: 5mm;
-      position: relative;
+      font-family: Arial, sans-serif;
     }
-    
-    /* QR Code Section - Left Side */
+
+    .badge-wrapper {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: flex-start;
+      width: 100mm;
+      height: 50mm;
+      padding: 5mm;
+      box-sizing: border-box;
+    }
+
     .qr-section {
       width: 30mm;
       height: 30mm;
@@ -37,236 +30,186 @@
       align-items: center;
       justify-content: center;
       margin-right: 5mm;
-      flex-shrink: 0;
     }
-    
+
     .qr-code {
       width: 25mm;
       height: 25mm;
     }
-    
+
     .qr-code img {
       width: 100%;
       height: 100%;
-      display: block;
     }
-    
-    /* Info Section - Right Side */
+
     .info-section {
       flex: 1;
       display: flex;
       flex-direction: column;
       justify-content: center;
       overflow: hidden;
-      height: 100%;
     }
-    
+
     .visitor-name {
       font-size: 18pt;
       font-weight: bold;
-      line-height: 1.2;
-      margin-bottom: 3mm;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+      margin-bottom: 5px;
+      line-height: 1.1;
+      word-break: break-word;
     }
-    
-    /* Responsive font sizes based on text length */
-    .visitor-name.long {
-      font-size: 14pt;
-    }
-    
-    .visitor-name.very-long {
-      font-size: 11pt;
-    }
-    
+
     .visitor-company {
       font-size: 14pt;
-      line-height: 1.2;
-      word-wrap: break-word;
-      overflow-wrap: break-word;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
+      line-height: 1.1;
+      word-break: break-word;
     }
-    
-    .visitor-company.long {
-      font-size: 11pt;
-    }
-    
-    .visitor-company.very-long {
-      font-size: 9pt;
-    }
-    
-    /* Loading state */
+
     .loading {
-      width: 100mm;
-      height: 50mm;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12pt;
+      text-align: center;
+      padding: 20mm;
+      font-size: 14pt;
     }
-    
-    /* Print specific styles */
+
     @media print {
-      body {
-        width: 100mm;
-        height: 50mm;
-        margin: 0;
-        padding: 0;
-      }
-      
-      .badge-wrapper {
-        page-break-after: avoid;
-        page-break-inside: avoid;
-      }
-      
       @page {
         size: 100mm 50mm landscape;
         margin: 0;
       }
-    }
-    
-    /* Hide scrollbars */
-    body::-webkit-scrollbar {
-      display: none;
+
+      body {
+        width: 100mm;
+        height: 50mm;
+      }
     }
   </style>
 </head>
 <body>
   <div id="badgeContent">
-    <div class="loading">Loading...</div>
+    <div class="loading">Loading badge...</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script>
-    // Use relative API path for both local and production
     const API_URL = '/api';
-    
-    // Get QR code from URL
+
     function getQRFromURL() {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('qr');
+      const params = new URLSearchParams(window.location.search);
+      return params.get('qr');
     }
-    
-    // Calculate text length class
-    function getTextLengthClass(text) {
+
+    function getTextSizeClass(text) {
       if (!text) return '';
-      if (text.length > 40) return 'very-long';
-      if (text.length > 25) return 'long';
+      if (text.length > 40) return 'very-small';
+      if (text.length > 30) return 'small';
       return '';
     }
-    
-    // Main function to load and display badge
+
+    async function performCheckin(visitorId, qrCode, expoId) {
+      try {
+        const hall = localStorage.getItem('hall') || 'Main';
+        const terminal = localStorage.getItem('terminal') || '1';
+
+        await fetch(`${API_URL}/checkins`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+          },
+          body: JSON.stringify({
+            visitor_id: visitorId,
+            expo_id: expoId,
+            hall,
+            terminal,
+            qr_code: qrCode,
+            checkin_type: 'print',
+            checkin_time: new Date().toISOString()
+          })
+        });
+
+        console.log('✅ Check-in recorded.');
+      } catch (err) {
+        console.warn('⚠️ Check-in failed:', err);
+      }
+    }
+
     async function loadBadge() {
       const qrCode = getQRFromURL();
-      
       if (!qrCode) {
-        document.getElementById('badgeContent').innerHTML = '<div class="loading">Invalid QR Code</div>';
+        document.getElementById('badgeContent').innerHTML = '<div class="loading">Invalid QR code</div>';
         return;
       }
-      
-      let visitorData = null;
-      
-      // Try to fetch visitor data from API
+
+      let visitor = null;
+
       try {
-        const response = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
-        
-        if (response.ok) {
-          const data = await response.json();
-          if (data.visitor) {
-            visitorData = data.visitor;
-          }
+        const res = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          visitor = data.visitor;
         }
-      } catch (error) {
-        console.error('Error fetching visitor:', error);
+      } catch (err) {
+        console.error('❌ Visitor fetch error:', err);
       }
-      
-      // Prepare display data
-      let displayName = 'Guest';
-      let displayCompany = '';
-      
-      if (visitorData) {
-        // Handle name: prefer full_name, then combine name + last_name
-        if (visitorData.full_name) {
-          displayName = visitorData.full_name;
-        } else if (visitorData.name || visitorData.last_name) {
-          displayName = `${visitorData.name || ''} ${visitorData.last_name || ''}`.trim();
-        }
-        
-        // If still no name, check custom_fields
-        if (displayName === 'Guest' || displayName === '') {
-          if (visitorData.custom_fields) {
-            const fields = typeof visitorData.custom_fields === 'string' 
-              ? JSON.parse(visitorData.custom_fields) 
-              : visitorData.custom_fields;
-            
-            if (fields.full_name) {
-              displayName = fields.full_name;
-            } else if (fields.name || fields.last_name) {
-              displayName = `${fields.name || ''} ${fields.last_name || ''}`.trim();
-            }
-          }
-        }
-        
-        displayCompany = visitorData.company || '';
+
+      if (!visitor) {
+        document.getElementById('badgeContent').innerHTML = '<div class="loading">Visitor not found</div>';
+        return;
       }
-      
-      // Get text length classes for responsive sizing
-      const nameClass = getTextLengthClass(displayName);
-      const companyClass = getTextLengthClass(displayCompany);
-      
-      // Display the badge
+
+      // Prepare display values
+      let displayName = visitor.full_name || `${visitor.name || ''} ${visitor.last_name || ''}`.trim();
+      let displayCompany = visitor.company || '';
+
+      // fallback from custom_fields
+      if ((!displayName || displayName === '') && visitor.custom_fields) {
+        try {
+          const fields = typeof visitor.custom_fields === 'string'
+            ? JSON.parse(visitor.custom_fields)
+            : visitor.custom_fields;
+
+          if (fields.full_name) displayName = fields.full_name;
+          else if (fields.name || fields.last_name) displayName = `${fields.name || ''} ${fields.last_name || ''}`.trim();
+        } catch (e) {}
+      }
+
+      const nameClass = getTextSizeClass(displayName);
+      const companyClass = getTextSizeClass(displayCompany);
+
       document.getElementById('badgeContent').innerHTML = `
         <div class="badge-wrapper">
           <div class="qr-section">
-            <div class="qr-code" id="qrCodeContainer"></div>
+            <div class="qr-code" id="qrcode"></div>
           </div>
           <div class="info-section">
             <div class="visitor-name ${nameClass}">${displayName}</div>
-            ${displayCompany ? `<div class="visitor-company ${companyClass}">${displayCompany}</div>` : ''}
+            <div class="visitor-company ${companyClass}">${displayCompany}</div>
           </div>
         </div>
       `;
-      
-      // Generate QR Code
+
+      // Generate QR
       QRCode.toDataURL(qrCode, {
-        width: 150,  // 30% smaller than original
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      }, function (error, url) {
-        if (error) {
-          console.error('QR generation error:', error);
-          document.getElementById('qrCodeContainer').innerHTML = 'QR Error';
-        } else {
+        width: 120,
+        margin: 0
+      }, async function (err, url) {
+        if (!err) {
           const img = document.createElement('img');
           img.src = url;
           img.alt = 'QR Code';
-          document.getElementById('qrCodeContainer').appendChild(img);
-          
-          // Auto print after QR is ready
+          document.getElementById('qrcode').appendChild(img);
+
+          // Perform check-in before printing
+          if (visitor.id && visitor.expo_id) {
+            await performCheckin(visitor.id, qrCode, visitor.expo_id);
+          }
+
           setTimeout(() => {
             window.print();
-            
-            // Optional: Close or redirect after print
-            window.onafterprint = function() {
-              // Uncomment if you want to redirect after printing
-              // window.location.href = '/qrscanner.html';
-            };
           }, 500);
         }
       });
     }
-    
-    // Start loading when page is ready
+
     document.addEventListener('DOMContentLoaded', loadBadge);
   </script>
 </body>
