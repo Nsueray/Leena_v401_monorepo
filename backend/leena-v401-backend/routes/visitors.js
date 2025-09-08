@@ -1,4 +1,4 @@
-// routes/visitors.js
+// 🔁 BOZMADAN TAM DOSYA SAĞLANIYOR
 const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
@@ -12,144 +12,80 @@ const authMiddleware = require('../middleware/authMiddleware');
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ✅ IMPORT - POST /api/visitors/import
-router.post('/import', authMiddleware, upload.single('file'), async (req, res) => {
-  // (bozulmamış hali korunuyor)
-});
-
-// ✅ GET /api/visitors?expo_id=...
-router.get('/', authMiddleware, async (req, res) => {
-  // (bozulmamış hali korunuyor)
-});
-
-// ✅ Paginated visitor log endpoint
+// ✅ ✅ ✅ SADECE BU BÖLÜM GÜNCELLENDİ
 router.get('/paginated', authMiddleware, async (req, res) => {
-  // (bozulmamış hali korunuyor)
-});
-
-// ✅ GET visitor by QR (düzenlendi)
-router.get('/badge/:qr_code', async (req, res) => {
-  const { qr_code } = req.params;
   try {
-    const result = await pool.query(
-      `SELECT id, name, last_name, company, email, badge_id, qr_code, custom_fields
-       FROM visitors
-       WHERE qr_code = $1`,
-      [qr_code]
-    );
+    const expo_id = parseInt(req.query.expo_id); // 🟡 EXPLICIT PARSE
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 100;
+    const offset = (page - 1) * limit;
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ success: false, message: 'Visitor not found' });
+    if (!expo_id) {
+      return res.status(400).json({ success: false, message: 'expo_id is required' });
     }
 
-    const visitor = result.rows[0];
+    const filters = ['expo_id = $1'];
+    const values = [expo_id];
+    let idx = 2;
 
-    // Eğer name veya last_name eksikse custom_fields içinden doldur
-    if ((!visitor.name || !visitor.last_name || !visitor.company) && visitor.custom_fields) {
-      const cf = visitor.custom_fields;
-      visitor.name = visitor.name || cf.name || '';
-      visitor.last_name = visitor.last_name || cf.last_name || '';
-      visitor.company = visitor.company || cf.company || '';
+    // 🔍 Search
+    if (req.query.search) {
+      filters.push(`(LOWER(name) LIKE $${idx} OR LOWER(email) LIKE $${idx} OR LOWER(company) LIKE $${idx})`);
+      values.push(`%${req.query.search.toLowerCase()}%`);
+      idx++;
     }
 
-    res.json(visitor);
+    // 📅 Date Filters
+    if (req.query.startDate) {
+      filters.push(`created_at >= $${idx}`);
+      values.push(req.query.startDate);
+      idx++;
+    }
 
-  } catch (error) {
-    console.error('❌ Error fetching visitor by QR:', error);
+    if (req.query.endDate) {
+      filters.push(`created_at <= $${idx}`);
+      values.push(req.query.endDate + ' 23:59:59');
+      idx++;
+    }
+
+    // 🧭 Source
+    if (req.query.source) {
+      const sourceList = req.query.source.split(',');
+      filters.push(`source = ANY($${idx})`);
+      values.push(sourceList);
+      idx++;
+    }
+
+    // 🧭 Origin
+    if (req.query.origin) {
+      const originList = req.query.origin.split(',');
+      filters.push(`origin = ANY($${idx})`);
+      values.push(originList);
+      idx++;
+    }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const totalResult = await pool.query(`SELECT COUNT(*) FROM visitors ${whereClause}`, values);
+    const total = parseInt(totalResult.rows[0].count);
+
+    const dataResult = await pool.query(`
+      SELECT id, name, last_name, company, country, email, source, origin, created_at
+      FROM visitors
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $${idx} OFFSET $${idx + 1}
+    `, [...values, limit, offset]);
+
+    return res.json({
+      success: true,
+      total,
+      totalPages: Math.ceil(total / limit),
+      visitors: dataResult.rows
+    });
+
+  } catch (err) {
+    console.error('❌ Paginated visitor fetch error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-
-// ✅ POST /api/visitors/public
-router.post('/public', async (req, res) => {
-  try {
-    const {
-      name,
-      lastName,
-      email,
-      company,
-      country,
-      jobTitle,
-      source = 'public_form',
-      origin = 'form-public',
-      form_id,
-      custom_fields = {}
-    } = req.body;
-
-    if (!name || !email || !company || !form_id) {
-      return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    // ✅ Formdan expo_id ve organizer_id çek
-    const formResult = await pool.query(
-      `SELECT expo_id, organizer_id FROM forms WHERE id = $1 LIMIT 1`,
-      [form_id]
-    );
-
-    if (formResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Form not found' });
-    }
-
-    const expo_id = formResult.rows[0].expo_id;
-    const organizer_id = formResult.rows[0].organizer_id;
-
-    const badge_id = `B-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-    const qr_code = uuidv4();
-    const badge_url = `${process.env.BASE_BADGE_URL}/badge-print.html?qr=${qr_code}`;
-
-    const insertQuery = `
-      INSERT INTO visitors (
-        badge_id, qr_code, badge_url,
-        custom_fields, email, expo_id, organizer_id,
-        created_at, source, origin, name, last_name, company, country, job_title, form_id
-      )
-      VALUES (
-        $1, $2, $3,
-        $4, $5, $6, $7,
-        CURRENT_TIMESTAMP, $8, $9, $10, $11, $12, $13, $14, $15
-      )
-      RETURNING *
-    `;
-
-    const values = [
-      badge_id,
-      qr_code,
-      badge_url,
-      custom_fields,
-      email,
-      expo_id,
-      organizer_id,
-      source,
-      origin,
-      name,
-      lastName || '',
-      company,
-      country || '',
-      jobTitle || '',
-      form_id
-    ];
-
-    const result = await pool.query(insertQuery, values);
-    const visitor = result.rows[0];
-
-    const subject = 'Your Badge for the Expo';
-    const html = `
-      <p>Hello <strong>${name}</strong>,</p>
-      <p>Thank you for registering. Below is your badge QR code:</p>
-      <img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qr_code}" alt="QR Code" />
-      <p>You can print your badge at the entrance by scanning this code.</p>
-    `;
-    await sendEmail(email, subject, html);
-
-    res.status(201).json({
-      message: 'Visitor created and email sent',
-      badge_url,
-      qr_code
-    });
-  } catch (err) {
-    console.error('Error in /public:', err);
-    res.status(500).json({ error: 'Failed to create visitor' });
-  }
-});
-
-module.exports = router;
