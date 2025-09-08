@@ -116,7 +116,10 @@ router.post('/public', async (req, res) => {
     
     // Extract visitor data from custom_fields
     const visitorData = {
-      name: custom_fields?.full_name || custom_fields?.name || '',
+      name: custom_fields?.full_name 
+          || (custom_fields?.name && custom_fields?.last_name ? `${custom_fields.name} ${custom_fields.last_name}` : null)
+          || custom_fields?.name 
+          || '',
       last_name: custom_fields?.last_name || '',
       email: custom_fields?.email || '',
       company: custom_fields?.company || '',
