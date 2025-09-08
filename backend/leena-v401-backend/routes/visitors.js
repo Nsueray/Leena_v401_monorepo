@@ -233,7 +233,7 @@ router.post('/public', async (req, res) => {
             company: visitorData.company || '',
             country: visitorData.country || '',
             expo_name: expoName,
-            qr_code: qrCode,
+            qr_code: `<img src="https://leena.app/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`,
             badge_id: badgeId,
             badge_url: badgeUrl,
             date: new Date().toLocaleDateString()
