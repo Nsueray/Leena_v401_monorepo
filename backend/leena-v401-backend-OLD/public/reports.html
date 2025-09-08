@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Expo Reports</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f6f6f6;
+    }
+    h2 {
+      color: #333;
+      margin-bottom: 1rem;
+    }
+    .report-box {
+      background: white;
+      padding: 15px 20px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+    }
+    .report-box h3 {
+      margin: 0 0 10px;
+      color: #444;
+    }
+    .report-box p {
+      margin: 4px 0;
+      color: #555;
+    }
+    #refreshBtn {
+      margin-bottom: 20px;
+      background-color: #e53935;
+      color: white;
+      border: none;
+      padding: 8px 14px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>Expo Summary Report</h2>
+  <button id="refreshBtn" onclick="loadReport()">Refresh</button>
+
+  <div class="report-box" id="reportSection">
+    <h3>Loading...</h3>
+  </div>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const expoId = localStorage.getItem('selectedExpoId');
+
+    async function loadReport() {
+      // Use relative path that works both locally and in production
+      const res = await fetch(`/api/reports?expoId=${expoId}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const report = await res.json();
+      const section = document.getElementById('reportSection');
+
+      if (res.ok) {
+        section.innerHTML = `
+          <h3>Overview</h3>
+          <p><strong>Total Registered Visitors:</strong> ${report.total_visitors}</p>
+          <p><strong>Total Check-ins:</strong> ${report.total_checkins}</p>
+          <p><strong>Unique Countries:</strong> ${report.unique_countries}</p>
+          <p><strong>Most Popular Source:</strong> ${report.top_source}</p>
+        `;
+      } else {
+        section.innerHTML = `<h3>Error loading report</h3><p>${report.error || 'Unknown error'}</p>`;
+      }
+    }
+
+    loadReport();
+  </script>
+</body>
+</html>

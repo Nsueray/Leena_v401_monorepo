@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Check-in Log</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+    .logo img {
+      height: 200px;
+    }
+    h2 {
+      color: #333;
+      margin-bottom: 1rem;
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 8px;
+      margin-bottom: 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: white;
+    }
+    th, td {
+      padding: 10px;
+      border: 1px solid #ddd;
+      text-align: left;
+    }
+    th {
+      background-color: #e53935;
+      color: white;
+    }
+    tr:hover {
+      background-color: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <img src="logo.png" alt="Leena Logo" />
+  </div>
+
+  <h2>Check-in Log</h2>
+  <input type="text" id="searchInput" placeholder="Search visitors..." onkeyup="filterTable()"/>
+  <table>
+    <thead>
+      <tr>
+        <th>Full Name</th>
+        <th>Company</th>
+        <th>Country</th>
+        <th>Checked-in At</th>
+        <th>Source</th>
+      </tr>
+    </thead>
+    <tbody id="checkinBody">
+      <!-- Data loaded by JS -->
+    </tbody>
+  </table>
+
+  <script>
+    const token = localStorage.getItem('token');
+    const expoId = localStorage.getItem('selectedExpoId');
+
+    async function fetchCheckins() {
+      // Use relative path that works both locally and in production
+      const res = await fetch(`/api/checkins?expoId=${expoId}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      const checkins = await res.json();
+      const body = document.getElementById('checkinBody');
+      body.innerHTML = '';
+      checkins.forEach(c => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${c.name} ${c.last_name}</td>
+          <td>${c.company}</td>
+          <td>${c.country}</td>
+          <td>${new Date(c.checkin_time).toLocaleString()}</td>
+          <td>${c.source || 'manual'}</td>
+        `;
+        body.appendChild(row);
+      });
+    }
+
+    function filterTable() {
+      const filter = document.getElementById('searchInput').value.toLowerCase();
+      const rows = document.querySelectorAll('#checkinBody tr');
+      rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(filter) ? '' : 'none';
+      });
+    }
+
+    fetchCheckins();
+  </script>
+</body>
+</html>

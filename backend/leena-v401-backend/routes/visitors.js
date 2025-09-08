@@ -245,4 +245,27 @@ router.get('/paginated', authMiddleware, async (req, res) => {
     }
 });
 
+// ✅ NEW: GET /api/visitors/badge/:qr_code
+router.get('/badge/:qr_code', async (req, res) => {
+    const { qr_code } = req.params;
+    try {
+        const result = await pool.query(
+            `SELECT id, name, last_name, company, email, badge_id, qr_code
+             FROM visitors
+             WHERE qr_code = $1`,
+            [qr_code]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Visitor not found' });
+        }
+
+        res.json(result.rows[0]);
+
+    } catch (error) {
+        console.error('❌ Error fetching visitor by QR:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
+    }
+});
+
 module.exports = router;

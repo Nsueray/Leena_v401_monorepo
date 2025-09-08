@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Badge Preview</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f3f4f6;
+      padding: 20px;
+      text-align: center;
+    }
+    .logo {
+      margin-bottom: 1rem;
+    }
+    .logo img {
+      height: 200px;
+    }
+    h2 {
+      color: #333;
+    }
+    .badge {
+      width: 300px;
+      height: 180px;
+      border: 1px solid #ccc;
+      margin: 20px auto;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    .badge .name {
+      font-size: 20px;
+      font-weight: bold;
+    }
+    .badge .company {
+      font-size: 16px;
+      margin-top: 5px;
+      color: #555;
+    }
+    canvas {
+      margin-top: 10px;
+    }
+    input {
+      padding: 8px;
+      margin: 5px;
+    }
+    button {
+      padding: 8px 14px;
+      background-color: #e53935;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #d32f2f;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo">
+    <img src="logo.png" alt="Leena Logo" />
+  </div>
+
+  <h2>Generate Visitor Badge</h2>
+  <input type="text" id="fullName" placeholder="Full Name" />
+  <input type="text" id="company" placeholder="Company" />
+  <button onclick="generateBadge()">Preview</button>
+
+  <div class="badge" id="badgePreview" style="display:none;">
+    <div class="name" id="badgeName"></div>
+    <div class="company" id="badgeCompany"></div>
+    <canvas id="qrCanvas"></canvas>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script>
+    function generateBadge() {
+      const name = document.getElementById('fullName').value.trim();
+      const company = document.getElementById('company').value.trim();
+
+      if (!name || !company) {
+        alert('Please enter full name and company');
+        return;
+      }
+
+      document.getElementById('badgeName').textContent = name;
+      document.getElementById('badgeCompany').textContent = company;
+
+      const canvas = document.getElementById('qrCanvas');
+      QRCode.toCanvas(canvas, `${name} | ${company}`, { width: 100 }, function (error) {
+        if (error) console.error(error);
+        document.getElementById('badgePreview').style.display = 'flex';
+      });
+    }
+  </script>
+</body>
+</html>

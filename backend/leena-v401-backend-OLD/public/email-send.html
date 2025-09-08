@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Send Emails - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --sidebar-bg: #2c3e50;
+            --sidebar-text: #ecf0f1;
+            --sidebar-hover: #34495e;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f7fa;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        .sidebar {
+            width: 240px;
+            background: var(--primary-gradient);
+            color: white;
+            padding: 20px 0;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        .sidebar-header {
+            padding: 0 20px 20px 20px;
+            font-size: 1.5em;
+            font-weight: bold;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .sidebar-menu {
+            list-style-type: none;
+            margin-top: 20px;
+            padding: 0;
+        }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: rgba(255,255,255,0.8);
+            text-decoration: none;
+            padding: 15px 20px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+            transform: translateX(5px);
+        }
+        
+        .main-wrapper {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px;
+            background-color: white;
+            border-bottom: 1px solid #dee2e6;
+            flex-shrink: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        #content-area {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f5f7fa;
+        }
+        
+        .send-option-card {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .send-option-card:hover {
+            border-color: var(--primary-color);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .send-option-card.active {
+            border-color: var(--primary-color);
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
+        }
+        
+        .btn-primary {
+            background: var(--primary-gradient);
+            border: none;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        
+        .form-label {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 8px;
+        }
+        
+        .file-upload-area {
+            border: 3px dashed #dee2e6;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .file-upload-area:hover {
+            border-color: var(--primary-color);
+            background: rgba(102, 126, 234, 0.05);
+        }
+        
+        .file-upload-area.dragover {
+            border-color: var(--primary-color);
+            background: rgba(102, 126, 234, 0.1);
+        }
+        
+        .recipients-list {
+            background: #f8f9fa;
+            border-radius: 5px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .recipient-item {
+            background: white;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .progress-container {
+            display: none;
+            margin-top: 20px;
+        }
+        
+        .email-preview {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <i class="bi bi-box-seam"></i>
+            Leena EMS
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="main-panel.html">
+                <i class="bi bi-speedometer2"></i> Dashboard
+            </a></li>
+            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')">
+                <i class="bi bi-people"></i> Visitors
+            </a></li>
+            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')">
+                <i class="bi bi-card-list"></i> Forms
+            </a></li>
+            <li><a href="checkins.html">
+                <i class="bi bi-check2-square"></i> Check-ins
+            </a></li>
+            <li><a href="email-templates.html">
+                <i class="bi bi-envelope"></i> Email Templates
+            </a></li>
+            <li><a class="active" href="email-send.html">
+                <i class="bi bi-send"></i> Send Emails
+            </a></li>
+            <li><a href="reports.html">
+                <i class="bi bi-graph-up"></i> Reports
+            </a></li>
+            <li><a href="import.html">
+                <i class="bi bi-download"></i> Import
+            </a></li>
+            <li class="mt-4"><a href="#" onclick="logout()">
+                <i class="bi bi-box-arrow-right"></i> Logout
+            </a></li>
+        </ul>
+    </nav>
+
+    <div class="main-wrapper">
+        <header class="main-header">
+            <h1>
+                <i class="bi bi-send text-primary"></i>
+                <span>Send Emails</span>
+            </h1>
+            <button class="btn btn-outline-secondary" onclick="window.location.href='email-templates.html'">
+                <i class="bi bi-envelope"></i> Manage Templates
+            </button>
+        </header>
+        
+        <main id="content-area">
+            <!-- Step 1: Choose Send Type -->
+            <div class="row" id="step1">
+                <div class="col-md-6">
+                    <div class="send-option-card" onclick="selectSendType('single')">
+                        <h4><i class="bi bi-person text-primary"></i> Single Email</h4>
+                        <p class="text-muted">Send email to one recipient</p>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="send-option-card" onclick="selectSendType('bulk')">
+                        <h4><i class="bi bi-people text-primary"></i> Bulk Email</h4>
+                        <p class="text-muted">Upload CSV/Excel for multiple recipients</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Email Form -->
+            <div id="step2" style="display: none;">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title mb-4">
+                            <span id="sendTypeTitle">Email Details</span>
+                        </h5>
+
+                        <!-- Recipients Section -->
+                        <div id="recipientSection">
+                            <!-- Single Email Input -->
+                            <div id="singleRecipient" style="display: none;">
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Name</label>
+                                        <input type="text" class="form-control" id="recipientName" placeholder="John Doe">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Email *</label>
+                                        <input type="email" class="form-control" id="recipientEmail" placeholder="john@example.com" required>
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label class="form-label">Company</label>
+                                        <input type="text" class="form-control" id="recipientCompany" placeholder="Example Corp">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Bulk Upload -->
+                            <div id="bulkRecipient" style="display: none;">
+                                <div class="file-upload-area" id="fileUploadArea" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
+                                    <i class="bi bi-cloud-upload display-4 text-primary"></i>
+                                    <h5 class="mt-3">Drag & Drop CSV/Excel File</h5>
+                                    <p class="text-muted">or click to browse</p>
+                                    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;" onchange="handleFileSelect(event)">
+                                    <button class="btn btn-primary mt-2" onclick="document.getElementById('fileInput').click()">
+                                        Choose File
+                                    </button>
+                                </div>
+                                
+                                <div class="recipients-list mt-3" id="recipientsList" style="display: none;">
+                                    <h6>Recipients (<span id="recipientCount">0</span>)</h6>
+                                    <div id="recipientsContent"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Email Settings -->
+                        <hr class="my-4">
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Select Template *</label>
+                                <select class="form-select" id="templateSelect" onchange="loadTemplatePreview()">
+                                    <option value="">Choose template...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Select Expo *</label>
+                                <select class="form-select" id="expoSelect">
+                                    <option value="">Choose expo...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Database Options -->
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="saveToDatabase" checked>
+                                    <label class="form-check-label" for="saveToDatabase">
+                                        <strong>Save recipients to database</strong>
+                                    </label>
+                                </div>
+                                
+                                <div id="databaseOptions" class="ms-4">
+                                    <div class="mb-3">
+                                        <label class="form-label">Save as:</label>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="recordType" id="saveAsVisitor" value="visitor" checked>
+                                            <label class="form-check-label" for="saveAsVisitor">
+                                                <i class="bi bi-person"></i> Visitor
+                                            </label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="recordType" id="saveAsExhibitor" value="exhibitor">
+                                            <label class="form-check-label" for="saveAsExhibitor">
+                                                <i class="bi bi-building"></i> Exhibitor
+                                            </label>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="generateQR" checked>
+                                        <label class="form-check-label" for="generateQR">
+                                            Generate QR codes and badges
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Email Preview -->
+                        <div class="email-preview" id="emailPreview">
+                            <h6>Email Preview</h6>
+                            <div id="previewContent"></div>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="progress-container" id="progressContainer">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                                     id="progressBar" 
+                                     style="width: 0%">0%</div>
+                            </div>
+                            <p class="text-center mt-2" id="progressText">Sending emails...</p>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="mt-4 d-flex justify-content-between">
+                            <button class="btn btn-secondary" onclick="resetForm()">
+                                <i class="bi bi-arrow-left"></i> Back
+                            </button>
+                            <button class="btn btn-primary" onclick="sendEmails()" id="sendButton">
+                                <i class="bi bi-send"></i> Send Emails
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results -->
+            <div id="results" style="display: none;">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title text-success">
+                            <i class="bi bi-check-circle"></i> Emails Sent Successfully
+                        </h5>
+                        <div id="resultsContent"></div>
+                        <button class="btn btn-primary mt-3" onclick="resetForm()">
+                            <i class="bi bi-arrow-clockwise"></i> Send More Emails
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        const API_URL = '/api';
+        let sendType = null;
+        let recipients = [];
+        let templates = [];
+        let expos = [];
+        let selectedTemplate = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+            loadTemplates();
+            loadExpos();
+            setupDatabaseToggle();
+        });
+
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return false;
+            }
+            return true;
+        }
+
+        async function loadTemplates() {
+            try {
+                const response = await fetch(`${API_URL}/email-templates`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load templates');
+
+                const data = await response.json();
+                templates = data.templates || [];
+                
+                const select = document.getElementById('templateSelect');
+                templates.forEach(template => {
+                    if (template.is_active) {
+                        const option = document.createElement('option');
+                        option.value = template.id;
+                        option.textContent = template.name;
+                        select.appendChild(option);
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading templates:', error);
+            }
+        }
+
+        async function loadExpos() {
+            try {
+                const response = await fetch(`${API_URL}/expos`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (!response.ok) throw new Error('Failed to load expos');
+
+                const data = await response.json();
+                console.log('Expos response:', data);
+                
+                // Backend direkt array döndürüyor
+                expos = data;
+                
+                const select = document.getElementById('expoSelect');
+                
+                if (!expos || expos.length === 0) {
+                    const option = document.createElement('option');
+                    option.value = "";
+                    option.textContent = "No expos available";
+                    select.appendChild(option);
+                    select.disabled = true;
+                    return;
+                }
+                
+                expos.forEach(expo => {
+                    const option = document.createElement('option');
+                    option.value = expo.id;
+                    option.textContent = expo.name;
+                    select.appendChild(option);
+                });
+
+                // Auto-select current expo if available
+                const currentExpoId = localStorage.getItem('selectedExpoId');
+                if (currentExpoId) {
+                    select.value = currentExpoId;
+                }
+            } catch (error) {
+                console.error('Error loading expos:', error);
+                const select = document.getElementById('expoSelect');
+                select.innerHTML = '<option value="">Error loading expos</option>';
+                select.disabled = true;
+            }
+        }
+
+        function selectSendType(type) {
+            sendType = type;
+            document.getElementById('step1').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+            
+            if (type === 'single') {
+                document.getElementById('sendTypeTitle').textContent = 'Send Single Email';
+                document.getElementById('singleRecipient').style.display = 'block';
+                document.getElementById('bulkRecipient').style.display = 'none';
+            } else {
+                document.getElementById('sendTypeTitle').textContent = 'Send Bulk Emails';
+                document.getElementById('singleRecipient').style.display = 'none';
+                document.getElementById('bulkRecipient').style.display = 'block';
+            }
+        }
+
+        function setupDatabaseToggle() {
+            const checkbox = document.getElementById('saveToDatabase');
+            checkbox.addEventListener('change', function() {
+                document.getElementById('databaseOptions').style.display = 
+                    this.checked ? 'block' : 'none';
+            });
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            document.getElementById('fileUploadArea').classList.add('dragover');
+        }
+
+        function handleDragLeave(e) {
+            e.preventDefault();
+            document.getElementById('fileUploadArea').classList.remove('dragover');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            document.getElementById('fileUploadArea').classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            if (files.length > 0) {
+                processFile(files[0]);
+            }
+        }
+
+        function processFile(file) {
+            const reader = new FileReader();
+            
+            if (file.name.endsWith('.csv')) {
+                reader.onload = function(e) {
+                    const csv = e.target.result;
+                    const lines = csv.split('\n');
+                    const headers = lines[0].split(',');
+                    
+                    recipients = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        if (lines[i].trim()) {
+                            const data = lines[i].split(',');
+                            recipients.push({
+                                name: data[0] || '',
+                                email: data[1] || '',
+                                company: data[2] || ''
+                            });
+                        }
+                    }
+                    displayRecipients();
+                };
+                reader.readAsText(file);
+            } else {
+                reader.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const json = XLSX.utils.sheet_to_json(sheet);
+                    
+                    recipients = json.map(row => ({
+                        name: row.Name || row.name || '',
+                        email: row.Email || row.email || '',
+                        company: row.Company || row.company || ''
+                    }));
+                    displayRecipients();
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        function displayRecipients() {
+            const container = document.getElementById('recipientsList');
+            const content = document.getElementById('recipientsContent');
+            
+            container.style.display = 'block';
+            document.getElementById('recipientCount').textContent = recipients.length;
+            
+            content.innerHTML = recipients.slice(0, 10).map((r, i) => `
+                <div class="recipient-item">
+                    <span>${r.name || 'No Name'} - ${r.email}</span>
+                    <button class="btn btn-sm btn-outline-danger" onclick="removeRecipient(${i})">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            `).join('');
+            
+            if (recipients.length > 10) {
+                content.innerHTML += `<p class="text-muted mt-2">...and ${recipients.length - 10} more</p>`;
+            }
+        }
+
+        function removeRecipient(index) {
+            recipients.splice(index, 1);
+            displayRecipients();
+        }
+
+        function loadTemplatePreview() {
+            const templateId = document.getElementById('templateSelect').value;
+            if (!templateId) {
+                document.getElementById('emailPreview').style.display = 'none';
+                return;
+            }
+            
+            selectedTemplate = templates.find(t => t.id == templateId);
+            if (selectedTemplate) {
+                const preview = document.getElementById('emailPreview');
+                preview.style.display = 'block';
+                
+                let content = selectedTemplate.html_content
+                    .replace(/{{name}}/g, 'John Doe')
+                    .replace(/{{email}}/g, 'john@example.com')
+                    .replace(/{{company}}/g, 'Example Corp')
+                    .replace(/{{expo_name}}/g, expos.find(e => e.id == document.getElementById('expoSelect').value)?.name || 'Expo');
+                
+                document.getElementById('previewContent').innerHTML = `
+                    <strong>Subject:</strong> ${selectedTemplate.subject}<br>
+                    <hr>
+                    <div style="max-height: 300px; overflow-y: auto;">
+                        ${content}
+                    </div>
+                `;
+            }
+        }
+
+        async function sendEmails() {
+            // Validate
+            if (!document.getElementById('templateSelect').value) {
+                alert('Please select a template');
+                return;
+            }
+            
+            if (!document.getElementById('expoSelect').value) {
+                alert('Please select an expo');
+                return;
+            }
+            
+            // Prepare recipients
+            if (sendType === 'single') {
+                const email = document.getElementById('recipientEmail').value;
+                if (!email) {
+                    alert('Please enter recipient email');
+                    return;
+                }
+                recipients = [{
+                    name: document.getElementById('recipientName').value || 'Guest',
+                    email: email,
+                    company: document.getElementById('recipientCompany').value || ''
+                }];
+            }
+            
+            if (recipients.length === 0) {
+                alert('No recipients to send to');
+                return;
+            }
+            
+            // Show progress
+            document.getElementById('progressContainer').style.display = 'block';
+            document.getElementById('sendButton').disabled = true;
+            
+            const requestData = {
+                template_id: parseInt(document.getElementById('templateSelect').value),
+                expo_id: parseInt(document.getElementById('expoSelect').value),
+                recipients: recipients,
+                save_to_database: document.getElementById('saveToDatabase').checked,
+                record_type: document.querySelector('input[name="recordType"]:checked').value,
+                generate_qr: document.getElementById('generateQR').checked
+            };
+            
+            try {
+                const response = await fetch(`${API_URL}/email-send/bulk`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                if (!response.ok) throw new Error('Failed to send emails');
+                
+                const result = await response.json();
+                showResults(result);
+            } catch (error) {
+                console.error('Error sending emails:', error);
+                alert('Failed to send emails. Please try again.');
+                document.getElementById('progressContainer').style.display = 'none';
+                document.getElementById('sendButton').disabled = false;
+            }
+        }
+
+        function showResults(result) {
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('results').style.display = 'block';
+            
+            document.getElementById('resultsContent').innerHTML = `
+                <div class="alert alert-success">
+                    <i class="bi bi-check-circle"></i> 
+                    Successfully sent ${result.sent_count || recipients.length} email(s)
+                </div>
+                ${result.saved_count ? `
+                    <div class="alert alert-info">
+                        <i class="bi bi-database"></i> 
+                        Saved ${result.saved_count} records to database
+                    </div>
+                ` : ''}
+            `;
+        }
+
+        function resetForm() {
+            sendType = null;
+            recipients = [];
+            selectedTemplate = null;
+            
+            document.getElementById('step1').style.display = 'block';
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('progressContainer').style.display = 'none';
+            document.getElementById('sendButton').disabled = false;
+            document.getElementById('emailPreview').style.display = 'none';
+            document.getElementById('recipientsList').style.display = 'none';
+            
+            // Reset forms
+            document.getElementById('recipientName').value = '';
+            document.getElementById('recipientEmail').value = '';
+            document.getElementById('recipientCompany').value = '';
+            document.getElementById('fileInput').value = '';
+        }
+
+        function logout() {
+            if (confirm('Are you sure you want to logout?')) {
+                localStorage.clear();
+                window.location.href = 'login.html';
+            }
+        }
+    </script>
+</body>
+</html>

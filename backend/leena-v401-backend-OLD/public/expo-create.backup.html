@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create New Expo - Leena EMS</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        h1 {
+            color: #343a40;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #6c757d;
+            font-size: 14px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #495057;
+            font-weight: 500;
+        }
+        .required {
+            color: #e74c3c;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+        .date-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
+        }
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #495057;
+            margin-right: 10px;
+        }
+        .btn-secondary:hover {
+            background: #e9ecef;
+        }
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+        .error {
+            color: #e74c3c;
+            font-size: 13px;
+            margin-top: 5px;
+            display: none;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Create New Expo</h1>
+            <p class="subtitle">Set up your event details</p>
+        </div>
+
+        <div class="success" id="successMessage">
+            Expo created successfully! Redirecting...
+        </div>
+
+        <form id="expoForm">
+            <div class="form-group">
+                <label for="name">
+                    Expo Name <span class="required">*</span>
+                </label>
+                <input type="text" id="name" name="name" required 
+                       placeholder="e.g., Tech Summit 2025">
+                <div class="error" id="nameError">Expo name is required</div>
+            </div>
+
+            <div class="form-group">
+                <label for="location">
+                    Location <span class="required">*</span>
+                </label>
+                <input type="text" id="location" name="location" required 
+                       placeholder="e.g., Istanbul Convention Center">
+                <div class="error" id="locationError">Location is required</div>
+            </div>
+
+            <div class="date-group">
+                <div class="form-group">
+                    <label for="start_date">
+                        Start Date <span class="required">*</span>
+                    </label>
+                    <input type="date" id="start_date" name="start_date" required>
+                    <div class="error" id="startDateError">Start date is required</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="end_date">
+                        End Date <span class="required">*</span>
+                    </label>
+                    <input type="date" id="end_date" name="end_date" required>
+                    <div class="error" id="endDateError">End date is required</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="description">
+                    Description
+                </label>
+                <textarea id="description" name="description" 
+                          placeholder="Brief description of your expo (optional)"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label for="logo_url">
+                    Logo URL
+                </label>
+                <input type="url" id="logo_url" name="logo_url" 
+                       placeholder="https://example.com/logo.png (optional)">
+            </div>
+
+            <div class="loading" id="loadingSpinner">
+                <div class="spinner"></div>
+                <p style="margin-top: 10px;">Creating expo...</p>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="goBack()">
+                    ← Cancel
+                </button>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                    Create Expo
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api';
+
+        // Set minimum date to today
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('start_date').setAttribute('min', today);
+            document.getElementById('end_date').setAttribute('min', today);
+
+            // Update end date minimum when start date changes
+            document.getElementById('start_date').addEventListener('change', (e) => {
+                document.getElementById('end_date').setAttribute('min', e.target.value);
+                validateDates();
+            });
+        });
+
+        // Form submission
+        document.getElementById('expoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!validateForm()) {
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // Show loading
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('submitBtn').disabled = true;
+
+            const formData = {
+                name: document.getElementById('name').value.trim(),
+                location: document.getElementById('location').value.trim(),
+                start_date: document.getElementById('start_date').value,
+                end_date: document.getElementById('end_date').value,
+                description: document.getElementById('description').value.trim(),
+                logo_url: document.getElementById('logo_url').value.trim() || null
+            };
+
+            try {
+                const response = await fetch(`${API_URL}/expos`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+                console.log('Expo creation response:', result);
+
+                if (response.ok) {
+                    // Show success message
+                    document.getElementById('successMessage').style.display = 'block';
+                    document.getElementById('expoForm').style.display = 'none';
+                    
+                    // Check if expo ID exists in response
+                    if (result.expo && result.expo.id) {
+                        // Store the new expo ID and name
+                        localStorage.setItem('selectedExpoId', result.expo.id);
+                        localStorage.setItem('selectedExpoName', result.expo.name);
+                        
+                        // Redirect after 2 seconds to main panel
+                        setTimeout(() => {
+                            // Use main-panel.html as it seems to be the main management interface
+                            window.location.href = 'main-panel.html';
+                        }, 2000);
+                    } else {
+                        console.error('Expo ID not found in response:', result);
+                        alert('Expo created but ID not received. Redirecting to dashboard...');
+                        setTimeout(() => {
+                            window.location.href = 'dashboard.html';
+                        }, 2000);
+                    }
+                } else {
+                    throw new Error(result.error || 'Failed to create expo');
+                }
+            } catch (error) {
+                console.error('Error creating expo:', error);
+                alert('Failed to create expo: ' + error.message);
+                document.getElementById('submitBtn').disabled = false;
+            } finally {
+                document.getElementById('loadingSpinner').style.display = 'none';
+            }
+        });
+
+        // Form validation
+        function validateForm() {
+            let isValid = true;
+            
+            // Reset errors
+            document.querySelectorAll('.error').forEach(el => el.style.display = 'none');
+            
+            // Validate name
+            if (!document.getElementById('name').value.trim()) {
+                document.getElementById('nameError').style.display = 'block';
+                isValid = false;
+            }
+            
+            // Validate location
+            if (!document.getElementById('location').value.trim()) {
+                document.getElementById('locationError').style.display = 'block';
+                isValid = false;
+            }
+            
+            // Validate dates
+            if (!document.getElementById('start_date').value) {
+                document.getElementById('startDateError').style.display = 'block';
+                isValid = false;
+            }
+            
+            if (!document.getElementById('end_date').value) {
+                document.getElementById('endDateError').style.display = 'block';
+                isValid = false;
+            }
+            
+            // Validate date logic
+            if (!validateDates()) {
+                isValid = false;
+            }
+            
+            return isValid;
+        }
+
+        // Validate date logic
+        function validateDates() {
+            const startDate = new Date(document.getElementById('start_date').value);
+            const endDate = new Date(document.getElementById('end_date').value);
+            
+            if (startDate && endDate && startDate > endDate) {
+                document.getElementById('endDateError').textContent = 'End date must be after start date';
+                document.getElementById('endDateError').style.display = 'block';
+                return false;
+            }
+            
+            return true;
+        }
+
+        // Go back
+        function goBack() {
+            window.location.href = 'dashboard.html';
+        }
+    </script>
+</body>
+</html>
