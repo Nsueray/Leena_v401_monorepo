@@ -59,7 +59,7 @@
       text-transform: uppercase;
       margin-bottom: 5px;
     }
-    /* ✅ RESPONSIVE TEXT FIX */
+    /* RESPONSIVE TEXT FIX */
     .info-value { 
       color: #333; 
       font-size: 16px;
@@ -80,10 +80,10 @@
       background: #f8f9fa;
       border-radius: 10px;
     }
-    /* ✅ QR CODE 30% SMALLER */
+    /* QR CODE 30% SMALLER */
     .qr-code {
-      width: 140px;  /* Was 200px, now 30% smaller */
-      height: 140px; /* Was 200px, now 30% smaller */
+      width: 140px;
+      height: 140px;
       margin: 0 auto;
       padding: 10px;
       background: white;
@@ -194,7 +194,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script>
-    const API_URL = 'http://localhost:3000/api';
+    // ✅ FIX 1: Use relative path that works both locally and in production
+    const API_URL = '/api';
 
     function getQRFromURL() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -209,37 +210,59 @@
         return;
       }
 
-      displayBadge({
-        qr_code: qrCode,
-        name: 'Loading...',
-        company: '',
-        badge_id: 'Loading...'
-      });
-
-      fetchVisitorData(qrCode);
-    }
-
-    async function fetchVisitorData(qrCode) {
+      // Try to fetch visitor data from API
       try {
         const response = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
+        
         if (response.ok) {
           const data = await response.json();
-          displayBadge(data.visitor);
+          console.log('Visitor data received:', data); // Debug log
+          
+          if (data.visitor) {
+            displayBadge(data.visitor);
+          } else {
+            // If no visitor data, show badge with QR only
+            displayBadgeWithQROnly(qrCode);
+          }
+        } else {
+          console.error('Failed to fetch visitor data, status:', response.status);
+          // Show badge with QR code only
+          displayBadgeWithQROnly(qrCode);
         }
       } catch (error) {
-        console.log('Could not fetch visitor data, using QR code only');
+        console.error('Error fetching visitor data:', error);
+        // Show badge with QR code only
+        displayBadgeWithQROnly(qrCode);
       }
+    }
+
+    function displayBadgeWithQROnly(qrCode) {
+      displayBadge({
+        qr_code: qrCode,
+        name: 'Guest',
+        company: '',
+        badge_id: qrCode.substring(0, 8).toUpperCase()
+      });
     }
 
     function displayBadge(visitor) {
       const content = document.getElementById('content');
       const qrCodeValue = visitor.qr_code || getQRFromURL();
-      const visitorName = visitor.name && visitor.name !== 'Loading...' ? visitor.name : 'Guest';
-      const badgeId = visitor.badge_id || qrCodeValue.substr(0, 8).toUpperCase();
       
-      // ✅ Check if text is long and add class
+      // ✅ FIX 2: Better name handling
+      let visitorName = 'Guest';
+      if (visitor.name && visitor.name !== '' && visitor.name !== 'Loading...') {
+        visitorName = visitor.name;
+      }
+      
+      // ✅ FIX 3: Better badge ID handling
+      const badgeId = visitor.badge_id || qrCodeValue.substring(0, 8).toUpperCase();
+      
+      // Check if text is long and add class
       const nameClass = visitorName.length > 30 ? 'long-text' : '';
       const companyClass = visitor.company && visitor.company.length > 30 ? 'long-text' : '';
+
+      console.log('Displaying badge for:', { name: visitorName, badge_id: badgeId, company: visitor.company }); // Debug log
 
       content.innerHTML = `
         <div class="badge-container">
@@ -285,9 +308,9 @@
         </div>
       `;
 
-      // ✅ QR CODE GENERATION - 30% SMALLER (126px instead of 180px)
+      // QR CODE GENERATION - 30% SMALLER (126px instead of 180px)
       QRCode.toDataURL(qrCodeValue, {
-        width: 126,  // Was 180, now 30% smaller
+        width: 126,
         margin: 1,
         color: {
           dark: '#000000',
@@ -301,8 +324,8 @@
           const img = document.createElement('img');
           img.src = url;
           img.alt = 'QR Code';
-          img.width = 126;   // 30% smaller
-          img.height = 126;  // 30% smaller
+          img.width = 126;
+          img.height = 126;
           document.getElementById('qrcode').appendChild(img);
         }
       });
