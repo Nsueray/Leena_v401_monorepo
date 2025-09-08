@@ -265,4 +265,14 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
+// ✅ Legacy support: allow /stats?expo_id=1 by internally redirecting to /stats/summary
+router.get('/stats', (req, res, next) => {
+  if (req.query.expo_id) {
+    req.query.expoId = req.query.expo_id;
+    delete req.query.expo_id;
+  }
+  req.url = '/stats/summary';
+  next();
+});
+
 module.exports = router;
