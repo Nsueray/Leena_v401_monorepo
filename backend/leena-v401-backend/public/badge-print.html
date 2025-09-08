@@ -2,99 +2,333 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=100mm, initial-scale=1.0" />
-  <title>Badge Print</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Print Your Event Badge</title>
   <style>
-    @page {
-      size: 100mm 50mm;
-      margin: 0;
-    }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      margin: 0;
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100mm;
+      padding: 20px;
     }
-
-    .badge {
-      width: 100mm;
-      height: 50mm;
-      padding: 8mm;
-      box-sizing: border-box;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    .badge-info {
-      flex: 1;
-      padding-right: 5mm;
-    }
-
-    .badge-name {
-      font-size: clamp(12pt, 3vw, 16pt);
-      font-weight: bold;
-      margin-bottom: 3mm;
-      word-wrap: break-word;
-      white-space: normal;
-    }
-
-    .badge-company {
-      font-size: clamp(10pt, 2.5vw, 12pt);
-      word-wrap: break-word;
-      white-space: normal;
-    }
-
-    .badge-qr {
-      width: 25mm; /* ✅ %30 küçültüldü */
-      height: 25mm;
-    }
-
-    .badge-qr img {
+    .container {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 600px;
       width: 100%;
-      height: 100%;
-      object-fit: contain;
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+      text-align: center;
+    }
+    .header h1 { font-size: 28px; margin-bottom: 10px; }
+    .badge-container { padding: 40px; text-align: center; }
+    .badge {
+      border: 3px solid #e0e0e0;
+      border-radius: 15px;
+      padding: 30px;
+      display: inline-block;
+      background: white;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .badge-header { margin-bottom: 20px; }
+    .badge-title {
+      font-size: 18px;
+      color: #333;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    .badge-subtitle { font-size: 14px; color: #666; }
+    .visitor-info { margin: 20px 0; text-align: left; }
+    .info-row {
+      padding: 10px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .info-label {
+      font-weight: 600;
+      color: #666;
+      font-size: 12px;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+    /* ✅ RESPONSIVE TEXT FIX */
+    .info-value { 
+      color: #333; 
+      font-size: 16px;
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      hyphens: auto;
+      max-width: 300px;
+      line-height: 1.4;
+    }
+    /* For longer text, make it smaller */
+    .info-value.long-text {
+      font-size: 14px;
+    }
+    .qr-section {
+      margin: 30px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 10px;
+    }
+    /* ✅ QR CODE 30% SMALLER */
+    .qr-code {
+      width: 140px;  /* Was 200px, now 30% smaller */
+      height: 140px; /* Was 200px, now 30% smaller */
+      margin: 0 auto;
+      padding: 10px;
+      background: white;
+      border-radius: 10px;
+    }
+    .badge-footer {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 2px dashed #e0e0e0;
+      font-size: 12px;
+      color: #999;
+    }
+    .actions {
+      padding: 30px;
+      background: #f8f9fa;
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+    }
+    .btn {
+      padding: 12px 30px;
+      border: none;
+      border-radius: 25px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    .btn-secondary {
+      background: white;
+      color: #667eea;
+      border: 2px solid #667eea;
+    }
+    .btn-secondary:hover {
+      background: #667eea;
+      color: white;
+    }
+    .loading {
+      text-align: center;
+      padding: 60px;
+    }
+    .loading-spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error {
+      text-align: center;
+      padding: 60px;
+      color: #dc3545;
+    }
+    .error i {
+      font-size: 60px;
+      margin-bottom: 20px;
+    }
+    @media print {
+      body { background: white; padding: 0; }
+      .container {
+        box-shadow: none;
+        max-width: 100%;
+      }
+      .header, .actions { display: none; }
+      .badge-container { padding: 0; }
+      .badge {
+        border: 2px solid #333;
+        box-shadow: none;
+      }
+      /* Keep smaller QR size for print */
+      .qr-code {
+        width: 140px;
+        height: 140px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="badge">
-    <div class="badge-info">
-      <div class="badge-name" id="name">Name</div>
-      <div class="badge-company" id="company">Company</div>
+  <div class="container">
+    <div class="header">
+      <h1>🎫 Your Event Badge</h1>
+      <p>Print or save your badge for the event</p>
     </div>
-    <div class="badge-qr">
-      <img id="qrcode" src="" alt="QR Code" />
+
+    <div id="content">
+      <div class="loading">
+        <div class="loading-spinner"></div>
+        <p>Loading your badge...</p>
+      </div>
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script>
-    const params = new URLSearchParams(window.location.search);
-    const qr = params.get("qr");
+    const API_URL = 'http://localhost:3000/api';
 
-    if (qr) {
-      fetch(`/api/visitors/badge/${qr}`)
-        .then((res) => res.json())
-        .then((data) => {
-          document.getElementById("name").textContent =
-            data.name || data.custom_fields?.name || "Unknown";
-          document.getElementById("company").textContent =
-            data.company || data.custom_fields?.company || "-";
-          document.getElementById(
-            "qrcode"
-          ).src = `/api/qr-image/${data.qr_code}`;
-        })
-        .catch((err) => {
-          document.getElementById("name").textContent = "Invalid QR";
-          document.getElementById("company").textContent = "";
-        });
-    } else {
-      document.getElementById("name").textContent = "Missing QR";
-      document.getElementById("company").textContent = "";
+    function getQRFromURL() {
+      const urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get('qr');
     }
+
+    async function loadBadge() {
+      const qrCode = getQRFromURL();
+
+      if (!qrCode) {
+        showError('Invalid badge link');
+        return;
+      }
+
+      displayBadge({
+        qr_code: qrCode,
+        name: 'Loading...',
+        company: '',
+        badge_id: 'Loading...'
+      });
+
+      fetchVisitorData(qrCode);
+    }
+
+    async function fetchVisitorData(qrCode) {
+      try {
+        const response = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
+        if (response.ok) {
+          const data = await response.json();
+          displayBadge(data.visitor);
+        }
+      } catch (error) {
+        console.log('Could not fetch visitor data, using QR code only');
+      }
+    }
+
+    function displayBadge(visitor) {
+      const content = document.getElementById('content');
+      const qrCodeValue = visitor.qr_code || getQRFromURL();
+      const visitorName = visitor.name && visitor.name !== 'Loading...' ? visitor.name : 'Guest';
+      const badgeId = visitor.badge_id || qrCodeValue.substr(0, 8).toUpperCase();
+      
+      // ✅ Check if text is long and add class
+      const nameClass = visitorName.length > 30 ? 'long-text' : '';
+      const companyClass = visitor.company && visitor.company.length > 30 ? 'long-text' : '';
+
+      content.innerHTML = `
+        <div class="badge-container">
+          <div class="badge">
+            <div class="badge-header">
+              <div class="badge-title">EVENT BADGE</div>
+              <div class="badge-subtitle">Leena Events 2025</div>
+            </div>
+            <div class="visitor-info">
+              <div class="info-row">
+                <div class="info-label">Name</div>
+                <div class="info-value ${nameClass}">${visitorName}</div>
+              </div>
+              ${visitor.company ? `
+              <div class="info-row">
+                <div class="info-label">Company</div>
+                <div class="info-value ${companyClass}">${visitor.company}</div>
+              </div>` : ''}
+              <div class="info-row">
+                <div class="info-label">Badge ID</div>
+                <div class="info-value">${badgeId}</div>
+              </div>
+            </div>
+            <div class="qr-section">
+              <div class="qr-code" id="qrcode"></div>
+              <p style="margin-top: 10px; color: #666; font-size: 12px;">
+                Scan for quick check-in
+              </p>
+            </div>
+            <div class="badge-footer">
+              <p>Please wear this badge at all times during the event</p>
+              <p style="margin-top: 5px;">© ${new Date().getFullYear()} Leena Events</p>
+            </div>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary" onclick="window.print()">
+            🖨️ Print Badge
+          </button>
+          <button class="btn btn-secondary" onclick="downloadBadge()">
+            💾 Save as Image
+          </button>
+        </div>
+      `;
+
+      // ✅ QR CODE GENERATION - 30% SMALLER (126px instead of 180px)
+      QRCode.toDataURL(qrCodeValue, {
+        width: 126,  // Was 180, now 30% smaller
+        margin: 1,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      }, function (error, url) {
+        if (error) {
+          console.error('QR Code generation error:', error);
+          document.getElementById('qrcode').innerHTML = '<p>QR Code generation failed</p>';
+        } else {
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = 'QR Code';
+          img.width = 126;   // 30% smaller
+          img.height = 126;  // 30% smaller
+          document.getElementById('qrcode').appendChild(img);
+        }
+      });
+    }
+
+    function showError(message) {
+      const content = document.getElementById('content');
+      content.innerHTML = `
+        <div class="error">
+          <p style="font-size: 60px;">⚠️</p>
+          <h3>Oops!</h3>
+          <p>${message}</p>
+          <p style="margin-top: 20px;">
+            <a href="/" class="btn btn-primary">Go to Homepage</a>
+          </p>
+        </div>
+      `;
+    }
+
+    function downloadBadge() {
+      alert('Save feature coming soon! Please use Print > Save as PDF for now.');
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      loadBadge();
+    });
   </script>
 </body>
 </html>
