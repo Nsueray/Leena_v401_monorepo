@@ -386,7 +386,7 @@
             }
             
             table {
-                min-width: 800px;
+                min-width: 1000px;
             }
             
             .pagination-container {
@@ -680,6 +680,8 @@
                             <th>Name</th>
                             <th>Company</th>
                             <th>Country</th>
+                            <th>Source</th>
+                            <th>Origin</th>
                             <th>Hall</th>
                             <th>Terminal</th>
                             <th>Check-in Time</th>
@@ -703,12 +705,30 @@
                 const fullName = `${visitorName} ${visitorLastName}`.trim() || 'Unknown';
                 const company = checkin.visitor_company || checkin.company || '-';
                 const country = checkin.visitor_country || checkin.country || '-';
+                const source = checkin.source || '-';
+                const origin = checkin.origin || '-';
+                
+                // Capitalize first letter for better display
+                const formatLabel = (str) => {
+                    if (!str || str === '-') return '-';
+                    return str.charAt(0).toUpperCase() + str.slice(1);
+                };
                 
                 html += `
                     <tr>
                         <td><strong>${escapeHtml(fullName)}</strong></td>
                         <td>${escapeHtml(company)}</td>
                         <td>${escapeHtml(country)}</td>
+                        <td>
+                            <span class="badge-pill badge-source">
+                                ${escapeHtml(formatLabel(source))}
+                            </span>
+                        </td>
+                        <td>
+                            <span class="badge-pill badge-origin">
+                                ${escapeHtml(formatLabel(origin))}
+                            </span>
+                        </td>
                         <td>
                             <span class="badge-pill badge-hall">
                                 ${escapeHtml(checkin.hall || 'Main')}

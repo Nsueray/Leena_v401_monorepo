@@ -44,7 +44,7 @@ router.post('/', authenticateToken, async (req, res) => {
 
     if (qr_code && !visitor_id) {
       const visitorResult = await pool.query(
-        'SELECT id, custom_fields FROM visitors WHERE qr_code = $1 AND expo_id = $2',
+        'SELECT id, custom_fields, source, origin FROM visitors WHERE qr_code = $1 AND expo_id = $2',
         [qr_code, expo_id]
       );
 
@@ -63,6 +63,8 @@ router.post('/', authenticateToken, async (req, res) => {
         v.id, 
         v.custom_fields,
         v.qr_code,
+        v.source,
+        v.origin,
         (SELECT COUNT(*) FROM checkins WHERE visitor_id = v.id AND expo_id = $2) as checkin_count,
         (SELECT checkin_time FROM checkins WHERE visitor_id = v.id AND expo_id = $2 ORDER BY checkin_time DESC LIMIT 1) as last_checkin
        FROM visitors v
@@ -81,15 +83,25 @@ router.post('/', authenticateToken, async (req, res) => {
       const minimumInterval = 60000;
 
       if (timeSinceLastCheckin < minimumInterval && checkin_type === 'entry') {
+        // Parse custom_fields if it's a string
+        let customFields = visitor.custom_fields;
+        if (typeof customFields === 'string') {
+          try {
+            customFields = JSON.parse(customFields);
+          } catch (e) {
+            customFields = {};
+          }
+        }
+        
         return res.status(409).json({ 
           error: 'Duplicate check-in detected',
           message: 'This visitor was checked in less than a minute ago',
           last_checkin: visitor.last_checkin,
           visitor: {
             id: visitor.id,
-            name: visitor.custom_fields?.name,
-            last_name: visitor.custom_fields?.last_name,
-            company: visitor.custom_fields?.company
+            name: customFields?.name,
+            last_name: customFields?.last_name,
+            company: customFields?.company
           }
         });
       }
@@ -104,6 +116,24 @@ router.post('/', authenticateToken, async (req, res) => {
 
     const checkin = checkinResult.rows[0];
 
+    // Parse custom_fields if it's a string
+    let customFields = visitor.custom_fields;
+    if (typeof customFields === 'string') {
+      try {
+        customFields = JSON.parse(customFields);
+      } catch (e) {
+        customFields = {};
+      }
+    }
+
+    // Build comprehensive name field
+    let visitorName = '';
+    if (customFields?.full_name) {
+      visitorName = customFields.full_name;
+    } else if (customFields?.name || customFields?.last_name) {
+      visitorName = `${customFields?.name || ''} ${customFields?.last_name || ''}`.trim();
+    }
+
     const response = {
       message: 'Check-in successful',
       checkin: {
@@ -116,11 +146,16 @@ router.post('/', authenticateToken, async (req, res) => {
       visitor: {
         id: visitor.id,
         qr_code: visitor.qr_code,
-        name: visitor.custom_fields?.name,
-        last_name: visitor.custom_fields?.last_name,
-        email: visitor.custom_fields?.email,
-        company: visitor.custom_fields?.company,
-        country: visitor.custom_fields?.country,
+        name: visitorName,
+        last_name: customFields?.last_name,
+        email: customFields?.email,
+        company: customFields?.company || '',
+        country: customFields?.country || '',
+        origin: visitor.origin || '',
+        source: visitor.source || '',
+        terminal: checkin.terminal,
+        hall: checkin.hall,
+        checkin_time: checkin.checkin_time,
         total_checkins: parseInt(visitor.checkin_count) + 1
       },
       expo: {
