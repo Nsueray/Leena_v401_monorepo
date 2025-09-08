@@ -110,7 +110,7 @@ router.get('/badge/:qr_code', async (req, res) => {
   }
 });
 
-// ✅ ✅ ✅ YENİ EKLENEN ENDPOINT - PUBLIC FORM KAYDI
+// ✅ ✅ ✅ YENİ EKLENEN ENDPOINT - PUBLIC FORM KAYDI (email ile)
 router.post('/public', async (req, res) => {
   try {
     const {
@@ -155,6 +155,20 @@ router.post('/public', async (req, res) => {
     ];
 
     const result = await pool.query(insertQuery, values);
+
+    // ✅ QR Email Gönderimi
+    const emailHtml = await processEmailTemplate('default', {
+      name: name || '',
+      company: company || '',
+      qr_code: qrCode,
+      badge_id: badgeId
+    });
+
+    await sendEmail({
+      to: email,
+      subject: 'Your Event Badge - Leena EMS',
+      html: emailHtml
+    });
 
     return res.json({
       success: true,
