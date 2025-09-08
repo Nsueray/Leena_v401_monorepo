@@ -202,7 +202,7 @@
             padding: 20px;
             border-bottom: 1px solid #dee2e6;
             display: flex;
-            justify-content: between;
+            justify-content: space-between;
             align-items: center;
         }
         
@@ -300,6 +300,11 @@
             border-color: transparent;
         }
         
+        .page-item.disabled .page-link {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        
         .page-info {
             color: #6c757d;
             font-size: 0.9rem;
@@ -352,6 +357,11 @@
         .alert-danger {
             background: #f8d7da;
             color: #721c24;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
         }
         
         @media (max-width: 768px) {
@@ -473,7 +483,7 @@
                         <button class="btn btn-secondary" onclick="clearFilters()">
                             <i class="bi bi-x-circle"></i> Clear
                         </button>
-                        <button class="btn btn-light" onclick="loadCheckins()">
+                        <button class="btn btn-light" onclick="refreshData()">
                             <i class="bi bi-arrow-clockwise"></i> Refresh
                         </button>
                     </div>
@@ -487,6 +497,9 @@
                 <div class="table-title">
                     <i class="bi bi-list"></i>
                     Check-in Records
+                </div>
+                <div>
+                    <span class="text-muted">Total: <strong id="totalCount">0</strong> records</span>
                 </div>
             </div>
             
@@ -526,10 +539,9 @@
         let currentFilters = {};
         let expoId = null;
         let token = null;
-        let availableDays = [];
 
         // Initialize
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             // Check auth
             token = localStorage.getItem('token');
             expoId = localStorage.getItem('selectedExpoId');
@@ -545,9 +557,9 @@
                 return;
             }
             
-            // Load initial data
-            loadCheckins();
+            // Initialize page
             generateDayOptions();
+            await refreshData();
         });
 
         // Generate day options (last 7 days)
@@ -573,41 +585,68 @@
             }
         }
 
+        // Refresh all data
+        async function refreshData() {
+            await Promise.all([
+                loadCheckins(),
+                updateStats()
+            ]);
+        }
+
         // Load check-ins
         async function loadCheckins() {
             showLoading(true);
             
             try {
-                // Build query parameters
+                // Build query parameters - IMPORTANT: use expoId not expo_id for consistency
                 const params = new URLSearchParams({
-                    expoId: expoId,
+                    expoId: expoId,  // Fixed: was expo_id
                     page: currentPage,
                     limit: recordsPerPage,
-                    ...currentFilters
+                    includeVisitorDetails: 'true'
                 });
                 
+                // Add filters if they exist
+                if (currentFilters.day) params.append('date', currentFilters.day);
+                if (currentFilters.source) params.append('source', currentFilters.source);
+                if (currentFilters.origin) params.append('origin', currentFilters.origin);
+                
                 const response = await fetch(`${API_BASE_URL}/checkins?${params}`, {
+                    method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
                     }
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to load check-ins');
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
                 }
                 
                 const data = await response.json();
-                checkins = data.checkins || [];
-                totalRecords = data.total || 0;
-                totalPages = Math.ceil(totalRecords / recordsPerPage);
                 
+                // Handle pagination response
+                if (data.pagination) {
+                    checkins = data.checkins || [];
+                    totalRecords = data.pagination.total || 0;
+                    totalPages = Math.ceil(totalRecords / recordsPerPage);
+                } else {
+                    // Fallback for simple response
+                    checkins = data.checkins || data || [];
+                    totalRecords = data.total || checkins.length;
+                    totalPages = Math.ceil(totalRecords / recordsPerPage);
+                }
+                
+                document.getElementById('totalCount').textContent = totalRecords;
                 renderCheckins();
-                updateStats();
                 renderPagination();
                 
             } catch (error) {
                 console.error('Error loading check-ins:', error);
-                showAlert('Failed to load check-ins. Please try again.', 'danger');
+                showAlert(`Failed to load check-ins: ${error.message}`, 'danger');
+                checkins = [];
+                renderCheckins();
             } finally {
                 showLoading(false);
             }
@@ -625,6 +664,9 @@
                         </div>
                         <h3>No Check-ins Found</h3>
                         <p>No check-in records match your current filters</p>
+                        <button class="btn btn-primary" onclick="clearFilters()">
+                            <i class="bi bi-x-circle"></i> Clear Filters
+                        </button>
                     </div>
                 `;
                 document.getElementById('paginationContainer').style.display = 'none';
@@ -640,8 +682,6 @@
                             <th>Country</th>
                             <th>Hall</th>
                             <th>Terminal</th>
-                            <th>Source</th>
-                            <th>Origin</th>
                             <th>Check-in Time</th>
                         </tr>
                     </thead>
@@ -657,29 +697,24 @@
                     minute: '2-digit'
                 });
                 
-                const fullName = `${checkin.name || ''} ${checkin.last_name || ''}`.trim() || 'Unknown';
+                // Get visitor info from various possible sources
+                const visitorName = checkin.visitor_name || checkin.name || '';
+                const visitorLastName = checkin.visitor_last_name || checkin.last_name || '';
+                const fullName = `${visitorName} ${visitorLastName}`.trim() || 'Unknown';
+                const company = checkin.visitor_company || checkin.company || '-';
+                const country = checkin.visitor_country || checkin.country || '-';
                 
                 html += `
                     <tr>
                         <td><strong>${escapeHtml(fullName)}</strong></td>
-                        <td>${escapeHtml(checkin.company || '-')}</td>
-                        <td>${escapeHtml(checkin.country || '-')}</td>
+                        <td>${escapeHtml(company)}</td>
+                        <td>${escapeHtml(country)}</td>
                         <td>
                             <span class="badge-pill badge-hall">
                                 ${escapeHtml(checkin.hall || 'Main')}
                             </span>
                         </td>
                         <td>${escapeHtml(checkin.terminal || '-')}</td>
-                        <td>
-                            <span class="badge-pill badge-source">
-                                ${checkin.source || 'unknown'}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="badge-pill badge-origin">
-                                ${checkin.origin || 'unknown'}
-                            </span>
-                        </td>
                         <td>${formattedTime}</td>
                     </tr>
                 `;
@@ -695,35 +730,47 @@
             document.getElementById('recordsInfo').textContent = checkins.length;
         }
 
-        // Update stats
+        // Update stats - FIXED ENDPOINT
         async function updateStats() {
             try {
-                const response = await fetch(`${API_BASE_URL}/checkins/stats?expo_id=${expoId}`, {
+                const response = await fetch(`${API_BASE_URL}/checkins/stats/summary?expoId=${expoId}`, {
+                    method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
                     }
                 });
                 
                 if (!response.ok) {
-                    console.error('Failed to fetch stats');
-                    return;
+                    console.error('Failed to fetch stats:', response.status);
+                    throw new Error(`Stats API error: ${response.status}`);
                 }
                 
-                const stats = await response.json();
+                const data = await response.json();
+                
+                // Extract stats from response
+                const stats = data.statistics || data;
                 
                 // Update counters
-                document.getElementById('totalCheckins').textContent = stats.total_checkins || 0;
-                document.getElementById('uniqueVisitors').textContent = stats.unique_visitors || 0;
-                document.getElementById('todayCheckins').textContent = stats.today_checkins || 0;
+                document.getElementById('totalCheckins').textContent = 
+                    stats.total_checkins || stats.total || '0';
+                document.getElementById('uniqueVisitors').textContent = 
+                    stats.unique_visitors || stats.unique_count || '0';
+                document.getElementById('todayCheckins').textContent = 
+                    stats.today_checkins || stats.today_count || '0';
                 
                 // Update hall distribution
                 const hallStats = document.getElementById('hallStats');
-                if (stats.hall_distribution && Object.keys(stats.hall_distribution).length > 0) {
+                const hallData = stats.by_hall || stats.hall_distribution || {};
+                
+                if (Object.keys(hallData).length > 0) {
                     let hallHtml = '';
-                    for (const [hall, count] of Object.entries(stats.hall_distribution)) {
-                        hallHtml += `<span class="hall-badge">${escapeHtml(hall)}: <strong>${count}</strong></span>`;
+                    for (const [hall, count] of Object.entries(hallData)) {
+                        if (hall && count !== null && count !== undefined) {
+                            hallHtml += `<span class="hall-badge">${escapeHtml(hall)}: <strong>${count}</strong></span>`;
+                        }
                     }
-                    hallStats.innerHTML = hallHtml;
+                    hallStats.innerHTML = hallHtml || '<span class="text-muted">No hall data</span>';
                 } else {
                     hallStats.innerHTML = '<span class="text-muted">No data available</span>';
                 }
@@ -742,6 +789,11 @@
         function renderPagination() {
             const pagination = document.getElementById('pagination');
             const pageInfo = document.getElementById('pageInfo');
+            
+            if (totalPages <= 1) {
+                document.getElementById('paginationContainer').style.display = 'none';
+                return;
+            }
             
             pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
             
@@ -765,10 +817,35 @@
                 startPage = Math.max(1, endPage - maxVisiblePages + 1);
             }
             
+            // First page
+            if (startPage > 1) {
+                html += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="goToPage(1); return false;">1</a>
+                    </li>
+                `;
+                if (startPage > 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            // Page range
             for (let i = startPage; i <= endPage; i++) {
                 html += `
                     <li class="page-item ${i === currentPage ? 'active' : ''}">
                         <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
+                    </li>
+                `;
+            }
+            
+            // Last page
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+                html += `
+                    <li class="page-item">
+                        <a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>
                     </li>
                 `;
             }
@@ -786,14 +863,14 @@
         }
 
         // Go to page
-        function goToPage(page) {
-            if (page < 1 || page > totalPages) return;
+        async function goToPage(page) {
+            if (page < 1 || page > totalPages || page === currentPage) return;
             currentPage = page;
-            loadCheckins();
+            await loadCheckins();
         }
 
         // Apply filters
-        function applyFilters() {
+        async function applyFilters() {
             currentFilters = {};
             
             const day = document.getElementById('dayFilter').value;
@@ -805,22 +882,23 @@
             if (origin) currentFilters.origin = origin;
             
             currentPage = 1;
-            loadCheckins();
+            await refreshData();
+            showAlert('Filters applied successfully', 'success');
         }
 
         // Clear filters
-        function clearFilters() {
+        async function clearFilters() {
             document.getElementById('dayFilter').value = '';
             document.getElementById('sourceFilter').value = '';
             document.getElementById('originFilter').value = '';
             
             currentFilters = {};
             currentPage = 1;
-            loadCheckins();
+            await refreshData();
         }
 
         // UI Helper functions
-        function showAlert(message, type) {
+        function showAlert(message, type = 'info') {
             const alertDiv = document.getElementById('alertMessage');
             alertDiv.className = `alert alert-${type}`;
             alertDiv.innerHTML = `
