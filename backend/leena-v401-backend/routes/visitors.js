@@ -9,10 +9,7 @@ const { generateBadgeUrl } = require('../utils/qrcode');
 const { sendEmail, processEmailTemplate } = require('../utils/email');
 const authMiddleware = require('../middleware/authMiddleware');
 
-// Delay helper
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Multer config
 const upload = multer({ storage: multer.memoryStorage() });
 
 // ✅ IMPORT - POST /api/visitors/import
@@ -30,9 +27,37 @@ router.get('/paginated', authMiddleware, async (req, res) => {
   // (bozulmamış hali korunuyor)
 });
 
-// ✅ GET visitor by QR
+// ✅ GET visitor by QR (düzenlendi)
 router.get('/badge/:qr_code', async (req, res) => {
-  // (bozulmamış hali korunuyor)
+  const { qr_code } = req.params;
+  try {
+    const result = await pool.query(
+      `SELECT id, name, last_name, company, email, badge_id, qr_code, custom_fields
+       FROM visitors
+       WHERE qr_code = $1`,
+      [qr_code]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Visitor not found' });
+    }
+
+    const visitor = result.rows[0];
+
+    // Eğer name veya last_name eksikse custom_fields içinden doldur
+    if ((!visitor.name || !visitor.last_name || !visitor.company) && visitor.custom_fields) {
+      const cf = visitor.custom_fields;
+      visitor.name = visitor.name || cf.name || '';
+      visitor.last_name = visitor.last_name || cf.last_name || '';
+      visitor.company = visitor.company || cf.company || '';
+    }
+
+    res.json(visitor);
+
+  } catch (error) {
+    console.error('❌ Error fetching visitor by QR:', error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
 });
 
 // ✅ POST /api/visitors/public
@@ -107,7 +132,6 @@ router.post('/public', async (req, res) => {
     const result = await pool.query(insertQuery, values);
     const visitor = result.rows[0];
 
-    // ✅ Mail gönder
     const subject = 'Your Badge for the Expo';
     const html = `
       <p>Hello <strong>${name}</strong>,</p>
