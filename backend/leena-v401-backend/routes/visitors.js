@@ -110,4 +110,63 @@ router.get('/badge/:qr_code', async (req, res) => {
   }
 });
 
+// ✅ ✅ ✅ YENİ EKLENEN ENDPOINT - PUBLIC FORM KAYDI
+router.post('/public', async (req, res) => {
+  try {
+    const {
+      name,
+      last_name,
+      email,
+      company,
+      country,
+      job_title,
+      source,
+      origin,
+      expo_id,
+      organizer_id
+    } = req.body;
+
+    const qrCode = uuidv4();
+    const badgeId = qrCode.substring(0, 8).toUpperCase();
+
+    const insertQuery = `
+      INSERT INTO visitors (
+        name, last_name, email, company, country, job_title, source, origin,
+        expo_id, organizer_id, qr_code, badge_id, created_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8,
+        $9, $10, $11, $12, NOW()
+      ) RETURNING *
+    `;
+
+    const values = [
+      name || '',
+      last_name || '',
+      email || '',
+      company || '',
+      country || '',
+      job_title || '',
+      source || 'form',
+      origin || 'public',
+      expo_id,
+      organizer_id,
+      qrCode,
+      badgeId
+    ];
+
+    const result = await pool.query(insertQuery, values);
+
+    return res.json({
+      success: true,
+      visitor: result.rows[0],
+      qr_code: qrCode,
+      badge_id: badgeId
+    });
+
+  } catch (err) {
+    console.error('❌ Public form submission error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 module.exports = router;
