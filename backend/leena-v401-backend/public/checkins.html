@@ -700,9 +700,10 @@
                 });
                 
                 // Get visitor info from various possible sources
+                const visitorFullName = checkin.visitor_full_name || '';
                 const visitorName = checkin.visitor_name || checkin.name || '';
                 const visitorLastName = checkin.visitor_last_name || checkin.last_name || '';
-                const fullName = `${visitorName} ${visitorLastName}`.trim() || 'Unknown';
+                const fullName = visitorFullName || `${visitorName} ${visitorLastName}`.trim() || 'Unknown';
                 const company = checkin.visitor_company || checkin.company || '-';
                 const country = checkin.visitor_country || checkin.country || '-';
                 const source = checkin.source || '-';
