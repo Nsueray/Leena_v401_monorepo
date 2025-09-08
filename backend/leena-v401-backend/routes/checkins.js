@@ -152,17 +152,99 @@ router.get('/', authenticateToken, async (req, res) => {
     endDate,
     limit = 100,
     offset = 0,
-    includeVisitorDetails = 'true'
+    page = 1,
+    includeVisitorDetails = 'true',
+    source,
+    origin
   } = req.query;
 
-  // 🔁 Accept alternate casing from query string
+  // Accept alternate casing from query string
   expoId = expoId || req.query.expo_id;
+  
+  // Calculate offset from page if provided
+  if (page && page > 1) {
+    offset = (page - 1) * limit;
+  }
 
   if (!expoId && !visitorId) {
     return res.status(400).json({ error: 'Either expoId or visitorId is required' });
   }
 
   try {
+    // First get total count for pagination
+    let countQuery = `
+      SELECT COUNT(DISTINCT c.id) as total
+      FROM checkins c
+      JOIN visitors v ON v.id = c.visitor_id
+      JOIN expos e ON e.id = c.expo_id
+      WHERE e.organizer_id = $1`;
+
+    const countParams = [req.organizer_id];
+    let countParamIndex = 2;
+
+    if (expoId) {
+      countQuery += ` AND c.expo_id = $${countParamIndex}`;
+      countParams.push(expoId);
+      countParamIndex++;
+    }
+
+    if (visitorId) {
+      countQuery += ` AND c.visitor_id = $${countParamIndex}`;
+      countParams.push(visitorId);
+      countParamIndex++;
+    }
+
+    if (terminal) {
+      countQuery += ` AND c.terminal = $${countParamIndex}`;
+      countParams.push(terminal);
+      countParamIndex++;
+    }
+
+    if (hall) {
+      countQuery += ` AND c.hall = $${countParamIndex}`;
+      countParams.push(hall);
+      countParamIndex++;
+    }
+
+    if (checkinType) {
+      countQuery += ` AND c.checkin_type = $${countParamIndex}`;
+      countParams.push(checkinType);
+      countParamIndex++;
+    }
+
+    if (source) {
+      countQuery += ` AND v.source = $${countParamIndex}`;
+      countParams.push(source);
+      countParamIndex++;
+    }
+
+    if (origin) {
+      countQuery += ` AND v.origin = $${countParamIndex}`;
+      countParams.push(origin);
+      countParamIndex++;
+    }
+
+    if (date) {
+      countQuery += ` AND DATE(c.checkin_time) = $${countParamIndex}`;
+      countParams.push(date);
+      countParamIndex++;
+    } else {
+      if (startDate) {
+        countQuery += ` AND c.checkin_time >= $${countParamIndex}`;
+        countParams.push(startDate);
+        countParamIndex++;
+      }
+      if (endDate) {
+        countQuery += ` AND c.checkin_time <= $${countParamIndex}`;
+        countParams.push(endDate);
+        countParamIndex++;
+      }
+    }
+
+    const countResult = await pool.query(countQuery, countParams);
+    const totalRecords = parseInt(countResult.rows[0].total);
+
+    // Now get the actual data
     let query = `
       SELECT 
         c.id,
@@ -186,6 +268,7 @@ router.get('/', authenticateToken, async (req, res) => {
         v.custom_fields->>'email' as visitor_email,
         v.custom_fields->>'company' as visitor_company,
         v.custom_fields->>'country' as visitor_country,
+        v.custom_fields->>'job_title' as visitor_job_title,
         e.name as expo_name`;
     }
 
@@ -228,6 +311,18 @@ router.get('/', authenticateToken, async (req, res) => {
       paramCount++;
     }
 
+    if (source) {
+      query += ` AND v.source = $${paramCount}`;
+      queryParams.push(source);
+      paramCount++;
+    }
+
+    if (origin) {
+      query += ` AND v.origin = $${paramCount}`;
+      queryParams.push(origin);
+      paramCount++;
+    }
+
     if (date) {
       query += ` AND DATE(c.checkin_time) = $${paramCount}`;
       queryParams.push(date);
@@ -253,10 +348,12 @@ router.get('/', authenticateToken, async (req, res) => {
     res.json({
       checkins: result.rows,
       pagination: {
-        total: result.rows.length,
+        total: totalRecords,
         limit: parseInt(limit),
         offset: parseInt(offset),
-        has_more: false
+        page: parseInt(page),
+        totalPages: Math.ceil(totalRecords / limit),
+        has_more: offset + result.rows.length < totalRecords
       }
     });
   } catch (err) {
@@ -265,14 +362,171 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 });
 
-// ✅ Legacy support: allow /stats?expo_id=1 by internally redirecting to /stats/summary
-router.get('/stats', (req, res, next) => {
+/**
+ * GET /api/checkins/stats/summary
+ * Get check-in statistics for an expo
+ */
+router.get('/stats/summary', authenticateToken, async (req, res) => {
+  let { expoId } = req.query;
+  
+  // Accept alternate casing
+  expoId = expoId || req.query.expo_id;
+
+  if (!expoId) {
+    return res.status(400).json({ error: 'expoId is required' });
+  }
+
+  try {
+    // Verify expo ownership
+    const expoCheck = await pool.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expoId, req.organizer_id]
+    );
+
+    if (expoCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this expo' });
+    }
+
+    // Get total check-ins
+    const totalResult = await pool.query(
+      'SELECT COUNT(*) as total FROM checkins WHERE expo_id = $1',
+      [expoId]
+    );
+
+    // Get unique visitors
+    const uniqueResult = await pool.query(
+      'SELECT COUNT(DISTINCT visitor_id) as unique_count FROM checkins WHERE expo_id = $1',
+      [expoId]
+    );
+
+    // Get today's check-ins
+    const todayResult = await pool.query(
+      `SELECT COUNT(*) as today_count 
+       FROM checkins 
+       WHERE expo_id = $1 AND DATE(checkin_time) = CURRENT_DATE`,
+      [expoId]
+    );
+
+    // Get hall distribution
+    const hallResult = await pool.query(
+      `SELECT hall, COUNT(*) as count 
+       FROM checkins 
+       WHERE expo_id = $1 
+       GROUP BY hall 
+       ORDER BY count DESC`,
+      [expoId]
+    );
+
+    // Build hall distribution object
+    const hallDistribution = {};
+    hallResult.rows.forEach(row => {
+      hallDistribution[row.hall || 'Unknown'] = parseInt(row.count);
+    });
+
+    // Get source distribution (from visitors table)
+    const sourceResult = await pool.query(
+      `SELECT v.source, COUNT(DISTINCT c.id) as count
+       FROM checkins c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.expo_id = $1
+       GROUP BY v.source
+       ORDER BY count DESC`,
+      [expoId]
+    );
+
+    const sourceDistribution = {};
+    sourceResult.rows.forEach(row => {
+      sourceDistribution[row.source || 'Unknown'] = parseInt(row.count);
+    });
+
+    res.json({
+      statistics: {
+        total_checkins: parseInt(totalResult.rows[0].total),
+        unique_visitors: parseInt(uniqueResult.rows[0].unique_count),
+        today_checkins: parseInt(todayResult.rows[0].today_count),
+        by_hall: hallDistribution,
+        by_source: sourceDistribution
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching check-in stats:', err);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
+});
+
+// Legacy support: allow /stats?expo_id=1 by internally redirecting to /stats/summary
+router.get('/stats', authenticateToken, async (req, res) => {
+  // Pass through to the new endpoint
   if (req.query.expo_id) {
     req.query.expoId = req.query.expo_id;
-    delete req.query.expo_id;
   }
-  req.url = '/stats/summary';
-  next();
+  
+  // Get stats using the summary endpoint logic
+  let { expoId } = req.query;
+  
+  if (!expoId) {
+    return res.status(400).json({ error: 'expoId is required' });
+  }
+
+  try {
+    // Verify expo ownership
+    const expoCheck = await pool.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expoId, req.organizer_id]
+    );
+
+    if (expoCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this expo' });
+    }
+
+    // Get total check-ins
+    const totalResult = await pool.query(
+      'SELECT COUNT(*) as total FROM checkins WHERE expo_id = $1',
+      [expoId]
+    );
+
+    // Get unique visitors
+    const uniqueResult = await pool.query(
+      'SELECT COUNT(DISTINCT visitor_id) as unique_count FROM checkins WHERE expo_id = $1',
+      [expoId]
+    );
+
+    // Get today's check-ins
+    const todayResult = await pool.query(
+      `SELECT COUNT(*) as today_count 
+       FROM checkins 
+       WHERE expo_id = $1 AND DATE(checkin_time) = CURRENT_DATE`,
+      [expoId]
+    );
+
+    // Get hall distribution
+    const hallResult = await pool.query(
+      `SELECT hall, COUNT(*) as count 
+       FROM checkins 
+       WHERE expo_id = $1 
+       GROUP BY hall 
+       ORDER BY count DESC`,
+      [expoId]
+    );
+
+    // Build hall distribution object
+    const hallDistribution = {};
+    hallResult.rows.forEach(row => {
+      hallDistribution[row.hall || 'Unknown'] = parseInt(row.count);
+    });
+
+    res.json({
+      statistics: {
+        total_checkins: parseInt(totalResult.rows[0].total),
+        unique_visitors: parseInt(uniqueResult.rows[0].unique_count),
+        today_checkins: parseInt(todayResult.rows[0].today_count),
+        by_hall: hallDistribution
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching check-in stats:', err);
+    res.status(500).json({ error: 'Failed to fetch statistics' });
+  }
 });
 
 module.exports = router;
