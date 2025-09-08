@@ -268,4 +268,77 @@ router.get('/badge/:qr_code', async (req, res) => {
     }
 });
 
+// ✅ Add this at the bottom of the file (before module.exports)
+router.post('/public', async (req, res) => {
+  try {
+    const {
+      name,
+      lastName,
+      email,
+      company,
+      country,
+      jobTitle,
+      source,
+      origin = 'public',
+      expoName
+    } = req.body;
+    if (!name || !email || !company || !expoName) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    const badgeID = `B-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const qrCode = uuidv4();
+    const badgeURL = `${process.env.BASE_BADGE_URL}/badge-print.html?qr=${qrCode}`;
+    const insertQuery = `
+      INSERT INTO visitors (
+        badge_id, qr_code, badge_url,
+        custom_fields, email, expo_id, organizer_id, created_at, source, origin
+      )
+      VALUES (
+        $1, $2, $3,
+        $4, $5, 
+        (SELECT id FROM expos WHERE name = $6 LIMIT 1),
+        (SELECT organizer_id FROM expos WHERE name = $6 LIMIT 1),
+        CURRENT_TIMESTAMP, $7, $8
+      )
+      RETURNING *
+    `;
+    const customFields = {
+      name,
+      last_name: lastName,
+      company,
+      country,
+      job_title: jobTitle
+    };
+    const values = [
+      badgeID,
+      qrCode,
+      badgeURL,
+      customFields,
+      email,
+      expoName,
+      source,
+      origin
+    ];
+    const result = await pool.query(insertQuery, values);
+    const visitor = result.rows[0];
+    // Send confirmation email (if template exists)
+    const subject = 'Your Badge for the Expo';
+    const html = `
+      <p>Hello <strong>${name}</strong>,</p>
+      <p>Thank you for registering. Below is your badge QR code:</p>
+      <img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qrCode}" alt="QR Code" />
+      <p>You can print your badge at the entrance by scanning this code.</p>
+    `;
+    await sendEmail(email, subject, html);
+    res.status(201).json({
+      message: 'Visitor created and email sent',
+      badge_url: badgeURL,
+      qr_code: qrCode
+    });
+  } catch (err) {
+    console.error('Error in /public:', err);
+    res.status(500).json({ error: 'Failed to create visitor' });
+  }
+});
+
 module.exports = router;
