@@ -59,16 +59,31 @@
       text-transform: uppercase;
       margin-bottom: 5px;
     }
-    .info-value { color: #333; font-size: 16px; }
+    /* RESPONSIVE TEXT FIX */
+    .info-value { 
+      color: #333; 
+      font-size: 16px;
+      word-wrap: break-word;
+      word-break: break-word;
+      overflow-wrap: break-word;
+      hyphens: auto;
+      max-width: 300px;
+      line-height: 1.4;
+    }
+    /* For longer text, make it smaller */
+    .info-value.long-text {
+      font-size: 14px;
+    }
     .qr-section {
       margin: 30px 0;
       padding: 20px;
       background: #f8f9fa;
       border-radius: 10px;
     }
+    /* QR CODE 30% SMALLER */
     .qr-code {
-      width: 200px;
-      height: 200px;
+      width: 140px;
+      height: 140px;
       margin: 0 auto;
       padding: 10px;
       background: white;
@@ -154,6 +169,11 @@
         border: 2px solid #333;
         box-shadow: none;
       }
+      /* Keep smaller QR size for print */
+      .qr-code {
+        width: 140px;
+        height: 140px;
+      }
     }
   </style>
 </head>
@@ -174,6 +194,7 @@
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
   <script>
+    // ✅ FIX 1: Use relative path that works both locally and in production
     const API_URL = '/api';
 
     function getQRFromURL() {
@@ -189,33 +210,59 @@
         return;
       }
 
-      displayBadge({
-        qr_code: qrCode,
-        name: 'Loading...',
-        company: '',
-        badge_id: 'Loading...'
-      });
-
-      fetchVisitorData(qrCode);
-    }
-
-    async function fetchVisitorData(qrCode) {
+      // Try to fetch visitor data from API
       try {
         const response = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
+        
         if (response.ok) {
           const data = await response.json();
-          displayBadge(data.visitor);
+          console.log('Visitor data received:', data); // Debug log
+          
+          if (data.visitor) {
+            displayBadge(data.visitor);
+          } else {
+            // If no visitor data, show badge with QR only
+            displayBadgeWithQROnly(qrCode);
+          }
+        } else {
+          console.error('Failed to fetch visitor data, status:', response.status);
+          // Show badge with QR code only
+          displayBadgeWithQROnly(qrCode);
         }
       } catch (error) {
-        console.log('Could not fetch visitor data, using QR code only');
+        console.error('Error fetching visitor data:', error);
+        // Show badge with QR code only
+        displayBadgeWithQROnly(qrCode);
       }
+    }
+
+    function displayBadgeWithQROnly(qrCode) {
+      displayBadge({
+        qr_code: qrCode,
+        name: 'Guest',
+        company: '',
+        badge_id: qrCode.substring(0, 8).toUpperCase()
+      });
     }
 
     function displayBadge(visitor) {
       const content = document.getElementById('content');
       const qrCodeValue = visitor.qr_code || getQRFromURL();
-      const visitorName = visitor.name && visitor.name !== 'Loading...' ? visitor.name : 'Guest';
-      const badgeId = visitor.badge_id || qrCodeValue.substr(0, 8).toUpperCase();
+      
+      // ✅ FIX 2: Better name handling
+      let visitorName = 'Guest';
+      if (visitor.name && visitor.name !== '' && visitor.name !== 'Loading...') {
+        visitorName = visitor.name;
+      }
+      
+      // ✅ FIX 3: Better badge ID handling
+      const badgeId = visitor.badge_id || qrCodeValue.substring(0, 8).toUpperCase();
+      
+      // Check if text is long and add class
+      const nameClass = visitorName.length > 30 ? 'long-text' : '';
+      const companyClass = visitor.company && visitor.company.length > 30 ? 'long-text' : '';
+
+      console.log('Displaying badge for:', { name: visitorName, badge_id: badgeId, company: visitor.company }); // Debug log
 
       content.innerHTML = `
         <div class="badge-container">
@@ -227,12 +274,12 @@
             <div class="visitor-info">
               <div class="info-row">
                 <div class="info-label">Name</div>
-                <div class="info-value">${visitorName}</div>
+                <div class="info-value ${nameClass}">${visitorName}</div>
               </div>
               ${visitor.company ? `
               <div class="info-row">
                 <div class="info-label">Company</div>
-                <div class="info-value">${visitor.company}</div>
+                <div class="info-value ${companyClass}">${visitor.company}</div>
               </div>` : ''}
               <div class="info-row">
                 <div class="info-label">Badge ID</div>
@@ -261,9 +308,9 @@
         </div>
       `;
 
-      // ✅ FIXED QR CODE GENERATION
+      // QR CODE GENERATION - 30% SMALLER (126px instead of 180px)
       QRCode.toDataURL(qrCodeValue, {
-        width: 180,
+        width: 126,
         margin: 1,
         color: {
           dark: '#000000',
@@ -277,8 +324,8 @@
           const img = document.createElement('img');
           img.src = url;
           img.alt = 'QR Code';
-          img.width = 180;
-          img.height = 180;
+          img.width = 126;
+          img.height = 126;
           document.getElementById('qrcode').appendChild(img);
         }
       });
