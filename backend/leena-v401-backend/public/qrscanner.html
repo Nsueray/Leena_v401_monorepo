@@ -305,6 +305,11 @@
             color: #155724;
         }
         
+        .alert-warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
         .loading-spinner {
             display: none;
             text-align: center;
@@ -449,29 +454,100 @@
     <script>
         // Configuration
         const API_BASE_URL = '/api';
-        let hall = 'main';
-        let terminal = '1';
+        let hall = null;
+        let terminal = null;
         let autoCheckinEnabled = true;
         let isProcessing = false;
         
-        // Get URL parameters
-        const urlParams = new URLSearchParams(window.location.search);
-        hall = urlParams.get('hall') || 'main';
-        terminal = urlParams.get('terminal') || '1';
-        
-        // Get expo_id and organizer_id (from localStorage or default)
-        const expoId = localStorage.getItem('expo_id') || '1';
-        const organizerId = localStorage.getItem('organizer_id') || '1';
-        
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            // Process URL parameters first
+            processUrlParameters();
+            
+            // Then get values from localStorage (URL params take priority if they exist)
+            loadTerminalSettings();
+            
             // Display terminal info
-            document.getElementById('hallDisplay').textContent = hall;
-            document.getElementById('terminalDisplay').textContent = terminal;
+            updateTerminalDisplay();
+            
+            // Check for required data
+            checkRequiredData();
             
             // Setup event listeners
             setupEventListeners();
         });
+        
+        // Process URL parameters and save to localStorage
+        function processUrlParameters() {
+            const urlParams = new URLSearchParams(window.location.search);
+            
+            const urlHall = urlParams.get('hall');
+            const urlTerminal = urlParams.get('terminal');
+            
+            if (urlHall) {
+                localStorage.setItem('hall', urlHall);
+                hall = urlHall;
+                console.log('Hall set from URL:', urlHall);
+            }
+            
+            if (urlTerminal) {
+                localStorage.setItem('terminal', urlTerminal);
+                terminal = urlTerminal;
+                console.log('Terminal set from URL:', urlTerminal);
+            }
+        }
+        
+        // Load terminal settings from localStorage
+        function loadTerminalSettings() {
+            // Only load from localStorage if not already set from URL
+            if (!hall) {
+                hall = localStorage.getItem('hall') || 'main';
+            }
+            if (!terminal) {
+                terminal = localStorage.getItem('terminal') || '1';
+            }
+            
+            console.log('Terminal settings loaded - Hall:', hall, 'Terminal:', terminal);
+        }
+        
+        // Update terminal display
+        function updateTerminalDisplay() {
+            document.getElementById('hallDisplay').textContent = hall || 'Not Set';
+            document.getElementById('terminalDisplay').textContent = terminal || 'Not Set';
+        }
+        
+        // Check for required data
+        function checkRequiredData() {
+            const expoId = localStorage.getItem('selectedExpoId');
+            const token = localStorage.getItem('token');
+            
+            if (!expoId) {
+                showAlert('No expo selected. Please select an expo from the dashboard.', 'warning');
+                console.error('Missing expo_id in localStorage');
+            }
+            
+            if (!token) {
+                showAlert('Authentication required. Redirecting to login...', 'danger');
+                console.error('Missing token in localStorage');
+                setTimeout(() => {
+                    window.location.href = 'login.html';
+                }, 2000);
+            }
+            
+            if (!hall || !terminal) {
+                showAlert('Terminal or Hall not configured. Check-in may not work properly. Please set terminal via URL parameters (?terminal=T1&hall=Main)', 'warning');
+                console.warn('Missing terminal or hall configuration');
+            }
+        }
+        
+        // Get expo_id and organizer_id from localStorage
+        function getStorageData() {
+            return {
+                expoId: localStorage.getItem('selectedExpoId'),
+                organizerId: localStorage.getItem('organizer_id'),
+                token: localStorage.getItem('token')
+            };
+        }
         
         function setupEventListeners() {
             // QR Scanner input
@@ -521,27 +597,38 @@
                 return;
             }
             
+            const { expoId, token } = getStorageData();
+            if (!expoId || !token) {
+                showAlert('Missing required data. Please login again.', 'danger');
+                return;
+            }
+            
             isProcessing = true;
             showLoading(true);
             hideAlert();
             
             try {
                 // Fetch visitor by QR code
-                const response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`);
+                const response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 
                 if (!response.ok) {
                     throw new Error('Badge not found');
                 }
                 
                 const visitor = await response.json();
+                console.log('Visitor found for QR scan:', visitor);
                 
                 // Auto check-in if enabled
                 if (autoCheckinEnabled) {
-                    await performCheckin(visitor.id);
+                    await performCheckin(visitor.visitor?.id || visitor.id);
                 }
                 
                 // Redirect to badge print page
-                window.location.href = `badge.html?qr=${qrCode}`;
+                window.location.href = `badge-print.html?qr=${qrCode}`;
                 
             } catch (error) {
                 console.error('Scan error:', error);
@@ -554,8 +641,15 @@
             }
         }
         
-        // Handle manual registration
+        // Handle manual registration - UPDATED to redirect correctly
         async function handleManualRegistration() {
+            const { expoId, organizerId, token } = getStorageData();
+            
+            if (!expoId || !token) {
+                showAlert('Missing required data. Please login again.', 'danger');
+                return;
+            }
+            
             isProcessing = true;
             showLoading(true);
             hideAlert();
@@ -573,16 +667,19 @@
                     source: 'manual',
                     visitor_type: 'visitor',
                     expo_id: expoId,
-                    organizer_id: organizerId,
+                    organizer_id: organizerId || '1',
                     hall: hall,
                     terminal: terminal
                 };
+                
+                console.log('Submitting manual registration with data:', formData);
                 
                 // Send registration request
                 const response = await fetch(`${API_BASE_URL}/visitors/manual`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify(formData)
                 });
@@ -593,6 +690,15 @@
                 }
                 
                 const result = await response.json();
+                console.log('Registration successful, response:', result);
+                
+                // Extract QR code from response
+                const qrCode = result.qr_code || result.qrCode || result.badge_id;
+                
+                if (!qrCode) {
+                    console.error('No QR code in response:', result);
+                    throw new Error('Registration successful but no QR code received');
+                }
                 
                 // Auto check-in if enabled
                 if (autoCheckinEnabled && result.visitor_id) {
@@ -600,44 +706,63 @@
                 }
                 
                 // Show success message
-                showAlert('Registration successful! Redirecting to badge print...', 'success');
+                showAlert('Registration successful! Redirecting to badge...', 'success');
                 
-                // Redirect to badge print page
+                // Direct redirect to badge-print.html with QR code
+                console.log('Redirecting to badge-print.html with QR:', qrCode);
+                
+                // Small delay for user to see success message
                 setTimeout(() => {
-                    window.location.href = `badge-print.html?qr=${result.qr_code}`;
-                }, 1500);
+                    window.location.href = `badge-print.html?qr=${qrCode}`;
+                }, 500);
                 
             } catch (error) {
                 console.error('Registration error:', error);
                 showAlert(error.message || 'Registration failed. Please try again.', 'danger');
-            } finally {
                 isProcessing = false;
                 showLoading(false);
             }
+            // Note: Not resetting isProcessing here because we're redirecting
         }
         
         // Perform check-in
         async function performCheckin(visitorId) {
+            const { expoId, token } = getStorageData();
+            
+            if (!expoId || !visitorId) {
+                console.error('Cannot perform check-in: missing data', { expoId, visitorId });
+                return;
+            }
+            
             try {
                 const checkinData = {
                     visitor_id: visitorId,
                     expo_id: expoId,
-                    hall: hall,
-                    terminal: terminal,
+                    hall: hall || 'main',
+                    terminal: terminal || '1',
                     checkin_type: 'entry',
                     checkin_time: new Date().toISOString()
                 };
                 
-                await fetch(`${API_BASE_URL}/checkins`, {
+                console.log('Performing check-in with data:', checkinData);
+                
+                const response = await fetch(`${API_BASE_URL}/checkins`, {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify(checkinData)
                 });
                 
-                // We don't await the response to avoid delays
-                console.log('Check-in recorded');
+                const result = await response.json();
+                console.log('Check-in response:', result);
+                
+                if (response.ok) {
+                    console.log('Check-in recorded successfully');
+                } else {
+                    console.warn('Check-in failed but continuing:', result);
+                }
                 
             } catch (error) {
                 console.error('Check-in error:', error);
