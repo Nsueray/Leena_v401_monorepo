@@ -628,7 +628,7 @@
                 }
                 
                 // Redirect to badge print page
-                window.location.href = `badge-print.html?qr=${qrCode}`;
+                window.location.href = `badge.html?qr=${qrCode}`;
                 
             } catch (error) {
                 console.error('Scan error:', error);
@@ -708,12 +708,12 @@
                 // Show success message
                 showAlert('Registration successful! Redirecting to badge...', 'success');
                 
-                // Direct redirect to badge-print.html with QR code
-                console.log('Redirecting to badge-print.html with QR:', qrCode);
+                // Direct redirect to badge.html with QR code
+                console.log('Redirecting to badge.html with QR:', qrCode);
                 
                 // Small delay for user to see success message
                 setTimeout(() => {
-                    window.location.href = `badge-print.html?qr=${qrCode}`;
+                    window.location.href = `badge.html?qr=${qrCode}`;
                 }, 500);
                 
             } catch (error) {
