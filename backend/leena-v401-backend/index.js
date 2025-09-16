@@ -141,7 +141,7 @@ app.get('/', (req, res) => {
             reports: '/api/reports',
             webhook: '/api/webhook/zoho/:organizerId/:expoId',
             terminals: '/api/terminals',
-            import_checkins: '/api/import-checkins' // ✅ NEW
+            import_checkins: '/api/import-checkins', // ✅ NEW
             checkin_reports: '/api/checkins/reports' // ✅ ADD THIS
         }
     });
