@@ -3,7 +3,7 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const Papa = require('papaparse');
-const { pool } = require('../utils/db');
+const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 
 // Configure multer for memory storage
