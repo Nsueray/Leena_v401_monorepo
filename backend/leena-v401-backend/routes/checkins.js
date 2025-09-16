@@ -279,7 +279,7 @@ router.get('/', authenticateToken, async (req, res) => {
     const countResult = await pool.query(countQuery, countParams);
     const totalRecords = parseInt(countResult.rows[0].total);
 
-    // Now get the actual data
+    // Now get the actual data with IMPROVED visitor field extraction
     let query = `
       SELECT 
         c.id,
@@ -295,15 +295,65 @@ router.get('/', authenticateToken, async (req, res) => {
     if (includeVisitorDetails === 'true') {
       query += `,
         v.qr_code,
+        v.badge_id,
         v.source,
         v.origin,
         v.custom_fields,
-        v.custom_fields->>'name' as visitor_name,
-        v.custom_fields->>'last_name' as visitor_last_name,
-        v.custom_fields->>'email' as visitor_email,
-        v.custom_fields->>'company' as visitor_company,
-        v.custom_fields->>'country' as visitor_country,
-        v.custom_fields->>'job_title' as visitor_job_title,
+        -- Get name from multiple possible sources
+        COALESCE(
+          v.custom_fields->>'full_name',
+          v.custom_fields->>'name',
+          v.name,
+          ''
+        ) as visitor_name,
+        -- Get last name
+        COALESCE(
+          v.custom_fields->>'last_name',
+          v.last_name,
+          ''
+        ) as visitor_last_name,
+        -- Get full name (prioritize full_name field, then concatenate)
+        COALESCE(
+          v.custom_fields->>'full_name',
+          CASE 
+            WHEN v.name IS NOT NULL OR v.last_name IS NOT NULL 
+            THEN TRIM(CONCAT(COALESCE(v.name, ''), ' ', COALESCE(v.last_name, '')))
+            WHEN v.custom_fields->>'name' IS NOT NULL OR v.custom_fields->>'last_name' IS NOT NULL
+            THEN TRIM(CONCAT(COALESCE(v.custom_fields->>'name', ''), ' ', COALESCE(v.custom_fields->>'last_name', '')))
+            ELSE ''
+          END
+        ) as visitor_full_name,
+        -- Get email from multiple sources
+        COALESCE(
+          v.custom_fields->>'email',
+          v.email,
+          ''
+        ) as visitor_email,
+        -- Get company from multiple sources
+        COALESCE(
+          v.custom_fields->>'company',
+          v.company,
+          ''
+        ) as visitor_company,
+        -- Get country from multiple sources
+        COALESCE(
+          v.custom_fields->>'country',
+          v.country,
+          ''
+        ) as visitor_country,
+        -- Get job title
+        COALESCE(
+          v.custom_fields->>'job_title',
+          v.job_title,
+          ''
+        ) as visitor_job_title,
+        -- Add direct fields as backup
+        v.name as name,
+        v.last_name as last_name,
+        v.email as email,
+        v.company as company,
+        v.country as country,
+        v.phone as phone,
         e.name as expo_name`;
     }
 
