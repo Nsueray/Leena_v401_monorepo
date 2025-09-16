@@ -43,25 +43,23 @@ router.get('/', authenticateToken, async (req, res) => {
       paramIndex++;
     }
 
+    // Get valid checkins (exclude duplicates within 2 minutes)
     const validCheckinsQuery = `
       WITH ranked_checkins AS (
         SELECT 
-          c.id,
-          c.visitor_id,
-          c.checkin_time,
+          c.*,
           v.source,
           v.origin,
           v.custom_fields,
-          v.country AS direct_country,
+          v.country as direct_country,
           LAG(c.checkin_time) OVER (
             PARTITION BY c.visitor_id 
             ORDER BY c.checkin_time
-          ) AS prev_checkin_time
+          ) as prev_checkin_time
         FROM checkins c
         JOIN visitors v ON v.id = c.visitor_id
         WHERE c.expo_id = $1
-          AND c.terminal = 'badge-print'
-          ${dateFilter}
+        ${dateFilter}
       ),
       valid_checkins AS (
         SELECT *
@@ -77,56 +75,52 @@ router.get('/', authenticateToken, async (req, res) => {
         origin,
         custom_fields,
         direct_country,
-        COALESCE(custom_fields->>'country', direct_country) AS country,
-        custom_fields->>'sector' AS sector,
-        custom_fields->>'job_title' AS job_title
+        COALESCE(custom_fields->>'country', direct_country) as country,
+        custom_fields->>'sector' as sector,
+        custom_fields->>'job_title' as job_title
       FROM valid_checkins
     `;
 
     const validCheckinsResult = await pool.query(validCheckinsQuery, queryParams);
     const validCheckins = validCheckinsResult.rows;
 
-    // Summary
+    // Calculate summary
     const uniqueVisitors = new Set(validCheckins.map(c => c.visitor_id));
 
-    // Group by helpers
-    const groupBy = (keyFn) => {
-      const map = {};
-      validCheckins.forEach(row => {
-        const key = keyFn(row) || 'unknown';
-        map[key] = (map[key] || 0) + 1;
-      });
-      return map;
+    const groupBy = (arr, keyFn) => {
+      return arr.reduce((acc, item) => {
+        const key = keyFn(item) || 'unknown';
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
     };
 
-    const byDate = groupBy(row => new Date(row.checkin_time).toISOString().split('T')[0]);
-    const bySource = groupBy(row => row.source);
-    const byOrigin = groupBy(row => row.origin);
-    const byCountry = groupBy(row => row.country);
-    const bySector = groupBy(row => row.sector);
-    const byJobTitle = groupBy(row => row.job_title);
+    const sortByValue = (obj) => Object.fromEntries(
+      Object.entries(obj).sort(([, a], [, b]) => b - a)
+    );
 
-    // Sorters
-    const sortByValue = obj => Object.fromEntries(Object.entries(obj).sort(([, a], [, b]) => b - a));
-    const sortByKey = obj => Object.fromEntries(Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)));
+    const sortByDateKey = (obj) => Object.fromEntries(
+      Object.entries(obj).sort(([a], [b]) => a.localeCompare(b))
+    );
 
     res.json({
       summary: {
         total_valid_checkins: validCheckins.length,
         unique_visitors: uniqueVisitors.size
       },
-      by_date: sortByKey(byDate),
-      by_source: sortByValue(bySource),
-      by_origin: sortByValue(byOrigin),
-      by_country: sortByValue(byCountry),
-      by_sector: sortByValue(bySector),
-      by_job_title: sortByValue(byJobTitle)
+      by_date: sortByDateKey(groupBy(validCheckins, c => new Date(c.checkin_time).toISOString().split('T')[0])),
+      by_source: sortByValue(groupBy(validCheckins, c => c.source)),
+      by_origin: sortByValue(groupBy(validCheckins, c => c.origin)),
+      by_country: sortByValue(groupBy(validCheckins, c => c.country)),
+      by_sector: sortByValue(groupBy(validCheckins, c => c.sector)),
+      by_job_title: sortByValue(groupBy(validCheckins, c => c.job_title))
     });
+
   } catch (err) {
     console.error('Check-in reports error:', err);
-    res.status(500).json({
+    res.status(500).json({ 
       error: 'Failed to generate check-in reports',
-      details: err.message
+      details: err.message 
     });
   }
 });
