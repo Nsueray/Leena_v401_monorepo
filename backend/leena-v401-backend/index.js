@@ -55,6 +55,7 @@ let authRoutes, organizerRoutes, expoRoutes, visitorRoutes;
 let formRoutes, checkinRoutes, emailTemplateRoutes, emailSendRoutes, reportRoutes, webhookRoutes;
 let terminalRoutes; // ✅ NEW
 let importCheckinsRoutes; // ✅ NEW
+let checkinReportRoutes; // ✅ NEW
 
 try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
 try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
@@ -68,6 +69,7 @@ try { reportRoutes = require('./routes/reports'); console.log('✓ Report routes
 try { webhookRoutes = require('./routes/webhook'); console.log('✓ Webhook route loaded'); } catch (err) { console.error('✗ Failed to load webhook route:', err.message); }
 try { terminalRoutes = require('./routes/terminals'); console.log('✓ Terminal routes loaded'); } catch (err) { console.error('✗ Failed to load terminal routes:', err.message); }
 try { importCheckinsRoutes = require('./routes/import-checkins'); console.log('✓ Import Checkins route loaded'); } catch (err) { console.error('✗ Failed to load import-checkins route:', err.message); }
+try { checkinReportRoutes = require('./routes/checkinReports'); console.log('✓ Checkin Reports route loaded'); } catch (err) { console.error('✗ Failed to load checkinReports route:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -82,6 +84,7 @@ if (reportRoutes) app.use('/api/reports', reportRoutes);
 if (webhookRoutes) app.use('/api/webhook', webhookRoutes);
 if (terminalRoutes) app.use('/api/terminals', terminalRoutes); // ✅ NEW
 if (importCheckinsRoutes) app.use('/api/import-checkins', importCheckinsRoutes); // ✅ FIXED
+if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes); // ✅ NEW
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
@@ -139,6 +142,7 @@ app.get('/', (req, res) => {
             webhook: '/api/webhook/zoho/:organizerId/:expoId',
             terminals: '/api/terminals',
             import_checkins: '/api/import-checkins' // ✅ NEW
+            checkin_reports: '/api/checkins/reports' // ✅ ADD THIS
         }
     });
 });
