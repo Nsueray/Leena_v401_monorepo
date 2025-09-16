@@ -3,8 +3,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const Papa = require('papaparse');
-const pool = require('../utils/db'); // 🔐 Güvenli kullanım
-const verifyToken = require('../middleware/authMiddleware');
+const { pool } = require('../utils/db');
+const { verifyToken } = require('../utils/auth');
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -84,6 +84,12 @@ router.post('/import-checkins', verifyToken, upload.single('csvFile'), async (re
                     cleanRecord[cleanKey] = record[key];
                 });
 
+                // Parse and validate visitorId
+                const visitorId = parseInt(cleanRecord.visitorId);
+                if (!visitorId || isNaN(visitorId)) {
+                    throw new Error(`Invalid visitorId "${cleanRecord.visitorId}"`);
+                }
+
                 // Parse timestamp
                 let checkinTime = null;
                 if (cleanRecord.timestamp) {
@@ -113,7 +119,7 @@ router.post('/import-checkins', verifyToken, upload.single('csvFile'), async (re
                 `;
 
                 const values = [
-                    parseInt(cleanRecord.visitorId),  // visitor_id
+                    visitorId,                         // visitor_id
                     1,                                 // expo_id (fixed to 1)
                     'log-recovery',                    // source
                     'recovered-terminal',              // terminal
