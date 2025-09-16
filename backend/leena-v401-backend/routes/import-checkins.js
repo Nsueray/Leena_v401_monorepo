@@ -4,7 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const Papa = require('papaparse');
 const { pool } = require('../utils/db');
-const { verifyToken } = require('../utils/auth');
+const authMiddleware = require('../middleware/authMiddleware');
 
 // Configure multer for memory storage
 const upload = multer({ 
@@ -20,7 +20,7 @@ const upload = multer({
 });
 
 // Import check-ins from CSV
-router.post('/import-checkins', verifyToken, upload.single('csvFile'), async (req, res) => {
+router.post('/', authMiddleware, upload.single('csvFile'), async (req, res) => {
     const client = await pool.connect();
     
     try {
@@ -183,7 +183,7 @@ router.post('/import-checkins', verifyToken, upload.single('csvFile'), async (re
 });
 
 // Get import statistics
-router.get('/import-stats', verifyToken, async (req, res) => {
+router.get('/stats', authMiddleware, async (req, res) => {
     try {
         const statsQuery = `
             SELECT 
