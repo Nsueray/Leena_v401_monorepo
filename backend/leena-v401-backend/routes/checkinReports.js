@@ -4,10 +4,6 @@ const router = express.Router();
 const pool = require('../utils/db');
 const authenticateToken = require('../middleware/authMiddleware');
 
-/**
- * GET /api/checkins/reports
- * Generate comprehensive check-in reports with various groupings
- */
 router.get('/', authenticateToken, async (req, res) => {
   const { expo_id, startDate, endDate } = req.query;
 
@@ -16,17 +12,14 @@ router.get('/', authenticateToken, async (req, res) => {
   }
 
   try {
-    // Verify expo ownership
     const expoCheck = await pool.query(
       'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
       [expo_id, req.organizer_id]
     );
-
     if (expoCheck.rows.length === 0) {
       return res.status(403).json({ error: 'Access denied to this expo' });
     }
 
-    // Build date filter clause
     let dateFilter = '';
     const queryParams = [expo_id];
     let paramIndex = 2;
@@ -43,13 +36,12 @@ router.get('/', authenticateToken, async (req, res) => {
       paramIndex++;
     }
 
-    // Get valid checkins (exclude duplicates within 2 minutes)
     const validCheckinsQuery = `
       WITH ranked_checkins AS (
         SELECT 
           c.*,
-          v.source,
-          v.origin,
+          v.source as visitor_source,
+          v.origin as visitor_origin,
           v.custom_fields,
           v.country as direct_country,
           LAG(c.checkin_time) OVER (
@@ -65,14 +57,14 @@ router.get('/', authenticateToken, async (req, res) => {
         SELECT *
         FROM ranked_checkins
         WHERE prev_checkin_time IS NULL 
-          OR EXTRACT(EPOCH FROM (checkin_time - prev_checkin_time)) >= 120
+           OR EXTRACT(EPOCH FROM (checkin_time - prev_checkin_time)) >= 120
       )
       SELECT 
         id,
         visitor_id,
         checkin_time,
-        source,
-        origin,
+        visitor_source,
+        visitor_origin,
         custom_fields,
         direct_country,
         COALESCE(custom_fields->>'country', direct_country) as country,
@@ -84,36 +76,39 @@ router.get('/', authenticateToken, async (req, res) => {
     const validCheckinsResult = await pool.query(validCheckinsQuery, queryParams);
     const validCheckins = validCheckinsResult.rows;
 
-    // Calculate summary
     const uniqueVisitors = new Set(validCheckins.map(c => c.visitor_id));
 
-    const groupBy = (arr, keyFn) => {
-      return arr.reduce((acc, item) => {
-        const key = keyFn(item) || 'unknown';
+    // Grouping
+    const groupByField = (list, field) => {
+      return list.reduce((acc, item) => {
+        const key = item[field] || 'unknown';
         acc[key] = (acc[key] || 0) + 1;
         return acc;
       }, {});
     };
 
-    const sortByValue = (obj) => Object.fromEntries(
-      Object.entries(obj).sort(([, a], [, b]) => b - a)
-    );
+    const byDate = validCheckins.reduce((acc, item) => {
+      const date = new Date(item.checkin_time).toISOString().split('T')[0];
+      acc[date] = (acc[date] || 0) + 1;
+      return acc;
+    }, {});
 
-    const sortByDateKey = (obj) => Object.fromEntries(
-      Object.entries(obj).sort(([a], [b]) => a.localeCompare(b))
-    );
+    const sortDesc = obj =>
+      Object.fromEntries(Object.entries(obj).sort(([, a], [, b]) => b - a));
+    const sortDateAsc = obj =>
+      Object.fromEntries(Object.entries(obj).sort(([a], [b]) => a.localeCompare(b)));
 
     res.json({
       summary: {
         total_valid_checkins: validCheckins.length,
         unique_visitors: uniqueVisitors.size
       },
-      by_date: sortByDateKey(groupBy(validCheckins, c => new Date(c.checkin_time).toISOString().split('T')[0])),
-      by_source: sortByValue(groupBy(validCheckins, c => c.source)),
-      by_origin: sortByValue(groupBy(validCheckins, c => c.origin)),
-      by_country: sortByValue(groupBy(validCheckins, c => c.country)),
-      by_sector: sortByValue(groupBy(validCheckins, c => c.sector)),
-      by_job_title: sortByValue(groupBy(validCheckins, c => c.job_title))
+      by_date: sortDateAsc(byDate),
+      by_source: sortDesc(groupByField(validCheckins, 'visitor_source')),
+      by_origin: sortDesc(groupByField(validCheckins, 'visitor_origin')),
+      by_country: sortDesc(groupByField(validCheckins, 'country')),
+      by_sector: sortDesc(groupByField(validCheckins, 'sector')),
+      by_job_title: sortDesc(groupByField(validCheckins, 'job_title'))
     });
 
   } catch (err) {
