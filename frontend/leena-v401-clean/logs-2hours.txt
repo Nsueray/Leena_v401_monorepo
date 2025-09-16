@@ -1,0 +1,15 @@
+[?25l[?1049h[2J[1;1H[?25l[?2004h⣽  Loading...[1;0H[D[2K⣻  Loading...[1;0H[D[2K⢿  Loading...[1;0H[D[2K⡿  Loading...[1;0H[D[2K⣟  Loading...[1;0H[D[2K⣯  Loading...[1;0H[D[2K⣽  Loading...[1;0H[D[2K⣻  Loading...[1;0H[D[2K⢿  Loading...[1;0H[D[2K⡿  Loading...[1;0H[D[2K⣟  Loading...[1;0H[D[2K⣯  Loading...[1;0H[D[2K⣷  Loading...[1;0H[D[2K⣾  Loading...[1;0H[D[2K⣽  Loading...[1;0H[D[2K⣻  Loading...[1;0H[D[2K⢿  Loading...[1;0H[D[2K⡿  Loading...[1;0H[D[2K                                                                                                 
+My Workspace > Logs                                                                              
+                                                                                                 
+┏━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃Name                     ┃Project      ┃Environment  ┃Type      ┃ID                            ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━╋━━━━━━━━━━━━━╋━━━━━━━━━━━━━╋━━━━━━━━━━╋━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃leena_v401_db            ┃             ┃             ┃Postgres  ┃dpg-d2smvl75r7bs73al6scg-a    ┃
+┃leena-madesign-2025      ┃             ┃             ┃Web Servi…┃srv-d1gvpemmcj7s73d9i0hg      ┃
+┃leena4-kenya-final-live  ┃             ┃             ┃Web Servi…┃srv-d18ajcjipnbc73bcfgp0      ┃
+┃Leena_v401               ┃             ┃             ┃Web Servi…┃srv-d2sm97emcj7s73ab8me0      ┃
+┣━━━━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━┻━━━━━━━━━━━━━┻━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
+┃1/1                                                                                            ┃
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛
+[c]: Copy ID  [w]: Change Workspace  [f]: Filter by Project  [/]: Search                         
+[Ctrl+C]: Quit  [Ctrl+S]: Copy command to clipboard                                              [15;0H[2K[?2004l[?25h[?1002l[?1003l[?1006l[?1049l[?25h

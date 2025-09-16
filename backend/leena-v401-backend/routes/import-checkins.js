@@ -4,7 +4,7 @@ const router = express.Router();
 const multer = require('multer');
 const Papa = require('papaparse');
 const { pool } = require('../utils/db');
-const { verifyToken } = require('../utils/auth');
+const verifyToken = require('../middleware/authMiddleware');
 
 // Configure multer for memory storage
 const upload = multer({ 
