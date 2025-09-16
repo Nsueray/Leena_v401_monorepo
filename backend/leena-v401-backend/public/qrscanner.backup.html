@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badge Scanner - Leena EMS v401</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9ecef 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .scanner-container {
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .scanner-header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .scanner-header h1 {
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .scanner-header .subtitle {
+            opacity: 0.9;
+            margin-top: 10px;
+            font-size: 0.95rem;
+        }
+        
+        .terminal-info {
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            padding: 10px 15px;
+            margin-top: 15px;
+            display: inline-block;
+        }
+        
+        .scanner-body {
+            padding: 30px;
+        }
+        
+        .scan-section {
+            margin-bottom: 30px;
+        }
+        
+        .scan-input-wrapper {
+            position: relative;
+        }
+        
+        .scan-input-wrapper i {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.5rem;
+            color: var(--primary-color);
+        }
+        
+        .scan-input {
+            width: 100%;
+            padding: 20px 20px 20px 60px;
+            font-size: 1.2rem;
+            border: 2px solid #e9ecef;
+            border-radius: 15px;
+            transition: all 0.3s;
+        }
+        
+        .scan-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+        }
+        
+        .scan-input::placeholder {
+            color: #adb5bd;
+        }
+        
+        .divider {
+            text-align: center;
+            margin: 30px 0;
+            position: relative;
+        }
+        
+        .divider::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            width: 100%;
+            height: 1px;
+            background: #e9ecef;
+        }
+        
+        .divider span {
+            background: white;
+            padding: 0 20px;
+            position: relative;
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .toggle-manual {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .toggle-manual input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+        
+        .toggle-manual label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .manual-form {
+            display: none;
+            animation: slideDown 0.3s ease-out;
+        }
+        
+        .manual-form.active {
+            display: block;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-label {
+            font-weight: 500;
+            color: #495057;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .form-label .required {
+            color: #e74c3c;
+        }
+        
+        .form-control {
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 12px 15px;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+        
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+        }
+        
+        .form-select {
+            border: 1px solid #dee2e6;
+            border-radius: 10px;
+            padding: 12px 15px;
+            font-size: 1rem;
+        }
+        
+        .btn {
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            border-radius: 10px;
+            border: none;
+            transition: all 0.3s;
+            cursor: pointer;
+            width: 100%;
+        }
+        
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .settings-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+        
+        .setting-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 0;
+        }
+        
+        .setting-label {
+            font-weight: 500;
+            color: #495057;
+        }
+        
+        .setting-description {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        
+        .form-switch {
+            margin: 0;
+        }
+        
+        .form-switch .form-check-input {
+            width: 50px;
+            height: 25px;
+            cursor: pointer;
+        }
+        
+        .form-switch .form-check-input:checked {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        
+        .alert {
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            border: none;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        .alert-danger {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading-spinner.active {
+            display: block;
+        }
+        
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+            border-width: 0.3rem;
+            color: var(--primary-color);
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .scanner-header h1 {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="scanner-container">
+        <div class="scanner-header">
+            <h1>
+                <i class="bi bi-qr-code-scan"></i>
+                Badge Scanner
+            </h1>
+            <div class="subtitle">Leena EMS v401 - Exhibition Badge System</div>
+            <div class="terminal-info" id="terminalInfo">
+                <i class="bi bi-geo-alt"></i> Hall: <span id="hallDisplay">-</span> | Terminal: <span id="terminalDisplay">-</span>
+            </div>
+        </div>
+        
+        <div class="scanner-body">
+            <!-- Alert Messages -->
+            <div id="alertMessage" class="alert" style="display: none;"></div>
+            
+            <!-- QR Code Scanner Section -->
+            <div class="scan-section">
+                <div class="scan-input-wrapper">
+                    <i class="bi bi-qr-code"></i>
+                    <input type="text" 
+                           class="scan-input" 
+                           id="scanInput" 
+                           placeholder="Scan or enter badge QR code..." 
+                           autofocus>
+                </div>
+            </div>
+            
+            <!-- Divider -->
+            <div class="divider">
+                <span>or</span>
+            </div>
+            
+            <!-- Manual Registration Toggle -->
+            <div class="toggle-manual">
+                <input type="checkbox" id="manualToggle">
+                <label for="manualToggle">Manual Registration</label>
+            </div>
+            
+            <!-- Manual Registration Form -->
+            <div class="manual-form" id="manualForm">
+                <form id="registrationForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">First Name <span class="required">*</span></label>
+                            <input type="text" class="form-control" id="firstName" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Last Name <span class="required">*</span></label>
+                            <input type="text" class="form-control" id="lastName" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Email <span class="required">*</span></label>
+                        <input type="email" class="form-control" id="email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Company <span class="required">*</span></label>
+                        <input type="text" class="form-control" id="company" required>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Job Title</label>
+                            <input type="text" class="form-control" id="jobTitle">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Country</label>
+                            <select class="form-select" id="country">
+                                <option value="">Select Country</option>
+                                <option value="Morocco">Morocco</option>
+                                <option value="France">France</option>
+                                <option value="Spain">Spain</option>
+                                <option value="USA">USA</option>
+                                <option value="UK">UK</option>
+                                <option value="Germany">Germany</option>
+                                <option value="Italy">Italy</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" id="registerBtn">
+                        <i class="bi bi-person-plus"></i> Register & Print Badge
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Loading Spinner -->
+            <div class="loading-spinner" id="loadingSpinner">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Processing...</span>
+                </div>
+            </div>
+            
+            <!-- Settings Section -->
+            <div class="settings-section">
+                <div class="setting-item">
+                    <div>
+                        <div class="setting-label">Auto Check-in</div>
+                        <div class="setting-description">Automatically check-in visitor after badge print</div>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="autoCheckin" checked>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = '/api';
+        let hall = 'main';
+        let terminal = '1';
+        let autoCheckinEnabled = true;
+        let isProcessing = false;
+        
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        hall = urlParams.get('hall') || 'main';
+        terminal = urlParams.get('terminal') || '1';
+        
+        // Get expo_id and organizer_id (from localStorage or default)
+        const expoId = localStorage.getItem('expo_id') || '1';
+        const organizerId = localStorage.getItem('organizer_id') || '1';
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            // Display terminal info
+            document.getElementById('hallDisplay').textContent = hall;
+            document.getElementById('terminalDisplay').textContent = terminal;
+            
+            // Setup event listeners
+            setupEventListeners();
+        });
+        
+        function setupEventListeners() {
+            // QR Scanner input
+            const scanInput = document.getElementById('scanInput');
+            scanInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !isProcessing) {
+                    handleQRScan();
+                }
+            });
+            
+            // Manual toggle
+            const manualToggle = document.getElementById('manualToggle');
+            manualToggle.addEventListener('change', (e) => {
+                const manualForm = document.getElementById('manualForm');
+                if (e.target.checked) {
+                    manualForm.classList.add('active');
+                    document.getElementById('firstName').focus();
+                } else {
+                    manualForm.classList.remove('active');
+                    scanInput.focus();
+                }
+            });
+            
+            // Registration form
+            const registrationForm = document.getElementById('registrationForm');
+            registrationForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                if (!isProcessing) {
+                    await handleManualRegistration();
+                }
+            });
+            
+            // Auto check-in toggle
+            const autoCheckinToggle = document.getElementById('autoCheckin');
+            autoCheckinToggle.addEventListener('change', (e) => {
+                autoCheckinEnabled = e.target.checked;
+            });
+        }
+        
+        // Handle QR code scan
+        async function handleQRScan() {
+            const scanInput = document.getElementById('scanInput');
+            const qrCode = scanInput.value.trim();
+            
+            if (!qrCode) {
+                showAlert('Please scan or enter a QR code', 'danger');
+                return;
+            }
+            
+            isProcessing = true;
+            showLoading(true);
+            hideAlert();
+            
+            try {
+                // Fetch visitor by QR code
+                const response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`);
+                
+                if (!response.ok) {
+                    throw new Error('Badge not found');
+                }
+                
+                const visitor = await response.json();
+                
+                // Auto check-in if enabled
+                if (autoCheckinEnabled) {
+                    await performCheckin(visitor.id);
+                }
+                
+                // Redirect to badge print page
+                window.location.href = `badge.html?qr=${qrCode}`;
+                
+            } catch (error) {
+                console.error('Scan error:', error);
+                showAlert('Badge not found. Please try manual registration.', 'danger');
+                scanInput.value = '';
+                scanInput.focus();
+            } finally {
+                isProcessing = false;
+                showLoading(false);
+            }
+        }
+        
+        // Handle manual registration
+        async function handleManualRegistration() {
+            isProcessing = true;
+            showLoading(true);
+            hideAlert();
+            
+            try {
+                // Collect form data
+                const formData = {
+                    name: document.getElementById('firstName').value.trim(),
+                    last_name: document.getElementById('lastName').value.trim(),
+                    email: document.getElementById('email').value.trim(),
+                    company: document.getElementById('company').value.trim(),
+                    job_title: document.getElementById('jobTitle').value.trim() || 'N/A',
+                    country: document.getElementById('country').value || 'Morocco',
+                    origin: 'onsite',
+                    source: 'manual',
+                    visitor_type: 'visitor',
+                    expo_id: expoId,
+                    organizer_id: organizerId,
+                    hall: hall,
+                    terminal: terminal
+                };
+                
+                // Send registration request
+                const response = await fetch(`${API_BASE_URL}/visitors/manual`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Registration failed');
+                }
+                
+                const result = await response.json();
+                
+                // Auto check-in if enabled
+                if (autoCheckinEnabled && result.visitor_id) {
+                    await performCheckin(result.visitor_id);
+                }
+                
+                // Show success message
+                showAlert('Registration successful! Redirecting to badge print...', 'success');
+                
+                // Redirect to badge print page
+                setTimeout(() => {
+                    window.location.href = `badge-print.html?qr=${result.qr_code}`;
+                }, 1500);
+                
+            } catch (error) {
+                console.error('Registration error:', error);
+                showAlert(error.message || 'Registration failed. Please try again.', 'danger');
+            } finally {
+                isProcessing = false;
+                showLoading(false);
+            }
+        }
+        
+        // Perform check-in
+        async function performCheckin(visitorId) {
+            try {
+                const checkinData = {
+                    visitor_id: visitorId,
+                    expo_id: expoId,
+                    hall: hall,
+                    terminal: terminal,
+                    checkin_type: 'entry',
+                    checkin_time: new Date().toISOString()
+                };
+                
+                await fetch(`${API_BASE_URL}/checkins`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(checkinData)
+                });
+                
+                // We don't await the response to avoid delays
+                console.log('Check-in recorded');
+                
+            } catch (error) {
+                console.error('Check-in error:', error);
+                // Don't block the flow if check-in fails
+            }
+        }
+        
+        // UI Helper functions
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('alertMessage');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            alertDiv.style.display = 'block';
+        }
+        
+        function hideAlert() {
+            const alertDiv = document.getElementById('alertMessage');
+            alertDiv.style.display = 'none';
+        }
+        
+        function showLoading(show) {
+            const spinner = document.getElementById('loadingSpinner');
+            const registerBtn = document.getElementById('registerBtn');
+            
+            if (show) {
+                spinner.classList.add('active');
+                if (registerBtn) registerBtn.disabled = true;
+            } else {
+                spinner.classList.remove('active');
+                if (registerBtn) registerBtn.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
