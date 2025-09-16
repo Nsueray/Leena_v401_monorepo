@@ -81,7 +81,7 @@ if (emailSendRoutes) app.use('/api/email-send', emailSendRoutes);
 if (reportRoutes) app.use('/api/reports', reportRoutes);
 if (webhookRoutes) app.use('/api/webhook', webhookRoutes);
 if (terminalRoutes) app.use('/api/terminals', terminalRoutes); // ✅ NEW
-if (importCheckinsRoutes) app.use('/api', importCheckinsRoutes); // ✅ NEW
+if (importCheckinsRoutes) app.use('/api/import-checkins', importCheckinsRoutes); // ✅ FIXED
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
