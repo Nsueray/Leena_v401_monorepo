@@ -53,9 +53,10 @@ app.get('/health', (req, res) => {
 // --- Import Route Modules ---
 let authRoutes, organizerRoutes, expoRoutes, visitorRoutes;
 let formRoutes, checkinRoutes, emailTemplateRoutes, emailSendRoutes, reportRoutes, webhookRoutes;
-let terminalRoutes; // ✅ NEW
-let importCheckinsRoutes; // ✅ NEW
-let checkinReportRoutes; // ✅ NEW
+let terminalRoutes;
+let importCheckinsRoutes;
+let checkinReportRoutes;
+let terminalCheckinRoutes; // ✅ v402 Mini
 
 try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
 try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
@@ -70,6 +71,7 @@ try { webhookRoutes = require('./routes/webhook'); console.log('✓ Webhook rout
 try { terminalRoutes = require('./routes/terminals'); console.log('✓ Terminal routes loaded'); } catch (err) { console.error('✗ Failed to load terminal routes:', err.message); }
 try { importCheckinsRoutes = require('./routes/import-checkins'); console.log('✓ Import Checkins route loaded'); } catch (err) { console.error('✗ Failed to load import-checkins route:', err.message); }
 try { checkinReportRoutes = require('./routes/checkinReports'); console.log('✓ Checkin Reports route loaded'); } catch (err) { console.error('✗ Failed to load checkinReports route:', err.message); }
+try { terminalCheckinRoutes = require('./routes/terminalCheckins'); console.log('✓ Terminal Checkin routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load terminalCheckins routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -82,9 +84,10 @@ if (emailTemplateRoutes) app.use('/api/email-templates', emailTemplateRoutes);
 if (emailSendRoutes) app.use('/api/email-send', emailSendRoutes);
 if (reportRoutes) app.use('/api/reports', reportRoutes);
 if (webhookRoutes) app.use('/api/webhook', webhookRoutes);
-if (terminalRoutes) app.use('/api/terminals', terminalRoutes); // ✅ NEW
-if (importCheckinsRoutes) app.use('/api/import-checkins', importCheckinsRoutes); // ✅ FIXED
-if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes); // ✅ NEW
+if (terminalRoutes) app.use('/api/terminals', terminalRoutes);
+if (importCheckinsRoutes) app.use('/api/import-checkins', importCheckinsRoutes);
+if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes);
+if (terminalCheckinRoutes) app.use('/api/terminal', terminalCheckinRoutes); // ✅ v402 Mini
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
@@ -141,8 +144,9 @@ app.get('/', (req, res) => {
             reports: '/api/reports',
             webhook: '/api/webhook/zoho/:organizerId/:expoId',
             terminals: '/api/terminals',
-            import_checkins: '/api/import-checkins', // ✅ NEW
-            checkin_reports: '/api/checkins/reports' // ✅ ADD THIS
+            terminal_checkins: '/api/terminal', // v402 Mini
+            import_checkins: '/api/import-checkins',
+            checkin_reports: '/api/checkins/reports'
         }
     });
 });
@@ -188,7 +192,8 @@ app.use((req, res, next) => {
             email_send: '/api/email-send',
             webhook: '/api/webhook/zoho/:organizerId/:expoId',
             terminals: '/api/terminals',
-            import_checkins: '/api/import-checkins' // ✅ NEW
+            terminal_checkins: '/api/terminal',
+            import_checkins: '/api/import-checkins'
         }
     });
 });
