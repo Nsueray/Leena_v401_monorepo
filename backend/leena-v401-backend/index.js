@@ -211,9 +211,16 @@ app.use((req, res, next) => {
 // --- Error Handler ---
 app.use((err, req, res, next) => {
     console.error('Error:', err);
-    res.status(err.status || 500).json({
-        error: err.message || 'Internal Server Error',
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+
+    const status = err && err.status ? err.status : 500;
+    const message = err && err.message ? err.message : 'Internal Server Error';
+
+    res.status(status).json({
+        error: message,
+        stack:
+            process.env.NODE_ENV === 'development' && err && err.stack
+                ? err.stack
+                : undefined
     });
 });
 
