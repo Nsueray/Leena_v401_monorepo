@@ -57,6 +57,7 @@ let terminalRoutes;
 let importCheckinsRoutes;
 let checkinReportRoutes;
 let terminalCheckinRoutes; // ✅ v402 Mini
+let emailSegmentRoutes; // ✅ v402 Mini - Email Segments
 
 try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
 try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
@@ -72,6 +73,7 @@ try { terminalRoutes = require('./routes/terminals'); console.log('✓ Terminal 
 try { importCheckinsRoutes = require('./routes/import-checkins'); console.log('✓ Import Checkins route loaded'); } catch (err) { console.error('✗ Failed to load import-checkins route:', err.message); }
 try { checkinReportRoutes = require('./routes/checkinReports'); console.log('✓ Checkin Reports route loaded'); } catch (err) { console.error('✗ Failed to load checkinReports route:', err.message); }
 try { terminalCheckinRoutes = require('./routes/terminalCheckins'); console.log('✓ Terminal Checkin routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load terminalCheckins routes:', err.message); }
+try { emailSegmentRoutes = require('./routes/emailSegments'); console.log('✓ Email Segment routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load emailSegments routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -88,6 +90,7 @@ if (terminalRoutes) app.use('/api/terminals', terminalRoutes);
 if (importCheckinsRoutes) app.use('/api/import-checkins', importCheckinsRoutes);
 if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes);
 if (terminalCheckinRoutes) app.use('/api/terminal', terminalCheckinRoutes); // ✅ v402 Mini
+if (emailSegmentRoutes) app.use('/api/email-segments', emailSegmentRoutes); // ✅ v402 Mini - Email Segments
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
@@ -141,6 +144,7 @@ app.get('/', (req, res) => {
             checkins: '/api/checkins',
             email_templates: '/api/email-templates',
             email_send: '/api/email-send',
+            email_segments: '/api/email-segments', // v402 Mini
             reports: '/api/reports',
             webhook: '/api/webhook/zoho/:organizerId/:expoId',
             terminals: '/api/terminals',
@@ -190,6 +194,7 @@ app.use((req, res, next) => {
             reports: '/api/reports',
             email_templates: '/api/email-templates',
             email_send: '/api/email-send',
+            email_segments: '/api/email-segments',
             webhook: '/api/webhook/zoho/:organizerId/:expoId',
             terminals: '/api/terminals',
             terminal_checkins: '/api/terminal',
