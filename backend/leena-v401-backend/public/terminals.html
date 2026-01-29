@@ -151,6 +151,39 @@
             background: #5a6268;
         }
         
+        .btn-outline-primary {
+            background: transparent;
+            border: 1px solid var(--primary-color);
+            color: var(--primary-color);
+        }
+        
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-outline-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background: transparent;
+            color: #6c757d;
+            border-color: #6c757d;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #218838;
+        }
+        
+        .btn-success:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
         /* Table */
         .table-container {
             background: white;
@@ -206,6 +239,11 @@
         .badge-secondary {
             background: #e2e3e5;
             color: #383d41;
+        }
+        
+        .badge-warning {
+            background: #fff3cd;
+            color: #856404;
         }
         
         /* Alert */
@@ -291,6 +329,68 @@
             font-weight: 600;
         }
         
+        /* Toast notification */
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+        }
+        
+        .toast {
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            margin-top: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        .toast.success {
+            background: #28a745;
+        }
+        
+        .toast.error {
+            background: #dc3545;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                opacity: 1;
+                transform: translateX(0);
+            }
+            to {
+                opacity: 0;
+                transform: translateX(100%);
+            }
+        }
+        
+        .toast.hiding {
+            animation: slideOut 0.3s ease-out forwards;
+        }
+        
+        /* Tooltip styles */
+        .no-key-text {
+            color: #6c757d;
+            font-size: 0.8rem;
+            font-style: italic;
+        }
+        
         @media (max-width: 768px) {
             .page-header h1 {
                 font-size: 1.5rem;
@@ -301,7 +401,7 @@
             }
             
             table {
-                min-width: 600px;
+                min-width: 800px;
             }
         }
     </style>
@@ -433,6 +533,9 @@
         </div>
     </div>
 
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
     <script>
         // Configuration
         const API_BASE_URL = '/api';
@@ -505,6 +608,20 @@
             }
         }
 
+        // Generate scanner URL for a terminal
+        function generateScannerUrl(terminal) {
+            if (!terminal.terminal_key) {
+                return null;
+            }
+            const baseUrl = window.location.origin;
+            const params = new URLSearchParams({
+                terminalKey: terminal.terminal_key,
+                hall: terminal.hall,
+                terminal: terminal.terminal_no
+            });
+            return `${baseUrl}/qrscanner.html?${params.toString()}`;
+        }
+
         // Render terminals table
         function renderTerminals() {
             const container = document.getElementById('terminalsContent');
@@ -531,6 +648,7 @@
                                 <th>Terminal No</th>
                                 <th>Auto Check-in</th>
                                 <th>Status</th>
+                                <th>Terminal Key</th>
                                 <th>Created</th>
                                 <th>Scanner Link</th>
                                 <th>Actions</th>
@@ -541,7 +659,8 @@
             
             terminals.forEach(terminal => {
                 const createdAt = new Date(terminal.created_at).toLocaleDateString();
-                const scannerUrl = `${window.location.origin}/qrscanner.html?hall=${encodeURIComponent(terminal.hall)}&terminal=${encodeURIComponent(terminal.terminal_no)}`;
+                const scannerUrl = generateScannerUrl(terminal);
+                const hasKey = !!terminal.terminal_key;
                 
                 html += `
                     <tr>
@@ -557,11 +676,23 @@
                                 ${terminal.is_active !== false ? 'Active' : 'Inactive'}
                             </span>
                         </td>
+                        <td>
+                            ${hasKey 
+                                ? `<span class="badge badge-success"><i class="bi bi-key"></i> Generated</span>` 
+                                : `<span class="badge badge-warning"><i class="bi bi-exclamation-triangle"></i> Not Generated</span>`
+                            }
+                        </td>
                         <td>${createdAt}</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-primary" onclick="copyLink('${scannerUrl}')">
-                                <i class="bi bi-link-45deg"></i> Copy Link
-                            </button>
+                            ${hasKey 
+                                ? `<button class="btn btn-sm btn-success" onclick="copyScannerUrl('${escapeHtml(scannerUrl)}')">
+                                       <i class="bi bi-clipboard-check"></i> Copy Scanner URL
+                                   </button>`
+                                : `<button class="btn btn-sm btn-outline-primary" disabled title="Terminal key not generated">
+                                       <i class="bi bi-clipboard"></i> Copy Scanner URL
+                                   </button>
+                                   <div class="no-key-text">Key not generated</div>`
+                            }
                         </td>
                         <td>
                             <button class="btn btn-sm btn-danger" onclick="deleteTerminal(${terminal.id})">
@@ -579,6 +710,36 @@
             `;
             
             container.innerHTML = html;
+        }
+
+        // Copy scanner URL to clipboard
+        function copyScannerUrl(url) {
+            navigator.clipboard.writeText(url).then(() => {
+                showToast('Scanner URL copied to clipboard!', 'success');
+            }).catch((err) => {
+                console.error('Failed to copy:', err);
+                showToast('Failed to copy URL', 'error');
+            });
+        }
+
+        // Show toast notification
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+            
+            // Remove toast after 3 seconds
+            setTimeout(() => {
+                toast.classList.add('hiding');
+                setTimeout(() => {
+                    toast.remove();
+                }, 300);
+            }, 3000);
         }
 
         // Add terminal
@@ -653,7 +814,7 @@
             }
         }
 
-        // Copy link to clipboard
+        // Copy link to clipboard (legacy function kept for compatibility)
         function copyLink(url) {
             navigator.clipboard.writeText(url).then(() => {
                 showAlert('Scanner link copied to clipboard!', 'success');
@@ -691,6 +852,7 @@
         }
 
         function escapeHtml(text) {
+            if (!text) return '';
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
