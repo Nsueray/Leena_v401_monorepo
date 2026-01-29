@@ -451,6 +451,46 @@
         </div>
     </div>
 
+    <!-- Exhibitor Info Modal -->
+    <div class="modal fade" id="exhibitorModal" tabindex="-1" aria-labelledby="exhibitorModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header" style="background: var(--primary-gradient); color: white;">
+                    <h5 class="modal-title" id="exhibitorModalLabel">
+                        <i class="bi bi-building"></i> Exhibitor Information
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <strong>Name:</strong>
+                        <span id="exhibitorName">-</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Company:</strong>
+                        <span id="exhibitorCompany">-</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Country:</strong>
+                        <span id="exhibitorCountry">-</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Job Title:</strong>
+                        <span id="exhibitorJobTitle">-</span>
+                    </div>
+                    <div class="mb-3" id="exhibitorEmailRow">
+                        <strong>Email:</strong>
+                        <span id="exhibitorEmail">-</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Configuration
         const API_BASE_URL = '/api';
@@ -459,9 +499,13 @@
         let terminalKey = null;
         let autoCheckinEnabled = true;
         let isProcessing = false;
+        let exhibitorModal = null;
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Bootstrap modal
+            exhibitorModal = new bootstrap.Modal(document.getElementById('exhibitorModal'));
+            
             // Process URL parameters first
             processUrlParameters();
             
@@ -632,6 +676,32 @@
             autoCheckinToggle.addEventListener('change', (e) => {
                 autoCheckinEnabled = e.target.checked;
             });
+            
+            // Re-focus scan input when modal closes
+            document.getElementById('exhibitorModal').addEventListener('hidden.bs.modal', () => {
+                document.getElementById('scanInput').value = '';
+                document.getElementById('scanInput').focus();
+            });
+        }
+        
+        // Show exhibitor info modal
+        function showExhibitorModal(visitor) {
+            const fullName = `${visitor.name || ''} ${visitor.lastName || ''}`.trim() || 'N/A';
+            document.getElementById('exhibitorName').textContent = fullName;
+            document.getElementById('exhibitorCompany').textContent = visitor.company || 'N/A';
+            document.getElementById('exhibitorCountry').textContent = visitor.country || 'N/A';
+            document.getElementById('exhibitorJobTitle').textContent = visitor.jobTitle || 'N/A';
+            
+            const emailRow = document.getElementById('exhibitorEmailRow');
+            const emailSpan = document.getElementById('exhibitorEmail');
+            if (visitor.email) {
+                emailSpan.textContent = visitor.email;
+                emailRow.style.display = 'block';
+            } else {
+                emailRow.style.display = 'none';
+            }
+            
+            exhibitorModal.show();
         }
         
         // Handle QR code scan
@@ -675,7 +745,16 @@
                     visitor = result.visitor;
                     console.log('Visitor found for QR scan (terminal mode):', visitor);
                     
-                    // Auto check-in if enabled (terminal mode)
+                    // v402: Check if exhibitor role
+                    if (visitor.role === 'exhibitor') {
+                        // Show exhibitor info modal, do NOT check-in
+                        showLoading(false);
+                        isProcessing = false;
+                        showExhibitorModal(visitor);
+                        return;
+                    }
+                    
+                    // Auto check-in if enabled (terminal mode, non-exhibitor)
                     if (autoCheckinEnabled && visitor.id) {
                         await performCheckin(visitor.id);
                     }
@@ -692,9 +771,28 @@
                     visitor = await response.json();
                     console.log('Visitor found for QR scan:', visitor);
                     
+                    // v402: Check if exhibitor role (JWT mode)
+                    const visitorData = visitor.visitor || visitor;
+                    const role = visitorData.role || visitorData.visitor_type || 'visitor';
+                    
+                    if (role === 'exhibitor') {
+                        // Show exhibitor info modal, do NOT check-in
+                        showLoading(false);
+                        isProcessing = false;
+                        showExhibitorModal({
+                            name: visitorData.name,
+                            lastName: visitorData.last_name || visitorData.lastName,
+                            company: visitorData.company,
+                            country: visitorData.country,
+                            jobTitle: visitorData.job_title || visitorData.jobTitle,
+                            email: visitorData.email
+                        });
+                        return;
+                    }
+                    
                     // Auto check-in if enabled
                     if (autoCheckinEnabled) {
-                        await performCheckin(visitor.visitor?.id || visitor.id);
+                        await performCheckin(visitorData.id || visitor.id);
                     }
                 }
                 
