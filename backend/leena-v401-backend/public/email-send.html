@@ -6,219 +6,29 @@
     <title>Send Emails - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <style>
-        :root {
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --primary-color: #667eea;
-            --secondary-color: #764ba2;
-            --sidebar-bg: #2c3e50;
-            --sidebar-text: #ecf0f1;
-            --sidebar-hover: #34495e;
-        }
-        
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background-color: #f5f7fa;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
-        }
-        
-        .sidebar {
-            width: 240px;
-            background: var(--primary-gradient);
-            color: white;
-            padding: 20px 0;
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
-        }
-        
-        .sidebar-header {
-            padding: 0 20px 20px 20px;
-            font-size: 1.5em;
-            font-weight: bold;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .sidebar-menu {
-            list-style-type: none;
-            margin-top: 20px;
-            padding: 0;
-        }
-        
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            padding: 15px 20px;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-        
-        .sidebar-menu a:hover,
-        .sidebar-menu a.active {
-            background-color: rgba(255,255,255,0.1);
-            color: white;
-            transform: translateX(5px);
-        }
-        
-        .main-wrapper {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        
-        .main-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px;
-            background-color: white;
-            border-bottom: 1px solid #dee2e6;
-            flex-shrink: 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
-        #content-area {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background-color: #f5f7fa;
-        }
-        
-        .send-option-card {
-            background: white;
-            border-radius: 10px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            cursor: pointer;
-            transition: all 0.3s;
-            border: 2px solid transparent;
-        }
-        
-        .send-option-card:hover {
-            border-color: var(--primary-color);
-            transform: translateY(-3px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        }
-        
-        .send-option-card.active {
-            border-color: var(--primary-color);
-            background: linear-gradient(135deg, rgba(102, 126, 234, 0.05), rgba(118, 75, 162, 0.05));
-        }
-        
-        .btn-primary {
-            background: var(--primary-gradient);
-            border: none;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
-        }
-        
-        .form-label {
-            font-weight: 600;
-            color: #495057;
-            margin-bottom: 8px;
-        }
-        
-        .file-upload-area {
-            border: 3px dashed #dee2e6;
-            border-radius: 10px;
-            padding: 40px;
-            text-align: center;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-        
-        .file-upload-area:hover {
-            border-color: var(--primary-color);
-            background: rgba(102, 126, 234, 0.05);
-        }
-        
-        .file-upload-area.dragover {
-            border-color: var(--primary-color);
-            background: rgba(102, 126, 234, 0.1);
-        }
-        
-        .recipients-list {
-            background: #f8f9fa;
-            border-radius: 5px;
-            padding: 15px;
-            max-height: 200px;
-            overflow-y: auto;
-        }
-        
-        .recipient-item {
-            background: white;
-            padding: 8px 12px;
-            margin: 5px 0;
-            border-radius: 5px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .progress-container {
-            display: none;
-            margin-top: 20px;
-        }
-        
-        .email-preview {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-            display: none;
-        }
-    </style>
+    <link rel="stylesheet" href="/assets/leena.css">
 </head>
 <body>
     <nav class="sidebar">
         <div class="sidebar-header">
-            <i class="bi bi-box-seam"></i>
-            Leena EMS
+            <img src="/logo.png" alt="Leena logo" class="sidebar-logo">
+            <span>Leena EMS</span>
         </div>
         <ul class="sidebar-menu">
-            <li><a href="main-panel.html">
-                <i class="bi bi-speedometer2"></i> Dashboard
-            </a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')">
-                <i class="bi bi-people"></i> Visitors
-            </a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')">
-                <i class="bi bi-card-list"></i> Forms
-            </a></li>
-            <li><a href="checkins.html">
-                <i class="bi bi-check2-square"></i> Check-ins
-            </a></li>
-            <li><a href="email-templates.html">
-                <i class="bi bi-envelope"></i> Email Templates
-            </a></li>
-            <li><a class="active" href="email-send.html">
-                <i class="bi bi-send"></i> Send Emails
-            </a></li>
-            <li><a href="reports.html">
-                <i class="bi bi-graph-up"></i> Reports
-            </a></li>
-            <li><a href="import.html">
-                <i class="bi bi-download"></i> Import
-            </a></li>
-            <li class="mt-4"><a href="#" onclick="logout()">
-                <i class="bi bi-box-arrow-right"></i> Logout
-            </a></li>
+            <li><a href="dashboard.html"><i class="bi bi-grid"></i> All Expos</a></li>
+            <li><a href="main-panel.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
+            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
+            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
+            <li><a href="checkins.html"><i class="bi bi-check2-square"></i> Check-ins</a></li>
+            <li><a href="terminals.html"><i class="bi bi-pc-display"></i> Terminals</a></li>
+            <li><a href="email-templates.html"><i class="bi bi-envelope"></i> Email Templates</a></li>
+            <li><a class="active" href="email-send.html"><i class="bi bi-send"></i> Send Emails</a></li>
+            <li><a href="email-segments.html"><i class="bi bi-megaphone"></i> Email Segments</a></li>
+            <li><a href="reports.html"><i class="bi bi-graph-up"></i> Reports</a></li>
+            <li><a href="import.html"><i class="bi bi-download"></i> Import</a></li>
+            <li><a href="visitorlog-paginated.html" target="_blank"><i class="bi bi-journals"></i> Visitor Log</a></li>
+            <li><a href="admin-dashboard.html"><i class="bi bi-shield-lock"></i> Admin Panel</a></li>
+            <li><a href="#" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
         </ul>
     </nav>
 
@@ -228,9 +38,11 @@
                 <i class="bi bi-send text-primary"></i>
                 <span>Send Emails</span>
             </h1>
-            <button class="btn btn-outline-secondary" onclick="window.location.href='email-templates.html'">
-                <i class="bi bi-envelope"></i> Manage Templates
-            </button>
+            <div class="header-buttons">
+                <button class="btn btn-outline-secondary" onclick="window.location.href='email-templates.html'">
+                    <i class="bi bi-envelope"></i> Manage Templates
+                </button>
+            </div>
         </header>
         
         <main id="content-area">

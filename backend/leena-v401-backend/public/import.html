@@ -6,147 +6,57 @@
     <title>Visitor Import Panel - Leena EMS v401</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #2A0845 0%, #6441A5 100%);
-            min-height: 100vh;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 20px;
-        }
-        
-        .main-container {
-            max-width: 800px;
-            margin: 0 auto;
-        }
-        
-        .header-panel {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px 15px 0 0;
-            padding: 20px;
-            color: white;
-            text-align: center;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-        
-        .content-panel {
-            background: white;
-            border-radius: 0 0 15px 15px;
-            padding: 30px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-        }
-        
-        .upload-zone {
-            border: 3px dashed #6441A5;
-            border-radius: 10px;
-            padding: 40px;
-            text-align: center;
-            background: #f8f9fa;
-            transition: all 0.3s;
-            cursor: pointer;
-        }
-        
-        .upload-zone:hover {
-            background: #e9ecef;
-            border-color: #2A0845;
-        }
-        
-        .upload-zone.dragover {
-            background: #e3d5ff;
-            border-color: #2A0845;
-        }
-        
-        .form-label {
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 8px;
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #6441A5 0%, #2A0845 100%);
-            border: none;
-            padding: 12px 30px;
-            font-weight: 600;
-            transition: all 0.3s;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(100, 65, 165, 0.3);
-        }
-        
-        .result-item {
-            padding: 10px;
-            margin: 5px 0;
-            border-left: 4px solid #28a745;
-            background: #f8f9fa;
-        }
-        
-        .result-item.error {
-            border-left-color: #dc3545;
-            background: #fff5f5;
-        }
-        
-        .spinner-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-        
-        .spinner-overlay.active {
-            display: flex;
-        }
-        
-        .file-info {
-            background: #f0f0f0;
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 15px;
-            display: none;
-        }
-        
-        .file-info.active {
-            display: block;
-        }
-        
-        .unauthorized-message {
-            text-align: center;
-            color: white;
-            padding: 50px;
-        }
-    </style>
+    <link rel="stylesheet" href="/assets/leena.css">
 </head>
 <body>
-    <div class="spinner-overlay" id="loadingSpinner">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <img src="/logo.png" alt="Leena logo" class="sidebar-logo">
+            <span>Leena EMS</span>
+        </div>
+        <ul class="sidebar-menu">
+            <li><a href="dashboard.html"><i class="bi bi-grid"></i> All Expos</a></li>
+            <li><a href="main-panel.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
+            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
+            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
+            <li><a href="checkins.html"><i class="bi bi-check2-square"></i> Check-ins</a></li>
+            <li><a href="terminals.html"><i class="bi bi-pc-display"></i> Terminals</a></li>
+            <li><a href="email-templates.html"><i class="bi bi-envelope"></i> Email Templates</a></li>
+            <li><a href="email-send.html"><i class="bi bi-send"></i> Send Emails</a></li>
+            <li><a href="email-segments.html"><i class="bi bi-megaphone"></i> Email Segments</a></li>
+            <li><a href="reports.html"><i class="bi bi-graph-up"></i> Reports</a></li>
+            <li><a class="active" href="import.html"><i class="bi bi-download"></i> Import</a></li>
+            <li><a href="visitorlog-paginated.html" target="_blank"><i class="bi bi-journals"></i> Visitor Log</a></li>
+            <li><a href="admin-dashboard.html"><i class="bi bi-shield-lock"></i> Admin Panel</a></li>
+        </ul>
+    </nav>
+
+    <div class="main-wrapper">
+        <div class="spinner-overlay" id="loadingSpinner">
         <div class="spinner-border text-light" style="width: 3rem; height: 3rem;">
             <span class="visually-hidden">Loading...</span>
         </div>
-    </div>
+        </div>
 
-    <div class="main-container">
-        <div class="header-panel">
-            <h2 class="mb-0">
-                <i class="bi bi-cloud-upload"></i> Visitor Import Panel
-            </h2>
-            <p class="mb-0 mt-2 opacity-75">Leena EMS v401 - Bulk Import System</p>
-        </div>
-        
-        <div class="content-panel" id="mainContent">
-            <!-- Content will be loaded dynamically -->
-        </div>
+        <header class="page-header">
+            <div>
+                <h1>
+                    <i class="bi bi-cloud-upload"></i> Visitor Import Panel
+                </h1>
+                <div class="subtitle">Leena EMS v401 - Bulk Import System</div>
+            </div>
+            <div class="header-buttons">
+                <a class="btn btn-light" href="main-panel.html">
+                    <i class="bi bi-arrow-left"></i> Back to Panel
+                </a>
+            </div>
+        </header>
+
+        <main class="main-container">
+            <div class="content-panel card" id="mainContent">
+                <!-- Content will be loaded dynamically -->
+            </div>
+        </main>
     </div>
 
     <script>
