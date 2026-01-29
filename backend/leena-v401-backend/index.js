@@ -155,35 +155,6 @@ app.get('/', (req, res) => {
     });
 });
 
-// --- Debug Endpoint ---
-app.get('/api/routes', (req, res) => {
-    const routes = [];
-
-    app._router.stack.forEach((middleware) => {
-        if (middleware.route) {
-            routes.push({
-                path: middleware.route.path,
-                methods: Object.keys(middleware.route.methods)
-            });
-        } else if (
-            middleware.name === 'router' &&
-            middleware.handle &&
-            middleware.handle.stack
-        ) {
-            middleware.handle.stack.forEach((handler) => {
-                if (handler.route) {
-                    routes.push({
-                        path: handler.route.path,
-                        methods: Object.keys(handler.route.methods)
-                    });
-                }
-            });
-        }
-    });
-
-    res.json(routes);
-});
-
 // --- 404 Handler ---
 app.use((req, res, next) => {
     console.log(`404 - Route not found: ${req.method} ${req.url}`);
