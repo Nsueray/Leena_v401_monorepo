@@ -158,24 +158,29 @@ app.get('/', (req, res) => {
 // --- Debug Endpoint ---
 app.get('/api/routes', (req, res) => {
     const routes = [];
+
     app._router.stack.forEach((middleware) => {
         if (middleware.route) {
             routes.push({
                 path: middleware.route.path,
                 methods: Object.keys(middleware.route.methods)
             });
-        } else if (middleware.name === 'router') {
+        } else if (
+            middleware.name === 'router' &&
+            middleware.handle &&
+            middleware.handle.stack
+        ) {
             middleware.handle.stack.forEach((handler) => {
                 if (handler.route) {
-                    const path = middleware.regexp.source.match(/\\\/([^\\]+)/);
                     routes.push({
-                        path: (path ? '/' + path[1] : '') + handler.route.path,
+                        path: handler.route.path,
                         methods: Object.keys(handler.route.methods)
                     });
                 }
             });
         }
     });
+
     res.json(routes);
 });
 
