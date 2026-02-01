@@ -240,7 +240,7 @@
             showLoader();
             
             try {
-                const response = await fetch(`${API_BASE_URL}/visitors?expo_id=${currentExpoId}`, {
+                const response = await fetch(`${API_BASE_URL}/visitors/paginated?expo_id=${currentExpoId}&page=1&limit=100`, {
                     headers: getAuthHeaders()
                 });
                 
