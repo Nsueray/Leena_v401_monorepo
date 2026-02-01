@@ -51,7 +51,7 @@ router.post('/login', async (req, res) => {
                 email: organizer.email,
             },
             process.env.JWT_SECRET,
-            { expiresIn: '8h' }
+            { expiresIn: '30d' }
         );
 
         res.json({
