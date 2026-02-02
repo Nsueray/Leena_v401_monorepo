@@ -137,6 +137,11 @@
             color: #6c757d;
             margin: 5px 0;
         }
+
+        .template-meta {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
         
         .template-preview {
             background: #f8f9fa;
@@ -439,6 +444,7 @@
                                 <i class="bi bi-envelope-fill text-muted"></i> 
                                 ${template.subject}
                             </p>
+                            <div class="template-meta">Template ID: #${template.id}</div>
                         </div>
                         <div class="template-actions">
                             <button class="btn btn-sm btn-outline-info" onclick="previewTemplate(${template.id})">
@@ -455,6 +461,9 @@
                     <div class="template-preview">
                         ${stripHtml(template.html_content).substring(0, 200)}...
                     </div>
+                    <button class="btn btn-sm btn-outline-secondary" onclick="copyWebhookUrl(${template.id})">
+                        <i class="bi bi-clipboard"></i> Copy Webhook URL
+                    </button>
                 </div>
             `).join('');
         }
@@ -589,6 +598,24 @@
                 console.error('Error loading defaults:', error);
                 showError('Failed to load default templates');
             }
+        }
+
+        function copyWebhookUrl(templateId) {
+            const organizerId = localStorage.getItem('organizerId');
+            const selectedExpoId = localStorage.getItem('selectedExpoId');
+
+            if (!organizerId || !selectedExpoId) {
+                alert('Missing organizer or expo ID. Please select an expo and try again.');
+                return;
+            }
+
+            const webhookUrl = `${window.location.origin}/api/webhook/zoho/${organizerId}/${selectedExpoId}/${templateId}`;
+
+            navigator.clipboard.writeText(webhookUrl).then(() => {
+                alert('Webhook URL copied to clipboard!');
+            }).catch(() => {
+                alert('Failed to copy webhook URL.');
+            });
         }
 
         function getDefaultTemplateContent() {
