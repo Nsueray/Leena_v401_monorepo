@@ -17,23 +17,56 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
 
     const { organizer_id, expo_id, form_id } = req.params;
 
-    const {
-      name,
-      lastName,
-      email,
-      company,
-      badgeNumber,
-      sector,
-      visitorCategory,
-      visitorStatus,
-      visitorType,
-      visitorSource,
-      jobTitle,
-      country,
-      phone,
-      website,
-      origin
-    } = req.body;
+    const name =
+      req.body.name ??
+      '';
+    const lastName =
+      req.body.lastName ??
+      req.body.last_name ??
+      '';
+    const email = req.body.email;
+    const company =
+      req.body.company ??
+      '';
+    const badgeNumber =
+      req.body.badgeNumber ??
+      req.body.badge_id ??
+      '';
+    const sector =
+      req.body.sector ??
+      '';
+    const visitorCategory =
+      req.body.visitorCategory ??
+      req.body.visitor_category ??
+      '';
+    const visitorStatus =
+      req.body.visitorStatus ??
+      req.body.visitor_status ??
+      '';
+    const visitorType =
+      req.body.visitorType ??
+      req.body.visitor_type ??
+      '';
+    const visitorSource =
+      req.body.visitorSource ??
+      req.body.source ??
+      'zoho';
+    const jobTitle =
+      req.body.jobTitle ??
+      req.body.job_title ??
+      '';
+    const country =
+      req.body.country ??
+      '';
+    const phone =
+      req.body.phone ??
+      '';
+    const website =
+      req.body.website ??
+      '';
+    const origin =
+      req.body.origin ??
+      '';
 
     console.log('📥 Incoming Zoho webhook:', req.body);
 
@@ -80,7 +113,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       country,
       phone,
       website,
-      visitorSource ?? req.body.source ?? 'zoho',
+      visitorSource,
       origin || 'zohoform',
       form_id,
       qr_code,
