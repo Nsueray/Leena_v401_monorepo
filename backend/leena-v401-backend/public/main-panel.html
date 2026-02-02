@@ -163,6 +163,7 @@
 
         // --- DATA FETCHING ---
         async function fetchExpoDetails(expoId) {
+            const storedExpoId = localStorage.getItem('selectedExpoId');
             try {
                 const response = await fetch(`${API_BASE_URL}/expos/${expoId}`, {
                     headers: getAuthHeaders()
@@ -172,10 +173,18 @@
                 
                 const expo = await response.json();
                 currentExpoName = expo.name;
-                document.querySelector('#expo-title span').textContent = expo.name;
+                document.getElementById('expo-title').innerHTML = `
+                    <i class="bi bi-calendar-event text-primary"></i>
+                    <span>${expo.name}</span>
+                    <div class="text-muted small">Expo ID: #${storedExpoId || expoId}</div>
+                `;
             } catch (error) {
                 console.error('Error fetching expo:', error);
-                document.querySelector('#expo-title span').textContent = 'Expo Not Found';
+                document.getElementById('expo-title').innerHTML = `
+                    <i class="bi bi-calendar-event text-primary"></i>
+                    <span>Expo Not Found</span>
+                    <div class="text-muted small">Expo ID: #${storedExpoId || expoId}</div>
+                `;
             }
         }
 

@@ -213,12 +213,16 @@
                                 ${template.is_registration_default ? '<span class="badge badge-default ms-2">Registration</span>' : ''}
                                 ${!template.is_active ? '<span class="badge bg-secondary ms-2">Inactive</span>' : ''}
                             </h5>
+                            <p class="text-muted small mb-1">Template ID: #${template.id}</p>
                             <p class="template-subject">
                                 <i class="bi bi-envelope-fill text-muted"></i> 
                                 ${template.subject}
                             </p>
                         </div>
                         <div class="template-actions">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="copyWebhookUrl(${template.id})">
+                                Copy Webhook URL
+                            </button>
                             <button class="btn btn-sm btn-outline-info" onclick="previewTemplate(${template.id})">
                                 <i class="bi bi-eye"></i>
                             </button>
@@ -235,6 +239,26 @@
                     </div>
                 </div>
             `).join('');
+        }
+
+        function copyWebhookUrl(templateId) {
+            const organizerId = localStorage.getItem('organizerId');
+            const expoId = localStorage.getItem('selectedExpoId');
+
+            if (!organizerId || !expoId) {
+                alert('Missing organizer or expo ID. Please select an expo and try again.');
+                return;
+            }
+
+            const webhookUrl = `${window.location.origin}/api/webhook/zoho/${organizerId}/${expoId}/${templateId}`;
+
+            navigator.clipboard.writeText(webhookUrl)
+                .then(() => {
+                    alert('Webhook URL copied to clipboard.');
+                })
+                .catch(() => {
+                    alert('Failed to copy webhook URL.');
+                });
         }
 
         function stripHtml(html) {
