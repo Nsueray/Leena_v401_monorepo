@@ -69,7 +69,7 @@ router.get('/paginated', authMiddleware, async (req, res) => {
     const total = parseInt(totalResult.rows[0].count);
 
     const dataResult = await pool.query(`
-      SELECT id, name, last_name, company, country, email, source, origin, created_at
+      SELECT id, name, last_name, company, country, email, source, origin, created_at, qr_code
       FROM visitors
       ${whereClause}
       ORDER BY created_at DESC

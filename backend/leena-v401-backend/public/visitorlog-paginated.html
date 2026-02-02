@@ -315,7 +315,7 @@
                     <td><span class="badge-pill badge-source">${v.source || '-'}</span></td>
                     <td><span class="badge-pill badge-origin">${v.origin || '-'}</span></td>
                     <td><small>${date.toLocaleDateString()}<br>${date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></td>
-                    <td><a href="badge.html?id=${v.id}" target="_blank" class="qr-btn" title="View Badge"><i class="bi bi-qr-code"></i></a></td>
+                    <td>${v.qr_code ? `<a href="badge.html?qr=${encodeURIComponent(v.qr_code)}" target="_blank" class="qr-btn" title="View Badge"><i class="bi bi-qr-code"></i></a>` : '-'}</td>
                 </tr>`;
             }).join('');
         }
