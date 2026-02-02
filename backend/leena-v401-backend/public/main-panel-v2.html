@@ -1769,6 +1769,12 @@
                             </button>
                         </div>
                     </div>
+                    <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+                        <i class="bi bi-info-circle-fill"></i>
+                        <div class="fw-semibold">
+                            Zoho webhooks use FORM ID. Email templates are selected via the form.
+                        </div>
+                    </div>
                 `;
 
                 if (forms.length === 0) {
@@ -1790,6 +1796,8 @@
                     forms.forEach(form => {
                         const isActive = form.is_active;
                         const publicUrl = `${window.location.origin}/form-public.html?id=${form.id}`;
+                        const templateId = form.email_template_id ?? 'None';
+                        const templateName = form.email_template_name || form.email_template || 'Unassigned';
                         
                         content += `
                             <div class="form-card" onclick="editForm(${form.id})">
@@ -1803,6 +1811,14 @@
                                         <span><i class="bi bi-ui-checks"></i> ${form.fields?.length || 0} fields</span>
                                         <span class="submissions"><i class="bi bi-people"></i> ${form.submission_count || 0} submissions</span>
                                     </div>
+                                    <p class="text-muted small mb-1">
+                                        <i class="bi bi-hash"></i>
+                                        <strong>Form ID:</strong> #${form.id}
+                                    </p>
+                                    <p class="text-muted small mb-0">
+                                        <i class="bi bi-envelope"></i>
+                                        <strong>Email Template:</strong> #${templateId} – ${escapeHtml(templateName)}
+                                    </p>
                                 </div>
                                 <div class="form-card-footer" onclick="event.stopPropagation()">
                                     <div class="btn-group">
@@ -1811,6 +1827,9 @@
                                         </button>
                                         <button class="btn btn-sm btn-outline-info" onclick="copyFormUrl('${publicUrl}')">
                                             <i class="bi bi-link-45deg"></i> Copy Link
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-success" onclick="copyZohoWebhookUrl(${form.id})">
+                                            <i class="bi bi-clipboard"></i> Copy Zoho Webhook URL
                                         </button>
                                         <button class="btn btn-sm btn-outline-danger" onclick="deleteForm(${form.id})">
                                             <i class="bi bi-trash"></i>
@@ -1872,6 +1891,18 @@
                 alert('Form URL copied to clipboard!');
             }).catch(() => {
                 alert('Failed to copy URL');
+            });
+        }
+
+        function copyZohoWebhookUrl(formId) {
+            const organizerId = localStorage.getItem('organizerId');
+            const expoId = localStorage.getItem('selectedExpoId');
+            const url = `/api/webhook/zoho/${organizerId}/${expoId}/${formId}`;
+
+            navigator.clipboard.writeText(url).then(() => {
+                alert('Zoho webhook URL copied to clipboard');
+            }).catch(() => {
+                alert('Failed to copy Zoho webhook URL');
             });
         }
 

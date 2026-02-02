@@ -578,9 +578,9 @@
             const url = `/api/webhook/zoho/${organizerId}/${expoId}/${formId}`;
 
             navigator.clipboard.writeText(url).then(() => {
-                showSuccess('Zoho webhook URL copied to clipboard');
+                alert('Zoho webhook URL copied to clipboard');
             }).catch(() => {
-                showError('Failed to copy Zoho webhook URL');
+                alert('Failed to copy Zoho webhook URL');
             });
         }
 
