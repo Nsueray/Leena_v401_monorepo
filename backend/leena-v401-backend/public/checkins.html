@@ -3,592 +3,327 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Check-ins - Leena EMS v401</title>
+    <title>Check-ins - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/assets/leena.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5; --warning: #f59e0b; --danger: #ef4444;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .header-actions { display: flex; gap: 10px; }
+        .main-content { flex: 1; padding: 24px; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-secondary:hover { background: var(--bg-main); }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; }
+        .stat-card .stat-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+        .filter-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px; }
+        .filter-row { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+        .filter-group { flex: 1; min-width: 150px; }
+        .filter-group label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+        .form-select, .form-control { padding: 9px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; width: 100%; }
+        .form-select:focus, .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,111,165,0.1); }
+        .table-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+        .table-title { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--bg-main); padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color); }
+        td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        tr:hover { background: var(--bg-main); }
+        .badge-pill { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+        .badge-source { background: #dbeafe; color: #1e40af; }
+        .badge-origin { background: #f3e8ff; color: #7c3aed; }
+        .badge-hall { background: var(--success-bg); color: #065f46; }
+        .empty-state { text-align: center; padding: 60px 24px; }
+        .empty-state-icon { width: 64px; height: 64px; background: var(--bg-main); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; color: var(--text-muted); }
+        .empty-state h3 { font-size: 16px; margin-bottom: 8px; }
+        .empty-state p { color: var(--text-secondary); margin-bottom: 20px; }
+        .loading-spinner { display: flex; justify-content: center; align-items: center; min-height: 200px; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pagination-container { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-top: 1px solid var(--border-color); }
+        .pagination { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+        .page-item .page-link { padding: 6px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); text-decoration: none; font-size: 13px; }
+        .page-item.active .page-link { background: var(--primary); color: white; border-color: var(--primary); }
+        .page-item.disabled .page-link { color: var(--text-muted); cursor: not-allowed; }
+        .alert { padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 16px; display: none; }
+        .alert-success { background: var(--success-bg); color: #065f46; border: 1px solid #a7f3d0; }
+        .alert-danger { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+        .hall-stats { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+        .hall-badge { background: var(--bg-main); padding: 4px 10px; border-radius: 20px; font-size: 12px; }
+        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: 1fr; } .filter-row { flex-direction: column; } }
+    </style>
 </head>
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <img src="/logo.png" alt="Leena logo" class="sidebar-logo">
-            <span>Leena EMS</span>
-        </div>
-        <ul class="sidebar-menu">
-            <li><a href="dashboard.html"><i class="bi bi-grid"></i> All Expos</a></li>
-            <li><a href="main-panel.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
-            <li><a class="active" href="checkins.html"><i class="bi bi-check2-square"></i> Check-ins</a></li>
-            <li><a href="terminals.html"><i class="bi bi-pc-display"></i> Terminals</a></li>
-            <li><a href="email-templates.html"><i class="bi bi-envelope"></i> Email Templates</a></li>
-            <li><a href="email-send.html"><i class="bi bi-send"></i> Send Emails</a></li>
-            <li><a href="email-segments.html"><i class="bi bi-megaphone"></i> Email Segments</a></li>
-            <li><a href="reports.html"><i class="bi bi-graph-up"></i> Reports</a></li>
-            <li><a href="import.html"><i class="bi bi-download"></i> Import</a></li>
-            <li><a href="visitorlog-paginated.html" target="_blank"><i class="bi bi-journals"></i> Visitor Log</a></li>
-            <li><a href="admin-dashboard.html"><i class="bi bi-shield-lock"></i> Admin Panel</a></li>
-        </ul>
-    </nav>
-
-    <div class="main-wrapper">
-        <header class="page-header">
-            <div class="container-fluid">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h1>
-                            <i class="bi bi-check2-square"></i>
-                            Check-ins
-                        </h1>
-                        <div class="subtitle">Live check-in monitoring for your expo</div>
-                    </div>
-                    <div>
-                        <button class="btn btn-light" onclick="goBack()">
-                            <i class="bi bi-arrow-left"></i> Back to Panel
-                        </button>
-                    </div>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="main-panel-v2.html" onclick="localStorage.setItem('loadPage','forms')"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item active" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
                 </div>
             </div>
-        </header>
-
-        <main class="main-container">
-        <!-- Alert Messages -->
-        <div id="alertMessage" style="display: none;"></div>
-
-        <!-- Stats Cards -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" id="totalCheckins">0</div>
-                <div class="stat-label">Total Check-ins</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="uniqueVisitors">0</div>
-                <div class="stat-label">Unique Visitors</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="todayCheckins">0</div>
-                <div class="stat-label">Today's Check-ins</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-label">Hall Distribution</div>
-                <div class="hall-stats" id="hallStats">
-                    <span class="text-muted">Loading...</span>
+        </nav>
+        
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-check2-square"></i> Check-ins</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="window.location.href='main-panel-v2.html'"><i class="bi bi-arrow-left"></i> Back</button>
                 </div>
-            </div>
-        </div>
-
-        <!-- Filter Panel -->
-        <div class="filter-panel">
-            <div class="filter-row">
-                <div class="filter-group">
-                    <label class="filter-label">Day Filter</label>
-                    <select class="form-select" id="dayFilter">
-                        <option value="">All Days</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">Source</label>
-                    <select class="form-select" id="sourceFilter">
-                        <option value="">All Sources</option>
-                        <option value="manual">Manual</option>
-                        <option value="qrscan">QR Scan</option>
-                        <option value="zohoform">Zoho Form</option>
-                        <option value="api">API</option>
-                        <option value="import">Import</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">Origin</label>
-                    <select class="form-select" id="originFilter">
-                        <option value="">All Origins</option>
-                        <option value="onsite">Onsite</option>
-                        <option value="massimport">Mass Import</option>
-                        <option value="online">Online</option>
-                        <option value="webhook">Webhook</option>
-                    </select>
-                </div>
-                <div class="filter-group">
-                    <label class="filter-label">&nbsp;</label>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-primary" onclick="applyFilters()">
-                            <i class="bi bi-funnel"></i> Apply
-                        </button>
-                        <button class="btn btn-secondary" onclick="clearFilters()">
-                            <i class="bi bi-x-circle"></i> Clear
-                        </button>
-                        <button class="btn btn-light" onclick="refreshData()">
-                            <i class="bi bi-arrow-clockwise"></i> Refresh
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Table Container -->
-        <div class="table-container">
-            <div class="table-header">
-                <div class="table-title">
-                    <i class="bi bi-list"></i>
-                    Check-in Records
-                </div>
-                <div>
-                    <span class="text-muted">Total: <strong id="totalCount">0</strong> records</span>
-                </div>
-            </div>
+            </header>
             
-            <div id="checkinsContent">
-                <div class="loading-spinner">
-                    <div class="spinner-border" role="status">
-                        <span class="visually-hidden">Loading...</span>
+            <main class="main-content">
+                <div id="alertMessage" class="alert"></div>
+                
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value" id="totalCheckins">0</div><div class="stat-label">Total Check-ins</div></div>
+                    <div class="stat-card"><div class="stat-value" id="uniqueVisitors">0</div><div class="stat-label">Unique Visitors</div></div>
+                    <div class="stat-card"><div class="stat-value" id="todayCheckins">0</div><div class="stat-label">Today's Check-ins</div></div>
+                    <div class="stat-card"><div class="stat-label">Hall Distribution</div><div class="hall-stats" id="hallStats"><span class="text-muted">Loading...</span></div></div>
+                </div>
+                
+                <div class="filter-panel">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label>Day Filter</label>
+                            <select class="form-select" id="dayFilter"><option value="">All Days</option></select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Source</label>
+                            <select class="form-select" id="sourceFilter">
+                                <option value="">All Sources</option>
+                                <option value="manual">Manual</option>
+                                <option value="qrscan">QR Scan</option>
+                                <option value="zohoform">Zoho Form</option>
+                                <option value="api">API</option>
+                                <option value="import">Import</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Origin</label>
+                            <select class="form-select" id="originFilter">
+                                <option value="">All Origins</option>
+                                <option value="onsite">Onsite</option>
+                                <option value="massimport">Mass Import</option>
+                                <option value="online">Online</option>
+                                <option value="webhook">Webhook</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>&nbsp;</label>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn btn-primary" onclick="applyFilters()"><i class="bi bi-funnel"></i> Apply</button>
+                                <button class="btn btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
+                                <button class="btn btn-secondary" onclick="refreshData()"><i class="bi bi-arrow-clockwise"></i></button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Pagination -->
-            <div class="pagination-container" id="paginationContainer" style="display: none;">
-                <div class="page-info" id="pageInfo">
-                    Page 1 of 1
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <div class="table-title"><i class="bi bi-list"></i> Check-in Records</div>
+                        <div>Total: <strong id="totalCount">0</strong> records</div>
+                    </div>
+                    <div id="checkinsContent"><div class="loading-spinner"><div class="spinner"></div></div></div>
+                    <div class="pagination-container" id="paginationContainer" style="display:none;">
+                        <div id="pageInfo">Page 1 of 1</div>
+                        <nav><ul class="pagination" id="pagination"></ul></nav>
+                        <div>Showing <span id="recordsInfo">0</span> records</div>
+                    </div>
                 </div>
-                <nav>
-                    <ul class="pagination" id="pagination">
-                        <!-- Pagination will be generated here -->
-                    </ul>
-                </nav>
-                <div>
-                    Showing <span id="recordsInfo">0</span> records
-                </div>
-            </div>
+            </main>
         </div>
-        </main>
     </div>
 
     <script>
-        // Configuration
         const API_BASE_URL = '/api';
-        let checkins = [];
-        let currentPage = 1;
-        let totalPages = 1;
-        let totalRecords = 0;
+        let checkins = [], currentPage = 1, totalPages = 1, totalRecords = 0;
         const recordsPerPage = 200;
-        let currentFilters = {};
-        let expoId = null;
-        let token = null;
+        let currentFilters = {}, expoId = null, token = null;
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
-            // Check auth
             token = localStorage.getItem('token');
             expoId = localStorage.getItem('selectedExpoId');
-            
-            if (!token) {
-                window.location.href = 'login.html';
-                return;
-            }
-            
-            if (!expoId) {
-                alert('No expo selected. Please select an expo first.');
-                window.location.href = 'dashboard.html';
-                return;
-            }
-            
-            // Initialize page
+            if (!token) { window.location.href = 'login_new.html'; return; }
+            if (!expoId) { alert('No expo selected.'); window.location.href = 'dashboard_new.html'; return; }
             generateDayOptions();
             await refreshData();
         });
 
-        // Generate day options (last 7 days)
         function generateDayOptions() {
             const select = document.getElementById('dayFilter');
             const today = new Date();
-            
             for (let i = 0; i < 7; i++) {
                 const date = new Date(today);
                 date.setDate(date.getDate() - i);
-                
                 const option = document.createElement('option');
                 option.value = date.toISOString().split('T')[0];
-                option.textContent = date.toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric' 
-                });
-                
+                option.textContent = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
                 if (i === 0) option.textContent += ' (Today)';
                 if (i === 1) option.textContent += ' (Yesterday)';
-                
                 select.appendChild(option);
             }
         }
 
-        // Refresh all data
-        async function refreshData() {
-            await Promise.all([
-                loadCheckins(),
-                updateStats()
-            ]);
-        }
+        async function refreshData() { await Promise.all([loadCheckins(), updateStats()]); }
 
-        // Load check-ins
         async function loadCheckins() {
-            showLoading(true);
-            
+            document.getElementById('checkinsContent').innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div>';
             try {
-                // Build query parameters - IMPORTANT: use expoId not expo_id for consistency
-                const params = new URLSearchParams({
-                    expoId: expoId,  // Fixed: was expo_id
-                    page: currentPage,
-                    limit: recordsPerPage,
-                    includeVisitorDetails: 'true'
-                });
-                
-                // Add filters if they exist
+                const params = new URLSearchParams({ expoId, page: currentPage, limit: recordsPerPage, includeVisitorDetails: 'true' });
                 if (currentFilters.day) params.append('date', currentFilters.day);
                 if (currentFilters.source) params.append('source', currentFilters.source);
                 if (currentFilters.origin) params.append('origin', currentFilters.origin);
                 
-                const response = await fetch(`${API_BASE_URL}/checkins?${params}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-                }
-                
+                const response = await fetch(`${API_BASE_URL}/checkins?${params}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Failed to load');
                 const data = await response.json();
                 
-                // Handle pagination response
-                if (data.pagination) {
-                    checkins = data.checkins || [];
-                    totalRecords = data.pagination.total || 0;
-                    totalPages = Math.ceil(totalRecords / recordsPerPage);
-                } else {
-                    // Fallback for simple response
-                    checkins = data.checkins || data || [];
-                    totalRecords = data.total || checkins.length;
-                    totalPages = Math.ceil(totalRecords / recordsPerPage);
-                }
-                
+                checkins = data.checkins || [];
+                totalRecords = data.pagination?.total || checkins.length;
+                totalPages = Math.ceil(totalRecords / recordsPerPage);
                 document.getElementById('totalCount').textContent = totalRecords;
                 renderCheckins();
                 renderPagination();
-                
             } catch (error) {
-                console.error('Error loading check-ins:', error);
-                showAlert(`Failed to load check-ins: ${error.message}`, 'danger');
+                showAlert('Failed to load check-ins', 'danger');
                 checkins = [];
                 renderCheckins();
-            } finally {
-                showLoading(false);
             }
         }
 
-        // Render check-ins table
         function renderCheckins() {
             const container = document.getElementById('checkinsContent');
-            
             if (checkins.length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-inbox"></i>
-                        </div>
-                        <h3>No Check-ins Found</h3>
-                        <p>No check-in records match your current filters</p>
-                        <button class="btn btn-primary" onclick="clearFilters()">
-                            <i class="bi bi-x-circle"></i> Clear Filters
-                        </button>
-                    </div>
-                `;
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-inbox"></i></div><h3>No Check-ins Found</h3><p>No records match your filters</p></div>';
                 document.getElementById('paginationContainer').style.display = 'none';
                 return;
             }
-            
-            let html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Name</th>
-                            <th>Company</th>
-                            <th>Country</th>
-                            <th>Source</th>
-                            <th>Origin</th>
-                            <th>Hall</th>
-                            <th>Terminal</th>
-                            <th>Check-in Time</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-            
-            checkins.forEach(checkin => {
-                const checkinTime = new Date(checkin.checkin_time);
-                const formattedTime = checkinTime.toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-                
-                // Get visitor info from various possible sources
-                const visitorFullName = checkin.visitor_full_name || '';
-                const visitorName = checkin.visitor_name || checkin.name || '';
-                const visitorLastName = checkin.visitor_last_name || checkin.last_name || '';
-                const fullName = visitorFullName || `${visitorName} ${visitorLastName}`.trim() || 'Unknown';
-                const company = checkin.visitor_company || checkin.company || '-';
-                const country = checkin.visitor_country || checkin.country || '-';
-                const source = checkin.source || '-';
-                const origin = checkin.origin || '-';
-                
-                // Capitalize first letter for better display
-                const formatLabel = (str) => {
-                    if (!str || str === '-') return '-';
-                    return str.charAt(0).toUpperCase() + str.slice(1);
-                };
-                
-                html += `
-                    <tr>
-                        <td><strong>${escapeHtml(fullName)}</strong></td>
-                        <td>${escapeHtml(company)}</td>
-                        <td>${escapeHtml(country)}</td>
-                        <td>
-                            <span class="badge-pill badge-source">
-                                ${escapeHtml(formatLabel(source))}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="badge-pill badge-origin">
-                                ${escapeHtml(formatLabel(origin))}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="badge-pill badge-hall">
-                                ${escapeHtml(checkin.hall || 'Main')}
-                            </span>
-                        </td>
-                        <td>${escapeHtml(checkin.terminal || '-')}</td>
-                        <td>${formattedTime}</td>
-                    </tr>
-                `;
+            let html = '<table><thead><tr><th>Name</th><th>Company</th><th>Country</th><th>Source</th><th>Origin</th><th>Hall</th><th>Terminal</th><th>Time</th></tr></thead><tbody>';
+            checkins.forEach(c => {
+                const time = new Date(c.checkin_time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const name = c.visitor_full_name || `${c.visitor_name || ''} ${c.visitor_last_name || ''}`.trim() || 'Unknown';
+                html += `<tr><td><strong>${escapeHtml(name)}</strong></td><td>${escapeHtml(c.visitor_company || '-')}</td><td>${escapeHtml(c.visitor_country || '-')}</td><td><span class="badge-pill badge-source">${escapeHtml(c.source || '-')}</span></td><td><span class="badge-pill badge-origin">${escapeHtml(c.origin || '-')}</span></td><td><span class="badge-pill badge-hall">${escapeHtml(c.hall || 'Main')}</span></td><td>${escapeHtml(c.terminal || '-')}</td><td>${time}</td></tr>`;
             });
-            
-            html += `
-                    </tbody>
-                </table>
-            `;
-            
+            html += '</tbody></table>';
             container.innerHTML = html;
             document.getElementById('paginationContainer').style.display = 'flex';
             document.getElementById('recordsInfo').textContent = checkins.length;
         }
 
-        // Update stats - FIXED ENDPOINT
         async function updateStats() {
             try {
-                const response = await fetch(`${API_BASE_URL}/checkins/stats/summary?expoId=${expoId}`, {
-                    method: 'GET',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) {
-                    console.error('Failed to fetch stats:', response.status);
-                    throw new Error(`Stats API error: ${response.status}`);
-                }
-                
+                const response = await fetch(`${API_BASE_URL}/checkins/stats/summary?expoId=${expoId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Stats failed');
                 const data = await response.json();
-                
-                // Extract stats from response
                 const stats = data.statistics || data;
-                
-                // Update counters
-                document.getElementById('totalCheckins').textContent = 
-                    stats.total_checkins || stats.total || '0';
-                document.getElementById('uniqueVisitors').textContent = 
-                    stats.unique_visitors || stats.unique_count || '0';
-                document.getElementById('todayCheckins').textContent = 
-                    stats.today_checkins || stats.today_count || '0';
-                
-                // Update hall distribution
+                document.getElementById('totalCheckins').textContent = stats.total_checkins || 0;
+                document.getElementById('uniqueVisitors').textContent = stats.unique_visitors || 0;
+                document.getElementById('todayCheckins').textContent = stats.today_checkins || 0;
+                const hallData = stats.by_hall || {};
                 const hallStats = document.getElementById('hallStats');
-                const hallData = stats.by_hall || stats.hall_distribution || {};
-                
                 if (Object.keys(hallData).length > 0) {
-                    let hallHtml = '';
-                    for (const [hall, count] of Object.entries(hallData)) {
-                        if (hall && count !== null && count !== undefined) {
-                            hallHtml += `<span class="hall-badge">${escapeHtml(hall)}: <strong>${count}</strong></span>`;
-                        }
-                    }
-                    hallStats.innerHTML = hallHtml || '<span class="text-muted">No hall data</span>';
-                } else {
-                    hallStats.innerHTML = '<span class="text-muted">No data available</span>';
-                }
-                
-            } catch (error) {
-                console.error('Error fetching stats:', error);
-                // Set defaults on error
+                    hallStats.innerHTML = Object.entries(hallData).map(([h, c]) => `<span class="hall-badge">${escapeHtml(h)}: <strong>${c}</strong></span>`).join('');
+                } else { hallStats.innerHTML = '<span class="text-muted">No data</span>'; }
+            } catch (e) {
                 document.getElementById('totalCheckins').textContent = '0';
                 document.getElementById('uniqueVisitors').textContent = '0';
                 document.getElementById('todayCheckins').textContent = '0';
-                document.getElementById('hallStats').innerHTML = '<span class="text-muted">Unable to load</span>';
             }
         }
 
-        // Render pagination
         function renderPagination() {
-            const pagination = document.getElementById('pagination');
-            const pageInfo = document.getElementById('pageInfo');
-            
-            if (totalPages <= 1) {
-                document.getElementById('paginationContainer').style.display = 'none';
-                return;
+            if (totalPages <= 1) { document.getElementById('paginationContainer').style.display = 'none'; return; }
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            let html = `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;"><i class="bi bi-chevron-left"></i></a></li>`;
+            for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+                html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a></li>`;
             }
-            
-            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-            
-            let html = '';
-            
-            // Previous button
-            html += `
-                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-                    <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                </li>
-            `;
-            
-            // Page numbers
-            const maxVisiblePages = 5;
-            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-            
-            if (endPage - startPage < maxVisiblePages - 1) {
-                startPage = Math.max(1, endPage - maxVisiblePages + 1);
-            }
-            
-            // First page
-            if (startPage > 1) {
-                html += `
-                    <li class="page-item">
-                        <a class="page-link" href="#" onclick="goToPage(1); return false;">1</a>
-                    </li>
-                `;
-                if (startPage > 2) {
-                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-                }
-            }
-            
-            // Page range
-            for (let i = startPage; i <= endPage; i++) {
-                html += `
-                    <li class="page-item ${i === currentPage ? 'active' : ''}">
-                        <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
-                    </li>
-                `;
-            }
-            
-            // Last page
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-                }
-                html += `
-                    <li class="page-item">
-                        <a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>
-                    </li>
-                `;
-            }
-            
-            // Next button
-            html += `
-                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-                    <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-            `;
-            
-            pagination.innerHTML = html;
+            html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;"><i class="bi bi-chevron-right"></i></a></li>`;
+            document.getElementById('pagination').innerHTML = html;
         }
 
-        // Go to page
-        async function goToPage(page) {
-            if (page < 1 || page > totalPages || page === currentPage) return;
-            currentPage = page;
-            await loadCheckins();
-        }
-
-        // Apply filters
+        async function goToPage(page) { if (page < 1 || page > totalPages || page === currentPage) return; currentPage = page; await loadCheckins(); }
         async function applyFilters() {
             currentFilters = {};
-            
             const day = document.getElementById('dayFilter').value;
             const source = document.getElementById('sourceFilter').value;
             const origin = document.getElementById('originFilter').value;
-            
             if (day) currentFilters.day = day;
             if (source) currentFilters.source = source;
             if (origin) currentFilters.origin = origin;
-            
             currentPage = 1;
             await refreshData();
-            showAlert('Filters applied successfully', 'success');
         }
-
-        // Clear filters
         async function clearFilters() {
             document.getElementById('dayFilter').value = '';
             document.getElementById('sourceFilter').value = '';
             document.getElementById('originFilter').value = '';
-            
             currentFilters = {};
             currentPage = 1;
             await refreshData();
         }
-
-        // UI Helper functions
-        function showAlert(message, type = 'info') {
-            const alertDiv = document.getElementById('alertMessage');
-            alertDiv.className = `alert alert-${type}`;
-            alertDiv.innerHTML = `
-                <i class="bi bi-${type === 'danger' ? 'exclamation-circle' : 'check-circle'}"></i>
-                ${message}
-            `;
-            alertDiv.style.display = 'block';
-            
-            setTimeout(() => {
-                alertDiv.style.display = 'none';
-            }, 5000);
+        function showAlert(msg, type) {
+            const el = document.getElementById('alertMessage');
+            el.className = `alert alert-${type}`;
+            el.innerHTML = `<i class="bi bi-${type === 'danger' ? 'exclamation-circle' : 'check-circle'}"></i> ${msg}`;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 5000);
         }
-
-        function showLoading(show) {
-            const container = document.getElementById('checkinsContent');
-            if (show) {
-                container.innerHTML = `
-                    <div class="loading-spinner">
-                        <div class="spinner-border" role="status">
-                            <span class="visually-hidden">Loading...</span>
-                        </div>
-                    </div>
-                `;
-            }
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text || '';
-            return div.innerHTML;
-        }
-
-        function goBack() {
-            window.location.href = 'main-panel.html';
-        }
+        function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
     </script>
 </body>
 </html>
