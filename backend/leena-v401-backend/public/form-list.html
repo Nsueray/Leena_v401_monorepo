@@ -70,6 +70,12 @@
                         </a>
                     </div>
                 </div>
+                <div class="alert alert-warning d-flex align-items-center gap-2" role="alert">
+                    <i class="bi bi-info-circle-fill"></i>
+                    <div class="fw-semibold">
+                        Zoho webhooks use FORM ID. Email templates are selected via the form.
+                    </div>
+                </div>
 
                 <!-- Statistics Cards -->
                 <div class="row mb-4">
@@ -288,6 +294,18 @@
                                 <i class="bi bi-calendar-event"></i> 
                                 ${form.expo_name || 'All Expos'}
                             </div>
+                            <div class="text-muted small mb-1">
+                                <i class="bi bi-hash"></i>
+                                <strong>Form ID:</strong> #${form.id}
+                            </div>
+                            <div class="text-muted small mb-3">
+                                <i class="bi bi-envelope"></i>
+                                <strong>Email Template:</strong> #${form.email_template_id ?? 'None'} – ${form.email_template_name || form.email_template || 'Unassigned'}
+                            </div>
+                            <button class="btn btn-sm btn-outline-success w-100 mb-3" 
+                                    onclick="event.stopPropagation(); copyZohoWebhookUrl(${form.id})">
+                                <i class="bi bi-clipboard"></i> Copy Zoho Webhook URL
+                            </button>
                             <div class="action-buttons">
                                 <button class="btn btn-sm btn-outline-primary flex-fill" 
                                         onclick="event.stopPropagation(); editForm(${form.id})">
@@ -550,6 +568,19 @@
                 showSuccess('Form URL copied to clipboard');
             }).catch(() => {
                 showError('Failed to copy URL');
+            });
+        }
+
+        // Copy Zoho webhook URL
+        function copyZohoWebhookUrl(formId) {
+            const organizerId = localStorage.getItem('organizerId');
+            const expoId = localStorage.getItem('selectedExpoId');
+            const url = `/api/webhook/zoho/${organizerId}/${expoId}/${formId}`;
+
+            navigator.clipboard.writeText(url).then(() => {
+                showSuccess('Zoho webhook URL copied to clipboard');
+            }).catch(() => {
+                showError('Failed to copy Zoho webhook URL');
             });
         }
 
