@@ -16,9 +16,9 @@
         </div>
         <ul class="sidebar-menu">
             <li><a class="active" href="dashboard.html"><i class="bi bi-grid"></i> All Expos</a></li>
-            <li><a href="main-panel.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
+            <li><a href="/main-panel-v2.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
+            <li><a href="/main-panel-v2.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
+            <li><a href="/main-panel-v2.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
             <li><a href="checkins.html"><i class="bi bi-check2-square"></i> Check-ins</a></li>
             <li><a href="terminals.html"><i class="bi bi-pc-display"></i> Terminals</a></li>
             <li><a href="email-templates.html"><i class="bi bi-envelope"></i> Email Templates</a></li>
@@ -224,8 +224,8 @@
             localStorage.setItem('selectedExpoId', expoId);
             localStorage.setItem('selectedExpoName', expoName);
             
-            // Always redirect to main-panel.html - this is the main management interface
-            window.location.href = 'main-panel.html';
+            // Always redirect to main-panel-v2.html - this is the main management interface
+            window.location.href = '/main-panel-v2.html';
         }
 
         function editExpo(expoId) {
