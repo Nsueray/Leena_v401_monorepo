@@ -3,331 +3,290 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Visitor Log - Leena EMS v401</title>
+    <title>Visitor Log - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/assets/leena.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5; --warning: #f59e0b; --danger: #ef4444;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .header-actions { display: flex; gap: 10px; }
+        .main-content { flex: 1; padding: 24px; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-secondary:hover { background: var(--bg-main); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; }
+        .stat-card .stat-label { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+        .filter-panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 24px; }
+        .filter-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+        .filter-group label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; }
+        .form-control, .form-select { padding: 9px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; width: 100%; }
+        .form-control:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,111,165,0.1); }
+        .search-box { position: relative; }
+        .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
+        .search-box input { padding-left: 38px; }
+        .filter-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+        .filter-pill { display: flex; align-items: center; gap: 6px; padding: 6px 12px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 20px; font-size: 12px; cursor: pointer; transition: all 0.15s; }
+        .filter-pill:has(input:checked) { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+        .filter-pill input { display: none; }
+        .table-container { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; }
+        .table-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+        .table-title { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--bg-main); padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        tr:hover { background: var(--bg-main); }
+        .badge-pill { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+        .badge-source { background: #dbeafe; color: #1e40af; }
+        .badge-origin { background: #f3e8ff; color: #7c3aed; }
+        .empty-state { text-align: center; padding: 60px 24px; display: none; }
+        .empty-state-icon { width: 64px; height: 64px; background: var(--bg-main); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; color: var(--text-muted); }
+        .empty-state h3 { font-size: 16px; margin-bottom: 8px; }
+        .empty-state p { color: var(--text-secondary); }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .loading-overlay.active { display: flex; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .pagination-container { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-top: 1px solid var(--border-color); }
+        .pagination { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+        .page-item .page-link { padding: 6px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); text-decoration: none; font-size: 13px; }
+        .page-item.active .page-link { background: var(--primary); color: white; border-color: var(--primary); }
+        .page-item.disabled .page-link { color: var(--text-muted); cursor: not-allowed; }
+        .qr-btn { padding: 4px 8px; font-size: 11px; background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; }
+        .qr-btn:hover { background: var(--primary); color: white; }
+        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+        .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        /* QR Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-overlay.show { display: flex; }
+        .modal-box { background: white; border-radius: var(--radius-lg); padding: 24px; max-width: 400px; width: 90%; text-align: center; }
+        .modal-box h3 { margin-bottom: 16px; }
+        .modal-box .qr-image { width: 200px; height: 200px; margin: 0 auto 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+        .modal-box .qr-code-text { font-family: monospace; font-size: 14px; background: var(--bg-main); padding: 12px; border-radius: var(--radius-md); word-break: break-all; margin-bottom: 16px; }
+        .modal-actions { display: flex; gap: 12px; justify-content: center; }
+        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .filter-row { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: 1fr; } table { font-size: 12px; } th, td { padding: 8px 10px; } }
+    </style>
 </head>
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <img src="/logo.png" alt="Leena logo" class="sidebar-logo">
-            <span>Leena EMS</span>
-        </div>
-        <ul class="sidebar-menu">
-            <li><a href="dashboard.html"><i class="bi bi-grid"></i> All Expos</a></li>
-            <li><a href="main-panel.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
-            <li><a href="checkins.html"><i class="bi bi-check2-square"></i> Check-ins</a></li>
-            <li><a href="terminals.html"><i class="bi bi-pc-display"></i> Terminals</a></li>
-            <li><a href="email-templates.html"><i class="bi bi-envelope"></i> Email Templates</a></li>
-            <li><a href="email-send.html"><i class="bi bi-send"></i> Send Emails</a></li>
-            <li><a href="email-segments.html"><i class="bi bi-megaphone"></i> Email Segments</a></li>
-            <li><a href="reports.html"><i class="bi bi-graph-up"></i> Reports</a></li>
-            <li><a href="import.html"><i class="bi bi-download"></i> Import</a></li>
-            <li><a class="active" href="visitorlog-paginated.html"><i class="bi bi-journals"></i> Visitor Log</a></li>
-            <li><a href="admin-dashboard.html"><i class="bi bi-shield-lock"></i> Admin Panel</a></li>
-        </ul>
-    </nav>
-
-    <div class="main-wrapper">
-        <!-- Loading Overlay -->
-        <div class="loading-overlay" id="loadingOverlay">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">Loading...</span>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-        </div>
-
-        <!-- Header -->
-        <div class="page-header">
-            <div class="container-fluid">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h1>
-                            <i class="bi bi-people-fill"></i>
-                            Visitor Log
-                        </h1>
-                        <div class="subtitle">High-performance paginated view</div>
-                    </div>
-                    <div>
-                        <button class="btn btn-light" onclick="goBack()">
-                            <i class="bi bi-arrow-left"></i> Back to Panel
-                        </button>
-                    </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item active" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="main-panel-v2.html" onclick="localStorage.setItem('loadPage','forms')"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
                 </div>
             </div>
-        </div>
-
-        <!-- Main Container -->
-        <div class="main-container">
-        <!-- Stats Cards -->
-        <div class="stats-row">
-            <div class="stat-card">
-                <div class="stat-value" id="totalVisitors">0</div>
-                <div class="stat-label">Total Visitors</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="todayVisitors">0</div>
-                <div class="stat-label">Today's Registrations</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="filteredCount">0</div>
-                <div class="stat-label">Filtered Results</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="currentPage">1</div>
-                <div class="stat-label">Current Page</div>
-            </div>
-        </div>
-
-        <!-- Filter Panel -->
-        <div class="filter-panel">
-            <div class="row">
-                <!-- Search Box -->
-                <div class="col-md-6 filter-section">
-                    <div class="filter-title">Search</div>
-                    <div class="search-box">
-                        <i class="bi bi-search"></i>
-                        <input type="text" class="form-control" id="searchInput" 
-                               placeholder="Search by name, email, or company...">
-                    </div>
+        </nav>
+        
+        <div class="main-wrapper">
+            <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+            
+            <header class="main-header">
+                <h1><i class="bi bi-people"></i> Visitor Log</h1>
+                <div class="header-actions">
+                    <button class="btn btn-success" onclick="exportData()"><i class="bi bi-download"></i> Export</button>
+                    <button class="btn btn-secondary" onclick="window.location.href='main-panel-v2.html'"><i class="bi bi-arrow-left"></i> Back</button>
                 </div>
-
-                <!-- Date Range -->
-                <div class="col-md-6 filter-section">
-                    <div class="filter-title">Date Range</div>
-                    <div class="d-flex gap-2">
-                        <input type="date" class="form-control" id="startDate">
-                        <input type="date" class="form-control" id="endDate">
+            </header>
+            
+            <main class="main-content">
+                <div class="stats-grid">
+                    <div class="stat-card"><div class="stat-value" id="totalVisitors">0</div><div class="stat-label">Total Visitors</div></div>
+                    <div class="stat-card"><div class="stat-value" id="todayVisitors">-</div><div class="stat-label">Today's Registrations</div></div>
+                    <div class="stat-card"><div class="stat-value" id="filteredCount">0</div><div class="stat-label">Filtered Results</div></div>
+                    <div class="stat-card"><div class="stat-value" id="currentPageDisplay">1</div><div class="stat-label">Current Page</div></div>
+                </div>
+                
+                <div class="filter-panel">
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label>Search</label>
+                            <div class="search-box">
+                                <i class="bi bi-search"></i>
+                                <input type="text" class="form-control" id="searchInput" placeholder="Search name, email, company...">
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>Date Range</label>
+                            <div style="display:flex;gap:8px;">
+                                <input type="date" class="form-control" id="startDate">
+                                <input type="date" class="form-control" id="endDate">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label>Source</label>
+                            <div class="filter-pills" id="sourceFilters">
+                                <label class="filter-pill"><input type="checkbox" value="manual"> Manual</label>
+                                <label class="filter-pill"><input type="checkbox" value="form"> Form</label>
+                                <label class="filter-pill"><input type="checkbox" value="import"> Import</label>
+                                <label class="filter-pill"><input type="checkbox" value="webhook"> Webhook</label>
+                            </div>
+                        </div>
+                        <div class="filter-group">
+                            <label>Origin</label>
+                            <div class="filter-pills" id="originFilters">
+                                <label class="filter-pill"><input type="checkbox" value="massimport"> Mass Import</label>
+                                <label class="filter-pill"><input type="checkbox" value="manual_entry"> Manual Entry</label>
+                                <label class="filter-pill"><input type="checkbox" value="zoho"> Zoho</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display:flex;gap:10px;margin-top:16px;">
+                        <button class="btn btn-primary" onclick="applyFilters()"><i class="bi bi-funnel"></i> Apply</button>
+                        <button class="btn btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
                     </div>
                 </div>
-
-                <!-- Source Filter -->
-                <div class="col-md-6 filter-section">
-                    <div class="filter-title">Source</div>
-                    <div class="filter-pills" id="sourceFilters">
-                        <label class="filter-pill">
-                            <input type="checkbox" value="manual"> Manual
-                        </label>
-                        <label class="filter-pill">
-                            <input type="checkbox" value="form"> Form
-                        </label>
-                        <label class="filter-pill">
-                            <input type="checkbox" value="import"> Import
-                        </label>
-                        <label class="filter-pill">
-                            <input type="checkbox" value="api"> API
-                        </label>
-                        <label class="filter-pill">
-                            <input type="checkbox" value="webhook"> Webhook
-                        </label>
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <div class="table-title"><i class="bi bi-list"></i> Visitor Records</div>
+                        <div id="resultsInfo" style="color:var(--text-muted);font-size:13px;">Showing 0 of 0</div>
+                    </div>
+                    <div id="tableContent">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Name</th>
+                                    <th>Last Name</th>
+                                    <th>Company</th>
+                                    <th>Country</th>
+                                    <th>Email</th>
+                                    <th>Source</th>
+                                    <th>Origin</th>
+                                    <th>Registered</th>
+                                    <th>QR</th>
+                                </tr>
+                            </thead>
+                            <tbody id="visitorsTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div class="empty-state" id="emptyState">
+                        <div class="empty-state-icon"><i class="bi bi-inbox"></i></div>
+                        <h3>No Visitors Found</h3>
+                        <p>Try adjusting your filters</p>
+                    </div>
+                    <div class="pagination-container" id="paginationContainer">
+                        <div id="pageInfo">Page 1 of 1</div>
+                        <nav><ul class="pagination" id="pagination"></ul></nav>
+                        <select class="form-select" id="limitSelect" style="width:auto;padding:6px 10px;">
+                            <option value="50">50/page</option>
+                            <option value="100" selected>100/page</option>
+                            <option value="200">200/page</option>
+                            <option value="500">500/page</option>
+                        </select>
                     </div>
                 </div>
-
-                <!-- Origin Filter -->
-                <div class="col-md-6 filter-section">
-                    <div class="filter-title">Origin</div>
-                    <div class="filter-pills" id="originFilters">
-                        <label class="filter-pill">
-                            <input type="checkbox" value="massimport"> Mass Import
-                        </label>
-                        <label class="filter-pill">
-                            <input type="checkbox" value="manual_entry"> Manual Entry
-                        </label>
-                        <label class="filter-pill">
-                            <input type="checkbox" value="zoho"> Zoho
-                        </label>
-                        <label class="filter-pill">
-                            <input type="checkbox" value="api"> API
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="col-12 mt-3 d-flex gap-2">
-                    <button class="btn btn-primary" onclick="applyFilters()">
-                        <i class="bi bi-funnel"></i> Apply Filters
-                    </button>
-                    <button class="btn btn-secondary" onclick="clearFilters()">
-                        <i class="bi bi-x-circle"></i> Clear All
-                    </button>
-                    <button class="btn btn-export ms-auto" onclick="exportData()">
-                        <i class="bi bi-download"></i> Export to Excel
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Table Container -->
-        <div class="table-container">
-            <div class="table-header">
-                <div class="table-title">Visitor Records</div>
-                <div class="results-info" id="resultsInfo">
-                    Showing 0 of 0 results
-                </div>
-            </div>
-
-            <div id="tableContent">
-                <table id="visitorsTable">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Name</th>
-                            <th>Last Name</th>
-                            <th>Company</th>
-                            <th>Country</th>
-                            <th>Email</th>
-                            <th>Source</th>
-                            <th>Origin</th>
-                            <th>Registered</th>
-                        </tr>
-                    </thead>
-                    <tbody id="visitorsTableBody">
-                        <!-- Data will be loaded here -->
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Empty State -->
-            <div class="empty-state" id="emptyState" style="display: none;">
-                <div class="empty-state-icon">
-                    <i class="bi bi-inbox"></i>
-                </div>
-                <h3>No Visitors Found</h3>
-                <p>Try adjusting your filters or search criteria</p>
-            </div>
-
-            <!-- Pagination -->
-            <div class="pagination-container" id="paginationContainer">
-                <div class="page-info" id="pageInfo">
-                    Page 1 of 1
-                </div>
-                <nav>
-                    <ul class="pagination" id="pagination">
-                        <!-- Pagination will be generated here -->
-                    </ul>
-                </nav>
-                <div>
-                    <select class="form-select form-select-sm" id="limitSelect" style="width: auto;">
-                        <option value="50">50 per page</option>
-                        <option value="100" selected>100 per page</option>
-                        <option value="200">200 per page</option>
-                        <option value="500">500 per page</option>
-                    </select>
-                </div>
-            </div>
-        </div>
+            </main>
         </div>
     </div>
+    
+    <!-- QR Modal -->
+    <div class="modal-overlay" id="qrModal">
+        <div class="modal-box">
+            <h3><i class="bi bi-qr-code"></i> Visitor QR Code</h3>
+            <div class="qr-image" id="qrImage"></div>
+            <div class="qr-code-text" id="qrCodeText">-</div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" onclick="copyQrCode()"><i class="bi bi-clipboard"></i> Copy Code</button>
+                <button class="btn btn-secondary" onclick="closeQrModal()">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        // Configuration
         const API_BASE_URL = '/api';
-        let currentPage = 1;
-        let totalPages = 1;
-        let totalRecords = 0;
-        let recordsPerPage = 100;
+        let currentPage = 1, totalPages = 1, totalRecords = 0, recordsPerPage = 100;
         let currentFilters = {};
-        let currentExpoId = localStorage.getItem('selectedExpoId') || 1;
+        let currentExpoId = localStorage.getItem('selectedExpoId');
+        let currentQrCode = '';
 
-        // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
-            initializeEventListeners();
+            if (!localStorage.getItem('token')) { window.location.href = 'login_new.html'; return; }
+            if (!currentExpoId) { alert('No expo selected.'); window.location.href = 'dashboard_new.html'; return; }
+            initEventListeners();
             loadVisitors();
-            updateStats();
         });
 
-        // Initialize Event Listeners
-        function initializeEventListeners() {
-            // Search on Enter key
-            document.getElementById('searchInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    applyFilters();
-                }
-            });
-
-            // Limit change
-            document.getElementById('limitSelect').addEventListener('change', (e) => {
-                recordsPerPage = parseInt(e.target.value);
-                currentPage = 1;
-                loadVisitors();
-            });
-
-            // Filter pill clicks
-            document.querySelectorAll('.filter-pill').forEach(pill => {
-                pill.addEventListener('click', function() {
-                    const checkbox = this.querySelector('input[type="checkbox"]');
-                    if (checkbox.checked) {
-                        this.classList.add('active');
-                    } else {
-                        this.classList.remove('active');
-                    }
-                });
-            });
-
-            // Date inputs
-            document.getElementById('startDate').addEventListener('change', validateDateRange);
-            document.getElementById('endDate').addEventListener('change', validateDateRange);
+        function initEventListeners() {
+            document.getElementById('searchInput').addEventListener('keypress', e => { if (e.key === 'Enter') applyFilters(); });
+            document.getElementById('limitSelect').addEventListener('change', e => { recordsPerPage = parseInt(e.target.value); currentPage = 1; loadVisitors(); });
         }
 
-        // Validate date range
-        function validateDateRange() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            if (startDate && endDate && startDate > endDate) {
-                alert('Start date cannot be after end date');
-                document.getElementById('endDate').value = '';
-            }
-        }
-
-        // Load visitors from API
         async function loadVisitors() {
             showLoading(true);
-            
             try {
-                // Build query parameters
-                const params = new URLSearchParams({
-                    expo_id: currentExpoId,
-                    page: currentPage,
-                    limit: recordsPerPage,
-                    ...currentFilters
-                });
-
-                const response = await fetch(`${API_BASE_URL}/visitors/paginated?${params}`, {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to fetch visitors');
-                }
-
+                const params = new URLSearchParams({ expo_id: currentExpoId, page: currentPage, limit: recordsPerPage, ...currentFilters });
+                const response = await fetch(`${API_BASE_URL}/visitors/paginated?${params}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                if (!response.ok) throw new Error('Failed');
                 const data = await response.json();
-                
-                // Update global variables
                 totalRecords = data.total || 0;
                 totalPages = data.totalPages || Math.ceil(totalRecords / recordsPerPage);
-                
-                // Render table
                 renderTable(data.visitors || []);
-                
-                // Update UI
                 updateResultsInfo();
                 renderPagination();
-                updateStats();
-                
-            } catch (error) {
-                console.error('Error loading visitors:', error);
-                showError('Failed to load visitors. Please try again.');
-            } finally {
-                showLoading(false);
-            }
+            } catch (e) { console.error(e); alert('Failed to load visitors'); }
+            finally { showLoading(false); }
         }
 
-        // Render table
         function renderTable(visitors) {
             const tbody = document.getElementById('visitorsTableBody');
             const emptyState = document.getElementById('emptyState');
@@ -344,232 +303,110 @@
             emptyState.style.display = 'none';
             document.getElementById('paginationContainer').style.display = 'flex';
             
-            tbody.innerHTML = visitors.map(visitor => {
-                const createdAt = new Date(visitor.created_at);
-                const formattedDate = createdAt.toLocaleDateString();
-                const formattedTime = createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
-                return `
-                    <tr>
-                        <td>${visitor.id}</td>
-                        <td>${escapeHtml(visitor.name || '-')}</td>
-                        <td>${escapeHtml(visitor.lastName || visitor.last_name || '-')}</td>
-                        <td>${escapeHtml(visitor.company || '-')}</td>
-                        <td>${escapeHtml(visitor.country || '-')}</td>
-                        <td>${escapeHtml(visitor.email || '-')}</td>
-                        <td><span class="badge-pill badge-source">${visitor.source || 'unknown'}</span></td>
-                        <td><span class="badge-pill badge-origin">${visitor.origin || 'unknown'}</span></td>
-                        <td>
-                            <small>${formattedDate}<br>${formattedTime}</small>
-                        </td>
-                    </tr>
-                `;
+            tbody.innerHTML = visitors.map(v => {
+                const date = new Date(v.created_at);
+                const qrCode = v.qr_code || v.badge_id || '';
+                return `<tr>
+                    <td>${v.id}</td>
+                    <td><strong>${escapeHtml(v.name || '-')}</strong></td>
+                    <td>${escapeHtml(v.lastName || v.last_name || '-')}</td>
+                    <td>${escapeHtml(v.company || '-')}</td>
+                    <td>${escapeHtml(v.country || '-')}</td>
+                    <td>${escapeHtml(v.email || '-')}</td>
+                    <td><span class="badge-pill badge-source">${v.source || '-'}</span></td>
+                    <td><span class="badge-pill badge-origin">${v.origin || '-'}</span></td>
+                    <td><small>${date.toLocaleDateString()}<br>${date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></td>
+                    <td>${qrCode ? `<button class="qr-btn" onclick="showQrModal('${escapeHtml(qrCode)}', '${escapeHtml(v.name || '')}')"><i class="bi bi-qr-code"></i></button>` : '<span style="color:var(--text-muted);">-</span>'}</td>
+                </tr>`;
             }).join('');
         }
 
-        // Render pagination
+        function showQrModal(qrCode, visitorName) {
+            currentQrCode = qrCode;
+            document.getElementById('qrCodeText').textContent = qrCode;
+            // Generate QR image using Google Charts API
+            const qrImageUrl = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encodeURIComponent(qrCode)}&choe=UTF-8`;
+            document.getElementById('qrImage').innerHTML = `<img src="${qrImageUrl}" alt="QR Code" style="width:100%;height:100%;">`;
+            document.getElementById('qrModal').classList.add('show');
+        }
+
+        function closeQrModal() {
+            document.getElementById('qrModal').classList.remove('show');
+        }
+
+        function copyQrCode() {
+            navigator.clipboard.writeText(currentQrCode).then(() => {
+                showToast('QR code copied!');
+                closeQrModal();
+            }).catch(() => alert('Failed to copy'));
+        }
+
         function renderPagination() {
             const pagination = document.getElementById('pagination');
-            const pageInfo = document.getElementById('pageInfo');
+            document.getElementById('pageInfo').textContent = `Page ${currentPage} of ${totalPages}`;
+            document.getElementById('currentPageDisplay').textContent = currentPage;
             
-            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
-            document.getElementById('currentPage').textContent = currentPage;
+            if (totalPages <= 1) { pagination.innerHTML = ''; return; }
             
-            let html = '';
-            
-            // Previous button
-            html += `
-                <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-                    <a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">
-                        <i class="bi bi-chevron-left"></i>
-                    </a>
-                </li>
-            `;
-            
-            // Page numbers
-            const maxVisiblePages = 5;
-            let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-            let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-            
-            if (endPage - startPage < maxVisiblePages - 1) {
-                startPage = Math.max(1, endPage - maxVisiblePages + 1);
+            let html = `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;"><i class="bi bi-chevron-left"></i></a></li>`;
+            const start = Math.max(1, currentPage - 2), end = Math.min(totalPages, currentPage + 2);
+            for (let i = start; i <= end; i++) {
+                html += `<li class="page-item ${i === currentPage ? 'active' : ''}"><a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a></li>`;
             }
-            
-            if (startPage > 1) {
-                html += `
-                    <li class="page-item">
-                        <a class="page-link" href="#" onclick="goToPage(1); return false;">1</a>
-                    </li>
-                `;
-                if (startPage > 2) {
-                    html += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
-                }
-            }
-            
-            for (let i = startPage; i <= endPage; i++) {
-                html += `
-                    <li class="page-item ${i === currentPage ? 'active' : ''}">
-                        <a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>
-                    </li>
-                `;
-            }
-            
-            if (endPage < totalPages) {
-                if (endPage < totalPages - 1) {
-                    html += `<li class="page-item disabled"><a class="page-link">...</a></li>`;
-                }
-                html += `
-                    <li class="page-item">
-                        <a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>
-                    </li>
-                `;
-            }
-            
-            // Next button
-            html += `
-                <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-                    <a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">
-                        <i class="bi bi-chevron-right"></i>
-                    </a>
-                </li>
-            `;
-            
+            html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}"><a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;"><i class="bi bi-chevron-right"></i></a></li>`;
             pagination.innerHTML = html;
         }
 
-        // Go to page
-        function goToPage(page) {
-            if (page < 1 || page > totalPages) return;
-            currentPage = page;
-            loadVisitors();
-        }
+        function goToPage(page) { if (page < 1 || page > totalPages) return; currentPage = page; loadVisitors(); }
 
-        // Apply filters
         function applyFilters() {
             currentFilters = {};
-            
-            // Search
             const search = document.getElementById('searchInput').value.trim();
-            if (search) {
-                currentFilters.search = search;
-            }
-            
-            // Date range
+            if (search) currentFilters.search = search;
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
             if (startDate) currentFilters.startDate = startDate;
             if (endDate) currentFilters.endDate = endDate;
-            
-            // Source filters
-            const sourceFilters = [];
-            document.querySelectorAll('#sourceFilters input[type="checkbox"]:checked').forEach(cb => {
-                sourceFilters.push(cb.value);
-            });
-            if (sourceFilters.length > 0) {
-                currentFilters.source = sourceFilters.join(',');
-            }
-            
-            // Origin filters
-            const originFilters = [];
-            document.querySelectorAll('#originFilters input[type="checkbox"]:checked').forEach(cb => {
-                originFilters.push(cb.value);
-            });
-            if (originFilters.length > 0) {
-                currentFilters.origin = originFilters.join(',');
-            }
-            
-            // Reset to first page when applying filters
+            const sources = [...document.querySelectorAll('#sourceFilters input:checked')].map(c => c.value);
+            if (sources.length) currentFilters.source = sources.join(',');
+            const origins = [...document.querySelectorAll('#originFilters input:checked')].map(c => c.value);
+            if (origins.length) currentFilters.origin = origins.join(',');
             currentPage = 1;
             loadVisitors();
         }
 
-        // Clear filters
         function clearFilters() {
             document.getElementById('searchInput').value = '';
             document.getElementById('startDate').value = '';
             document.getElementById('endDate').value = '';
-            
-            document.querySelectorAll('.filter-pill input[type="checkbox"]').forEach(cb => {
-                cb.checked = false;
-                cb.closest('.filter-pill').classList.remove('active');
-            });
-            
+            document.querySelectorAll('.filter-pill input').forEach(c => c.checked = false);
             currentFilters = {};
             currentPage = 1;
             loadVisitors();
         }
 
-        // Update results info
         function updateResultsInfo() {
             const start = (currentPage - 1) * recordsPerPage + 1;
             const end = Math.min(currentPage * recordsPerPage, totalRecords);
-            
-            document.getElementById('resultsInfo').textContent = 
-                `Showing ${start}-${end} of ${totalRecords.toLocaleString()} results`;
-            
+            document.getElementById('resultsInfo').textContent = `Showing ${totalRecords > 0 ? start : 0}-${end} of ${totalRecords.toLocaleString()}`;
             document.getElementById('filteredCount').textContent = totalRecords.toLocaleString();
+            document.getElementById('totalVisitors').textContent = totalRecords.toLocaleString();
         }
 
-        // Update stats
-        async function updateStats() {
-            try {
-                // This would typically come from a stats endpoint
-                document.getElementById('totalVisitors').textContent = totalRecords.toLocaleString();
-                
-                // Calculate today's visitors (mock - replace with actual API call)
-                const today = new Date().toISOString().split('T')[0];
-                const todayParams = new URLSearchParams({
-                    expo_id: currentExpoId,
-                    startDate: today,
-                    endDate: today
-                });
-                
-                // Mock value - replace with actual API call
-                document.getElementById('todayVisitors').textContent = '42';
-                
-            } catch (error) {
-                console.error('Error updating stats:', error);
-            }
+        function exportData() {
+            if (!confirm('Export all filtered results?')) return;
+            const params = new URLSearchParams({ expo_id: currentExpoId, format: 'excel', ...currentFilters });
+            window.location.href = `${API_BASE_URL}/visitors/export?${params}`;
         }
 
-        // Export data
-        async function exportData() {
-            if (!confirm('Export all filtered results to Excel?')) return;
-            
-            showLoading(true);
-            try {
-                const params = new URLSearchParams({
-                    expo_id: currentExpoId,
-                    format: 'excel',
-                    ...currentFilters
-                });
-                
-                window.location.href = `${API_BASE_URL}/visitors/export?${params}`;
-            } catch (error) {
-                console.error('Export error:', error);
-                alert('Failed to export data');
-            } finally {
-                showLoading(false);
-            }
-        }
-
-        // Utility functions
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').classList.toggle('active', show);
-        }
-
-        function showError(message) {
-            alert(message); // Replace with better error handling
-        }
-
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function goBack() {
-            window.location.href = 'main-panel.html';
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+        function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+        function showToast(msg) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<i class="bi bi-check-circle"></i> ${msg}`;
+            document.getElementById('toastContainer').appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
         }
     </script>
 </body>
