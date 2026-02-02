@@ -305,7 +305,6 @@
             
             tbody.innerHTML = visitors.map(v => {
                 const date = new Date(v.created_at);
-                const qrCode = v.qr_code || v.badge_id || '';
                 return `<tr>
                     <td>${v.id}</td>
                     <td><strong>${escapeHtml(v.name || '-')}</strong></td>
@@ -316,7 +315,7 @@
                     <td><span class="badge-pill badge-source">${v.source || '-'}</span></td>
                     <td><span class="badge-pill badge-origin">${v.origin || '-'}</span></td>
                     <td><small>${date.toLocaleDateString()}<br>${date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></td>
-                    <td>${qrCode ? `<button class="qr-btn" onclick="showQrModal('${escapeHtml(qrCode)}', '${escapeHtml(v.name || '')}')"><i class="bi bi-qr-code"></i></button>` : '<span style="color:var(--text-muted);">-</span>'}</td>
+                    <td><a href="badge.html?id=${v.id}" target="_blank" class="qr-btn" title="View Badge"><i class="bi bi-qr-code"></i></a></td>
                 </tr>`;
             }).join('');
         }
