@@ -127,6 +127,12 @@
             color: white;
             font-size: 16px;
         }
+
+        .logo-image {
+            height: 28px;
+            width: auto;
+            flex-shrink: 0;
+        }
         
         .logo-text {
             font-weight: 600;
@@ -1184,6 +1190,7 @@
                 <div class="logo-icon">
                     <i class="bi bi-box-seam"></i>
                 </div>
+                <img src="/logo.png" alt="Leena logo" class="logo-image">
                 <span class="logo-text">Leena EMS</span>
             </div>
             
@@ -1198,9 +1205,9 @@
                 
                 <div class="nav-section">
                     <div class="nav-section-title">Management</div>
-                    <a class="nav-item" onclick="loadVisitors()">
+                    <a class="nav-item" href="visitorlog-paginated.html">
                         <i class="bi bi-people"></i>
-                        <span>Visitors</span>
+                        <span>Visitor Log</span>
                     </a>
                     <a class="nav-item" onclick="loadForms()">
                         <i class="bi bi-ui-checks-grid"></i>
@@ -1584,7 +1591,7 @@
                             <div class="dashboard-card" style="flex: 1;">
                                 <div class="card-header">
                                     <span class="card-title"><i class="bi bi-activity"></i> Recent Activity</span>
-                                    <a class="card-action" onclick="loadVisitors()">View all →</a>
+                                    <a class="card-action" href="visitorlog-paginated.html">View all →</a>
                                 </div>
                                 <div class="card-body">
                                     <div class="activity-list">
@@ -1627,117 +1634,8 @@
             }
         }
 
-        async function loadVisitors() {
-            setActiveMenu('Visitors');
-            showLoader('Loading visitors...');
-            
-            try {
-                const response = await fetch(`${API_BASE_URL}/visitors?expo_id=${currentExpoId}`, {
-                    headers: getAuthHeaders()
-                });
-                
-                if (!response.ok) throw new Error('Could not fetch visitors');
-
-                const data = await response.json();
-                const visitors = data.visitors || [];
-
-                let content = `
-                    <div class="page-header">
-                        <div class="page-title-group">
-                            <h2><i class="bi bi-people"></i> Visitors</h2>
-                            <p>${visitors.length.toLocaleString()} registered visitors</p>
-                        </div>
-                        <div class="page-actions">
-                            <button class="btn btn-secondary" onclick="loadImport()">
-                                <i class="bi bi-upload"></i> Import
-                            </button>
-                            <button class="btn btn-primary" onclick="window.location.href='form-builder.html'">
-                                <i class="bi bi-plus-lg"></i> Create Form
-                            </button>
-                        </div>
-                    </div>
-                `;
-
-                if (visitors.length === 0) {
-                    content += `
-                        <div class="empty-state">
-                            <div class="empty-state-icon">
-                                <i class="bi bi-people"></i>
-                            </div>
-                            <h3>No Visitors Yet</h3>
-                            <p>Create a registration form or import visitors to get started.</p>
-                            <button class="btn btn-primary" onclick="window.location.href='form-builder.html'">
-                                <i class="bi bi-plus-lg"></i> Create Registration Form
-                            </button>
-                        </div>
-                    `;
-                } else {
-                    content += `
-                        <div class="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Name</th>
-                                        <th>Email</th>
-                                        <th>Company</th>
-                                        <th>Country</th>
-                                        <th>Source</th>
-                                        <th>Registered</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                    `;
-
-                    visitors.slice(0, 100).forEach(v => {
-                        let fields = {};
-                        try {
-                            fields = typeof v.custom_fields === 'string' ? 
-                                JSON.parse(v.custom_fields) : v.custom_fields || {};
-                        } catch (e) {
-                            fields = {};
-                        }
-
-                        const name = v.name || fields.name || fields.full_name || '-';
-                        const email = v.email || fields.email || '-';
-                        const company = v.company || fields.company || '-';
-                        const country = fields.country || v.country || '-';
-                        const source = v.source || '-';
-                        const date = new Date(v.created_at).toLocaleDateString();
-
-                        content += `
-                            <tr>
-                                <td><strong>${escapeHtml(name)}</strong></td>
-                                <td>${escapeHtml(email)}</td>
-                                <td>${escapeHtml(company)}</td>
-                                <td>${escapeHtml(country)}</td>
-                                <td><span style="background: var(--info-bg); color: var(--info); padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500;">${escapeHtml(source)}</span></td>
-                                <td>${date}</td>
-                            </tr>
-                        `;
-                    });
-
-                    content += `
-                                </tbody>
-                            </table>
-                        </div>
-                    `;
-                    
-                    if (visitors.length > 100) {
-                        content += `
-                            <div class="alert alert-info" style="margin-top: 16px;">
-                                <i class="bi bi-info-circle"></i>
-                                Showing first 100 visitors. <a href="visitorlog-paginated.html" target="_blank" style="color: inherit; font-weight: 600;">View all visitors →</a>
-                            </div>
-                        `;
-                    }
-                }
-
-                document.getElementById('content-area').innerHTML = content;
-
-            } catch (error) {
-                console.error('Error loading visitors:', error);
-                showError('Could not load visitors. Please try again.');
-            }
+        function loadVisitors() {
+            window.location.href = 'visitorlog-paginated.html';
         }
 
         async function loadForms() {
