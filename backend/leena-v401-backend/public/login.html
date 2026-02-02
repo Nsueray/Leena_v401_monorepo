@@ -104,7 +104,11 @@
             if (response.ok && data.token) {
                 localStorage.setItem('token', data.token);
                 localStorage.setItem('organizer', JSON.stringify(data.organizer));
+
+                // Critical: used by Zoho webhook URL generation
                 localStorage.setItem('organizerId', data.organizer.id);
+
+                // Redirect to the new UI
                 window.location.href = '/main-panel-v2.html';
             } else {
                 errorMessage.textContent = data.error || 'Login failed. Please check your credentials.';
