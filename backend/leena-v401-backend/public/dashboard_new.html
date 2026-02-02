@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Expos - Leena EMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="styles/common.css">
+    <style>
+        .welcome-section { margin-bottom: 32px; }
+        .welcome-section h1 { font-size: 24px; margin-bottom: 4px; }
+        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .section-header h2 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
+        .expo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .expo-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; transition: all 0.2s; cursor: pointer; }
+        .expo-card:hover { border-color: var(--primary-color); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+        .expo-card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; }
+        .expo-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .expo-id { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+        .expo-status { padding: 4px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
+        .expo-status.active { background: #d1fae5; color: #059669; }
+        .expo-status.ended { background: #f3f4f6; color: #6b7280; }
+        .expo-status.upcoming { background: #dbeafe; color: #2563eb; }
+        .expo-info { margin-bottom: 16px; }
+        .expo-info-item { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; margin-bottom: 6px; }
+        .expo-stats { display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
+        .expo-stat { text-align: center; flex: 1; }
+        .expo-stat-value { font-size: 20px; font-weight: 700; }
+        .expo-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
+        .expo-actions { display: flex; gap: 8px; }
+        .expo-actions .btn { flex: 1; }
+        .create-expo-card { background: var(--bg-card); border: 2px dashed var(--border-color); border-radius: var(--radius-lg); padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .create-expo-card:hover { border-color: var(--primary-color); background: var(--primary-light); }
+        .create-expo-card i { font-size: 32px; color: var(--primary-color); margin-bottom: 12px; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        .modal-overlay.show { display: flex; }
+        .modal { background: var(--bg-card); border-radius: var(--radius-lg); width: 100%; max-width: 500px; }
+        .modal-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 18px; margin: 0; }
+        .modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; }
+        .user-btn { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-size: 13px; }
+        .user-avatar { width: 28px; height: 28px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html" class="active"><i class="bi bi-collection"></i> My Expos</a></li>
+                <div class="sidebar-divider"></div>
+                <li><a href="#" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
+            </ul>
+        </nav>
+        
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-collection"></i> <span>My Expos</span></h1>
+                <div class="header-actions">
+                    <button class="user-btn">
+                        <div class="user-avatar" id="userAvatar">?</div>
+                        <span id="userName">Loading...</span>
+                    </button>
+                </div>
+            </header>
+            
+            <main class="main-content">
+                <div class="welcome-section">
+                    <h1 id="welcomeTitle">Welcome back!</h1>
+                    <p>Select an expo to manage or create a new one.</p>
+                </div>
+                
+                <div class="stats-row" id="statsRow" style="display: none;">
+                    <div class="stat-card"><div class="value" id="statTotal">0</div><div class="label">Total Expos</div></div>
+                    <div class="stat-card"><div class="value" id="statActive">0</div><div class="label">Active</div></div>
+                    <div class="stat-card"><div class="value" id="statVisitors">0</div><div class="label">Visitors</div></div>
+                    <div class="stat-card"><div class="value" id="statCheckins">0</div><div class="label">Check-ins</div></div>
+                </div>
+                
+                <div class="section-header">
+                    <h2><i class="bi bi-calendar-event"></i> Your Expos</h2>
+                    <button class="btn btn-primary" onclick="showCreateModal()"><i class="bi bi-plus-circle"></i> Create Expo</button>
+                </div>
+                
+                <div id="expoContainer"><div class="loading-spinner"><div class="spinner"></div></div></div>
+            </main>
+        </div>
+    </div>
+    
+    <div class="modal-overlay" id="createModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create New Expo</h2>
+                <button class="modal-close" onclick="hideCreateModal()"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Expo Name *</label>
+                    <input type="text" class="form-control" id="expoName" placeholder="e.g., Tech Summit 2026" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Location</label>
+                    <input type="text" class="form-control" id="expoLocation" placeholder="e.g., Istanbul Convention Center">
+                </div>
+                <div class="grid grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Start Date *</label>
+                        <input type="date" class="form-control" id="expoStartDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">End Date *</label>
+                        <input type="date" class="form-control" id="expoEndDate" required>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="hideCreateModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createExpo()" id="createBtn">Create Expo</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            if (!token) { window.location.href = 'login.html'; return; }
+            localStorage.removeItem('selectedExpoId');
+            localStorage.removeItem('selectedExpoName');
+            loadUserInfo();
+            loadExpos();
+        });
+        
+        function loadUserInfo() {
+            const org = localStorage.getItem('organizer');
+            if (org) {
+                const data = JSON.parse(org);
+                document.getElementById('userName').textContent = data.name;
+                document.getElementById('userAvatar').textContent = data.name.charAt(0).toUpperCase();
+                document.getElementById('welcomeTitle').textContent = `Welcome back, ${data.name.split(' ')[0]}!`;
+            }
+        }
+        
+        async function loadExpos() {
+            try {
+                const res = await fetch(`${API_URL}/expos`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (res.status === 401) { logout(); return; }
+                const expos = await res.json();
+                displayExpos(expos);
+            } catch (err) {
+                document.getElementById('expoContainer').innerHTML = '<div class="empty-state"><h3>Error loading expos</h3><button class="btn btn-primary" onclick="loadExpos()">Retry</button></div>';
+            }
+        }
+        
+        function displayExpos(expos) {
+            const container = document.getElementById('expoContainer');
+            if (!expos || expos.length === 0) {
+                container.innerHTML = '<div class="expo-grid"><div class="create-expo-card" onclick="showCreateModal()"><i class="bi bi-plus-circle"></i><h3>Create Your First Expo</h3><p>Get started by creating an expo</p></div></div>';
+                return;
+            }
+            
+            document.getElementById('statsRow').style.display = 'grid';
+            const now = new Date();
+            let activeCount = 0, totalVisitors = 0, totalCheckins = 0;
+            
+            let html = '<div class="expo-grid">';
+            expos.forEach(expo => {
+                const start = new Date(expo.start_date), end = new Date(expo.end_date);
+                let status = 'ended', statusClass = 'ended';
+                if (now < start) { status = 'Upcoming'; statusClass = 'upcoming'; }
+                else if (now <= end) { status = 'Active'; statusClass = 'active'; activeCount++; }
+                else { status = 'Ended'; }
+                totalVisitors += expo.visitor_count || 0;
+                totalCheckins += expo.checkin_count || 0;
+                
+                html += `<div class="expo-card" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')">
+                    <div class="expo-card-header">
+                        <div><h3>${expo.name}</h3><div class="expo-id">ID: ${expo.id}</div></div>
+                        <span class="expo-status ${statusClass}">${status}</span>
+                    </div>
+                    <div class="expo-info">
+                        <div class="expo-info-item"><i class="bi bi-geo-alt"></i> ${expo.location || 'No location'}</div>
+                        <div class="expo-info-item"><i class="bi bi-calendar"></i> ${formatDate(expo.start_date)} - ${formatDate(expo.end_date)}</div>
+                    </div>
+                    <div class="expo-stats">
+                        <div class="expo-stat"><div class="expo-stat-value">${expo.visitor_count || 0}</div><div class="expo-stat-label">Visitors</div></div>
+                        <div class="expo-stat"><div class="expo-stat-value">${expo.checkin_count || 0}</div><div class="expo-stat-label">Check-ins</div></div>
+                    </div>
+                    <div class="expo-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-primary" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')"><i class="bi bi-arrow-right"></i> Enter</button>
+                        <button class="btn btn-secondary"><i class="bi bi-pencil"></i></button>
+                    </div>
+                </div>`;
+            });
+            html += '<div class="create-expo-card" onclick="showCreateModal()"><i class="bi bi-plus-circle"></i><h3>Create New Expo</h3></div></div>';
+            container.innerHTML = html;
+            
+            document.getElementById('statTotal').textContent = expos.length;
+            document.getElementById('statActive').textContent = activeCount;
+            document.getElementById('statVisitors').textContent = totalVisitors;
+            document.getElementById('statCheckins').textContent = totalCheckins;
+        }
+        
+        function enterExpo(id, name) {
+            localStorage.setItem('selectedExpoId', id);
+            localStorage.setItem('selectedExpoName', name);
+            window.location.href = 'main-panel.html';
+        }
+        
+        function showCreateModal() { document.getElementById('createModal').classList.add('show'); }
+        function hideCreateModal() { document.getElementById('createModal').classList.remove('show'); }
+        
+        async function createExpo() {
+            const name = document.getElementById('expoName').value.trim();
+            const location = document.getElementById('expoLocation').value.trim();
+            const startDate = document.getElementById('expoStartDate').value;
+            const endDate = document.getElementById('expoEndDate').value;
+            
+            if (!name || !startDate || !endDate) { alert('Please fill required fields'); return; }
+            
+            document.getElementById('createBtn').disabled = true;
+            try {
+                const res = await fetch(`${API_URL}/expos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({ name, location, start_date: startDate, end_date: endDate })
+                });
+                if (res.ok) { hideCreateModal(); loadExpos(); }
+                else { const err = await res.json(); alert(err.error || 'Failed to create expo'); }
+            } catch (err) { alert('Error creating expo'); }
+            document.getElementById('createBtn').disabled = false;
+        }
+        
+        function formatDate(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+    </script>
+</body>
+</html>
