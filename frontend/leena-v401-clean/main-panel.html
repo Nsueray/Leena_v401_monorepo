@@ -180,6 +180,11 @@
             border-radius: 50%;
             background: #1e7e34;
         }
+
+        .expo-id {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
         
         .header-buttons {
             display: flex;
@@ -535,6 +540,7 @@
                     <span>Loading...</span>
                     <span class="expo-status">Live</span>
                 </h1>
+                <div class="expo-id">Expo ID: #<span id="selectedExpoIdDisplay">-</span></div>
             </div>
             <div class="header-buttons">
                 <button class="btn btn-secondary" onclick="goToDashboard()">
@@ -564,6 +570,10 @@
         document.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('token');
             currentExpoId = localStorage.getItem('selectedExpoId');
+            const selectedExpoIdDisplay = document.getElementById('selectedExpoIdDisplay');
+            if (selectedExpoIdDisplay) {
+                selectedExpoIdDisplay.textContent = currentExpoId || '-';
+            }
 
             if (!token) {
                 window.location.href = 'login.html';
