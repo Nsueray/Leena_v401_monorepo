@@ -7,54 +7,566 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="styles/common.css">
     <style>
-        .welcome-section { margin-bottom: 32px; }
-        .welcome-section h1 { font-size: 24px; margin-bottom: 4px; }
-        .stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 32px; }
-        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .section-header h2 { font-size: 18px; display: flex; align-items: center; gap: 8px; }
-        .expo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
-        .expo-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; transition: all 0.2s; cursor: pointer; }
-        .expo-card:hover { border-color: var(--primary-color); box-shadow: var(--shadow-lg); transform: translateY(-2px); }
-        .expo-card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; }
-        .expo-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
-        .expo-id { font-size: 11px; color: var(--text-muted); font-family: monospace; }
-        .expo-status { padding: 4px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
-        .expo-status.active { background: #d1fae5; color: #059669; }
+        :root {
+            --primary-color: #4a6fa5;
+            --primary-hover: #3d5d8a;
+            --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e;
+            --sidebar-text: #a1a1aa;
+            --sidebar-text-hover: #ffffff;
+            --sidebar-hover-bg: rgba(255,255,255,0.06);
+            --bg-primary: #f8f9fa;
+            --bg-card: #ffffff;
+            --text-primary: #171717;
+            --text-secondary: #525252;
+            --text-muted: #a3a3a3;
+            --border-color: #e5e5e5;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-full: 9999px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
+            --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 14px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .app-container {
+            display: flex;
+            min-height: 100vh;
+        }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 240px;
+            background: var(--sidebar-bg);
+            color: var(--sidebar-text);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            bottom: 0;
+        }
+        
+        .sidebar-header {
+            padding: 24px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        
+        .sidebar-logo {
+            font-size: 28px;
+            font-weight: 300;
+            letter-spacing: 4px;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+        
+        .sidebar-logo span {
+            font-weight: 600;
+        }
+        
+        .sidebar-menu {
+            list-style: none;
+            padding: 16px 12px;
+            flex: 1;
+        }
+        
+        .sidebar-menu li { margin-bottom: 4px; }
+        
+        .sidebar-menu a {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--sidebar-text);
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+        
+        .sidebar-menu a:hover {
+            background: var(--sidebar-hover-bg);
+            color: var(--sidebar-text-hover);
+        }
+        
+        .sidebar-menu a.active {
+            background: rgba(255,255,255,0.1);
+            color: var(--sidebar-text-hover);
+        }
+        
+        .sidebar-menu a i {
+            font-size: 16px;
+            width: 20px;
+            opacity: 0.7;
+        }
+        
+        .sidebar-menu a:hover i,
+        .sidebar-menu a.active i { opacity: 1; }
+        
+        .sidebar-divider {
+            height: 1px;
+            background: rgba(255,255,255,0.06);
+            margin: 12px 0;
+        }
+        
+        /* Main */
+        .main-wrapper {
+            flex: 1;
+            margin-left: 240px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        
+        .main-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border-color);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        .main-header h1 {
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .main-header h1 i {
+            color: var(--text-secondary);
+        }
+        
+        .main-content {
+            flex: 1;
+            padding: 24px;
+        }
+        
+        /* User Button */
+        .user-btn {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 12px 6px 6px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-full);
+            cursor: pointer;
+            font-size: 13px;
+            font-family: inherit;
+            color: var(--text-primary);
+        }
+        
+        .user-avatar {
+            width: 28px;
+            height: 28px;
+            background: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        
+        /* Welcome */
+        .welcome-section {
+            margin-bottom: 24px;
+        }
+        
+        .welcome-section h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .welcome-section p {
+            color: var(--text-secondary);
+        }
+        
+        /* Stats */
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+        
+        .stat-card {
+            background: var(--bg-card);
+            padding: 20px;
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+        }
+        
+        .stat-card .value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .stat-card .label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+        
+        /* Section Header */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .section-header h2 {
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 9px 16px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            text-decoration: none;
+            background: var(--bg-card);
+            color: var(--text-primary);
+        }
+        
+        .btn:hover {
+            background: #f5f5f5;
+        }
+        
+        .btn-primary {
+            background: var(--primary-color);
+            color: white;
+            border-color: var(--primary-color);
+        }
+        
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+        
+        .btn-secondary {
+            background: var(--bg-card);
+            color: var(--text-secondary);
+        }
+        
+        /* Expo Grid */
+        .expo-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+        
+        .expo-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .expo-card:hover {
+            border-color: var(--primary-color);
+            box-shadow: var(--shadow-lg);
+            transform: translateY(-2px);
+        }
+        
+        .expo-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 12px;
+        }
+        
+        .expo-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        
+        .expo-id {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-family: 'SF Mono', Monaco, monospace;
+        }
+        
+        .expo-status {
+            padding: 4px 10px;
+            border-radius: var(--radius-full);
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .expo-status.active { background: #dcfce7; color: #166534; }
         .expo-status.ended { background: #f3f4f6; color: #6b7280; }
-        .expo-status.upcoming { background: #dbeafe; color: #2563eb; }
+        .expo-status.upcoming { background: #dbeafe; color: #1e40af; }
+        
         .expo-info { margin-bottom: 16px; }
-        .expo-info-item { display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; margin-bottom: 6px; }
-        .expo-stats { display: flex; gap: 16px; padding: 12px 0; border-top: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
-        .expo-stat { text-align: center; flex: 1; }
-        .expo-stat-value { font-size: 20px; font-weight: 700; }
-        .expo-stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; }
-        .expo-actions { display: flex; gap: 8px; }
+        
+        .expo-info-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-secondary);
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+        
+        .expo-info-item i {
+            width: 16px;
+            color: var(--text-muted);
+        }
+        
+        .expo-stats {
+            display: flex;
+            gap: 16px;
+            padding: 12px 0;
+            border-top: 1px solid var(--border-color);
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 16px;
+        }
+        
+        .expo-stat {
+            text-align: center;
+            flex: 1;
+        }
+        
+        .expo-stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .expo-stat-label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .expo-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
         .expo-actions .btn { flex: 1; }
-        .create-expo-card { background: var(--bg-card); border: 2px dashed var(--border-color); border-radius: var(--radius-lg); padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; }
-        .create-expo-card:hover { border-color: var(--primary-color); background: var(--primary-light); }
-        .create-expo-card i { font-size: 32px; color: var(--primary-color); margin-bottom: 12px; }
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
+        
+        /* Create Card */
+        .create-expo-card {
+            background: var(--bg-card);
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 280px;
+        }
+        
+        .create-expo-card:hover {
+            border-color: var(--primary-color);
+            background: var(--primary-light);
+        }
+        
+        .create-expo-card i {
+            font-size: 32px;
+            color: var(--primary-color);
+            margin-bottom: 12px;
+        }
+        
+        .create-expo-card h3 {
+            font-size: 15px;
+            margin-bottom: 4px;
+        }
+        
+        .create-expo-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            padding: 20px;
+        }
+        
         .modal-overlay.show { display: flex; }
-        .modal { background: var(--bg-card); border-radius: var(--radius-lg); width: 100%; max-width: 500px; }
-        .modal-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
-        .modal-header h2 { font-size: 18px; margin: 0; }
-        .modal-close { background: none; border: none; font-size: 20px; color: var(--text-muted); cursor: pointer; }
+        
+        .modal {
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            width: 100%;
+            max-width: 480px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+        
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .modal-header h2 {
+            font-size: 17px;
+            margin: 0;
+        }
+        
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 18px;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+        }
+        
+        .modal-close:hover { color: var(--text-primary); }
+        
         .modal-body { padding: 20px; }
-        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; }
-        .user-btn { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; font-size: 13px; }
-        .user-avatar { width: 28px; height: 28px; background: var(--primary-color); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; }
+        
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+        
+        /* Form */
+        .form-group { margin-bottom: 16px; }
+        
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            font-family: inherit;
+            font-size: 14px;
+            transition: all 0.15s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.1);
+        }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        /* Loading */
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            padding: 60px;
+        }
+        
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 2px solid var(--border-color);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            background: var(--bg-card);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-color);
+        }
+        
+        .empty-state h3 {
+            margin-bottom: 8px;
+        }
+        
+        .empty-state p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+        
+        @media (max-width: 1024px) {
+            .stats-row { grid-template-columns: repeat(2, 1fr); }
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main-wrapper { margin-left: 0; }
+            .stats-row { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
     <div class="app-container">
         <nav class="sidebar">
             <div class="sidebar-header">
-                <img src="assets/Leena_logo_white.png" alt="Leena" class="sidebar-logo">
+                <div class="sidebar-logo">Lee<span>na</span></div>
             </div>
             <ul class="sidebar-menu">
-                <li><a href="dashboard.html" class="active"><i class="bi bi-collection"></i> My Expos</a></li>
+                <li><a href="dashboard_new.html" class="active"><i class="bi bi-collection"></i> My Expos</a></li>
                 <div class="sidebar-divider"></div>
                 <li><a href="#" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
             </ul>
@@ -63,12 +575,10 @@
         <div class="main-wrapper">
             <header class="main-header">
                 <h1><i class="bi bi-collection"></i> <span>My Expos</span></h1>
-                <div class="header-actions">
-                    <button class="user-btn">
-                        <div class="user-avatar" id="userAvatar">?</div>
-                        <span id="userName">Loading...</span>
-                    </button>
-                </div>
+                <button class="user-btn">
+                    <div class="user-avatar" id="userAvatar">?</div>
+                    <span id="userName">Loading...</span>
+                </button>
             </header>
             
             <main class="main-content">
@@ -109,7 +619,7 @@
                     <label class="form-label">Location</label>
                     <input type="text" class="form-control" id="expoLocation" placeholder="e.g., Istanbul Convention Center">
                 </div>
-                <div class="grid grid-2">
+                <div class="grid-2">
                     <div class="form-group">
                         <label class="form-label">Start Date *</label>
                         <input type="date" class="form-control" id="expoStartDate" required>
@@ -132,7 +642,7 @@
         
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('token');
-            if (!token) { window.location.href = 'login.html'; return; }
+            if (!token) { window.location.href = 'login_new.html'; return; }
             localStorage.removeItem('selectedExpoId');
             localStorage.removeItem('selectedExpoName');
             loadUserInfo();
@@ -176,10 +686,9 @@
             let html = '<div class="expo-grid">';
             expos.forEach(expo => {
                 const start = new Date(expo.start_date), end = new Date(expo.end_date);
-                let status = 'ended', statusClass = 'ended';
+                let status = 'Ended', statusClass = 'ended';
                 if (now < start) { status = 'Upcoming'; statusClass = 'upcoming'; }
                 else if (now <= end) { status = 'Active'; statusClass = 'active'; activeCount++; }
-                else { status = 'Ended'; }
                 totalVisitors += expo.visitor_count || 0;
                 totalCheckins += expo.checkin_count || 0;
                 
@@ -193,8 +702,8 @@
                         <div class="expo-info-item"><i class="bi bi-calendar"></i> ${formatDate(expo.start_date)} - ${formatDate(expo.end_date)}</div>
                     </div>
                     <div class="expo-stats">
-                        <div class="expo-stat"><div class="expo-stat-value">${expo.visitor_count || 0}</div><div class="expo-stat-label">Visitors</div></div>
-                        <div class="expo-stat"><div class="expo-stat-value">${expo.checkin_count || 0}</div><div class="expo-stat-label">Check-ins</div></div>
+                        <div class="expo-stat"><div class="expo-stat-value">${formatNumber(expo.visitor_count || 0)}</div><div class="expo-stat-label">Visitors</div></div>
+                        <div class="expo-stat"><div class="expo-stat-value">${formatNumber(expo.checkin_count || 0)}</div><div class="expo-stat-label">Check-ins</div></div>
                     </div>
                     <div class="expo-actions" onclick="event.stopPropagation()">
                         <button class="btn btn-primary" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')"><i class="bi bi-arrow-right"></i> Enter</button>
@@ -207,8 +716,8 @@
             
             document.getElementById('statTotal').textContent = expos.length;
             document.getElementById('statActive').textContent = activeCount;
-            document.getElementById('statVisitors').textContent = totalVisitors;
-            document.getElementById('statCheckins').textContent = totalCheckins;
+            document.getElementById('statVisitors').textContent = formatNumber(totalVisitors);
+            document.getElementById('statCheckins').textContent = formatNumber(totalCheckins);
         }
         
         function enterExpo(id, name) {
@@ -225,9 +734,7 @@
             const location = document.getElementById('expoLocation').value.trim();
             const startDate = document.getElementById('expoStartDate').value;
             const endDate = document.getElementById('expoEndDate').value;
-            
             if (!name || !startDate || !endDate) { alert('Please fill required fields'); return; }
-            
             document.getElementById('createBtn').disabled = true;
             try {
                 const res = await fetch(`${API_URL}/expos`, {
@@ -236,13 +743,14 @@
                     body: JSON.stringify({ name, location, start_date: startDate, end_date: endDate })
                 });
                 if (res.ok) { hideCreateModal(); loadExpos(); }
-                else { const err = await res.json(); alert(err.error || 'Failed to create expo'); }
-            } catch (err) { alert('Error creating expo'); }
+                else { const err = await res.json(); alert(err.error || 'Failed'); }
+            } catch (err) { alert('Error'); }
             document.getElementById('createBtn').disabled = false;
         }
         
         function formatDate(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+        function formatNumber(n) { return n.toLocaleString(); }
+        function logout() { localStorage.clear(); window.location.href = 'login_new.html'; }
     </script>
 </body>
 </html>
