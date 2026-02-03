@@ -17,11 +17,13 @@ router.post('/inbound', upload.none(), async (req, res) => {
     const text = req.body.text || '';
     const rawFrom = req.body.from || '';
 
-    // Extract plain email from "Name <email>"
+    // Extract plain email from "Name <email>" or "email"
     let fromEmail = rawFrom;
-    const match = rawFrom.match(/<(.+)>/);
-    if (match) {
+    const match = rawFrom.match(/<([^>]+)>/);
+    if (match && match[1]) {
       fromEmail = match[1].trim();
+    } else {
+      fromEmail = rawFrom.trim();
     }
 
     console.log('📩 INBOUND REPLY FROM:', fromEmail);
@@ -50,7 +52,7 @@ router.post('/inbound', upload.none(), async (req, res) => {
 
     // Build simple HTML email
     const html = `
-      <p><strong>From:</strong> ${rawFrom}</p>
+      <p><strong>From:</strong> ${fromEmail}</p>
       <hr/>
       <pre style="white-space:pre-wrap;">${text}</pre>
     `;
