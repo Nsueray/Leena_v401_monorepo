@@ -58,6 +58,7 @@ let importCheckinsRoutes;
 let checkinReportRoutes;
 let terminalCheckinRoutes; // ✅ v402 Mini
 let emailSegmentRoutes; // ✅ v402 Mini - Email Segments
+let emailInboundRoutes; // ✅ Inbound Email (NEW)
 
 try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
 try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
@@ -74,6 +75,7 @@ try { importCheckinsRoutes = require('./routes/import-checkins'); console.log('�
 try { checkinReportRoutes = require('./routes/checkinReports'); console.log('✓ Checkin Reports route loaded'); } catch (err) { console.error('✗ Failed to load checkinReports route:', err.message); }
 try { terminalCheckinRoutes = require('./routes/terminalCheckins'); console.log('✓ Terminal Checkin routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load terminalCheckins routes:', err.message); }
 try { emailSegmentRoutes = require('./routes/emailSegments'); console.log('✓ Email Segment routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load emailSegments routes:', err.message); }
+try { emailInboundRoutes = require('./routes/emailInbound'); console.log('✓ Email Inbound routes loaded'); } catch (err) { console.error('✗ Failed to load emailInbound routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -91,6 +93,7 @@ if (importCheckinsRoutes) app.use('/api/import-checkins', importCheckinsRoutes);
 if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes);
 if (terminalCheckinRoutes) app.use('/api/terminal', terminalCheckinRoutes); // ✅ v402 Mini
 if (emailSegmentRoutes) app.use('/api/email-segments', emailSegmentRoutes); // ✅ v402 Mini - Email Segments
+if (emailInboundRoutes) app.use('/api/email', emailInboundRoutes); // ✅ Inbound Email
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
@@ -144,13 +147,14 @@ app.get('/', (req, res) => {
             checkins: '/api/checkins',
             email_templates: '/api/email-templates',
             email_send: '/api/email-send',
-            email_segments: '/api/email-segments', // v402 Mini
+            email_segments: '/api/email-segments',
             reports: '/api/reports',
             webhook: '/api/webhook/zoho/:organizerId/:expoId',
             terminals: '/api/terminals',
-            terminal_checkins: '/api/terminal', // v402 Mini
+            terminal_checkins: '/api/terminal',
             import_checkins: '/api/import-checkins',
-            checkin_reports: '/api/checkins/reports'
+            checkin_reports: '/api/checkins/reports',
+            email_inbound: '/api/email/inbound'
         }
     });
 });
@@ -160,22 +164,7 @@ app.use((req, res, next) => {
     console.log(`404 - Route not found: ${req.method} ${req.url}`);
     res.status(404).json({
         error: 'Not Found',
-        message: `Route ${req.method} ${req.url} not found`,
-        availableEndpoints: {
-            auth: '/api/auth/login, /api/auth/register',
-            visitors: '/api/visitors',
-            expos: '/api/expos',
-            forms: '/api/forms',
-            checkins: '/api/checkins',
-            reports: '/api/reports',
-            email_templates: '/api/email-templates',
-            email_send: '/api/email-send',
-            email_segments: '/api/email-segments',
-            webhook: '/api/webhook/zoho/:organizerId/:expoId',
-            terminals: '/api/terminals',
-            terminal_checkins: '/api/terminal',
-            import_checkins: '/api/import-checkins'
-        }
+        message: `Route ${req.method} ${req.url} not found`
     });
 });
 
@@ -201,7 +190,6 @@ const server = app.listen(PORT, () => {
     console.log(`✅ Leena.app v401 backend is running`);
     console.log(`📍 URL: http://localhost:${PORT}`);
     console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📝 View all routes: http://localhost:${PORT}/api/routes`);
     console.log('═══════════════════════════════════════');
 });
 
