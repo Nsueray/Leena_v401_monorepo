@@ -1,30 +1,27 @@
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
-const upload = multer(); // memory storage
+const upload = multer();
 const pool = require('../utils/db');
 const { sendEmail } = require('../utils/email');
 
-/**
- * SendGrid Inbound Parse → Organizer Forward
- * NOTE: SendGrid sends multipart/form-data
- */
-
-// ⚠️ upload.none() is CRITICAL
 router.post('/inbound', upload.none(), async (req, res) => {
   try {
-    const from = req.body.from;
     const subject = req.body.subject || 'Visitor Reply';
     const text = req.body.text || '';
 
-    console.log('📩 INBOUND REPLY FROM:', from);
+    // Parse FROM
+    let fromEmail = req.body.from;
+    let fromName = '';
 
-    if (!from) {
-      console.log('⚠️ Inbound email missing FROM field');
-      return res.sendStatus(200);
+    const match = req.body.from && req.body.from.match(/(.*)<(.+)>/);
+    if (match) {
+      fromName = match[1].trim();
+      fromEmail = match[2].trim();
     }
 
-    // Get organizer forward emails
+    console.log('📩 INBOUND REPLY FROM:', fromEmail);
+
     const orgRes = await pool.query(
       `SELECT reply_forward_emails
        FROM organizers
@@ -43,17 +40,19 @@ router.post('/inbound', upload.none(), async (req, res) => {
       .filter(Boolean);
 
     if (forwardEmails.length === 0) {
-      console.log('⚠️ Forward list empty');
       return res.sendStatus(200);
     }
 
     await sendEmail({
       to: forwardEmails,
-      from: from,        // ✅ visitor email
-      replyTo: from,     // organizer reply → visitor
+      from: {
+        email: fromEmail,
+        name: fromName || undefined
+      },
+      replyTo: fromEmail,
       subject: `[Visitor Reply] ${subject}`,
       text: `
-From: ${from}
+From: ${req.body.from}
 
 --------------------
 ${text}
@@ -66,7 +65,7 @@ ${text}
 
   } catch (err) {
     console.error('❌ Inbound forward error:', err);
-    res.sendStatus(200); // avoid SendGrid retries
+    res.sendStatus(200);
   }
 });
 
