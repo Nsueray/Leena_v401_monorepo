@@ -3,7 +3,7 @@ const router = express.Router();
 const pool = require('../utils/db');
 const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
-const { sendEmail, processEmailTemplate } = require('../utils/email');
+const { sendEmail, sendEmailWithReplyTo, processEmailTemplate } = require('../utils/email');
 
 const ZOHO_TOKEN = '98uy237fbiweuhr8h23g9rg239';
 
@@ -151,7 +151,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
         const html = processEmailTemplate(html_content, emailData);
         const subjectLine = processEmailTemplate(subject || 'Your Badge', emailData);
 
-        await sendEmail(email, subjectLine, html);
+        await sendEmailWithReplyTo(email, subjectLine, html, 'reply@replies.leena.app');
         console.log('📧 Email sent to:', email);
       } else {
         console.log('ℹ️ No template found for form', form_id);

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
-const { processEmailTemplate, sendEmail } = require('../utils/email');
+const { processEmailTemplate, sendEmail, sendEmailWithReplyTo } = require('../utils/email');
 const { generateQRCode } = require('../utils/qrcode');
 const { v4: uuidv4 } = require('uuid');
 
@@ -72,7 +72,7 @@ router.post('/single', authMiddleware, async (req, res) => {
         const html = processEmailTemplate(template.html_content, emailData);
         const subject = processEmailTemplate(template.subject, emailData);
 
-        const success = await sendEmail(recipient.email, subject, html);
+        const success = await sendEmailWithReplyTo(recipient.email, subject, html, 'reply@replies.leena.app');
 
         await pool.query(`
             INSERT INTO email_logs (organizer_id, template_id, expo_id, recipient, recipient_email, recipient_name, subject, status, visitor_id, created_at)
@@ -175,7 +175,7 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                 const html = processEmailTemplate(template.html_content, emailData);
                 const subject = processEmailTemplate(template.subject, emailData);
 
-                const success = await sendEmail(recipient.email, subject, html);
+                const success = await sendEmailWithReplyTo(recipient.email, subject, html, 'reply@replies.leena.app');
                 if (success) sent++;
 
                 await pool.query(`
