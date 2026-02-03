@@ -6,397 +6,335 @@
     <title>Send Emails - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/assets/leena.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5; --danger: #ef4444; --info: #3b82f6; --info-bg: #dbeafe;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .header-actions { display: flex; gap: 10px; }
+        .main-content { flex: 1; padding: 24px; max-width: 900px; margin: 0 auto; width: 100%; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-bottom: 24px; }
+        .card-title { font-size: 16px; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        .card-title i { color: var(--primary); }
+        .send-options { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+        .send-option { background: var(--bg-card); border: 2px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .send-option:hover { border-color: var(--primary); background: var(--primary-light); }
+        .send-option i { font-size: 36px; color: var(--primary); margin-bottom: 12px; }
+        .send-option h4 { font-size: 15px; margin-bottom: 6px; }
+        .send-option p { font-size: 13px; color: var(--text-muted); margin: 0; }
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+        .form-control, .form-select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; }
+        .form-control:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,111,165,0.1); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-check { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        .form-check-input { width: 16px; height: 16px; }
+        .upload-zone { border: 2px dashed var(--border-color); border-radius: var(--radius-lg); padding: 40px 24px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .upload-zone:hover, .upload-zone.dragover { border-color: var(--primary); background: var(--primary-light); }
+        .upload-zone i { font-size: 40px; color: var(--primary); margin-bottom: 12px; }
+        .recipients-list { background: var(--bg-main); border-radius: var(--radius-md); padding: 16px; margin-top: 16px; max-height: 200px; overflow-y: auto; }
+        .recipient-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: var(--radius-md); margin-bottom: 6px; font-size: 13px; }
+        .recipient-item button { background: none; border: none; color: var(--danger); cursor: pointer; }
+        .options-card { background: var(--bg-main); border-radius: var(--radius-md); padding: 16px; margin-top: 20px; }
+        .email-preview { background: var(--bg-main); border-radius: var(--radius-md); padding: 16px; margin-top: 20px; display: none; }
+        .email-preview h6 { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
+        .preview-content { background: white; border-radius: var(--radius-md); padding: 16px; max-height: 300px; overflow-y: auto; font-size: 13px; }
+        .progress-container { margin-top: 20px; display: none; }
+        .progress { height: 8px; background: var(--border-color); border-radius: 4px; overflow: hidden; }
+        .progress-bar { height: 100%; background: var(--primary); transition: width 0.3s; }
+        .results-card { text-align: center; padding: 40px; }
+        .results-card .icon { width: 64px; height: 64px; background: var(--success-bg); color: var(--success); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; }
+        .alert { padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 12px; font-size: 13px; }
+        .alert-success { background: var(--success-bg); color: #065f46; }
+        .alert-info { background: var(--info-bg); color: #1e40af; }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .send-options, .form-row { grid-template-columns: 1fr; } }
+    </style>
 </head>
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <img src="/logo.png" alt="Leena logo" class="sidebar-logo">
-            <span>Leena EMS</span>
-        </div>
-        <ul class="sidebar-menu">
-            <li><a href="dashboard.html"><i class="bi bi-grid"></i> All Expos</a></li>
-            <li><a href="main-panel.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
-            <li><a href="checkins.html"><i class="bi bi-check2-square"></i> Check-ins</a></li>
-            <li><a href="terminals.html"><i class="bi bi-pc-display"></i> Terminals</a></li>
-            <li><a href="email-templates.html"><i class="bi bi-envelope"></i> Email Templates</a></li>
-            <li><a class="active" href="email-send.html"><i class="bi bi-send"></i> Send Emails</a></li>
-            <li><a href="email-segments.html"><i class="bi bi-megaphone"></i> Email Segments</a></li>
-            <li><a href="reports.html"><i class="bi bi-graph-up"></i> Reports</a></li>
-            <li><a href="import.html"><i class="bi bi-download"></i> Import</a></li>
-            <li><a href="visitorlog-paginated.html" target="_blank"><i class="bi bi-journals"></i> Visitor Log</a></li>
-            <li><a href="admin-dashboard.html"><i class="bi bi-shield-lock"></i> Admin Panel</a></li>
-            <li><a href="#" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
-        </ul>
-    </nav>
-
-    <div class="main-wrapper">
-        <header class="main-header">
-            <h1>
-                <i class="bi bi-send text-primary"></i>
-                <span>Send Emails</span>
-            </h1>
-            <div class="header-buttons">
-                <button class="btn btn-outline-secondary" onclick="window.location.href='email-templates.html'">
-                    <i class="bi bi-envelope"></i> Manage Templates
-                </button>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-        </header>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="main-panel-v2.html" onclick="localStorage.setItem('loadPage','forms')"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item active" href="email-send.html"><i class="bi bi-send"></i><span>Send Emails</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
         
-        <main id="content-area">
-            <!-- Step 1: Choose Send Type -->
-            <div class="row" id="step1">
-                <div class="col-md-6">
-                    <div class="send-option-card" onclick="selectSendType('single')">
-                        <h4><i class="bi bi-person text-primary"></i> Single Email</h4>
-                        <p class="text-muted">Send email to one recipient</p>
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-send"></i> Send Emails</h1>
+                <div class="header-actions">
+                    <button class="btn btn-secondary" onclick="window.location.href='email-templates.html'"><i class="bi bi-envelope"></i> Templates</button>
+                    <button class="btn btn-secondary" onclick="window.location.href='main-panel-v2.html'"><i class="bi bi-arrow-left"></i> Back</button>
+                </div>
+            </header>
+            
+            <main class="main-content">
+                <!-- Step 1: Choose Type -->
+                <div id="step1">
+                    <div class="send-options">
+                        <div class="send-option" onclick="selectSendType('single')">
+                            <i class="bi bi-person"></i>
+                            <h4>Single Email</h4>
+                            <p>Send email to one recipient</p>
+                        </div>
+                        <div class="send-option" onclick="selectSendType('bulk')">
+                            <i class="bi bi-people"></i>
+                            <h4>Bulk Email</h4>
+                            <p>Upload CSV/Excel for multiple recipients</p>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="send-option-card" onclick="selectSendType('bulk')">
-                        <h4><i class="bi bi-people text-primary"></i> Bulk Email</h4>
-                        <p class="text-muted">Upload CSV/Excel for multiple recipients</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 2: Email Form -->
-            <div id="step2" style="display: none;">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title mb-4">
-                            <span id="sendTypeTitle">Email Details</span>
-                        </h5>
-
-                        <!-- Recipients Section -->
-                        <div id="recipientSection">
-                            <!-- Single Email Input -->
-                            <div id="singleRecipient" style="display: none;">
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">Name</label>
-                                        <input type="text" class="form-control" id="recipientName" placeholder="John Doe">
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">Email *</label>
-                                        <input type="email" class="form-control" id="recipientEmail" placeholder="john@example.com" required>
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label class="form-label">Company</label>
-                                        <input type="text" class="form-control" id="recipientCompany" placeholder="Example Corp">
-                                    </div>
+                
+                <!-- Step 2: Email Form -->
+                <div id="step2" style="display:none;">
+                    <div class="card">
+                        <div class="card-title"><i class="bi bi-envelope"></i> <span id="sendTypeTitle">Email Details</span></div>
+                        
+                        <!-- Single Recipient -->
+                        <div id="singleRecipient" style="display:none;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Name</label>
+                                    <input type="text" class="form-control" id="recipientName" placeholder="John Doe">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email *</label>
+                                    <input type="email" class="form-control" id="recipientEmail" placeholder="john@example.com" required>
                                 </div>
                             </div>
-
-                            <!-- Bulk Upload -->
-                            <div id="bulkRecipient" style="display: none;">
-                                <div class="file-upload-area" id="fileUploadArea" ondrop="handleDrop(event)" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)">
-                                    <i class="bi bi-cloud-upload display-4 text-primary"></i>
-                                    <h5 class="mt-3">Drag & Drop CSV/Excel File</h5>
-                                    <p class="text-muted">or click to browse</p>
-                                    <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display: none;" onchange="handleFileSelect(event)">
-                                    <button class="btn btn-primary mt-2" onclick="document.getElementById('fileInput').click()">
-                                        Choose File
-                                    </button>
-                                </div>
-                                
-                                <div class="recipients-list mt-3" id="recipientsList" style="display: none;">
-                                    <h6>Recipients (<span id="recipientCount">0</span>)</h6>
-                                    <div id="recipientsContent"></div>
-                                </div>
+                            <div class="form-group">
+                                <label class="form-label">Company</label>
+                                <input type="text" class="form-control" id="recipientCompany" placeholder="Example Corp">
                             </div>
                         </div>
-
-                        <!-- Email Settings -->
-                        <hr class="my-4">
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
+                        <!-- Bulk Upload -->
+                        <div id="bulkRecipient" style="display:none;">
+                            <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none;" onchange="handleFileSelect(event)">
+                                <i class="bi bi-cloud-upload"></i>
+                                <h4>Drop CSV/Excel file here</h4>
+                                <p style="color:var(--text-muted);margin:8px 0;">or click to browse</p>
+                                <button class="btn btn-primary" onclick="event.stopPropagation();">Choose File</button>
+                            </div>
+                            <div class="recipients-list" id="recipientsList" style="display:none;">
+                                <strong>Recipients (<span id="recipientCount">0</span>)</strong>
+                                <div id="recipientsContent" style="margin-top:12px;"></div>
+                            </div>
+                        </div>
+                        
+                        <hr style="margin:24px 0;border-color:var(--border-color);">
+                        
+                        <!-- Template & Expo Selection -->
+                        <div class="form-row">
+                            <div class="form-group">
                                 <label class="form-label">Select Template *</label>
                                 <select class="form-select" id="templateSelect" onchange="loadTemplatePreview()">
                                     <option value="">Choose template...</option>
                                 </select>
                             </div>
-                            <div class="col-md-6 mb-3">
+                            <div class="form-group">
                                 <label class="form-label">Select Expo *</label>
                                 <select class="form-select" id="expoSelect">
                                     <option value="">Choose expo...</option>
                                 </select>
                             </div>
                         </div>
-
+                        
                         <!-- Database Options -->
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <div class="form-check mb-3">
-                                    <input class="form-check-input" type="checkbox" id="saveToDatabase" checked>
-                                    <label class="form-check-label" for="saveToDatabase">
-                                        <strong>Save recipients to database</strong>
+                        <div class="options-card">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="saveToDatabase" checked>
+                                <label for="saveToDatabase"><strong>Save recipients to database</strong></label>
+                            </div>
+                            <div id="databaseOptions" style="margin-left:24px;margin-top:12px;">
+                                <div style="display:flex;gap:16px;margin-bottom:12px;">
+                                    <label class="form-check">
+                                        <input type="radio" class="form-check-input" name="recordType" value="visitor" checked>
+                                        <i class="bi bi-person"></i> Visitor
+                                    </label>
+                                    <label class="form-check">
+                                        <input type="radio" class="form-check-input" name="recordType" value="exhibitor">
+                                        <i class="bi bi-building"></i> Exhibitor
                                     </label>
                                 </div>
-                                
-                                <div id="databaseOptions" class="ms-4">
-                                    <div class="mb-3">
-                                        <label class="form-label">Save as:</label>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="recordType" id="saveAsVisitor" value="visitor" checked>
-                                            <label class="form-check-label" for="saveAsVisitor">
-                                                <i class="bi bi-person"></i> Visitor
-                                            </label>
-                                        </div>
-                                        <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="recordType" id="saveAsExhibitor" value="exhibitor">
-                                            <label class="form-check-label" for="saveAsExhibitor">
-                                                <i class="bi bi-building"></i> Exhibitor
-                                            </label>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="generateQR" checked>
-                                        <label class="form-check-label" for="generateQR">
-                                            Generate QR codes and badges
-                                        </label>
-                                    </div>
-                                </div>
+                                <label class="form-check">
+                                    <input type="checkbox" class="form-check-input" id="generateQR" checked>
+                                    Generate QR codes and badges
+                                </label>
                             </div>
                         </div>
-
+                        
                         <!-- Email Preview -->
                         <div class="email-preview" id="emailPreview">
-                            <h6>Email Preview</h6>
-                            <div id="previewContent"></div>
+                            <h6><i class="bi bi-eye"></i> Email Preview</h6>
+                            <div class="preview-content" id="previewContent"></div>
                         </div>
-
-                        <!-- Progress Bar -->
+                        
+                        <!-- Progress -->
                         <div class="progress-container" id="progressContainer">
-                            <div class="progress">
-                                <div class="progress-bar progress-bar-striped progress-bar-animated" 
-                                     id="progressBar" 
-                                     style="width: 0%">0%</div>
-                            </div>
-                            <p class="text-center mt-2" id="progressText">Sending emails...</p>
+                            <div class="progress"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+                            <p style="text-align:center;margin-top:8px;color:var(--text-muted);" id="progressText">Sending emails...</p>
                         </div>
-
-                        <!-- Action Buttons -->
-                        <div class="mt-4 d-flex justify-content-between">
-                            <button class="btn btn-secondary" onclick="resetForm()">
-                                <i class="bi bi-arrow-left"></i> Back
-                            </button>
-                            <button class="btn btn-primary" onclick="sendEmails()" id="sendButton">
-                                <i class="bi bi-send"></i> Send Emails
-                            </button>
+                        
+                        <!-- Actions -->
+                        <div style="display:flex;justify-content:space-between;margin-top:24px;">
+                            <button class="btn btn-secondary" onclick="resetForm()"><i class="bi bi-arrow-left"></i> Back</button>
+                            <button class="btn btn-primary" onclick="sendEmails()" id="sendButton"><i class="bi bi-send"></i> Send Emails</button>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- Results -->
-            <div id="results" style="display: none;">
-                <div class="card">
-                    <div class="card-body">
-                        <h5 class="card-title text-success">
-                            <i class="bi bi-check-circle"></i> Emails Sent Successfully
-                        </h5>
-                        <div id="resultsContent"></div>
-                        <button class="btn btn-primary mt-3" onclick="resetForm()">
-                            <i class="bi bi-arrow-clockwise"></i> Send More Emails
-                        </button>
+                
+                <!-- Results -->
+                <div id="results" style="display:none;">
+                    <div class="card results-card">
+                        <div class="icon"><i class="bi bi-check-lg"></i></div>
+                        <h3>Emails Sent Successfully!</h3>
+                        <div id="resultsContent" style="margin:20px 0;"></div>
+                        <button class="btn btn-primary" onclick="resetForm()"><i class="bi bi-arrow-clockwise"></i> Send More Emails</button>
                     </div>
                 </div>
-            </div>
-        </main>
+            </main>
+        </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script>
         const API_URL = '/api';
-        let sendType = null;
-        let recipients = [];
-        let templates = [];
-        let expos = [];
-        let selectedTemplate = null;
+        let sendType = null, recipients = [], templates = [], expos = [], selectedTemplate = null;
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            checkAuth();
+            if (!localStorage.getItem('token')) { window.location.href = 'login_new.html'; return; }
             loadTemplates();
             loadExpos();
-            setupDatabaseToggle();
+            setupDragDrop();
+            document.getElementById('saveToDatabase').addEventListener('change', function() {
+                document.getElementById('databaseOptions').style.display = this.checked ? 'block' : 'none';
+            });
         });
-
-        function checkAuth() {
-            const token = localStorage.getItem('token');
-            if (!token) {
-                window.location.href = 'login.html';
-                return false;
-            }
-            return true;
-        }
 
         async function loadTemplates() {
             try {
-                const response = await fetch(`${API_URL}/email-templates`, {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-
-                if (!response.ok) throw new Error('Failed to load templates');
-
-                const data = await response.json();
+                const res = await fetch(`${API_URL}/email-templates`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                const data = await res.json();
                 templates = data.templates || [];
-                
                 const select = document.getElementById('templateSelect');
-                templates.forEach(template => {
-                    if (template.is_active) {
-                        const option = document.createElement('option');
-                        option.value = template.id;
-                        option.textContent = template.name;
-                        select.appendChild(option);
-                    }
+                templates.filter(t => t.is_active).forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = t.name;
+                    select.appendChild(opt);
                 });
-            } catch (error) {
-                console.error('Error loading templates:', error);
-            }
+            } catch (e) { console.error('Error loading templates'); }
         }
 
         async function loadExpos() {
             try {
-                const response = await fetch(`${API_URL}/expos`, {
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-
-                if (!response.ok) throw new Error('Failed to load expos');
-
-                const data = await response.json();
-                console.log('Expos response:', data);
-                
-                // Backend direkt array döndürüyor
-                expos = data;
-                
+                const res = await fetch(`${API_URL}/expos`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                expos = await res.json();
                 const select = document.getElementById('expoSelect');
-                
-                if (!expos || expos.length === 0) {
-                    const option = document.createElement('option');
-                    option.value = "";
-                    option.textContent = "No expos available";
-                    select.appendChild(option);
-                    select.disabled = true;
-                    return;
-                }
-                
-                expos.forEach(expo => {
-                    const option = document.createElement('option');
-                    option.value = expo.id;
-                    option.textContent = expo.name;
-                    select.appendChild(option);
+                expos.forEach(e => {
+                    const opt = document.createElement('option');
+                    opt.value = e.id;
+                    opt.textContent = e.name;
+                    select.appendChild(opt);
                 });
-
-                // Auto-select current expo if available
                 const currentExpoId = localStorage.getItem('selectedExpoId');
-                if (currentExpoId) {
-                    select.value = currentExpoId;
-                }
-            } catch (error) {
-                console.error('Error loading expos:', error);
-                const select = document.getElementById('expoSelect');
-                select.innerHTML = '<option value="">Error loading expos</option>';
-                select.disabled = true;
-            }
+                if (currentExpoId) select.value = currentExpoId;
+            } catch (e) { console.error('Error loading expos'); }
         }
 
         function selectSendType(type) {
             sendType = type;
             document.getElementById('step1').style.display = 'none';
             document.getElementById('step2').style.display = 'block';
-            
-            if (type === 'single') {
-                document.getElementById('sendTypeTitle').textContent = 'Send Single Email';
-                document.getElementById('singleRecipient').style.display = 'block';
-                document.getElementById('bulkRecipient').style.display = 'none';
-            } else {
-                document.getElementById('sendTypeTitle').textContent = 'Send Bulk Emails';
-                document.getElementById('singleRecipient').style.display = 'none';
-                document.getElementById('bulkRecipient').style.display = 'block';
-            }
+            document.getElementById('sendTypeTitle').textContent = type === 'single' ? 'Single Email' : 'Bulk Emails';
+            document.getElementById('singleRecipient').style.display = type === 'single' ? 'block' : 'none';
+            document.getElementById('bulkRecipient').style.display = type === 'bulk' ? 'block' : 'none';
         }
 
-        function setupDatabaseToggle() {
-            const checkbox = document.getElementById('saveToDatabase');
-            checkbox.addEventListener('change', function() {
-                document.getElementById('databaseOptions').style.display = 
-                    this.checked ? 'block' : 'none';
-            });
+        function setupDragDrop() {
+            const zone = document.getElementById('uploadZone');
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('dragover'); if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); });
         }
 
-        function handleDragOver(e) {
-            e.preventDefault();
-            document.getElementById('fileUploadArea').classList.add('dragover');
-        }
-
-        function handleDragLeave(e) {
-            e.preventDefault();
-            document.getElementById('fileUploadArea').classList.remove('dragover');
-        }
-
-        function handleDrop(e) {
-            e.preventDefault();
-            document.getElementById('fileUploadArea').classList.remove('dragover');
-            
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                processFile(files[0]);
-            }
-        }
-
-        function handleFileSelect(e) {
-            const files = e.target.files;
-            if (files.length > 0) {
-                processFile(files[0]);
-            }
-        }
+        function handleFileSelect(e) { if (e.target.files.length) processFile(e.target.files[0]); }
 
         function processFile(file) {
             const reader = new FileReader();
-            
             if (file.name.endsWith('.csv')) {
-                reader.onload = function(e) {
-                    const csv = e.target.result;
-                    const lines = csv.split('\n');
-                    const headers = lines[0].split(',');
-                    
+                reader.onload = e => {
+                    const lines = e.target.result.split('\n');
                     recipients = [];
                     for (let i = 1; i < lines.length; i++) {
                         if (lines[i].trim()) {
                             const data = lines[i].split(',');
-                            recipients.push({
-                                name: data[0] || '',
-                                email: data[1] || '',
-                                company: data[2] || ''
-                            });
+                            recipients.push({ name: data[0] || '', email: data[1] || '', company: data[2] || '' });
                         }
                     }
                     displayRecipients();
                 };
                 reader.readAsText(file);
             } else {
-                reader.onload = function(e) {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, {type: 'array'});
-                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const json = XLSX.utils.sheet_to_json(sheet);
-                    
-                    recipients = json.map(row => ({
-                        name: row.Name || row.name || '',
-                        email: row.Email || row.email || '',
-                        company: row.Company || row.company || ''
-                    }));
+                reader.onload = e => {
+                    const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+                    recipients = json.map(row => ({ name: row.Name || row.name || '', email: row.Email || row.email || '', company: row.Company || row.company || '' }));
                     displayRecipients();
                 };
                 reader.readAsArrayBuffer(file);
@@ -404,120 +342,62 @@
         }
 
         function displayRecipients() {
-            const container = document.getElementById('recipientsList');
-            const content = document.getElementById('recipientsContent');
-            
-            container.style.display = 'block';
+            document.getElementById('recipientsList').style.display = 'block';
             document.getElementById('recipientCount').textContent = recipients.length;
-            
-            content.innerHTML = recipients.slice(0, 10).map((r, i) => `
-                <div class="recipient-item">
-                    <span>${r.name || 'No Name'} - ${r.email}</span>
-                    <button class="btn btn-sm btn-outline-danger" onclick="removeRecipient(${i})">
-                        <i class="bi bi-x"></i>
-                    </button>
-                </div>
-            `).join('');
-            
-            if (recipients.length > 10) {
-                content.innerHTML += `<p class="text-muted mt-2">...and ${recipients.length - 10} more</p>`;
-            }
+            document.getElementById('recipientsContent').innerHTML = recipients.slice(0, 10).map((r, i) => `
+                <div class="recipient-item"><span>${r.name || 'No Name'} - ${r.email}</span><button onclick="removeRecipient(${i})"><i class="bi bi-x"></i></button></div>
+            `).join('') + (recipients.length > 10 ? `<p style="color:var(--text-muted);margin-top:8px;">...and ${recipients.length - 10} more</p>` : '');
         }
 
-        function removeRecipient(index) {
-            recipients.splice(index, 1);
-            displayRecipients();
-        }
+        function removeRecipient(i) { recipients.splice(i, 1); displayRecipients(); }
 
         function loadTemplatePreview() {
             const templateId = document.getElementById('templateSelect').value;
-            if (!templateId) {
-                document.getElementById('emailPreview').style.display = 'none';
-                return;
-            }
-            
+            if (!templateId) { document.getElementById('emailPreview').style.display = 'none'; return; }
             selectedTemplate = templates.find(t => t.id == templateId);
             if (selectedTemplate) {
-                const preview = document.getElementById('emailPreview');
-                preview.style.display = 'block';
-                
+                document.getElementById('emailPreview').style.display = 'block';
                 let content = selectedTemplate.html_content
                     .replace(/{{name}}/g, 'John Doe')
                     .replace(/{{email}}/g, 'john@example.com')
                     .replace(/{{company}}/g, 'Example Corp')
                     .replace(/{{expo_name}}/g, expos.find(e => e.id == document.getElementById('expoSelect').value)?.name || 'Expo');
-                
-                document.getElementById('previewContent').innerHTML = `
-                    <strong>Subject:</strong> ${selectedTemplate.subject}<br>
-                    <hr>
-                    <div style="max-height: 300px; overflow-y: auto;">
-                        ${content}
-                    </div>
-                `;
+                document.getElementById('previewContent').innerHTML = `<strong>Subject:</strong> ${selectedTemplate.subject}<hr style="margin:12px 0;">${content}`;
             }
         }
 
         async function sendEmails() {
-            // Validate
-            if (!document.getElementById('templateSelect').value) {
-                alert('Please select a template');
-                return;
-            }
+            if (!document.getElementById('templateSelect').value) { alert('Please select a template'); return; }
+            if (!document.getElementById('expoSelect').value) { alert('Please select an expo'); return; }
             
-            if (!document.getElementById('expoSelect').value) {
-                alert('Please select an expo');
-                return;
-            }
-            
-            // Prepare recipients
             if (sendType === 'single') {
                 const email = document.getElementById('recipientEmail').value;
-                if (!email) {
-                    alert('Please enter recipient email');
-                    return;
-                }
-                recipients = [{
-                    name: document.getElementById('recipientName').value || 'Guest',
-                    email: email,
-                    company: document.getElementById('recipientCompany').value || ''
-                }];
+                if (!email) { alert('Please enter recipient email'); return; }
+                recipients = [{ name: document.getElementById('recipientName').value || 'Guest', email, company: document.getElementById('recipientCompany').value || '' }];
             }
-            
-            if (recipients.length === 0) {
-                alert('No recipients to send to');
-                return;
-            }
-            
-            // Show progress
+            if (recipients.length === 0) { alert('No recipients'); return; }
+
             document.getElementById('progressContainer').style.display = 'block';
             document.getElementById('sendButton').disabled = true;
-            
-            const requestData = {
-                template_id: parseInt(document.getElementById('templateSelect').value),
-                expo_id: parseInt(document.getElementById('expoSelect').value),
-                recipients: recipients,
-                save_to_database: document.getElementById('saveToDatabase').checked,
-                record_type: document.querySelector('input[name="recordType"]:checked').value,
-                generate_qr: document.getElementById('generateQR').checked
-            };
-            
+
             try {
-                const response = await fetch(`${API_URL}/email-send/bulk`, {
+                const res = await fetch(`${API_URL}/email-send/bulk`, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(requestData)
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        template_id: parseInt(document.getElementById('templateSelect').value),
+                        expo_id: parseInt(document.getElementById('expoSelect').value),
+                        recipients,
+                        save_to_database: document.getElementById('saveToDatabase').checked,
+                        record_type: document.querySelector('input[name="recordType"]:checked').value,
+                        generate_qr: document.getElementById('generateQR').checked
+                    })
                 });
-                
-                if (!response.ok) throw new Error('Failed to send emails');
-                
-                const result = await response.json();
+                if (!res.ok) throw new Error('Failed');
+                const result = await res.json();
                 showResults(result);
-            } catch (error) {
-                console.error('Error sending emails:', error);
-                alert('Failed to send emails. Please try again.');
+            } catch (e) {
+                alert('Failed to send emails');
                 document.getElementById('progressContainer').style.display = 'none';
                 document.getElementById('sendButton').disabled = false;
             }
@@ -526,26 +406,14 @@
         function showResults(result) {
             document.getElementById('step2').style.display = 'none';
             document.getElementById('results').style.display = 'block';
-            
             document.getElementById('resultsContent').innerHTML = `
-                <div class="alert alert-success">
-                    <i class="bi bi-check-circle"></i> 
-                    Successfully sent ${result.sent_count || recipients.length} email(s)
-                </div>
-                ${result.saved_count ? `
-                    <div class="alert alert-info">
-                        <i class="bi bi-database"></i> 
-                        Saved ${result.saved_count} records to database
-                    </div>
-                ` : ''}
+                <div class="alert alert-success"><i class="bi bi-check-circle"></i> Sent ${result.sent_count || recipients.length} email(s)</div>
+                ${result.saved_count ? `<div class="alert alert-info"><i class="bi bi-database"></i> Saved ${result.saved_count} records to database</div>` : ''}
             `;
         }
 
         function resetForm() {
-            sendType = null;
-            recipients = [];
-            selectedTemplate = null;
-            
+            sendType = null; recipients = []; selectedTemplate = null;
             document.getElementById('step1').style.display = 'block';
             document.getElementById('step2').style.display = 'none';
             document.getElementById('results').style.display = 'none';
@@ -553,19 +421,10 @@
             document.getElementById('sendButton').disabled = false;
             document.getElementById('emailPreview').style.display = 'none';
             document.getElementById('recipientsList').style.display = 'none';
-            
-            // Reset forms
             document.getElementById('recipientName').value = '';
             document.getElementById('recipientEmail').value = '';
             document.getElementById('recipientCompany').value = '';
             document.getElementById('fileInput').value = '';
-        }
-
-        function logout() {
-            if (confirm('Are you sure you want to logout?')) {
-                localStorage.clear();
-                window.location.href = 'login.html';
-            }
         }
     </script>
 </body>
