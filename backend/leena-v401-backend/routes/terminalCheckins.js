@@ -62,7 +62,6 @@ router.get('/visitor-by-qr', async (req, res) => {
                v.origin,
                v.custom_fields,
                v.visitor_type,
-               v.role,
                ves.status AS event_status,
                ves.updated_at AS status_updated_at
              FROM visitors v
@@ -94,8 +93,8 @@ router.get('/visitor-by-qr', async (req, res) => {
 
         const checkinCount = parseInt(checkinCountResult.rows[0].checkin_count, 10);
 
-        // Determine role: priority is visitor_type, then role, then default to "visitor"
-        const role = visitor.visitor_type || visitor.role || 'visitor';
+        // Determine role: use visitor_type or default to "visitor"
+        const role = visitor.visitor_type || 'visitor';
 
         return res.json({
             success: true,
