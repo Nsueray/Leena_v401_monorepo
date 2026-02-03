@@ -5,27 +5,34 @@ const upload = multer();
 const pool = require('../utils/db');
 const { sendEmail } = require('../utils/email');
 
+/**
+ * SendGrid Inbound Parse
+ * Forward replies to organizer emails
+ * NOTE: Uses existing sendEmail(to, subject, html)
+ */
+
 router.post('/inbound', upload.none(), async (req, res) => {
   try {
     const subject = req.body.subject || 'Visitor Reply';
     const text = req.body.text || '';
+    const rawFrom = req.body.from || '';
 
-    // Parse FROM
-    let fromEmail = req.body.from;
-
-    const match = req.body.from && req.body.from.match(/<(.+)>/);
+    // Extract plain email from "Name <email>"
+    let fromEmail = rawFrom;
+    const match = rawFrom.match(/<(.+)>/);
     if (match) {
       fromEmail = match[1].trim();
     }
 
     console.log('📩 INBOUND REPLY FROM:', fromEmail);
 
-    const orgRes = await pool.query(
-      `SELECT reply_forward_emails
-       FROM organizers
-       WHERE reply_forward_emails IS NOT NULL
-       LIMIT 1`
-    );
+    // Get organizer forward emails
+    const orgRes = await pool.query(`
+      SELECT reply_forward_emails
+      FROM organizers
+      WHERE reply_forward_emails IS NOT NULL
+      LIMIT 1
+    `);
 
     if (orgRes.rows.length === 0) {
       console.log('⚠️ No reply_forward_emails defined');
@@ -41,26 +48,28 @@ router.post('/inbound', upload.none(), async (req, res) => {
       return res.sendStatus(200);
     }
 
-    await sendEmail({
-      to: forwardEmails,
-      from: fromEmail,          // ✅ STRING — mevcut sistemle %100 uyumlu
-      replyTo: fromEmail,
-      subject: `[Visitor Reply] ${subject}`,
-      text: `
-From: ${req.body.from}
+    // Build simple HTML email
+    const html = `
+      <p><strong>From:</strong> ${rawFrom}</p>
+      <hr/>
+      <pre style="white-space:pre-wrap;">${text}</pre>
+    `;
 
---------------------
-${text}
---------------------
-      `
-    });
+    // IMPORTANT:
+    // sendEmail(to, subject, html)
+    // to can be string or array of strings
+    await sendEmail(
+      forwardEmails,
+      `[Visitor Reply] ${subject}`,
+      html
+    );
 
     console.log('✅ Reply forwarded to:', forwardEmails.join(', '));
     res.sendStatus(200);
 
   } catch (err) {
     console.error('❌ Inbound forward error:', err);
-    res.sendStatus(200);
+    res.sendStatus(200); // avoid SendGrid retries
   }
 });
 
