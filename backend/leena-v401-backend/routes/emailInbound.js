@@ -1,21 +1,30 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const upload = multer(); // memory storage
 const pool = require('../utils/db');
 const { sendEmail } = require('../utils/email');
 
 /**
- * Inbound Email → Direct Forward to Organizer
+ * SendGrid Inbound Parse → Organizer Forward
+ * NOTE: SendGrid sends multipart/form-data
  */
 
-router.post('/inbound', async (req, res) => {
+// ⚠️ upload.none() is CRITICAL
+router.post('/inbound', upload.none(), async (req, res) => {
   try {
-    const from = req.body.from;     // visitor email
+    const from = req.body.from;
     const subject = req.body.subject || 'Visitor Reply';
     const text = req.body.text || '';
 
     console.log('📩 INBOUND REPLY FROM:', from);
 
-    // Şimdilik: forward maili olan ilk organizer
+    if (!from) {
+      console.log('⚠️ Inbound email missing FROM field');
+      return res.sendStatus(200);
+    }
+
+    // Get organizer forward emails
     const orgRes = await pool.query(
       `SELECT reply_forward_emails
        FROM organizers
@@ -40,8 +49,8 @@ router.post('/inbound', async (req, res) => {
 
     await sendEmail({
       to: forwardEmails,
-      from: from,          // ✅ visitor email
-      replyTo: from,       // organizer reply → visitor
+      from: from,        // ✅ visitor email
+      replyTo: from,     // organizer reply → visitor
       subject: `[Visitor Reply] ${subject}`,
       text: `
 From: ${from}
@@ -57,7 +66,7 @@ ${text}
 
   } catch (err) {
     console.error('❌ Inbound forward error:', err);
-    res.sendStatus(200); // SendGrid retry yapmasın
+    res.sendStatus(200); // avoid SendGrid retries
   }
 });
 
