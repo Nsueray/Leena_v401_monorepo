@@ -1,5 +1,6 @@
 // routes/terminals.js
 const express = require('express');
+const { v4: uuidv4 } = require('uuid');
 const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -37,11 +38,13 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing required fields' });
     }
 
+    const terminalKey = uuidv4();
+
     const result = await pool.query(
       `INSERT INTO terminals (
-        organizer_id, expo_id, hall, terminal_no, auto_checkin
-      ) VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [organizer_id, expo_id, hall, terminal_no, auto_checkin ?? true]
+        organizer_id, expo_id, hall, terminal_no, auto_checkin, terminal_key
+      ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [organizer_id, expo_id, hall, terminal_no, auto_checkin ?? true, terminalKey]
     );
 
     res.status(201).json({ success: true, terminal: result.rows[0] });
