@@ -68,14 +68,12 @@ async function sendEmailWithReplyTo(to, subject, html, replyToEmail) {
         }
 
         const msg = {
-  to,
-  from: process.env.SENDER_EMAIL || 'noreply@leena.app',
-  reply_to: {
-    email: replyToEmail
-  },
-  subject,
-  html
-};
+            to,
+            from: process.env.SENDER_EMAIL || 'noreply@leena.app',
+            replyTo: replyToEmail,  // Correct SendGrid format - direct property
+            subject,
+            html
+        };
 
         await sgMail.send(msg);
         console.log(`📧 Email sent to: ${to} (reply-to: ${replyToEmail})`);
