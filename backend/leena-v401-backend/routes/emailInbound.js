@@ -12,12 +12,10 @@ router.post('/inbound', upload.none(), async (req, res) => {
 
     // Parse FROM
     let fromEmail = req.body.from;
-    let fromName = '';
 
-    const match = req.body.from && req.body.from.match(/(.*)<(.+)>/);
+    const match = req.body.from && req.body.from.match(/<(.+)>/);
     if (match) {
-      fromName = match[1].trim();
-      fromEmail = match[2].trim();
+      fromEmail = match[1].trim();
     }
 
     console.log('📩 INBOUND REPLY FROM:', fromEmail);
@@ -45,10 +43,7 @@ router.post('/inbound', upload.none(), async (req, res) => {
 
     await sendEmail({
       to: forwardEmails,
-      from: {
-        email: fromEmail,
-        name: fromName || undefined
-      },
+      from: fromEmail,          // ✅ STRING — mevcut sistemle %100 uyumlu
       replyTo: fromEmail,
       subject: `[Visitor Reply] ${subject}`,
       text: `
