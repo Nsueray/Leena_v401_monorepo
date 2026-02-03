@@ -1,49 +1,63 @@
 const express = require('express');
 const router = express.Router();
+const pool = require('../utils/db');
+const { sendEmail } = require('../utils/email');
 
 /**
- * SendGrid Inbound Parse endpoint
- * Receives incoming email replies
- * 
- * IMPORTANT:
- * - This endpoint is intentionally PUBLIC
- * - No auth middleware
- * - First phase: only log & acknowledge
+ * Inbound Email → Direct Forward to Organizer
  */
 
 router.post('/inbound', async (req, res) => {
   try {
-    console.log('📩 [INBOUND EMAIL RECEIVED]');
-    console.log('--------------------------------');
+    const from = req.body.from;     // visitor email
+    const subject = req.body.subject || 'Visitor Reply';
+    const text = req.body.text || '';
 
-    // Basic fields
-    console.log('From:', req.body.from);
-    console.log('To:', req.body.to);
-    console.log('Subject:', req.body.subject);
+    console.log('📩 INBOUND REPLY FROM:', from);
 
-    // Headers (critical for Message-ID matching later)
-    if (req.body.headers) {
-      console.log('Headers:', req.body.headers);
+    // Şimdilik: forward maili olan ilk organizer
+    const orgRes = await pool.query(
+      `SELECT reply_forward_emails
+       FROM organizers
+       WHERE reply_forward_emails IS NOT NULL
+       LIMIT 1`
+    );
+
+    if (orgRes.rows.length === 0) {
+      console.log('⚠️ No reply_forward_emails defined');
+      return res.sendStatus(200);
     }
 
-    // Text / HTML content
-    if (req.body.text) {
-      console.log('Text Body:', req.body.text.substring(0, 500));
+    const forwardEmails = orgRes.rows[0].reply_forward_emails
+      .split(',')
+      .map(e => e.trim())
+      .filter(Boolean);
+
+    if (forwardEmails.length === 0) {
+      console.log('⚠️ Forward list empty');
+      return res.sendStatus(200);
     }
 
-    if (req.body.html) {
-      console.log('HTML Body (truncated)');
-    }
+    await sendEmail({
+      to: forwardEmails,
+      from: from,          // ✅ visitor email
+      replyTo: from,       // organizer reply → visitor
+      subject: `[Visitor Reply] ${subject}`,
+      text: `
+From: ${from}
 
-    console.log('--------------------------------');
+--------------------
+${text}
+--------------------
+      `
+    });
 
-    // MUST respond 200 OK, otherwise SendGrid retries
-    res.status(200).send('OK');
-  } catch (error) {
-    console.error('❌ Inbound email error:', error);
+    console.log('✅ Reply forwarded to:', forwardEmails.join(', '));
+    res.sendStatus(200);
 
-    // Still respond 200 to avoid retry storms
-    res.status(200).send('ERROR');
+  } catch (err) {
+    console.error('❌ Inbound forward error:', err);
+    res.sendStatus(200); // SendGrid retry yapmasın
   }
 });
 
