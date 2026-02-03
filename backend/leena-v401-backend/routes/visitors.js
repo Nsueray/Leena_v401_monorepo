@@ -88,6 +88,26 @@ router.get('/paginated', authMiddleware, async (req, res) => {
   }
 });
 
+// ✅ Get visitor by QR code
+router.get('/badge/:qr_code', async (req, res) => {
+  try {
+    const qrCode = req.params.qr_code;
+    const result = await pool.query(
+      `SELECT * FROM visitors WHERE qr_code = $1 LIMIT 1`,
+      [qrCode]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Visitor not found' });
+    }
+
+    return res.json({ success: true, visitor: result.rows[0] });
+  } catch (err) {
+    console.error('❌ QR Code lookup error:', err);
+    return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // ✅ PUBLIC FORM SUBMISSION WITH EMAIL
 router.post('/public', async (req, res) => {
   try {
