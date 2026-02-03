@@ -53,6 +53,38 @@ async function sendEmail(to, subject, html) {
 }
 
 /**
+ * Send a single email with Reply-To using SendGrid
+ * @param {string} to - Recipient
+ * @param {string} subject - Email subject
+ * @param {string} html - HTML body
+ * @param {string} replyToEmail - Reply-To address
+ * @returns {Promise<boolean>}
+ */
+async function sendEmailWithReplyTo(to, subject, html, replyToEmail) {
+    try {
+        if (!process.env.SENDGRID_API_KEY) {
+            console.log('SendGrid not configured. Skipping send.');
+            return true;
+        }
+
+        const msg = {
+            to,
+            from: process.env.SENDER_EMAIL || 'noreply@leena.app',
+            replyTo: replyToEmail,
+            subject,
+            html
+        };
+
+        await sgMail.send(msg);
+        console.log(`📧 Email sent to: ${to} (reply-to: ${replyToEmail})`);
+        return true;
+    } catch (err) {
+        console.error(`❌ SendGrid error to ${to}:`, err.message || err);
+        return false;
+    }
+}
+
+/**
  * Send registration confirmation with generated QR and badge link
  * @param {object} visitor
  * @returns {Promise<boolean>}
@@ -132,6 +164,7 @@ async function sendBulkEmails(recipients, subject, htmlTemplate, commonData = {}
 module.exports = {
     processEmailTemplate,
     sendEmail,
+    sendEmailWithReplyTo,
     sendRegistrationEmail,
     sendBulkEmails
 };
