@@ -76,6 +76,8 @@ try { checkinReportRoutes = require('./routes/checkinReports'); console.log('✓
 try { terminalCheckinRoutes = require('./routes/terminalCheckins'); console.log('✓ Terminal Checkin routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load terminalCheckins routes:', err.message); }
 try { emailSegmentRoutes = require('./routes/emailSegments'); console.log('✓ Email Segment routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load emailSegments routes:', err.message); }
 try { emailInboundRoutes = require('./routes/emailInbound'); console.log('✓ Email Inbound routes loaded'); } catch (err) { console.error('✗ Failed to load emailInbound routes:', err.message); }
+let badgeTemplateRoutes;
+try { badgeTemplateRoutes = require('./routes/badgeTemplates'); console.log('✓ Badge Template routes loaded'); } catch (err) { console.error('✗ Failed to load badgeTemplates routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -94,6 +96,7 @@ if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes);
 if (terminalCheckinRoutes) app.use('/api/terminal', terminalCheckinRoutes); // ✅ v402 Mini
 if (emailSegmentRoutes) app.use('/api/email-segments', emailSegmentRoutes); // ✅ v402 Mini - Email Segments
 if (emailInboundRoutes) app.use('/api/email', emailInboundRoutes); // ✅ Inbound Email
+if (badgeTemplateRoutes) app.use('/api/badge-templates', badgeTemplateRoutes); // ✅ Badge Templates
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');

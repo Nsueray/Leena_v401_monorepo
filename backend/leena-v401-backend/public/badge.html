@@ -5,11 +5,23 @@
   <title>Print Badge</title>
   <meta name="viewport" content="width=100mm, height=50mm, initial-scale=1.0">
   <style>
+    :root {
+      --badge-width: 100mm;
+      --badge-height: 50mm;
+      --font-size-name: 18pt;
+      --font-size-company: 14pt;
+      --font-size-country: 12pt;
+      --font-size-role: 10pt;
+      --font-family: Arial, sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
     body {
-      margin: 0;
-      width: 100mm;
-      height: 50mm;
-      font-family: Arial, sans-serif;
+      width: var(--badge-width);
+      height: var(--badge-height);
+      font-family: var(--font-family);
+      overflow: hidden;
     }
 
     .badge-wrapper {
@@ -17,24 +29,29 @@
       flex-direction: row;
       align-items: center;
       justify-content: flex-start;
-      width: 100mm;
-      height: 50mm;
-      padding: 5mm;
+      width: var(--badge-width);
+      height: var(--badge-height);
+      padding: 4mm;
       box-sizing: border-box;
     }
 
+    .badge-wrapper.no-qr {
+      justify-content: center;
+    }
+
     .qr-section {
-      width: 30mm;
-      height: 30mm;
+      width: 32mm;
+      height: 32mm;
       display: flex;
       align-items: center;
       justify-content: center;
-      margin-right: 5mm;
+      margin-right: 4mm;
+      flex-shrink: 0;
     }
 
     .qr-code {
-      width: 25mm;
-      height: 25mm;
+      width: 30mm;
+      height: 30mm;
     }
 
     .qr-code img {
@@ -48,37 +65,82 @@
       flex-direction: column;
       justify-content: center;
       overflow: hidden;
+      min-width: 0;
+    }
+
+    .badge-wrapper.no-qr .info-section {
+      text-align: center;
+      align-items: center;
     }
 
     .visitor-name {
-      font-size: 18pt;
+      font-size: var(--font-size-name);
       font-weight: bold;
-      margin-bottom: 5px;
-      line-height: 1.1;
+      margin-bottom: 2mm;
+      line-height: 1.2;
       word-break: break-word;
     }
 
     .visitor-company {
-      font-size: 14pt;
-      line-height: 1.1;
+      font-size: var(--font-size-company);
+      line-height: 1.2;
       word-break: break-word;
+      margin-bottom: 1mm;
     }
 
+    .visitor-country {
+      font-size: var(--font-size-country);
+      line-height: 1.2;
+      color: #555;
+    }
+
+    .visitor-role {
+      font-size: var(--font-size-role);
+      font-weight: bold;
+      text-transform: uppercase;
+      background: #333;
+      color: #fff;
+      padding: 1mm 3mm;
+      border-radius: 2mm;
+      display: inline-block;
+      margin-top: 2mm;
+    }
+
+    .visitor-badge-id {
+      font-size: 8pt;
+      color: #999;
+      margin-top: 1mm;
+    }
+
+    /* Dynamic text sizing */
+    .text-small { font-size: 85%; }
+    .text-very-small { font-size: 70%; }
+
     .loading {
-      text-align: center;
-      padding: 20mm;
-      font-size: 14pt;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: var(--badge-width);
+      height: var(--badge-height);
+      font-size: 12pt;
+      color: #666;
+    }
+
+    .error {
+      color: #c00;
     }
 
     @media print {
       @page {
-        size: 100mm 50mm landscape;
+        size: var(--badge-width) var(--badge-height) landscape;
         margin: 0;
       }
 
       body {
-        width: 100mm;
-        height: 50mm;
+        width: var(--badge-width);
+        height: var(--badge-height);
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
     }
   </style>
@@ -92,124 +154,281 @@
   <script>
     const API_URL = '/api';
 
-    function getQRFromURL() {
+    // Get URL parameters
+    function getParams() {
       const params = new URLSearchParams(window.location.search);
-      return params.get('qr');
+      return {
+        qr: params.get('qr'),
+        terminalKey: params.get('terminal_key') || params.get('tk'),
+        templateId: params.get('template_id')
+      };
     }
 
-    function getTextSizeClass(text) {
+    // Get text size class based on length
+    function getTextSizeClass(text, threshold1 = 25, threshold2 = 40) {
       if (!text) return '';
-      if (text.length > 40) return 'very-small';
-      if (text.length > 30) return 'small';
+      if (text.length > threshold2) return 'text-very-small';
+      if (text.length > threshold1) return 'text-small';
       return '';
     }
 
-    async function performCheckin(visitorId, qrCode, expoId) {
-      try {
-        const hall = localStorage.getItem('hall') || 'Main';
-        const terminal = localStorage.getItem('terminal') || '1';
+    // Apply template config to CSS variables
+    function applyTemplateStyles(template) {
+      const root = document.documentElement;
+      const size = template.size_config || {};
+      const style = template.style_config || {};
 
-        await fetch(`${API_URL}/checkins`, {
+      // Size
+      if (size.width_mm) root.style.setProperty('--badge-width', size.width_mm + 'mm');
+      if (size.height_mm) root.style.setProperty('--badge-height', size.height_mm + 'mm');
+
+      // Fonts
+      if (style.font_size_name) root.style.setProperty('--font-size-name', style.font_size_name);
+      if (style.font_size_company) root.style.setProperty('--font-size-company', style.font_size_company);
+      if (style.font_size_country) root.style.setProperty('--font-size-country', style.font_size_country);
+      if (style.font_family) root.style.setProperty('--font-family', style.font_family);
+
+      // Update @page for print
+      const pageStyle = document.createElement('style');
+      pageStyle.textContent = `
+        @media print {
+          @page {
+            size: ${size.width_mm || 100}mm ${size.height_mm || 50}mm ${size.orientation || 'landscape'};
+            margin: 0;
+          }
+        }
+      `;
+      document.head.appendChild(pageStyle);
+    }
+
+    // Fetch badge template
+    async function getTemplate(terminalKey, templateId) {
+      // Default template
+      let template = {
+        size_config: { width_mm: 100, height_mm: 50, orientation: 'landscape' },
+        content_config: { show_qr: true, show_name: true, show_company: true, show_country: false, show_role: false, show_badge_id: false },
+        style_config: { font_size_name: '18pt', font_size_company: '14pt' }
+      };
+
+      try {
+        if (terminalKey) {
+          // Get template for terminal
+          const res = await fetch(`${API_URL}/badge-templates/for-terminal/${terminalKey}`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.template) {
+              template = data.template;
+            }
+          }
+        } else if (templateId) {
+          // Get specific template (requires auth)
+          const token = localStorage.getItem('token');
+          const res = await fetch(`${API_URL}/badge-templates/${templateId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.template) {
+              template = data.template;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Could not load template, using default:', err);
+      }
+
+      return template;
+    }
+
+    // Perform check-in via terminal API
+    async function performCheckin(visitorId, terminalKey) {
+      if (!terminalKey) {
+        console.log('No terminal key, skipping check-in');
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_URL}/terminal/checkin`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
+            'x-terminal-key': terminalKey
           },
-          body: JSON.stringify({
-            visitor_id: visitorId,
-            expo_id: expoId,
-            hall,
-            terminal,
-            qr_code: qrCode,
-            checkin_type: 'print',
-            checkin_time: new Date().toISOString()
-          })
+          body: JSON.stringify({ visitor_id: visitorId })
         });
 
-        console.log('✅ Check-in recorded.');
+        if (res.ok) {
+          console.log('✅ Check-in recorded');
+        } else {
+          console.warn('⚠️ Check-in response:', await res.text());
+        }
       } catch (err) {
         console.warn('⚠️ Check-in failed:', err);
       }
     }
 
+    // Update badge printed status
+    async function markBadgePrinted(visitorId, terminalKey) {
+      if (!terminalKey) return;
+
+      try {
+        const res = await fetch(`${API_URL}/terminal/badge-print`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-terminal-key': terminalKey
+          },
+          body: JSON.stringify({ visitor_id: visitorId })
+        });
+
+        if (res.ok) {
+          console.log('✅ Badge print recorded');
+        }
+      } catch (err) {
+        console.warn('⚠️ Badge print record failed:', err);
+      }
+    }
+
+    // Main function
     async function loadBadge() {
-      const qrCode = getQRFromURL();
-      if (!qrCode) {
-        document.getElementById('badgeContent').innerHTML = '<div class="loading">Invalid QR code</div>';
+      const { qr, terminalKey, templateId } = getParams();
+
+      if (!qr) {
+        document.getElementById('badgeContent').innerHTML = '<div class="loading error">Invalid QR code</div>';
         return;
       }
 
-      let visitor = null;
+      // 1. Load template
+      const template = await getTemplate(terminalKey, templateId);
+      applyTemplateStyles(template);
 
+      const content = template.content_config || {};
+
+      // 2. Load visitor data
+      let visitor = null;
       try {
-        const res = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
-        if (res.ok) {
-          const data = await res.json();
-          visitor = data.visitor;
+        // Try terminal endpoint first (if terminal key available)
+        if (terminalKey) {
+          const res = await fetch(`${API_URL}/terminal/visitor-by-qr?qr=${encodeURIComponent(qr)}`, {
+            headers: { 'x-terminal-key': terminalKey }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            visitor = data.visitor;
+          }
+        }
+        
+        // Fallback to public badge endpoint
+        if (!visitor) {
+          const res = await fetch(`${API_URL}/visitors/badge/${qr}`);
+          if (res.ok) {
+            const data = await res.json();
+            visitor = data.visitor;
+          }
         }
       } catch (err) {
         console.error('❌ Visitor fetch error:', err);
       }
 
       if (!visitor) {
-        document.getElementById('badgeContent').innerHTML = '<div class="loading">Visitor not found</div>';
+        document.getElementById('badgeContent').innerHTML = '<div class="loading error">Visitor not found</div>';
         return;
       }
 
-      // Prepare display values
-      let displayName = visitor.full_name || `${visitor.name || ''} ${visitor.last_name || ''}`.trim();
-      let displayCompany = visitor.company || '';
-
-      // fallback from custom_fields
-      if ((!displayName || displayName === '') && visitor.custom_fields) {
-        try {
-          const fields = typeof visitor.custom_fields === 'string'
-            ? JSON.parse(visitor.custom_fields)
-            : visitor.custom_fields;
-
-          if (fields.full_name) displayName = fields.full_name;
-          else if (fields.name || fields.last_name) displayName = `${fields.name || ''} ${fields.last_name || ''}`.trim();
-        } catch (e) {}
+      // 3. Prepare display values
+      let displayName = visitor.name || '';
+      if (visitor.lastName || visitor.last_name) {
+        displayName += ' ' + (visitor.lastName || visitor.last_name);
       }
+      displayName = displayName.trim() || 'Guest';
 
-      const nameClass = getTextSizeClass(displayName);
-      const companyClass = getTextSizeClass(displayCompany);
+      const displayCompany = visitor.company || '';
+      const displayCountry = visitor.country || '';
+      const displayRole = visitor.role || visitor.visitor_type || '';
+      const displayBadgeId = visitor.badgeId || visitor.badge_id || '';
 
-      document.getElementById('badgeContent').innerHTML = `
-        <div class="badge-wrapper">
+      // 4. Build badge HTML
+      const showQR = content.show_qr !== false;
+      const wrapperClass = showQR ? 'badge-wrapper' : 'badge-wrapper no-qr';
+
+      let badgeHTML = `<div class="${wrapperClass}">`;
+
+      // QR Section
+      if (showQR) {
+        badgeHTML += `
           <div class="qr-section">
             <div class="qr-code" id="qrcode"></div>
           </div>
-          <div class="info-section">
-            <div class="visitor-name ${nameClass}">${displayName}</div>
-            <div class="visitor-company ${companyClass}">${displayCompany}</div>
-          </div>
-        </div>
-      `;
+        `;
+      }
 
-      // Generate QR
-      QRCode.toDataURL(qrCode, {
-        width: 120,
-        margin: 0
-      }, async function (err, url) {
-        if (!err) {
-          const img = document.createElement('img');
-          img.src = url;
-          img.alt = 'QR Code';
-          document.getElementById('qrcode').appendChild(img);
+      // Info Section
+      badgeHTML += `<div class="info-section">`;
 
-          // Perform check-in before printing
-          if (visitor.id && visitor.expo_id) {
-            await performCheckin(visitor.id, qrCode, visitor.expo_id);
+      if (content.show_name !== false) {
+        const nameClass = getTextSizeClass(displayName);
+        badgeHTML += `<div class="visitor-name ${nameClass}">${escapeHtml(displayName)}</div>`;
+      }
+
+      if (content.show_company !== false && displayCompany) {
+        const companyClass = getTextSizeClass(displayCompany);
+        badgeHTML += `<div class="visitor-company ${companyClass}">${escapeHtml(displayCompany)}</div>`;
+      }
+
+      if (content.show_country && displayCountry) {
+        badgeHTML += `<div class="visitor-country">${escapeHtml(displayCountry)}</div>`;
+      }
+
+      if (content.show_role && displayRole && displayRole !== 'visitor') {
+        badgeHTML += `<div class="visitor-role">${escapeHtml(displayRole)}</div>`;
+      }
+
+      if (content.show_badge_id && displayBadgeId) {
+        badgeHTML += `<div class="visitor-badge-id">${escapeHtml(displayBadgeId)}</div>`;
+      }
+
+      badgeHTML += `</div></div>`;
+
+      document.getElementById('badgeContent').innerHTML = badgeHTML;
+
+      // 5. Generate QR code (if needed)
+      if (showQR) {
+        QRCode.toDataURL(qr, { width: 150, margin: 0 }, async function(err, url) {
+          if (!err) {
+            const img = document.createElement('img');
+            img.src = url;
+            img.alt = 'QR Code';
+            document.getElementById('qrcode').appendChild(img);
           }
 
-          setTimeout(() => {
-            window.print();
-          }, 500);
-        }
-      });
+          // 6. Record badge print and trigger print
+          await finalizePrint(visitor, terminalKey);
+        });
+      } else {
+        // No QR, just finalize
+        await finalizePrint(visitor, terminalKey);
+      }
     }
 
+    async function finalizePrint(visitor, terminalKey) {
+      // Record badge print (which may also create check-in based on expo settings)
+      if (visitor.id && terminalKey) {
+        await markBadgePrinted(visitor.id, terminalKey);
+      }
+
+      // Auto-print after short delay
+      setTimeout(() => {
+        window.print();
+      }, 300);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+
+    // Initialize
     document.addEventListener('DOMContentLoaded', loadBadge);
   </script>
 </body>
