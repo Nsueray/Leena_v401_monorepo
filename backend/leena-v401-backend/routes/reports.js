@@ -71,9 +71,9 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
     WITH visitor_stats AS (
       SELECT 
         COUNT(*) as total_visitors,
-        COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'email', ''), email)) as unique_emails,
-        COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'company', ''), company)) as unique_companies,
-        COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'country', ''), country)) as unique_countries,
+        COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_emails,
+        COUNT(DISTINCT COALESCE(custom_fields->>'company', company)) as unique_companies,
+        COUNT(DISTINCT COALESCE(custom_fields->>'country', country)) as unique_countries,
         COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as registrations_today,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as registrations_week,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as registrations_month,
@@ -123,7 +123,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE expo_id = $1), 0)), 2) as percentage
     FROM visitors
     WHERE expo_id = $1 
-    AND COALESCE(NULLIF(custom_fields->>'country', ''), country) IS NOT NULL
+    AND (custom_fields->>'country' IS NOT NULL OR country IS NOT NULL)
     ${dateFilter}
     GROUP BY COALESCE(NULLIF(custom_fields->>'country', ''), country)
     ORDER BY count DESC
@@ -136,10 +136,10 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
     SELECT 
       COALESCE(NULLIF(custom_fields->>'company', ''), company) as company,
       COUNT(*) as count,
-      COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'email', ''), email)) as unique_visitors
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_visitors
     FROM visitors
     WHERE expo_id = $1 
-    AND COALESCE(NULLIF(custom_fields->>'company', ''), company) IS NOT NULL
+    AND (custom_fields->>'company' IS NOT NULL OR company IS NOT NULL)
     ${dateFilter}
     GROUP BY COALESCE(NULLIF(custom_fields->>'company', ''), company)
     ORDER BY count DESC
@@ -166,7 +166,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
     SELECT 
       DATE(created_at) as date,
       COUNT(*) as registrations,
-      COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'email', ''), email)) as unique_registrations
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_registrations
     FROM visitors
     WHERE expo_id = $1
     AND created_at >= CURRENT_DATE - INTERVAL '30 days'
@@ -254,7 +254,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
         c.terminal,
         c.hall,
         v.custom_fields->>'name' as visitor_name,
-        v.COALESCE(NULLIF(custom_fields->>'company', ''), company) as company
+        COALESCE(NULLIF(custom_fields->>'company', ''), company) as company
       FROM checkins c
       JOIN visitors v ON c.visitor_id = v.id
       WHERE c.expo_id = $1
@@ -306,9 +306,9 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
     visitor_stats AS (
       SELECT 
         COUNT(*) as total_visitors,
-        COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'email', ''), email)) as unique_emails,
-        COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'company', ''), company)) as unique_companies,
-        COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'country', ''), country)) as unique_countries,
+        COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_emails,
+        COUNT(DISTINCT COALESCE(custom_fields->>'company', company)) as unique_companies,
+        COUNT(DISTINCT COALESCE(custom_fields->>'country', country)) as unique_countries,
         COUNT(DISTINCT expo_id) as expos_with_visitors,
         COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as registrations_today,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as registrations_week,
@@ -383,7 +383,7 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE organizer_id = $1), 0)), 2) as percentage
     FROM visitors
     WHERE organizer_id = $1 
-    AND COALESCE(NULLIF(custom_fields->>'country', ''), country) IS NOT NULL
+    AND (custom_fields->>'country' IS NOT NULL OR country IS NOT NULL)
     ${dateFilter}
     GROUP BY COALESCE(NULLIF(custom_fields->>'country', ''), country)
     ORDER BY count DESC
@@ -397,10 +397,10 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
       COALESCE(NULLIF(custom_fields->>'company', ''), company) as company,
       COUNT(*) as count,
       COUNT(DISTINCT expo_id) as expo_count,
-      COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'email', ''), email)) as unique_visitors
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_visitors
     FROM visitors
     WHERE organizer_id = $1 
-    AND COALESCE(NULLIF(custom_fields->>'company', ''), company) IS NOT NULL
+    AND (custom_fields->>'company' IS NOT NULL OR company IS NOT NULL)
     ${dateFilter}
     GROUP BY COALESCE(NULLIF(custom_fields->>'company', ''), company)
     ORDER BY count DESC
@@ -429,7 +429,7 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
       TO_CHAR(created_at, 'YYYY-MM') as month,
       COUNT(*) as registrations,
       COUNT(DISTINCT expo_id) as active_expos,
-      COUNT(DISTINCT COALESCE(NULLIF(custom_fields->>'email', ''), email)) as unique_visitors
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_visitors
     FROM visitors
     WHERE organizer_id = $1
     AND created_at >= CURRENT_DATE - INTERVAL '12 months'
@@ -489,7 +489,7 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
         e.name as expo_name,
         v.custom_fields->>'name' as visitor_name,
         v.custom_fields->>'email' as email,
-        v.COALESCE(NULLIF(custom_fields->>'company', ''), company) as company
+        COALESCE(NULLIF(custom_fields->>'company', ''), company) as company
       FROM visitors v
       JOIN expos e ON v.expo_id = e.id
       WHERE v.organizer_id = $1
