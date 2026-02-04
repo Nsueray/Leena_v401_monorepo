@@ -27,6 +27,9 @@ router.post('/inbound', upload.none(), async (req, res) => {
     }
 
     console.log('📩 INBOUND REPLY FROM:', fromEmail);
+    console.log('📩 INBOUND BODY KEYS:', Object.keys(req.body));
+    console.log('📩 INBOUND TEXT:', req.body.text ? req.body.text.substring(0, 200) : 'EMPTY');
+    console.log('📩 INBOUND HTML:', req.body.html ? req.body.html.substring(0, 200) : 'EMPTY');
 
     // Get organizer forward emails
     const orgRes = await pool.query(`
