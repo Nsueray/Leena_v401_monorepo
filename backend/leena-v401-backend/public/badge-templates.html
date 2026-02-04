@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Badge Templates - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5;
+            --danger: #ef4444; --danger-bg: #fee2e2;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        
+        /* Sidebar */
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        
+        /* Main Content */
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .header-actions { display: flex; gap: 10px; }
+        .main-content { flex: 1; padding: 24px; }
+        
+        /* Buttons */
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-secondary:hover { background: var(--bg-main); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        
+        /* Cards */
+        .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .template-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; position: relative; }
+        .template-card.default { border-color: var(--primary); border-width: 2px; }
+        .template-card .default-badge { position: absolute; top: 12px; right: 12px; background: var(--primary); color: white; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
+        .template-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+        .template-card .description { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+        .template-card .config-preview { background: var(--bg-main); border-radius: var(--radius-md); padding: 12px; margin-bottom: 16px; }
+        .template-card .config-item { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+        .template-card .config-item .label { color: var(--text-muted); }
+        .template-card .config-item .value { font-weight: 500; }
+        .template-card .actions { display: flex; gap: 8px; }
+        
+        /* Badge Preview */
+        .badge-preview { border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 10px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
+        .badge-mini { transform: scale(0.4); transform-origin: center; }
+        .badge-mini-wrapper { display: flex; align-items: center; background: white; border: 1px solid #ddd; padding: 4mm; }
+        .badge-mini-qr { width: 25mm; height: 25mm; background: #eee; margin-right: 4mm; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #999; }
+        .badge-mini-info { flex: 1; }
+        .badge-mini-name { font-weight: bold; font-size: 14pt; }
+        .badge-mini-company { font-size: 11pt; color: #555; }
+        
+        /* Modal */
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.2s; }
+        .modal-backdrop.show { opacity: 1; visibility: visible; }
+        .modal-content { background: var(--bg-card); border-radius: var(--radius-lg); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+        .modal-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h2 { font-size: 18px; font-weight: 600; }
+        .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
+        .modal-body { padding: 20px; }
+        .modal-footer { padding: 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
+        
+        /* Form */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 14px; }
+        .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-section { margin-bottom: 24px; }
+        .form-section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
+        
+        /* Checkbox */
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 12px; }
+        .checkbox-item { display: flex; align-items: center; gap: 8px; }
+        .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .checkbox-item label { font-size: 13px; cursor: pointer; }
+        
+        /* Loading */
+        .loading { display: flex; justify-content: center; padding: 40px; }
+        .spinner { width: 32px; height: 32px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Empty State */
+        .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; }
+        
+        @media (max-width: 768px) { 
+            .sidebar { display: none; } 
+            .main-wrapper { margin-left: 0; }
+            .form-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item active" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                </div>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-person-badge"></i> Badge Templates</h1>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="openModal()"><i class="bi bi-plus-lg"></i> New Template</button>
+                    <button class="btn btn-secondary" onclick="window.location.href='main-panel-v2.html'"><i class="bi bi-arrow-left"></i> Back</button>
+                </div>
+            </header>
+            
+            <main class="main-content" id="content">
+                <div class="loading"><div class="spinner"></div></div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal-backdrop" id="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">New Badge Template</h2>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="templateForm">
+                    <input type="hidden" id="templateId">
+                    
+                    <div class="form-section">
+                        <div class="form-section-title">Basic Info</div>
+                        <div class="form-group">
+                            <label>Template Name *</label>
+                            <input type="text" id="name" required placeholder="e.g., VIP Badge, Exhibitor Badge">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <textarea id="description" rows="2" placeholder="Optional description"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="is_default">
+                                <label for="is_default">Set as default template</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <div class="form-section-title">Badge Size</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Width (mm)</label>
+                                <input type="number" id="width_mm" value="100" min="20" max="300">
+                            </div>
+                            <div class="form-group">
+                                <label>Height (mm)</label>
+                                <input type="number" id="height_mm" value="50" min="20" max="300">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Orientation</label>
+                            <select id="orientation">
+                                <option value="landscape">Landscape</option>
+                                <option value="portrait">Portrait</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <div class="form-section-title">Content to Display</div>
+                        <div class="checkbox-group">
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="show_qr" checked>
+                                <label for="show_qr">QR Code</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="show_name" checked>
+                                <label for="show_name">Name</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="show_company" checked>
+                                <label for="show_company">Company</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="show_country">
+                                <label for="show_country">Country</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="show_role">
+                                <label for="show_role">Role Badge</label>
+                            </div>
+                            <div class="checkbox-item">
+                                <input type="checkbox" id="show_badge_id">
+                                <label for="show_badge_id">Badge ID</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-section">
+                        <div class="form-section-title">Font Sizes</div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Name Size</label>
+                                <select id="font_size_name">
+                                    <option value="14pt">Small (14pt)</option>
+                                    <option value="16pt">Medium (16pt)</option>
+                                    <option value="18pt" selected>Large (18pt)</option>
+                                    <option value="20pt">Extra Large (20pt)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Company Size</label>
+                                <select id="font_size_company">
+                                    <option value="10pt">Small (10pt)</option>
+                                    <option value="12pt">Medium (12pt)</option>
+                                    <option value="14pt" selected>Large (14pt)</option>
+                                    <option value="16pt">Extra Large (16pt)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="saveTemplate()"><i class="bi bi-check-lg"></i> Save Template</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('token');
+        let templates = [];
+        let editingId = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!token) { window.location.href = 'login_new.html'; return; }
+            loadTemplates();
+        });
+
+        async function loadTemplates() {
+            try {
+                const res = await fetch('/api/badge-templates', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!res.ok) throw new Error('Failed to load');
+                
+                const data = await res.json();
+                templates = data.templates || [];
+                renderTemplates();
+            } catch (e) {
+                console.error('Load error:', e);
+                document.getElementById('content').innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-exclamation-circle"></i>
+                        <h3>Failed to load templates</h3>
+                    </div>
+                `;
+            }
+        }
+
+        function renderTemplates() {
+            if (templates.length === 0) {
+                document.getElementById('content').innerHTML = `
+                    <div class="empty-state">
+                        <i class="bi bi-person-badge"></i>
+                        <h3>No Badge Templates</h3>
+                        <p>Create your first badge template to get started</p>
+                        <button class="btn btn-primary" onclick="openModal()" style="margin-top: 16px;">
+                            <i class="bi bi-plus-lg"></i> Create Template
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            document.getElementById('content').innerHTML = `
+                <div class="template-grid">
+                    ${templates.map(t => renderTemplateCard(t)).join('')}
+                </div>
+            `;
+        }
+
+        function renderTemplateCard(t) {
+            const size = t.size_config || {};
+            const content = t.content_config || {};
+            const style = t.style_config || {};
+            
+            const contentItems = [];
+            if (content.show_qr) contentItems.push('QR');
+            if (content.show_name) contentItems.push('Name');
+            if (content.show_company) contentItems.push('Company');
+            if (content.show_country) contentItems.push('Country');
+            if (content.show_role) contentItems.push('Role');
+            if (content.show_badge_id) contentItems.push('Badge ID');
+
+            return `
+                <div class="template-card ${t.is_default ? 'default' : ''}">
+                    ${t.is_default ? '<span class="default-badge">DEFAULT</span>' : ''}
+                    <h3>${escapeHtml(t.name)}</h3>
+                    <p class="description">${escapeHtml(t.description || 'No description')}</p>
+                    
+                    <div class="badge-preview">
+                        <div class="badge-mini-wrapper" style="width: ${size.width_mm || 100}mm; height: ${size.height_mm || 50}mm; transform: scale(0.35);">
+                            ${content.show_qr ? '<div class="badge-mini-qr">QR</div>' : ''}
+                            <div class="badge-mini-info">
+                                ${content.show_name ? '<div class="badge-mini-name">John Doe</div>' : ''}
+                                ${content.show_company ? '<div class="badge-mini-company">Acme Inc.</div>' : ''}
+                                ${content.show_country ? '<div style="font-size:10pt;color:#777;">Nigeria</div>' : ''}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="config-preview">
+                        <div class="config-item">
+                            <span class="label">Size</span>
+                            <span class="value">${size.width_mm || 100} × ${size.height_mm || 50} mm</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">Orientation</span>
+                            <span class="value">${size.orientation || 'landscape'}</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">Content</span>
+                            <span class="value">${contentItems.join(', ') || 'None'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="actions">
+                        <button class="btn btn-secondary btn-sm" onclick="editTemplate(${t.id})">
+                            <i class="bi bi-pencil"></i> Edit
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="previewTemplate(${t.id})">
+                            <i class="bi bi-eye"></i> Preview
+                        </button>
+                        ${!t.is_default ? `
+                            <button class="btn btn-danger btn-sm" onclick="deleteTemplate(${t.id})">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function openModal(template = null) {
+            editingId = template ? template.id : null;
+            document.getElementById('modalTitle').textContent = template ? 'Edit Template' : 'New Badge Template';
+            
+            // Reset form
+            document.getElementById('templateForm').reset();
+            
+            if (template) {
+                const size = template.size_config || {};
+                const content = template.content_config || {};
+                const style = template.style_config || {};
+                
+                document.getElementById('templateId').value = template.id;
+                document.getElementById('name').value = template.name || '';
+                document.getElementById('description').value = template.description || '';
+                document.getElementById('is_default').checked = template.is_default || false;
+                
+                document.getElementById('width_mm').value = size.width_mm || 100;
+                document.getElementById('height_mm').value = size.height_mm || 50;
+                document.getElementById('orientation').value = size.orientation || 'landscape';
+                
+                document.getElementById('show_qr').checked = content.show_qr !== false;
+                document.getElementById('show_name').checked = content.show_name !== false;
+                document.getElementById('show_company').checked = content.show_company !== false;
+                document.getElementById('show_country').checked = content.show_country || false;
+                document.getElementById('show_role').checked = content.show_role || false;
+                document.getElementById('show_badge_id').checked = content.show_badge_id || false;
+                
+                document.getElementById('font_size_name').value = style.font_size_name || '18pt';
+                document.getElementById('font_size_company').value = style.font_size_company || '14pt';
+            }
+            
+            document.getElementById('modal').classList.add('show');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('show');
+            editingId = null;
+        }
+
+        function editTemplate(id) {
+            const template = templates.find(t => t.id === id);
+            if (template) openModal(template);
+        }
+
+        async function saveTemplate() {
+            const name = document.getElementById('name').value.trim();
+            if (!name) {
+                alert('Please enter a template name');
+                return;
+            }
+
+            const payload = {
+                name: name,
+                description: document.getElementById('description').value.trim(),
+                is_default: document.getElementById('is_default').checked,
+                size_config: {
+                    width_mm: parseInt(document.getElementById('width_mm').value) || 100,
+                    height_mm: parseInt(document.getElementById('height_mm').value) || 50,
+                    orientation: document.getElementById('orientation').value
+                },
+                content_config: {
+                    show_qr: document.getElementById('show_qr').checked,
+                    show_name: document.getElementById('show_name').checked,
+                    show_company: document.getElementById('show_company').checked,
+                    show_country: document.getElementById('show_country').checked,
+                    show_role: document.getElementById('show_role').checked,
+                    show_badge_id: document.getElementById('show_badge_id').checked
+                },
+                style_config: {
+                    font_size_name: document.getElementById('font_size_name').value,
+                    font_size_company: document.getElementById('font_size_company').value
+                }
+            };
+
+            try {
+                const url = editingId ? `/api/badge-templates/${editingId}` : '/api/badge-templates';
+                const method = editingId ? 'PUT' : 'POST';
+                
+                const res = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Failed to save');
+                }
+
+                closeModal();
+                loadTemplates();
+            } catch (e) {
+                console.error('Save error:', e);
+                alert('Failed to save template: ' + e.message);
+            }
+        }
+
+        async function deleteTemplate(id) {
+            if (!confirm('Are you sure you want to delete this template?')) return;
+
+            try {
+                const res = await fetch(`/api/badge-templates/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error || 'Failed to delete');
+                }
+
+                loadTemplates();
+            } catch (e) {
+                console.error('Delete error:', e);
+                alert('Failed to delete: ' + e.message);
+            }
+        }
+
+        function previewTemplate(id) {
+            // Open badge preview with sample data
+            window.open(`/badge.html?qr=SAMPLE&template_id=${id}&preview=1`, '_blank', 'width=450,height=300');
+        }
+
+        function escapeHtml(t) {
+            const d = document.createElement('div');
+            d.textContent = t || '';
+            return d.innerHTML;
+        }
+
+        // Close modal on backdrop click
+        document.getElementById('modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+    </script>
+</body>
+</html>
