@@ -289,7 +289,7 @@
                         </div>
                     </div>
                     <div class="list-card">
-                        <h3><i class="bi bi-box-arrow-in-down"></i> By Origin</h3>
+                        <h3><i class="bi bi-megaphone"></i> Top Sources</h3>
                         <div id="originList"></div>
                     </div>
                     <div class="list-card">
@@ -359,18 +359,37 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: {
-                        legend: { display: false }
+                        legend: { display: false },
+                        datalabels: { display: false }
                     },
                     scales: {
                         y: { 
                             beginAtZero: true,
-                            ticks: { stepSize: 50 }
+                            ticks: { stepSize: 100 }
                         },
                         x: {
                             grid: { display: false }
                         }
                     }
-                }
+                },
+                plugins: [{
+                    id: 'valueLabels',
+                    afterDatasetsDraw(chart) {
+                        const ctx = chart.ctx;
+                        chart.data.datasets.forEach((dataset, i) => {
+                            const meta = chart.getDatasetMeta(i);
+                            meta.data.forEach((bar, index) => {
+                                const value = dataset.data[index];
+                                if (value > 0) {
+                                    ctx.fillStyle = '#475569';
+                                    ctx.font = 'bold 11px Inter';
+                                    ctx.textAlign = 'center';
+                                    ctx.fillText(value, bar.x, bar.y - 5);
+                                }
+                            });
+                        });
+                    }
+                }]
             });
         }
 
@@ -380,11 +399,15 @@
             
             // Take top 6 sources
             const topSources = sources.slice(0, 6);
+            const total = topSources.reduce((sum, s) => sum + (parseInt(s.count) || 0), 0);
             
-            // Shorten labels
+            // Shorten labels and add percentage
             const labels = topSources.map(s => {
                 const name = s.source || 'Unknown';
-                return name.length > 20 ? name.substring(0, 20) + '...' : name;
+                const count = parseInt(s.count) || 0;
+                const pct = total > 0 ? Math.round(count / total * 100) : 0;
+                const shortName = name.length > 15 ? name.substring(0, 15) + '...' : name;
+                return `${shortName} (${pct}%)`;
             });
             const values = topSources.map(s => parseInt(s.count) || 0);
             
@@ -526,44 +549,37 @@
             const container = document.getElementById('originList');
             if (!container) return;
             
-            // Group by origin (zohoform, manual, import, etc.)
-            // Since sources contain source field, we need origin
-            // For now, show sources but label as origin
+            // Group by actual origin values from the data
+            // sources has 'source' field but we need to calculate origin differently
+            // Let's fetch origin data from the report or calculate from sources
             
-            const originCounts = {};
-            sources.forEach(s => {
-                // Try to extract origin from source name
-                let origin = 'other';
-                const sourceLower = (s.source || '').toLowerCase();
-                if (sourceLower.includes('zoho') || sourceLower.includes('form')) origin = 'zohoform';
-                else if (sourceLower.includes('manual')) origin = 'manual';
-                else if (sourceLower.includes('import')) origin = 'import';
-                
-                originCounts[origin] = (originCounts[origin] || 0) + parseInt(s.count);
-            });
+            // For now, let's show unique sources as a simple list
+            // since origin data might not be in the API response
             
-            const origins = Object.entries(originCounts)
-                .map(([name, count]) => ({ name, count }))
-                .sort((a, b) => b.count - a.count);
-            
-            if (origins.length === 0) {
+            if (!sources || sources.length === 0) {
                 container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 20px;">No data available</p>';
                 return;
             }
             
-            const icons = {
-                'zohoform': 'bi-ui-checks',
-                'manual': 'bi-pencil',
-                'import': 'bi-cloud-upload',
-                'other': 'bi-question-circle'
-            };
+            // Calculate total
+            const total = sources.reduce((sum, s) => sum + (parseInt(s.count) || 0), 0);
             
-            container.innerHTML = origins.map(o => `
-                <div class="list-item">
-                    <span class="name"><i class="bi ${icons[o.name] || icons.other}" style="margin-right: 8px;"></i>${o.name}</span>
-                    <span class="count">${o.count.toLocaleString()}</span>
-                </div>
-            `).join('');
+            // Show top 5 sources with percentages
+            const topSources = sources.slice(0, 5);
+            
+            container.innerHTML = topSources.map(s => {
+                const count = parseInt(s.count) || 0;
+                const pct = total > 0 ? Math.round(count / total * 100) : 0;
+                const name = s.source || 'Unknown';
+                const shortName = name.length > 25 ? name.substring(0, 25) + '...' : name;
+                
+                return `
+                    <div class="list-item">
+                        <span class="name" title="${escapeHtml(name)}">${escapeHtml(shortName)}</span>
+                        <span class="count">${count.toLocaleString()} (${pct}%)</span>
+                    </div>
+                `;
+            }).join('');
         }
 
         async function exportReport() {
