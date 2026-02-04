@@ -8,14 +8,64 @@ const { sendEmail } = require('../utils/email');
 /**
  * SendGrid Inbound Parse
  * Forward replies to organizer emails
- * NOTE: Uses existing sendEmail(to, subject, html)
  */
 
 router.post('/inbound', upload.none(), async (req, res) => {
   try {
     const subject = req.body.subject || 'Visitor Reply';
-    const text = req.body.text || '';
     const rawFrom = req.body.from || '';
+    
+    // SendGrid sends full email in 'email' field
+    const rawEmail = req.body.email || '';
+    
+    // Extract text content from raw email
+    let textContent = '';
+    
+    // Try to get text/html from body first (if SendGrid parsed it)
+    if (req.body.text) {
+      textContent = req.body.text;
+    } else if (req.body.html) {
+      textContent = req.body.html;
+    } else if (rawEmail) {
+      // Parse text content from raw email
+      // Look for the actual message content (before quoted reply)
+      const lines = rawEmail.split('\n');
+      let inBody = false;
+      let bodyLines = [];
+      
+      for (const line of lines) {
+        // Skip headers until we hit empty line (start of body)
+        if (!inBody) {
+          if (line.trim() === '') {
+            inBody = true;
+          }
+          continue;
+        }
+        
+        // Stop at quoted reply indicator
+        if (line.startsWith('On ') && line.includes(' wrote:')) {
+          break;
+        }
+        if (line.startsWith('>')) {
+          break;
+        }
+        if (line.includes('-------- Original Message --------')) {
+          break;
+        }
+        
+        bodyLines.push(line);
+      }
+      
+      textContent = bodyLines.join('\n').trim();
+      
+      // If still empty, try to extract from multipart
+      if (!textContent && rawEmail.includes('Content-Type: text/plain')) {
+        const plainMatch = rawEmail.match(/Content-Type: text\/plain[^\n]*\n\n([\s\S]*?)(?=\n--|\n\nOn .* wrote:)/);
+        if (plainMatch) {
+          textContent = plainMatch[1].trim();
+        }
+      }
+    }
 
     // Extract plain email from "Name <email>" or "email"
     let fromEmail = rawFrom;
@@ -27,9 +77,7 @@ router.post('/inbound', upload.none(), async (req, res) => {
     }
 
     console.log('📩 INBOUND REPLY FROM:', fromEmail);
-    console.log('📩 INBOUND BODY KEYS:', Object.keys(req.body));
-    console.log('📩 INBOUND TEXT:', req.body.text ? req.body.text.substring(0, 200) : 'EMPTY');
-    console.log('📩 INBOUND HTML:', req.body.html ? req.body.html.substring(0, 200) : 'EMPTY');
+    console.log('📩 EXTRACTED TEXT:', textContent ? textContent.substring(0, 200) : 'EMPTY');
 
     // Get organizer forward emails
     const orgRes = await pool.query(`
@@ -53,16 +101,18 @@ router.post('/inbound', upload.none(), async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Build simple HTML email
+    // Build HTML email with extracted content
     const html = `
-      <p><strong>From:</strong> ${fromEmail}</p>
-      <hr/>
-      <pre style="white-space:pre-wrap;">${text}</pre>
+      <div style="font-family: Arial, sans-serif; max-width: 600px;">
+        <div style="background: #f5f5f5; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;">
+          <strong>From:</strong> ${fromEmail}
+        </div>
+        <div style="padding: 16px; background: #fff; border: 1px solid #e0e0e0; border-radius: 8px;">
+          <pre style="white-space: pre-wrap; font-family: inherit; margin: 0;">${textContent || '(No message content)'}</pre>
+        </div>
+      </div>
     `;
 
-    // IMPORTANT:
-    // sendEmail(to, subject, html)
-    // to can be string or array of strings
     await sendEmail(
       forwardEmails,
       `[Visitor Reply] ${subject}`,
@@ -74,7 +124,7 @@ router.post('/inbound', upload.none(), async (req, res) => {
 
   } catch (err) {
     console.error('❌ Inbound forward error:', err);
-    res.sendStatus(200); // avoid SendGrid retries
+    res.sendStatus(200);
   }
 });
 
