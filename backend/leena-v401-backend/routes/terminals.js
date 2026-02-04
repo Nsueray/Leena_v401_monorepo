@@ -77,3 +77,30 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+
+// ✅ PATCH /api/terminals/:id/toggle - Toggle terminal active status
+router.patch('/:id/toggle', authMiddleware, async (req, res) => {
+  try {
+    const terminalId = req.params.id;
+    const organizer_id = req.organizer_id;
+    const { is_active } = req.body;
+
+    if (typeof is_active !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'is_active must be a boolean' });
+    }
+
+    const result = await pool.query(
+      `UPDATE terminals SET is_active = $1 WHERE id = $2 AND organizer_id = $3 RETURNING *`,
+      [is_active, terminalId, organizer_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Terminal not found' });
+    }
+
+    res.json({ success: true, terminal: result.rows[0] });
+  } catch (err) {
+    console.error('❌ Error toggling terminal:', err);
+    res.status(500).json({ success: false, message: 'Failed to update terminal' });
+  }
+});
