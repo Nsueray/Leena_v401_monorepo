@@ -41,6 +41,7 @@
         .btn-primary:hover { background: var(--primary-hover); }
         .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
         .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
         .btn-danger { background: white; color: var(--danger); border-color: var(--border-color); }
         .btn-danger:hover { background: #fee2e2; }
         .btn-sm { padding: 6px 12px; font-size: 12px; }
@@ -78,6 +79,7 @@
         .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s; }
         .toast.error { background: var(--danger); }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        .action-buttons { display: flex; gap: 6px; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } }
     </style>
 </head>
@@ -151,9 +153,9 @@
                 
                 <div class="info-box">
                     <div class="info-row">
-                        <div class="info-item"><i class="bi bi-link-45deg"></i><span class="info-label">Scanner URL:</span><span class="info-value" id="scannerUrl">Loading...</span></div>
                         <div class="info-item"><i class="bi bi-calendar-event"></i><span class="info-label">Expo:</span><span class="info-value" id="currentExpo">Loading...</span></div>
                         <div class="info-item"><i class="bi bi-pc-display"></i><span class="info-label">Total:</span><span class="info-value" id="totalTerminals">0</span></div>
+                        <div class="info-item"><i class="bi bi-check-circle"></i><span class="info-label">Active:</span><span class="info-value" id="activeTerminals">0</span></div>
                     </div>
                 </div>
                 
@@ -186,7 +188,6 @@
         });
 
         function displayInfo() {
-            document.getElementById('scannerUrl').textContent = `${window.location.origin}/qrscanner.html`;
             document.getElementById('currentExpo').textContent = localStorage.getItem('selectedExpoName') || `Expo #${expoId}`;
         }
 
@@ -199,6 +200,7 @@
                 terminals = data.terminals || [];
                 renderTerminals();
                 document.getElementById('totalTerminals').textContent = terminals.length;
+                document.getElementById('activeTerminals').textContent = terminals.filter(t => t.is_active !== false).length;
             } catch (e) { showAlert('Failed to load terminals', 'danger'); }
         }
 
@@ -217,15 +219,25 @@
             terminals.forEach(t => {
                 const url = generateScannerUrl(t);
                 const hasKey = !!t.terminal_key;
+                const isActive = t.is_active !== false;
                 html += `<tr>
                     <td><strong>${escapeHtml(t.hall)}</strong></td>
                     <td>${escapeHtml(t.terminal_no)}</td>
                     <td><span class="badge ${t.auto_checkin ? 'badge-success' : 'badge-secondary'}">${t.auto_checkin ? 'Enabled' : 'Disabled'}</span></td>
-                    <td><span class="badge ${t.is_active !== false ? 'badge-success' : 'badge-secondary'}">${t.is_active !== false ? 'Active' : 'Inactive'}</span></td>
+                    <td><span class="badge ${isActive ? 'badge-success' : 'badge-secondary'}">${isActive ? 'Active' : 'Inactive'}</span></td>
                     <td><span class="badge ${hasKey ? 'badge-success' : 'badge-warning'}">${hasKey ? 'Generated' : 'Missing'}</span></td>
                     <td>${new Date(t.created_at).toLocaleDateString()}</td>
                     <td>${hasKey ? `<button class="btn btn-sm btn-success" onclick="copyScannerUrl('${escapeHtml(url)}')"><i class="bi bi-clipboard-check"></i> Copy</button>` : '<span class="text-muted">No key</span>'}</td>
-                    <td><button class="btn btn-sm btn-danger" onclick="deleteTerminal(${t.id})"><i class="bi bi-trash"></i></button></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-sm ${isActive ? 'btn-warning' : 'btn-success'}" onclick="toggleTerminal(${t.id}, ${!isActive})" title="${isActive ? 'Deactivate' : 'Activate'}">
+                                <i class="bi bi-${isActive ? 'pause-circle' : 'play-circle'}"></i>
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteTerminal(${t.id})" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </td>
                 </tr>`;
             });
             html += '</tbody></table>';
@@ -250,8 +262,23 @@
                 if (!response.ok) throw new Error('Failed');
                 showAlert('Terminal added!', 'success');
                 document.getElementById('addTerminalForm').reset();
+                document.getElementById('autoCheckin').checked = true;
+                document.getElementById('isActive').checked = true;
                 loadTerminals();
             } catch (e) { showAlert('Failed to add terminal', 'danger'); }
+        }
+
+        async function toggleTerminal(id, newStatus) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/terminals/${id}/toggle`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ is_active: newStatus })
+                });
+                if (!response.ok) throw new Error('Failed');
+                showToast(`Terminal ${newStatus ? 'activated' : 'deactivated'}`);
+                loadTerminals();
+            } catch (e) { showAlert('Failed to update terminal', 'danger'); }
         }
 
         async function deleteTerminal(id) {
