@@ -67,6 +67,7 @@
         .badge-success { background: var(--success-bg); color: #065f46; }
         .badge-warning { background: var(--warning-bg); color: #92400e; }
         .badge-secondary { background: #f3f4f6; color: #6b7280; }
+        .badge-primary { background: var(--primary-light); color: var(--primary); }
         .empty-state { text-align: center; padding: 60px 24px; }
         .empty-state-icon { width: 64px; height: 64px; background: var(--bg-main); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; color: var(--text-muted); }
         .loading-spinner { display: flex; justify-content: center; padding: 40px; }
@@ -80,6 +81,7 @@
         .toast.error { background: var(--danger); }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .action-buttons { display: flex; gap: 6px; }
+        .template-select { min-width: 140px; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } }
     </style>
 </head>
@@ -97,15 +99,18 @@
                 <div class="nav-section">
                     <div class="nav-section-title">Management</div>
                     <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
-                    <a class="nav-item" href="main-panel-v2.html" onclick="localStorage.setItem('loadPage','forms')"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
                     <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
                     <a class="nav-item active" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
                 </div>
                 <div class="nav-section">
                     <div class="nav-section-title">Communication</div>
                     <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
-                    <a class="nav-item" href="email-send.html"><i class="bi bi-send"></i><span>Send Emails</span></a>
                     <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
                 </div>
                 <div class="nav-divider"></div>
                 <div class="nav-section">
@@ -129,23 +134,29 @@
                     <div class="card-header"><i class="bi bi-plus-circle"></i> Add New Terminal</div>
                     <div class="card-body">
                         <form id="addTerminalForm" style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-end;">
-                            <div style="flex:1;min-width:150px;">
+                            <div style="flex:1;min-width:120px;">
                                 <label class="form-label">Hall *</label>
                                 <input type="text" class="form-control" id="hall" placeholder="e.g. Hall A" required>
                             </div>
-                            <div style="flex:1;min-width:150px;">
+                            <div style="flex:1;min-width:100px;">
                                 <label class="form-label">Terminal No *</label>
                                 <input type="text" class="form-control" id="terminalNo" placeholder="e.g. T1" required>
                             </div>
-                            <div style="flex:1;min-width:200px;">
+                            <div style="flex:1;min-width:180px;">
+                                <label class="form-label">Badge Template</label>
+                                <select class="form-select" id="badgeTemplateId">
+                                    <option value="">Default</option>
+                                </select>
+                            </div>
+                            <div style="min-width:180px;">
                                 <label class="form-label">Settings</label>
-                                <div style="display:flex;gap:16px;padding-top:8px;">
+                                <div style="display:flex;gap:12px;padding-top:6px;">
                                     <label class="form-check"><input type="checkbox" class="form-check-input" id="autoCheckin" checked> Auto Check-in</label>
                                     <label class="form-check"><input type="checkbox" class="form-check-input" id="isActive" checked> Active</label>
                                 </div>
                             </div>
                             <div>
-                                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add Terminal</button>
+                                <button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Add</button>
                             </div>
                         </form>
                     </div>
@@ -175,20 +186,57 @@
 
     <script>
         const API_BASE_URL = '/api';
-        let terminals = [], expoId = null, token = null;
+        let terminals = [], badgeTemplates = [], expoId = null, token = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             token = localStorage.getItem('token');
             expoId = localStorage.getItem('selectedExpoId');
             if (!token) { window.location.href = 'login_new.html'; return; }
-            if (!expoId) { alert('No expo selected.'); window.location.href = 'dashboard_new.html'; return; }
+            if (!expoId) { alert('No expo selected.'); window.location.href = 'main-panel-v2.html'; return; }
             document.getElementById('addTerminalForm').addEventListener('submit', handleAddTerminal);
+            loadBadgeTemplates();
             loadTerminals();
             displayInfo();
         });
 
         function displayInfo() {
             document.getElementById('currentExpo').textContent = localStorage.getItem('selectedExpoName') || `Expo #${expoId}`;
+        }
+
+        async function loadBadgeTemplates() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/badge-templates`, { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                if (!response.ok) throw new Error('Failed');
+                const data = await response.json();
+                badgeTemplates = data.templates || [];
+                populateBadgeTemplateDropdowns();
+            } catch (e) { 
+                console.warn('Could not load badge templates:', e);
+            }
+        }
+
+        function populateBadgeTemplateDropdowns() {
+            const select = document.getElementById('badgeTemplateId');
+            select.innerHTML = '<option value="">Default</option>';
+            badgeTemplates.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name + (t.is_default ? ' ★' : '');
+                select.appendChild(opt);
+            });
+        }
+
+        function getTemplateSelectHtml(currentTemplateId, terminalId) {
+            let html = `<select class="form-select template-select" onchange="updateTerminalTemplate(${terminalId}, this.value)">`;
+            html += '<option value="">Default</option>';
+            badgeTemplates.forEach(t => {
+                const selected = currentTemplateId == t.id ? 'selected' : '';
+                html += `<option value="${t.id}" ${selected}>${escapeHtml(t.name)}${t.is_default ? ' ★' : ''}</option>`;
+            });
+            html += '</select>';
+            return html;
         }
 
         async function loadTerminals() {
@@ -215,19 +263,19 @@
                 container.innerHTML = '<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-pc-display"></i></div><h3>No Terminals Yet</h3><p>Add your first terminal above</p></div>';
                 return;
             }
-            let html = '<table><thead><tr><th>Hall</th><th>Terminal</th><th>Auto Check-in</th><th>Status</th><th>Key</th><th>Created</th><th>Scanner Link</th><th>Actions</th></tr></thead><tbody>';
+            let html = '<table><thead><tr><th>Hall</th><th>Terminal</th><th>Badge Template</th><th>Auto Check-in</th><th>Status</th><th>Scanner Link</th><th>Actions</th></tr></thead><tbody>';
             terminals.forEach(t => {
                 const url = generateScannerUrl(t);
                 const hasKey = !!t.terminal_key;
                 const isActive = t.is_active !== false;
+                
                 html += `<tr>
                     <td><strong>${escapeHtml(t.hall)}</strong></td>
                     <td>${escapeHtml(t.terminal_no)}</td>
-                    <td><span class="badge ${t.auto_checkin ? 'badge-success' : 'badge-secondary'}">${t.auto_checkin ? 'Enabled' : 'Disabled'}</span></td>
+                    <td>${getTemplateSelectHtml(t.badge_template_id, t.id)}</td>
+                    <td><span class="badge ${t.auto_checkin ? 'badge-success' : 'badge-secondary'}">${t.auto_checkin ? 'Yes' : 'No'}</span></td>
                     <td><span class="badge ${isActive ? 'badge-success' : 'badge-secondary'}">${isActive ? 'Active' : 'Inactive'}</span></td>
-                    <td><span class="badge ${hasKey ? 'badge-success' : 'badge-warning'}">${hasKey ? 'Generated' : 'Missing'}</span></td>
-                    <td>${new Date(t.created_at).toLocaleDateString()}</td>
-                    <td>${hasKey ? `<button class="btn btn-sm btn-success" onclick="copyScannerUrl('${escapeHtml(url)}')"><i class="bi bi-clipboard-check"></i> Copy</button>` : '<span class="text-muted">No key</span>'}</td>
+                    <td>${hasKey ? `<button class="btn btn-sm btn-success" onclick="copyScannerUrl('${escapeHtml(url)}')"><i class="bi bi-clipboard"></i> Copy URL</button>` : '<span class="badge badge-warning">No key</span>'}</td>
                     <td>
                         <div class="action-buttons">
                             <button class="btn btn-sm ${isActive ? 'btn-warning' : 'btn-success'}" onclick="toggleTerminal(${t.id}, ${!isActive})" title="${isActive ? 'Deactivate' : 'Activate'}">
@@ -252,20 +300,45 @@
             e.preventDefault();
             const hall = document.getElementById('hall').value.trim();
             const terminalNo = document.getElementById('terminalNo').value.trim();
-            if (!hall || !terminalNo) { showAlert('Fill all fields', 'danger'); return; }
+            const badgeTemplateId = document.getElementById('badgeTemplateId').value || null;
+            
+            if (!hall || !terminalNo) { showAlert('Fill all required fields', 'danger'); return; }
+            
             try {
                 const response = await fetch(`${API_BASE_URL}/terminals`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ expo_id: expoId, hall, terminal_no: terminalNo, auto_checkin: document.getElementById('autoCheckin').checked, is_active: document.getElementById('isActive').checked })
+                    body: JSON.stringify({ 
+                        expo_id: expoId, 
+                        hall, 
+                        terminal_no: terminalNo, 
+                        auto_checkin: document.getElementById('autoCheckin').checked, 
+                        is_active: document.getElementById('isActive').checked,
+                        badge_template_id: badgeTemplateId
+                    })
                 });
                 if (!response.ok) throw new Error('Failed');
-                showAlert('Terminal added!', 'success');
+                showToast('Terminal added!');
                 document.getElementById('addTerminalForm').reset();
                 document.getElementById('autoCheckin').checked = true;
                 document.getElementById('isActive').checked = true;
                 loadTerminals();
             } catch (e) { showAlert('Failed to add terminal', 'danger'); }
+        }
+
+        async function updateTerminalTemplate(terminalId, templateId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/terminals/${terminalId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ badge_template_id: templateId || null })
+                });
+                if (!response.ok) throw new Error('Failed');
+                showToast('Badge template updated');
+            } catch (e) { 
+                showAlert('Failed to update template', 'danger'); 
+                loadTerminals();
+            }
         }
 
         async function toggleTerminal(id, newStatus) {
@@ -286,7 +359,7 @@
             try {
                 const response = await fetch(`${API_BASE_URL}/terminals/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
                 if (!response.ok) throw new Error('Failed');
-                showAlert('Terminal deleted', 'success');
+                showToast('Terminal deleted');
                 loadTerminals();
             } catch (e) { showAlert('Failed to delete', 'danger'); }
         }

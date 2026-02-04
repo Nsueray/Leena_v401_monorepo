@@ -30,7 +30,7 @@ router.get('/', authMiddleware, async (req, res) => {
 // ✅ POST /api/terminals
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { hall, terminal_no, auto_checkin } = req.body;
+    const { hall, terminal_no, auto_checkin, is_active, badge_template_id } = req.body;
     const expo_id = req.body.expo_id;
     const organizer_id = req.organizer_id;
 
@@ -42,9 +42,18 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO terminals (
-        organizer_id, expo_id, hall, terminal_no, auto_checkin, terminal_key
-      ) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [organizer_id, expo_id, hall, terminal_no, auto_checkin ?? true, terminalKey]
+        organizer_id, expo_id, hall, terminal_no, auto_checkin, is_active, terminal_key, badge_template_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        organizer_id, 
+        expo_id, 
+        hall, 
+        terminal_no, 
+        auto_checkin ?? true, 
+        is_active ?? true,
+        terminalKey,
+        badge_template_id || null
+      ]
     );
 
     res.status(201).json({ success: true, terminal: result.rows[0] });
@@ -54,29 +63,62 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ DELETE /api/terminals/:id
-router.delete('/:id', authMiddleware, async (req, res) => {
+// ✅ PUT /api/terminals/:id - Update terminal
+router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const terminalId = req.params.id;
     const organizer_id = req.organizer_id;
+    const { hall, terminal_no, auto_checkin, is_active, badge_template_id } = req.body;
+
+    // Build dynamic update query
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (hall !== undefined) {
+      updates.push(`hall = $${paramIndex++}`);
+      values.push(hall);
+    }
+    if (terminal_no !== undefined) {
+      updates.push(`terminal_no = $${paramIndex++}`);
+      values.push(terminal_no);
+    }
+    if (auto_checkin !== undefined) {
+      updates.push(`auto_checkin = $${paramIndex++}`);
+      values.push(auto_checkin);
+    }
+    if (is_active !== undefined) {
+      updates.push(`is_active = $${paramIndex++}`);
+      values.push(is_active);
+    }
+    if (badge_template_id !== undefined) {
+      updates.push(`badge_template_id = $${paramIndex++}`);
+      values.push(badge_template_id || null);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+
+    values.push(terminalId, organizer_id);
 
     const result = await pool.query(
-      `DELETE FROM terminals WHERE id = $1 AND organizer_id = $2 RETURNING *`,
-      [terminalId, organizer_id]
+      `UPDATE terminals SET ${updates.join(', ')} 
+       WHERE id = $${paramIndex++} AND organizer_id = $${paramIndex} 
+       RETURNING *`,
+      values
     );
 
     if (result.rowCount === 0) {
       return res.status(404).json({ success: false, message: 'Terminal not found' });
     }
 
-    res.json({ success: true, message: 'Terminal deleted' });
+    res.json({ success: true, terminal: result.rows[0] });
   } catch (err) {
-    console.error('❌ Error deleting terminal:', err);
-    res.status(500).json({ success: false, message: 'Failed to delete terminal' });
+    console.error('❌ Error updating terminal:', err);
+    res.status(500).json({ success: false, message: 'Failed to update terminal' });
   }
 });
-
-module.exports = router;
 
 // ✅ PATCH /api/terminals/:id/toggle - Toggle terminal active status
 router.patch('/:id/toggle', authMiddleware, async (req, res) => {
@@ -104,3 +146,27 @@ router.patch('/:id/toggle', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to update terminal' });
   }
 });
+
+// ✅ DELETE /api/terminals/:id
+router.delete('/:id', authMiddleware, async (req, res) => {
+  try {
+    const terminalId = req.params.id;
+    const organizer_id = req.organizer_id;
+
+    const result = await pool.query(
+      `DELETE FROM terminals WHERE id = $1 AND organizer_id = $2 RETURNING *`,
+      [terminalId, organizer_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ success: false, message: 'Terminal not found' });
+    }
+
+    res.json({ success: true, message: 'Terminal deleted' });
+  } catch (err) {
+    console.error('❌ Error deleting terminal:', err);
+    res.status(500).json({ success: false, message: 'Failed to delete terminal' });
+  }
+});
+
+module.exports = router;
