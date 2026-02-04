@@ -7,7 +7,8 @@ const { sendEmail, sendEmailWithReplyTo, processEmailTemplate } = require('../ut
 
 const ZOHO_TOKEN = '98uy237fbiweuhr8h23g9rg239';
 
-// ✅ Yeni endpoint: POST /api/webhook/zoho/:organizer_id/:expo_id/:form_id
+// ✅ POST /api/webhook/zoho/:organizer_id/:expo_id/:form_id
+// With duplicate email handling (upsert logic)
 router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
   try {
     const token = req.headers['x-webhook-token'];
@@ -17,116 +18,126 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
 
     const { organizer_id, expo_id, form_id } = req.params;
 
-    const name =
-      req.body.name ??
-      '';
-    const lastName =
-      req.body.lastName ??
-      req.body.last_name ??
-      '';
+    const name = req.body.name ?? '';
+    const lastName = req.body.lastName ?? req.body.last_name ?? '';
     const email = req.body.email;
-    const company =
-      req.body.company ??
-      '';
-    const badgeNumber =
-      req.body.badgeNumber ??
-      req.body.badge_id ??
-      '';
-    const sector =
-      req.body.sector ??
-      '';
-    const visitorCategory =
-      req.body.visitorCategory ??
-      req.body.visitor_category ??
-      '';
-    const visitorStatus =
-      req.body.visitorStatus ??
-      req.body.visitor_status ??
-      '';
-    const visitorType =
-      req.body.visitorType ??
-      req.body.visitor_type ??
-      '';
-    const visitorSource =
-      req.body.visitorSource ??
-      req.body.source ??
-      'zoho';
-    const jobTitle =
-      req.body.jobTitle ??
-      req.body.job_title ??
-      '';
-    const country =
-      req.body.country ??
-      '';
-    const phone =
-      req.body.phone ??
-      '';
-    const website =
-      req.body.website ??
-      '';
-    const origin =
-      req.body.origin ??
-      '';
+    const company = req.body.company ?? '';
+    const badgeNumber = req.body.badgeNumber ?? req.body.badge_id ?? '';
+    const sector = req.body.sector ?? '';
+    const visitorCategory = req.body.visitorCategory ?? req.body.visitor_category ?? '';
+    const visitorStatus = req.body.visitorStatus ?? req.body.visitor_status ?? '';
+    const visitorType = req.body.visitorType ?? req.body.visitor_type ?? '';
+    const visitorSource = req.body.visitorSource ?? req.body.source ?? 'zoho';
+    const jobTitle = req.body.jobTitle ?? req.body.job_title ?? '';
+    const country = req.body.country ?? '';
+    const phone = req.body.phone ?? '';
+    const website = req.body.website ?? '';
+    const origin = req.body.origin ?? '';
 
     console.log('📥 Incoming Zoho webhook:', req.body);
 
-    // Expo adı için bilgi çek
-    const expoResult = await pool.query(`SELECT name FROM expos WHERE id = $1 AND organizer_id = $2`, [expo_id, organizer_id]);
+    // Validate email
+    if (!email || email.trim() === '') {
+      return res.status(400).json({ success: false, message: 'Email is required' });
+    }
+
+    // Get expo info
+    const expoResult = await pool.query(
+      `SELECT name FROM expos WHERE id = $1 AND organizer_id = $2`,
+      [expo_id, organizer_id]
+    );
     if (expoResult.rows.length === 0) {
       return res.status(400).json({ success: false, message: 'Expo not found' });
     }
     const expo_name = expoResult.rows[0].name;
 
-    const badge_id = badgeNumber || `BADGE-${Date.now()}`;
-    const qr_code = uuidv4();
-    const badge_url = generateBadgeUrl(qr_code);
+    // 🔍 Check for existing visitor with same email in this expo
+    const existingResult = await pool.query(
+      `SELECT id, qr_code, badge_id, badge_url, name, email
+       FROM visitors 
+       WHERE lower(email) = lower($1) 
+         AND expo_id = $2 
+         AND organizer_id = $3
+       LIMIT 1`,
+      [email.trim(), expo_id, organizer_id]
+    );
 
-    const insertQuery = `
-      INSERT INTO visitors (
-        name, last_name, email, company, badge_id, expo_name,
-        sector, visitor_category, visitor_status, visitor_type,
-        job_title, country, phone, website,
-        source, origin, form_id,
-        qr_code, badge_url, expo_id, organizer_id, created_at
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,
-        $7,$8,$9,$10,
-        $11,$12,$13,$14,
-        $15,$16,$17,
-        $18,$19,$20,$21,NOW()
-      )
-      RETURNING *
-    `;
+    let visitor;
+    let isNewVisitor = false;
 
-    const values = [
-      name || 'No Name',
-      lastName || '',
-      email,
-      company,
-      badge_id,
-      expo_name,
-      sector,
-      visitorCategory,
-      visitorStatus,
-      visitorType || 'visitor',
-      jobTitle,
-      country,
-      phone,
-      website,
-      visitorSource,
-      origin || 'zohoform',
-      form_id,
-      qr_code,
-      badge_url,
-      expo_id,
-      organizer_id
-    ];
+    if (existingResult.rows.length > 0) {
+      // ✅ Existing visitor found - return existing record (don't create duplicate)
+      visitor = existingResult.rows[0];
+      console.log('ℹ️ Existing visitor found:', visitor.email, '- returning existing record');
+      
+      // Optionally update some fields if they were empty
+      // (uncomment if you want to update existing records)
+      /*
+      await pool.query(
+        `UPDATE visitors SET
+           name = COALESCE(NULLIF($1, ''), name),
+           last_name = COALESCE(NULLIF($2, ''), last_name),
+           company = COALESCE(NULLIF($3, ''), company),
+           phone = COALESCE(NULLIF($4, ''), phone)
+         WHERE id = $5`,
+        [name, lastName, company, phone, visitor.id]
+      );
+      */
+    } else {
+      // ✅ New visitor - create record
+      isNewVisitor = true;
+      const badge_id = badgeNumber || `BADGE-${Date.now()}`;
+      const qr_code = uuidv4();
+      const badge_url = generateBadgeUrl(qr_code);
 
-    const result = await pool.query(insertQuery, values);
-    const visitor = result.rows[0];
+      const insertQuery = `
+        INSERT INTO visitors (
+          name, last_name, email, company, badge_id, expo_name,
+          sector, visitor_category, visitor_status, visitor_type,
+          job_title, country, phone, website,
+          source, origin, form_id,
+          qr_code, badge_url, expo_id, organizer_id, created_at
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,
+          $7,$8,$9,$10,
+          $11,$12,$13,$14,
+          $15,$16,$17,
+          $18,$19,$20,$21,NOW()
+        )
+        RETURNING *
+      `;
 
-    // ✉️ Email gönderimi
-    if (form_id && email) {
+      const values = [
+        name || 'No Name',
+        lastName || '',
+        email.trim(),
+        company,
+        badge_id,
+        expo_name,
+        sector,
+        visitorCategory,
+        visitorStatus,
+        visitorType || 'visitor',
+        jobTitle,
+        country,
+        phone,
+        website,
+        visitorSource,
+        origin || 'zohoform',
+        form_id,
+        qr_code,
+        badge_url,
+        expo_id,
+        organizer_id
+      ];
+
+      const result = await pool.query(insertQuery, values);
+      visitor = result.rows[0];
+      console.log('✅ New visitor created:', visitor.email);
+    }
+
+    // ✉️ Send email only for NEW visitors
+    if (isNewVisitor && form_id && email) {
       const templateResult = await pool.query(`
         SELECT et.subject, et.html_content
         FROM forms f
@@ -138,27 +149,34 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
         const { subject, html_content } = templateResult.rows[0];
 
         const emailData = {
-          name,
-          last_name: lastName,
-          company,
-          email,
-          badge_id,
+          name: visitor.name || name,
+          last_name: visitor.last_name || lastName,
+          company: visitor.company || company,
+          email: visitor.email,
+          badge_id: visitor.badge_id,
           expo_name,
-          qr_code: `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qr_code}" alt="QR Code" style="max-width:200px;">`,
-          badge_url: badge_url
+          qr_code: `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width:200px;">`,
+          badge_url: visitor.badge_url
         };
 
         const html = processEmailTemplate(html_content, emailData);
         const subjectLine = processEmailTemplate(subject || 'Your Badge', emailData);
 
         await sendEmailWithReplyTo(email, subjectLine, html, 'reply@replies.leena.app');
-        console.log('📧 Email sent to:', email);
+        console.log('📧 Email sent to:', email, '(reply-to: reply@replies.leena.app)');
       } else {
         console.log('ℹ️ No template found for form', form_id);
       }
+    } else if (!isNewVisitor) {
+      console.log('ℹ️ Skipping email - existing visitor');
     }
 
-    res.status(200).json({ success: true, message: 'Visitor saved from Zoho' });
+    res.status(200).json({ 
+      success: true, 
+      message: isNewVisitor ? 'Visitor saved from Zoho' : 'Existing visitor returned',
+      isNewVisitor: isNewVisitor,
+      visitorId: visitor.id
+    });
 
   } catch (err) {
     console.error('❌ Webhook error:', err);
