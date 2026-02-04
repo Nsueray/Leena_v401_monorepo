@@ -66,23 +66,45 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     let isNewVisitor = false;
 
     if (existingResult.rows.length > 0) {
-      // ✅ Existing visitor found - return existing record (don't create duplicate)
-      visitor = existingResult.rows[0];
-      console.log('ℹ️ Existing visitor found:', visitor.email, '- returning existing record');
+      // ✅ Existing visitor found - UPDATE with new data
+      const existingId = existingResult.rows[0].id;
+      console.log('ℹ️ Existing visitor found:', email, '- updating with new data');
       
-      // Optionally update some fields if they were empty
-      // (uncomment if you want to update existing records)
-      /*
-      await pool.query(
+      // Update existing record with new information
+      const updateResult = await pool.query(
         `UPDATE visitors SET
-           name = COALESCE(NULLIF($1, ''), name),
-           last_name = COALESCE(NULLIF($2, ''), last_name),
-           company = COALESCE(NULLIF($3, ''), company),
-           phone = COALESCE(NULLIF($4, ''), phone)
-         WHERE id = $5`,
-        [name, lastName, company, phone, visitor.id]
+           name = $1,
+           last_name = $2,
+           company = $3,
+           phone = $4,
+           job_title = $5,
+           country = $6,
+           sector = $7,
+           website = $8,
+           visitor_category = $9,
+           visitor_status = $10,
+           visitor_type = $11,
+           badge_id = CASE WHEN $12 != '' THEN $12 ELSE badge_id END
+         WHERE id = $13
+         RETURNING *`,
+        [
+          name || 'No Name',
+          lastName || '',
+          company,
+          phone,
+          jobTitle,
+          country,
+          sector,
+          website,
+          visitorCategory,
+          visitorStatus,
+          visitorType || 'visitor',
+          badgeNumber,
+          existingId
+        ]
       );
-      */
+      visitor = updateResult.rows[0];
+      console.log('✅ Existing visitor updated:', visitor.email);
     } else {
       // ✅ New visitor - create record
       isNewVisitor = true;
