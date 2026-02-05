@@ -6,65 +6,233 @@
     <title>Form Builder - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/assets/leena.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-active: #2d2d4a;
+            --sidebar-text: #9ca3af; --sidebar-text-active: #fff; --sidebar-border: #252542;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0; --border-light: #f1f5f9;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5; --warning: #f59e0b; --warning-bg: #fef3c7;
+            --danger: #ef4444; --danger-bg: #fee2e2; --info: #3b82f6; --info-bg: #dbeafe;
+            --radius-sm: 6px; --radius-md: 8px; --radius-lg: 12px;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; -webkit-font-smoothing: antialiased; }
+        .app-shell { display: flex; min-height: 100vh; }
+        
+        /* Sidebar */
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
+        .sidebar-header { height: 64px; padding: 0 20px; display: flex; align-items: center; border-bottom: 1px solid var(--sidebar-border); }
+        .sidebar-logo { height: 80px; width: auto; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; position: relative; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); }
+        .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 24px; background: var(--primary); border-radius: 0 3px 3px 0; }
+        .nav-item i { font-size: 18px; width: 20px; text-align: center; opacity: 0.8; }
+        .nav-item:hover i, .nav-item.active i { opacity: 1; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: var(--sidebar-border); margin: 16px 12px; }
+        
+        /* Main */
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; min-height: 100vh; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .header-buttons { display: flex; gap: 10px; }
+        .main-content { flex: 1; padding: 24px; }
+        
+        /* Buttons */
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-secondary:hover { background: var(--bg-main); }
+        .btn-outline-secondary { background: transparent; color: var(--text-secondary); border-color: var(--border-color); }
+        .btn-outline-secondary:hover { background: var(--bg-main); border-color: var(--text-muted); }
+        .btn-outline-primary { background: transparent; color: var(--primary); border-color: var(--border-color); }
+        .btn-outline-primary:hover { background: var(--primary-light); border-color: var(--primary); }
+        .btn-outline-danger { background: transparent; color: var(--danger); border-color: var(--border-color); }
+        .btn-outline-danger:hover { background: var(--danger-bg); border-color: var(--danger); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        
+        /* Cards */
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); margin-bottom: 24px; }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); font-weight: 600; display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+        .card-header h5 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .card-header h5 i { color: var(--primary); }
+        .card-body { padding: 20px; }
+        
+        /* Forms */
+        .form-label { font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; color: var(--text-primary); }
+        .form-control, .form-select { padding: 9px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; width: 100%; font-family: inherit; transition: all 0.15s; }
+        .form-control:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,111,165,0.1); }
+        .form-check { display: flex; align-items: center; gap: 8px; }
+        .form-check-input { width: 16px; height: 16px; margin: 0; }
+        .form-check-label { font-size: 13px; }
+        .form-switch .form-check-input { width: 40px; height: 20px; }
+        .input-group { display: flex; }
+        .input-group .form-control, .input-group .form-select { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+        .input-group-text { padding: 9px 12px; background: var(--bg-main); border: 1px solid var(--border-color); border-left: none; border-radius: 0 var(--radius-md) var(--radius-md) 0; font-size: 13px; }
+        .text-muted { color: var(--text-muted) !important; }
+        small.text-muted { font-size: 11px; display: block; margin-top: 4px; }
+        
+        /* Row and Col */
+        .row { display: flex; flex-wrap: wrap; margin: 0 -12px; }
+        .col-lg-8 { flex: 0 0 66.666667%; max-width: 66.666667%; padding: 0 12px; }
+        .col-lg-4 { flex: 0 0 33.333333%; max-width: 33.333333%; padding: 0 12px; }
+        .col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 12px; }
+        .mb-3 { margin-bottom: 16px; }
+        .mb-4 { margin-bottom: 24px; }
+        .mt-3 { margin-top: 16px; }
+        .ms-2 { margin-left: 8px; }
+        .me-2 { margin-right: 8px; }
+        .d-flex { display: flex; }
+        .justify-content-between { justify-content: space-between; }
+        .align-items-center { align-items: center; }
+        .flex-grow-1 { flex-grow: 1; }
+        
+        /* Visitor Type Selector */
+        .visitor-type-selector { display: flex; gap: 16px; }
+        .visitor-type-selector .form-check { flex: 1; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; }
+        .visitor-type-selector .form-check:hover { border-color: var(--primary); background: var(--primary-light); }
+        .visitor-type-selector .form-check-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
+        .visitor-type-selector .form-check-label i { font-size: 18px; color: var(--primary); }
+        
+        /* Fields */
+        .field-item { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; transition: all 0.15s; }
+        .field-item:hover { border-color: var(--primary); box-shadow: var(--shadow-sm); }
+        .field-type-badge { display: inline-block; padding: 2px 8px; background: var(--info-bg); color: var(--info); font-size: 10px; font-weight: 600; border-radius: 20px; text-transform: uppercase; }
+        .field-actions { display: flex; gap: 6px; }
+        .drag-handle { cursor: grab; color: var(--text-muted); padding: 0 8px; }
+        .drag-handle:hover { color: var(--text-primary); }
+        
+        /* Add Field Button */
+        .add-field-btn { border: 2px dashed var(--border-color); border-radius: var(--radius-lg); padding: 40px 20px; text-align: center; cursor: pointer; transition: all 0.2s; margin-top: 16px; }
+        .add-field-btn:hover { border-color: var(--primary); background: var(--primary-light); }
+        .add-field-btn i { font-size: 48px; }
+        .add-field-btn h5 { margin: 16px 0 8px; font-size: 15px; }
+        .add-field-btn p { margin: 0; font-size: 13px; }
+        
+        /* Preview */
+        .preview-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; }
+        .preview-header { background: var(--sidebar-bg); color: white; padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+        .preview-header h5 { margin: 0; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .expo-badge { background: rgba(255,255,255,0.1); padding: 4px 10px; border-radius: 20px; font-size: 11px; }
+        #formPreview { padding: 20px; max-height: calc(100vh - 200px); overflow-y: auto; }
+        .form-preview-field { margin-bottom: 16px; }
+        
+        /* Badge */
+        .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+        .bg-primary { background: var(--primary) !important; color: white; }
+        .bg-danger { background: var(--danger) !important; color: white; }
+        .bg-success { background: var(--success) !important; color: white; }
+        .bg-info { background: var(--info-bg) !important; color: var(--info); }
+        .text-dark { color: var(--text-primary) !important; }
+        
+        /* Sticky */
+        .sticky-top { position: sticky; top: 88px; }
+        
+        /* Modal */
+        .modal { display: none; position: fixed; inset: 0; z-index: 1050; }
+        .modal.show { display: flex; align-items: center; justify-content: center; }
+        .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); }
+        .modal-dialog { position: relative; width: 100%; max-width: 600px; margin: 20px; z-index: 1051; }
+        .modal-content { background: var(--bg-card); border-radius: var(--radius-lg); box-shadow: 0 20px 40px rgba(0,0,0,0.15); }
+        .modal-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+        .modal-title { font-size: 16px; font-weight: 600; margin: 0; }
+        .modal-body { padding: 20px; max-height: 60vh; overflow-y: auto; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border-color); display: flex; gap: 12px; justify-content: flex-end; }
+        .btn-close { background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-muted); padding: 0; line-height: 1; }
+        .btn-close:hover { color: var(--text-primary); }
+        
+        /* Alert */
+        .alert { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border-radius: var(--radius-md); z-index: 9999; display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease; }
+        .alert-success { background: var(--success-bg); color: #065f46; border: 1px solid var(--success); }
+        .alert-danger { background: var(--danger-bg); color: #991b1b; border: 1px solid var(--danger); }
+        @keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+        
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .col-lg-8 { flex: 0 0 100%; max-width: 100%; }
+            .col-lg-4 { flex: 0 0 100%; max-width: 100%; margin-top: 24px; }
+            .sticky-top { position: relative; top: 0; }
+        }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main-wrapper { margin-left: 0; }
+            .col-md-6 { flex: 0 0 100%; max-width: 100%; }
+            .main-content { padding: 16px; }
+            .visitor-type-selector { flex-direction: column; }
+        }
+    </style>
 </head>
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <img src="/logo.png" alt="Leena logo" class="sidebar-logo">
-            <span>Leena EMS</span>
-        </div>
-        <ul class="sidebar-menu">
-            <li><a href="dashboard.html"><i class="bi bi-grid"></i> All Expos</a></li>
-            <li><a href="main-panel.html"><i class="bi bi-columns-gap"></i> Expo Panel</a></li>
-            <li><a href="main-panel.html" onclick="localStorage.setItem('loadPage', 'visitors')"><i class="bi bi-people"></i> Visitors</a></li>
-            <li><a class="active" href="main-panel.html" onclick="localStorage.setItem('loadPage', 'forms')"><i class="bi bi-card-list"></i> Forms</a></li>
-            <li><a href="checkins.html"><i class="bi bi-check2-square"></i> Check-ins</a></li>
-            <li><a href="terminals.html"><i class="bi bi-pc-display"></i> Terminals</a></li>
-            <li><a href="email-templates.html"><i class="bi bi-envelope"></i> Email Templates</a></li>
-            <li><a href="email-send.html"><i class="bi bi-send"></i> Send Emails</a></li>
-            <li><a href="email-segments.html"><i class="bi bi-megaphone"></i> Email Segments</a></li>
-            <li><a href="reports.html"><i class="bi bi-graph-up"></i> Reports</a></li>
-            <li><a href="import.html"><i class="bi bi-download"></i> Import</a></li>
-            <li><a href="visitorlog-paginated.html" target="_blank"><i class="bi bi-journals"></i> Visitor Log</a></li>
-            <li><a href="admin-dashboard.html"><i class="bi bi-shield-lock"></i> Admin Panel</a></li>
-            <li><a href="#" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Logout</a></li>
-        </ul>
-    </nav>
-
-    <div class="main-wrapper">
-        <header class="main-header">
-            <h1>
-                <i class="bi bi-hammer text-primary"></i>
-                <span>Form Builder</span>
-            </h1>
-            <div class="header-buttons">
-                <button class="btn btn-outline-secondary" onclick="goBackToForms()">
-                    <i class="bi bi-arrow-left"></i> Back to Forms
-                </button>
-                <button class="btn btn-primary" onclick="saveForm()">
-                    <i class="bi bi-save"></i> Save Form
-                </button>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-        </header>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item active" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-send.html"><i class="bi bi-send"></i><span>Send Emails</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
 
-        <main class="main-container">
-            <div class="row">
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-hammer"></i> Form Builder</h1>
+                <div class="header-buttons">
+                    <button class="btn btn-outline-secondary" onclick="goBackToForms()">
+                        <i class="bi bi-arrow-left"></i> Back to Forms
+                    </button>
+                    <button class="btn btn-primary" onclick="saveForm()">
+                        <i class="bi bi-save"></i> Save Form
+                    </button>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <div class="row">
                     <!-- Form Builder Section -->
                     <div class="col-lg-8">
                         <!-- Form Settings -->
-                        <div class="card mb-4">
-                            <div class="card-header bg-light">
-                                <h5 class="mb-0">
-                                    <i class="bi bi-gear text-primary"></i> Form Settings
-                                </h5>
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="bi bi-gear"></i> Form Settings</h5>
                             </div>
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Form Name *</label>
-                                        <input type="text" class="form-control" id="formName" 
-                                               placeholder="e.g., Registration Form" required>
+                                        <input type="text" class="form-control" id="formName" placeholder="e.g., Registration Form" required>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Expo</label>
@@ -81,24 +249,21 @@
                                 </div>
                                 <div class="mb-3">
                                     <label class="form-label">Description</label>
-                                    <textarea class="form-control" id="formDescription" rows="2" 
-                                              placeholder="Brief description of this form"></textarea>
+                                    <textarea class="form-control" id="formDescription" rows="2" placeholder="Brief description of this form"></textarea>
                                 </div>
                                 
-                                <!-- New: Visitor Type Selection -->
+                                <!-- Visitor Type Selection -->
                                 <div class="mb-3">
                                     <label class="form-label">Registration Type *</label>
                                     <div class="visitor-type-selector">
                                         <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="visitorType" 
-                                                   id="visitorTypeVisitor" value="visitor" checked>
+                                            <input class="form-check-input" type="radio" name="visitorType" id="visitorTypeVisitor" value="visitor" checked>
                                             <label class="form-check-label" for="visitorTypeVisitor">
                                                 <i class="bi bi-person"></i> Visitor Registration
                                             </label>
                                         </div>
                                         <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="visitorType" 
-                                                   id="visitorTypeExhibitor" value="exhibitor">
+                                            <input class="form-check-input" type="radio" name="visitorType" id="visitorTypeExhibitor" value="exhibitor">
                                             <label class="form-check-label" for="visitorTypeExhibitor">
                                                 <i class="bi bi-shop"></i> Exhibitor Registration
                                             </label>
@@ -106,22 +271,20 @@
                                     </div>
                                 </div>
 
-                                <!-- New: Email Template Selection -->
+                                <!-- Email Template Selection -->
                                 <div class="mb-3">
                                     <label class="form-label">Email Template</label>
                                     <select class="form-select" id="emailTemplateSelect">
                                         <option value="">No email (silent registration)</option>
-                                        <option value="loading">Loading templates...</option>
                                     </select>
                                     <small class="text-muted">Select which email template to send after registration</small>
                                 </div>
 
-                                <!-- New: Source and Origin Fields -->
+                                <!-- Source and Origin Fields -->
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label class="form-label">Source</label>
-                                        <input type="text" class="form-control" id="formSource" 
-                                               placeholder="e.g., website, campaign-2024">
+                                        <input type="text" class="form-control" id="formSource" placeholder="e.g., website, campaign-2024">
                                         <small class="text-muted">Track where registrations come from</small>
                                     </div>
                                     <div class="col-md-6 mb-3">
@@ -143,17 +306,13 @@
                                     <div class="col-md-6">
                                         <div class="form-check form-switch">
                                             <input class="form-check-input" type="checkbox" id="formActive" checked>
-                                            <label class="form-check-label" for="formActive">
-                                                Form is active (accepting submissions)
-                                            </label>
+                                            <label class="form-check-label" for="formActive">Form is active (accepting submissions)</label>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
                                         <div class="form-check form-switch">
                                             <input class="form-check-input" type="checkbox" id="formAllExpos">
-                                            <label class="form-check-label" for="formAllExpos">
-                                                Available for all expos
-                                            </label>
+                                            <label class="form-check-label" for="formAllExpos">Available for all expos</label>
                                         </div>
                                     </div>
                                 </div>
@@ -162,21 +321,16 @@
 
                         <!-- Form Fields -->
                         <div class="card">
-                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">
-                                    <i class="bi bi-ui-checks text-primary"></i> Form Fields
-                                </h5>
+                            <div class="card-header">
+                                <h5><i class="bi bi-ui-checks"></i> Form Fields</h5>
                                 <span class="badge bg-primary" id="fieldCount">0 fields</span>
                             </div>
                             <div class="card-body">
-                                <div id="fieldsContainer">
-                                    <!-- Fields will be added here dynamically -->
-                                </div>
-                                
+                                <div id="fieldsContainer"></div>
                                 <div class="add-field-btn" onclick="showFieldModal()">
-                                    <i class="bi bi-plus-circle display-4 text-primary"></i>
-                                    <h5 class="mt-3 text-primary">Add New Field</h5>
-                                    <p class="text-muted mb-0">Click to add a field to your form</p>
+                                    <i class="bi bi-plus-circle text-primary"></i>
+                                    <h5 class="text-primary">Add New Field</h5>
+                                    <p class="text-muted">Click to add a field to your form</p>
                                 </div>
                             </div>
                         </div>
@@ -184,36 +338,34 @@
 
                     <!-- Preview Section -->
                     <div class="col-lg-4">
-                        <div class="sticky-top" style="top: 20px;">
+                        <div class="sticky-top">
                             <div class="preview-section">
                                 <div class="preview-header">
-                                    <h5 class="mb-1">
-                                        <i class="bi bi-eye"></i> Live Preview
-                                    </h5>
-                                    <span class="expo-badge" id="previewExpoBadge">
-                                        Loading...
-                                    </span>
+                                    <h5><i class="bi bi-eye"></i> Live Preview</h5>
+                                    <span class="expo-badge" id="previewExpoBadge">Loading...</span>
                                 </div>
                                 <div id="formPreview">
-                                    <div class="text-center text-muted py-5">
-                                        <i class="bi bi-ui-checks display-1"></i>
-                                        <p>Add fields to see preview</p>
+                                    <div style="text-align: center; color: var(--text-muted); padding: 40px 20px;">
+                                        <i class="bi bi-ui-checks" style="font-size: 48px;"></i>
+                                        <p style="margin-top: 16px;">Add fields to see preview</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-        </main>
+            </main>
+        </div>
     </div>
 
     <!-- Field Modal -->
-    <div class="modal fade" id="fieldModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
+    <div class="modal" id="fieldModal">
+        <div class="modal-backdrop" onclick="hideFieldModal()"></div>
+        <div class="modal-dialog">
             <div class="modal-content">
-                <div class="modal-header bg-light">
+                <div class="modal-header">
                     <h5 class="modal-title" id="fieldModalTitle">Add Field</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" onclick="hideFieldModal()">×</button>
                 </div>
                 <div class="modal-body">
                     <div class="row">
@@ -233,46 +385,35 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Field Label *</label>
-                            <input type="text" class="form-control" id="fieldLabel" 
-                                   placeholder="e.g., Full Name" required>
+                            <input type="text" class="form-control" id="fieldLabel" placeholder="e.g., Full Name" required>
                         </div>
                     </div>
-                    
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Field Name (Database) *</label>
-                            <input type="text" class="form-control" id="fieldName" 
-                                   placeholder="e.g., full_name" pattern="[a-z_]+" required>
+                            <input type="text" class="form-control" id="fieldName" placeholder="e.g., full_name" pattern="[a-z_]+">
                             <small class="text-muted">Use lowercase letters and underscores only</small>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Placeholder Text</label>
-                            <input type="text" class="form-control" id="fieldPlaceholder" 
-                                   placeholder="e.g., Enter your full name">
+                            <input type="text" class="form-control" id="fieldPlaceholder" placeholder="e.g., Enter your full name">
                         </div>
                     </div>
-                    
                     <div class="mb-3" id="optionsContainer" style="display: none;">
                         <label class="form-label">Options (one per line)</label>
-                        <textarea class="form-control" id="fieldOptions" rows="4" 
-                                  placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
+                        <textarea class="form-control" id="fieldOptions" rows="4" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
                     </div>
-                    
                     <div class="mb-3">
                         <label class="form-label">Help Text</label>
-                        <input type="text" class="form-control" id="fieldHelpText" 
-                               placeholder="Additional instructions for this field">
+                        <input type="text" class="form-control" id="fieldHelpText" placeholder="Additional instructions for this field">
                     </div>
-                    
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="fieldRequired">
-                        <label class="form-check-label" for="fieldRequired">
-                            This field is required
-                        </label>
+                        <label class="form-check-label" for="fieldRequired">This field is required</label>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="hideFieldModal()">Cancel</button>
                     <button type="button" class="btn btn-primary" onclick="addField()">
                         <span id="fieldModalAction">Add</span> Field
                     </button>
@@ -281,7 +422,6 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const API_URL = '/api';
         let formFields = [];
@@ -291,7 +431,6 @@
         let currentExpoName = null;
         let emailTemplates = [];
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             checkAuth();
             loadCurrentExpo();
@@ -302,72 +441,50 @@
             setupVisitorTypeToggle();
         });
 
-        // Check authentication
         function checkAuth() {
             const token = localStorage.getItem('token');
             if (!token) {
-                window.location.href = 'login.html';
+                window.location.href = 'login_new.html';
                 return false;
             }
             return true;
         }
 
-        // Load email templates
         async function loadEmailTemplates() {
             try {
                 const token = localStorage.getItem('token');
                 const expoId = localStorage.getItem('selectedExpoId');
-                
                 const response = await fetch(`${API_URL}/templates?expo_id=${expoId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
                 if (response.ok) {
                     emailTemplates = await response.json();
                     const select = document.getElementById('emailTemplateSelect');
-                    
                     select.innerHTML = '<option value="">No email (silent registration)</option>';
-                    
                     emailTemplates.forEach(template => {
                         const option = document.createElement('option');
                         option.value = template.id;
                         option.textContent = template.name || `Template ${template.id}`;
                         select.appendChild(option);
                     });
-                } else {
-                    console.error('Failed to load email templates');
-                    document.getElementById('emailTemplateSelect').innerHTML = 
-                        '<option value="">No email templates available</option>';
                 }
             } catch (error) {
                 console.error('Error loading email templates:', error);
-                document.getElementById('emailTemplateSelect').innerHTML = 
-                    '<option value="">Error loading templates</option>';
             }
         }
 
-        // Setup visitor type toggle
         function setupVisitorTypeToggle() {
             const visitorRadio = document.getElementById('visitorTypeVisitor');
             const exhibitorRadio = document.getElementById('visitorTypeExhibitor');
-            
-            // Add specific fields based on type
             [visitorRadio, exhibitorRadio].forEach(radio => {
                 radio.addEventListener('change', function() {
                     updatePreview();
-                    // If switching to exhibitor, suggest adding booth_number field
                     if (this.value === 'exhibitor' && !formFields.find(f => f.name === 'booth_number')) {
                         if (confirm('Would you like to add a Booth Number field for exhibitors?')) {
                             formFields.push({
-                                name: 'booth_number',
-                                label: 'Booth Number',
-                                type: 'text',
-                                required: false,
-                                placeholder: 'Enter your booth number',
-                                helpText: 'Your assigned booth location',
-                                options: []
+                                name: 'booth_number', label: 'Booth Number', type: 'text',
+                                required: false, placeholder: 'Enter your booth number',
+                                helpText: 'Your assigned booth location', options: []
                             });
                             renderFields();
                             updatePreview();
@@ -377,58 +494,41 @@
             });
         }
 
-        // Load current expo from localStorage
         async function loadCurrentExpo() {
             currentExpoId = localStorage.getItem('selectedExpoId');
-            
             if (!currentExpoId) {
                 alert('No expo selected. Please select an expo first.');
-                window.location.href = 'dashboard.html';
+                window.location.href = 'dashboard_new.html';
                 return;
             }
-            
             try {
                 const token = localStorage.getItem('token');
                 const response = await fetch(`${API_URL}/expos/${currentExpoId}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
                 if (response.ok) {
                     const expo = await response.json();
                     currentExpoName = expo.name;
-                    
-                    // Update UI
-                    const expoSelect = document.getElementById('expoSelect');
-                    expoSelect.innerHTML = `<option value="${currentExpoId}">${currentExpoName}</option>`;
+                    document.getElementById('expoSelect').innerHTML = `<option value="${currentExpoId}">${currentExpoName}</option>`;
                     document.getElementById('previewExpoBadge').textContent = currentExpoName;
-                } else {
-                    throw new Error('Failed to load expo details');
                 }
             } catch (error) {
                 console.error('Error loading expo:', error);
                 currentExpoName = 'Current Expo';
-                const expoSelect = document.getElementById('expoSelect');
-                expoSelect.innerHTML = `<option value="${currentExpoId}">Expo ${currentExpoId}</option>`;
+                document.getElementById('expoSelect').innerHTML = `<option value="${currentExpoId}">Expo ${currentExpoId}</option>`;
                 document.getElementById('previewExpoBadge').textContent = `Expo ${currentExpoId}`;
             }
         }
 
-        // Setup expo toggle
         function setupExpoToggle() {
             const allExposCheckbox = document.getElementById('formAllExpos');
-            const expoSelect = document.getElementById('expoSelect');
-            const expoLockIcon = document.getElementById('expoLockIcon');
-            const previewExpoBadge = document.getElementById('previewExpoBadge');
-            
             allExposCheckbox.addEventListener('change', function() {
+                const previewExpoBadge = document.getElementById('previewExpoBadge');
+                const expoLockIcon = document.getElementById('expoLockIcon');
                 if (this.checked) {
-                    expoSelect.disabled = true;
                     expoLockIcon.innerHTML = '<i class="bi bi-globe"></i>';
                     previewExpoBadge.textContent = 'All Expos';
                 } else {
-                    expoSelect.disabled = true; // Always disabled, just for display
                     expoLockIcon.innerHTML = '<i class="bi bi-lock"></i>';
                     previewExpoBadge.textContent = currentExpoName || 'Current Expo';
                 }
@@ -436,93 +536,54 @@
             });
         }
 
-        // Check if editing existing form
         function checkEditMode() {
             const urlParams = new URLSearchParams(window.location.search);
             formId = urlParams.get('id');
             if (formId) {
                 loadForm(formId);
             } else {
-                // Add default fields for new form
                 formFields = [
-                    {
-                        name: 'full_name',
-                        label: 'Full Name',
-                        type: 'text',
-                        required: true,
-                        placeholder: 'Enter your full name',
-                        helpText: '',
-                        options: []
-                    },
-                    {
-                        name: 'email',
-                        label: 'Email Address',
-                        type: 'email',
-                        required: true,
-                        placeholder: 'your@email.com',
-                        helpText: '',
-                        options: []
-                    },
-                    {
-                        name: 'company',
-                        label: 'Company',
-                        type: 'text',
-                        required: false,
-                        placeholder: 'Your company name',
-                        helpText: '',
-                        options: []
-                    }
+                    { name: 'full_name', label: 'Full Name', type: 'text', required: true, placeholder: 'Enter your full name', helpText: '', options: [] },
+                    { name: 'email', label: 'Email Address', type: 'email', required: true, placeholder: 'your@email.com', helpText: '', options: [] },
+                    { name: 'company', label: 'Company', type: 'text', required: false, placeholder: 'Your company name', helpText: '', options: [] }
                 ];
                 renderFields();
                 updatePreview();
             }
         }
 
-        // Load existing form
         async function loadForm(id) {
             try {
                 const token = localStorage.getItem('token');
                 const response = await fetch(`${API_URL}/forms/${id}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-
-                if (!response.ok) {
-                    throw new Error('Failed to load form');
-                }
-
+                if (!response.ok) throw new Error('Failed to load form');
                 const data = await response.json();
                 
-                // Populate form settings
                 document.getElementById('formName').value = data.name || '';
                 document.getElementById('formDescription').value = data.description || '';
                 document.getElementById('formActive').checked = data.is_active;
                 
-                // Load visitor type
                 if (data.visitor_type === 'exhibitor') {
                     document.getElementById('visitorTypeExhibitor').checked = true;
                 } else {
                     document.getElementById('visitorTypeVisitor').checked = true;
                 }
                 
-                // Load email template
                 if (data.email_template_id) {
                     document.getElementById('emailTemplateSelect').value = data.email_template_id;
                 }
                 
-                // Load source and origin
                 document.getElementById('formSource').value = data.source || '';
                 document.getElementById('formOrigin').value = data.origin || 'form-public';
                 
-                // Check if form is for all expos
                 if (data.expo_id === null) {
                     document.getElementById('formAllExpos').checked = true;
                     document.getElementById('previewExpoBadge').textContent = 'All Expos';
                     document.getElementById('expoLockIcon').innerHTML = '<i class="bi bi-globe"></i>';
                 }
                 
-                // Load fields
                 formFields = data.fields || [];
                 renderFields();
                 updatePreview();
@@ -533,13 +594,10 @@
             }
         }
 
-        // Navigation
         function goBackToForms() {
-            localStorage.setItem('loadPage', 'forms');
-            window.location.href = 'main-panel.html';
+            window.location.href = 'main-panel-v2.html';
         }
 
-        // Save form
         async function saveForm() {
             const formName = document.getElementById('formName').value.trim();
             const formDescription = document.getElementById('formDescription').value.trim();
@@ -555,40 +613,22 @@
                 expoId = parseInt(currentExpoId);
             }
             
-            console.log('Saving form with:', {
-                expo_id: expoId,
-                visitor_type: visitorType,
-                email_template_id: emailTemplateId,
-                source: source,
-                origin: origin
-            });
-            
-            // Validation
             if (!formName) {
                 alert('Please enter a form name');
                 document.getElementById('formName').focus();
                 return;
             }
-            
             if (formFields.length === 0) {
                 alert('Please add at least one field to the form');
                 return;
             }
             
-            // Prepare data
             const formData = {
-                name: formName,
-                description: formDescription,
-                expo_id: expoId,
-                fields: formFields,
-                is_active: isActive,
+                name: formName, description: formDescription, expo_id: expoId,
+                fields: formFields, is_active: isActive,
                 email_template_id: emailTemplateId ? parseInt(emailTemplateId) : null,
-                visitor_type: visitorType,
-                source: source || null,
-                origin: origin
+                visitor_type: visitorType, source: source || null, origin: origin
             };
-            
-            console.log('Form data being sent:', formData);
             
             try {
                 const token = localStorage.getItem('token');
@@ -597,20 +637,14 @@
                 
                 const response = await fetch(url, {
                     method: method,
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(formData)
                 });
                 
                 const result = await response.json();
-                
                 if (response.ok) {
                     showSuccess(result.message || 'Form saved successfully');
-                    setTimeout(() => {
-                        goBackToForms();
-                    }, 1500);
+                    setTimeout(() => goBackToForms(), 1500);
                 } else {
                     throw new Error(result.message || 'Failed to save form');
                 }
@@ -620,12 +654,8 @@
             }
         }
 
-        // Field management functions
         function showFieldModal(index = null) {
             editingFieldIndex = index;
-            const modal = new bootstrap.Modal(document.getElementById('fieldModal'));
-            
-            // Reset form
             document.getElementById('fieldType').value = 'text';
             document.getElementById('fieldLabel').value = '';
             document.getElementById('fieldName').value = '';
@@ -638,14 +668,12 @@
                 const field = formFields[index];
                 document.getElementById('fieldModalTitle').textContent = 'Edit Field';
                 document.getElementById('fieldModalAction').textContent = 'Update';
-                
                 document.getElementById('fieldType').value = field.type;
                 document.getElementById('fieldLabel').value = field.label;
                 document.getElementById('fieldName').value = field.name;
                 document.getElementById('fieldPlaceholder').value = field.placeholder || '';
                 document.getElementById('fieldHelpText').value = field.helpText || '';
                 document.getElementById('fieldRequired').checked = field.required;
-                
                 if (field.options && field.options.length > 0) {
                     document.getElementById('fieldOptions').value = field.options.join('\n');
                 }
@@ -655,18 +683,17 @@
             }
             
             updateFieldOptions();
-            modal.show();
+            document.getElementById('fieldModal').classList.add('show');
+        }
+
+        function hideFieldModal() {
+            document.getElementById('fieldModal').classList.remove('show');
         }
 
         function updateFieldOptions() {
             const type = document.getElementById('fieldType').value;
             const optionsContainer = document.getElementById('optionsContainer');
-            
-            if (type === 'select' || type === 'radio') {
-                optionsContainer.style.display = 'block';
-            } else {
-                optionsContainer.style.display = 'none';
-            }
+            optionsContainer.style.display = (type === 'select' || type === 'radio') ? 'block' : 'none';
         }
 
         function addField() {
@@ -681,16 +708,12 @@
                 alert('Field label and name are required');
                 return;
             }
-            
             if (!/^[a-z_]+$/.test(name)) {
                 alert('Field name must contain only lowercase letters and underscores');
                 return;
             }
             
-            const isDuplicate = formFields.some((field, index) => 
-                field.name === name && index !== editingFieldIndex
-            );
-            
+            const isDuplicate = formFields.some((field, index) => field.name === name && index !== editingFieldIndex);
             if (isDuplicate) {
                 alert('A field with this name already exists');
                 return;
@@ -698,26 +721,14 @@
             
             let options = [];
             if (type === 'select' || type === 'radio') {
-                options = document.getElementById('fieldOptions').value
-.split('\n')
-                    .map(opt => opt.trim())
-                    .filter(opt => opt);
-                    
+                options = document.getElementById('fieldOptions').value.split('\n').map(opt => opt.trim()).filter(opt => opt);
                 if (options.length === 0) {
                     alert('Please provide at least one option');
                     return;
                 }
             }
             
-            const field = {
-                name,
-                label,
-                type,
-                required,
-                placeholder,
-                helpText,
-                options
-            };
+            const field = { name, label, type, required, placeholder, helpText, options };
             
             if (editingFieldIndex !== null) {
                 formFields[editingFieldIndex] = field;
@@ -727,8 +738,7 @@
             
             renderFields();
             updatePreview();
-            
-            bootstrap.Modal.getInstance(document.getElementById('fieldModal')).hide();
+            hideFieldModal();
         }
 
         function removeField(index) {
@@ -757,7 +767,6 @@
 
         function renderFields() {
             const container = document.getElementById('fieldsContainer');
-            
             if (formFields.length === 0) {
                 container.innerHTML = '';
                 document.getElementById('fieldCount').textContent = '0 fields';
@@ -767,37 +776,20 @@
             container.innerHTML = formFields.map((field, index) => `
                 <div class="field-item">
                     <div class="d-flex align-items-center">
-                        <span class="drag-handle">
-                            <i class="bi bi-grip-vertical"></i>
-                        </span>
+                        <span class="drag-handle"><i class="bi bi-grip-vertical"></i></span>
                         <div class="flex-grow-1">
                             <strong>${field.label}</strong>
                             <span class="field-type-badge ms-2">${field.type}</span>
-                            ${field.required ? '<span class="badge bg-danger ms-1">Required</span>' : ''}
-                            <div class="text-muted small mt-1">
-                                Name: ${field.name}
-                                ${field.helpText ? ` | ${field.helpText}` : ''}
+                            ${field.required ? '<span class="badge bg-danger ms-2">Required</span>' : ''}
+                            <div class="text-muted" style="font-size: 12px; margin-top: 4px;">
+                                Name: ${field.name}${field.helpText ? ` | ${field.helpText}` : ''}
                             </div>
                         </div>
                         <div class="field-actions">
-                            <button class="btn btn-sm btn-outline-secondary" 
-                                    onclick="moveFieldUp(${index})" 
-                                    ${index === 0 ? 'disabled' : ''}>
-                                <i class="bi bi-arrow-up"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary" 
-                                    onclick="moveFieldDown(${index})" 
-                                    ${index === formFields.length - 1 ? 'disabled' : ''}>
-                                <i class="bi bi-arrow-down"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary" 
-                                    onclick="showFieldModal(${index})">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" 
-                                    onclick="removeField(${index})">
-                                <i class="bi bi-trash"></i>
-                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="moveFieldUp(${index})" ${index === 0 ? 'disabled' : ''}><i class="bi bi-arrow-up"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="moveFieldDown(${index})" ${index === formFields.length - 1 ? 'disabled' : ''}><i class="bi bi-arrow-down"></i></button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="showFieldModal(${index})"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeField(${index})"><i class="bi bi-trash"></i></button>
                         </div>
                     </div>
                 </div>
@@ -813,115 +805,52 @@
             const visitorType = document.querySelector('input[name="visitorType"]:checked').value;
             
             if (formFields.length === 0) {
-                preview.innerHTML = `
-                    <div class="text-center text-muted py-5">
-                        <i class="bi bi-ui-checks display-1"></i>
-                        <p>Add fields to see preview</p>
-                    </div>
-                `;
+                preview.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px 20px;"><i class="bi bi-ui-checks" style="font-size: 48px;"></i><p style="margin-top: 16px;">Add fields to see preview</p></div>`;
                 return;
             }
             
             preview.innerHTML = `
-                <h5 class="mb-2">${formName}</h5>
-                ${formDescription ? `<p class="text-muted small">${formDescription}</p>` : ''}
-                <p class="badge bg-info text-dark">
+                <h5 style="margin-bottom: 8px;">${formName}</h5>
+                ${formDescription ? `<p style="color: var(--text-muted); font-size: 13px;">${formDescription}</p>` : ''}
+                <span class="badge bg-info text-dark" style="margin-bottom: 16px;">
                     <i class="bi bi-${visitorType === 'exhibitor' ? 'shop' : 'person'}"></i>
                     ${visitorType === 'exhibitor' ? 'Exhibitor' : 'Visitor'} Registration
-                </p>
-                <hr>
+                </span>
+                <hr style="margin: 16px 0;">
                 <form onsubmit="event.preventDefault();">
                     ${formFields.map(field => renderFieldPreview(field)).join('')}
-                    <div class="d-grid mt-4">
-                        <button type="submit" class="btn btn-primary">
-                            <i class="bi bi-send"></i> Submit Registration
-                        </button>
-                    </div>
+                    <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 16px;">
+                        <i class="bi bi-send"></i> Submit Registration
+                    </button>
                 </form>
             `;
         }
 
         function renderFieldPreview(field) {
             let input = '';
-            
             switch(field.type) {
                 case 'select':
-                    input = `
-                        <select class="form-select" ${field.required ? 'required' : ''}>
-                            <option value="">Choose ${field.label}...</option>
-                            ${(field.options || []).map(opt => 
-                                `<option value="${opt}">${opt}</option>`
-                            ).join('')}
-                        </select>
-                    `;
+                    input = `<select class="form-select" ${field.required ? 'required' : ''}><option value="">Choose ${field.label}...</option>${(field.options || []).map(opt => `<option value="${opt}">${opt}</option>`).join('')}</select>`;
                     break;
-                    
                 case 'textarea':
-                    input = `
-                        <textarea class="form-control" rows="3" 
-                                  placeholder="${field.placeholder || ''}" 
-                                  ${field.required ? 'required' : ''}></textarea>
-                    `;
+                    input = `<textarea class="form-control" rows="3" placeholder="${field.placeholder || ''}" ${field.required ? 'required' : ''}></textarea>`;
                     break;
-                    
                 case 'checkbox':
-                    return `
-                        <div class="form-preview-field">
-                            <div class="form-check">
-                                <input type="checkbox" class="form-check-input" id="preview_${field.name}"
-                                       ${field.required ? 'required' : ''}>
-                                <label class="form-check-label" for="preview_${field.name}">
-                                    ${field.label}
-                                    ${field.required ? '<span class="text-danger">*</span>' : ''}
-                                </label>
-                            </div>
-                            ${field.helpText ? `<small class="text-muted d-block mt-1">${field.helpText}</small>` : ''}
-                        </div>
-                    `;
-                    
+                    return `<div class="form-preview-field"><div class="form-check"><input type="checkbox" class="form-check-input" id="preview_${field.name}" ${field.required ? 'required' : ''}><label class="form-check-label" for="preview_${field.name}">${field.label}${field.required ? '<span style="color: var(--danger);">*</span>' : ''}</label></div>${field.helpText ? `<small class="text-muted">${field.helpText}</small>` : ''}</div>`;
                 case 'radio':
-                    input = (field.options || []).map((opt, idx) => `
-                        <div class="form-check">
-                            <input type="radio" class="form-check-input" 
-                                   name="preview_${field.name}" 
-                                   id="preview_${field.name}_${idx}"
-                                   ${field.required && idx === 0 ? 'required' : ''}>
-                            <label class="form-check-label" for="preview_${field.name}_${idx}">
-                                ${opt}
-                            </label>
-                        </div>
-                    `).join('');
+                    input = (field.options || []).map((opt, idx) => `<div class="form-check"><input type="radio" class="form-check-input" name="preview_${field.name}" id="preview_${field.name}_${idx}" ${field.required && idx === 0 ? 'required' : ''}><label class="form-check-label" for="preview_${field.name}_${idx}">${opt}</label></div>`).join('');
                     break;
-                    
                 default:
-                    input = `
-                        <input type="${field.type}" 
-                               class="form-control" 
-                               placeholder="${field.placeholder || ''}" 
-                               ${field.required ? 'required' : ''}>
-                    `;
+                    input = `<input type="${field.type}" class="form-control" placeholder="${field.placeholder || ''}" ${field.required ? 'required' : ''}>`;
             }
             
-            if (field.type === 'checkbox') {
-                return input;
-            }
-            
-            return `
-                <div class="form-preview-field">
-                    <label class="form-label">
-                        ${field.label}
-                        ${field.required ? '<span class="text-danger">*</span>' : ''}
-                    </label>
-                    ${input}
-                    ${field.helpText ? `<small class="text-muted">${field.helpText}</small>` : ''}
-                </div>
-            `;
+            if (field.type === 'checkbox') return input;
+            return `<div class="form-preview-field"><label class="form-label">${field.label}${field.required ? '<span style="color: var(--danger);">*</span>' : ''}</label>${input}${field.helpText ? `<small class="text-muted">${field.helpText}</small>` : ''}</div>`;
         }
 
         function setupAutoSave() {
             document.getElementById('formName').addEventListener('input', updatePreview);
             document.getElementById('formDescription').addEventListener('input', updatePreview);
-            
             document.addEventListener('keydown', (e) => {
                 if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                     e.preventDefault();
@@ -932,39 +861,23 @@
 
         function showSuccess(message) {
             const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-            alertDiv.style.zIndex = '9999';
-            alertDiv.innerHTML = `
-                <i class="bi bi-check-circle me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
+            alertDiv.className = 'alert alert-success';
+            alertDiv.innerHTML = `<i class="bi bi-check-circle me-2"></i>${message}`;
             document.body.appendChild(alertDiv);
-            
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 3000);
+            setTimeout(() => alertDiv.remove(), 3000);
         }
 
         function showError(message) {
             const alertDiv = document.createElement('div');
-            alertDiv.className = 'alert alert-danger alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-            alertDiv.style.zIndex = '9999';
-            alertDiv.innerHTML = `
-                <i class="bi bi-exclamation-circle me-2"></i>
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
+            alertDiv.className = 'alert alert-danger';
+            alertDiv.innerHTML = `<i class="bi bi-exclamation-circle me-2"></i>${message}`;
             document.body.appendChild(alertDiv);
-            
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 5000);
+            setTimeout(() => alertDiv.remove(), 5000);
         }
 
         function logout() {
             localStorage.clear();
-            window.location.href = 'login.html';
+            window.location.href = 'login_new.html';
         }
     </script>
 </body>
