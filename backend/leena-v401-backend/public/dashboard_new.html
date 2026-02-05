@@ -9,132 +9,161 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
         :root {
-            --primary-color: #4a6fa5;
+            --primary: #4a6fa5;
             --primary-hover: #3d5d8a;
             --primary-light: #eef2f7;
             --sidebar-bg: #1a1a2e;
-            --sidebar-text: #a1a1aa;
-            --sidebar-text-hover: #ffffff;
-            --sidebar-hover-bg: rgba(255,255,255,0.06);
-            --bg-primary: #f8f9fa;
+            --sidebar-hover: #252542;
+            --sidebar-active: #2d2d4a;
+            --sidebar-text: #9ca3af;
+            --sidebar-text-active: #ffffff;
+            --sidebar-border: #252542;
+            --bg-main: #f8fafc;
             --bg-card: #ffffff;
-            --text-primary: #171717;
-            --text-secondary: #525252;
-            --text-muted: #a3a3a3;
-            --border-color: #e5e5e5;
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-muted: #94a3b8;
+            --border-color: #e2e8f0;
+            --success: #10b981;
+            --success-bg: #d1fae5;
+            --warning: #f59e0b;
+            --info: #3b82f6;
             --radius-md: 8px;
             --radius-lg: 12px;
             --radius-full: 9999px;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
-            --shadow-md: 0 2px 8px rgba(0,0,0,0.06);
-            --shadow-lg: 0 4px 12px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
         }
         
         * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--bg-primary);
+            background: var(--bg-main);
             color: var(--text-primary);
             font-size: 14px;
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
         }
         
-        .app-container {
-            display: flex;
-            min-height: 100vh;
-        }
+        .app-shell { display: flex; min-height: 100vh; }
         
-        /* Sidebar */
+        /* Sidebar - Matching main-panel-v2.html */
         .sidebar {
-            width: 240px;
+            width: 256px;
             background: var(--sidebar-bg);
-            color: var(--sidebar-text);
-            display: flex;
-            flex-direction: column;
-            flex-shrink: 0;
             position: fixed;
             top: 0;
             left: 0;
             bottom: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
         }
         
         .sidebar-header {
-            padding: 24px 20px;
-            border-bottom: 1px solid rgba(255,255,255,0.06);
-        }
-        
-        .sidebar-logo {
-            height: 144px;
-            width: auto;
-        }
-        
-        .sidebar-menu {
-            list-style: none;
-            padding: 16px 12px;
-            flex: 1;
-        }
-        
-        .sidebar-menu li { margin-bottom: 4px; }
-        
-        .sidebar-menu a {
+            height: 64px;
+            padding: 0 20px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            border-bottom: 1px solid var(--sidebar-border);
+        }
+        
+        .sidebar-logo { height: 80px; width: auto; }
+        
+        .sidebar-nav {
+            flex: 1;
+            padding: 16px 12px;
+            overflow-y: auto;
+        }
+        
+        .nav-section { margin-bottom: 24px; }
+        
+        .nav-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
             color: var(--sidebar-text);
+            padding: 0 12px 8px;
+        }
+        
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             padding: 10px 12px;
+            color: var(--sidebar-text);
+            text-decoration: none;
             border-radius: var(--radius-md);
+            margin-bottom: 2px;
+            transition: all 0.15s;
+            position: relative;
+            cursor: pointer;
+        }
+        
+        .nav-item:hover {
+            background: var(--sidebar-hover);
+            color: var(--sidebar-text-active);
+        }
+        
+        .nav-item.active {
+            background: var(--sidebar-active);
+            color: var(--sidebar-text-active);
+        }
+        
+        .nav-item.active::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 24px;
+            background: var(--primary);
+            border-radius: 0 3px 3px 0;
+        }
+        
+        .nav-item i {
+            font-size: 18px;
+            width: 20px;
+            text-align: center;
+            opacity: 0.8;
+        }
+        
+        .nav-item:hover i, .nav-item.active i { opacity: 1; }
+        
+        .nav-item span {
             font-size: 13px;
             font-weight: 500;
-            text-decoration: none;
-            transition: all 0.15s;
         }
         
-        .sidebar-menu a:hover {
-            background: var(--sidebar-hover-bg);
-            color: var(--sidebar-text-hover);
-        }
-        
-        .sidebar-menu a.active {
-            background: rgba(255,255,255,0.1);
-            color: var(--sidebar-text-hover);
-        }
-        
-        .sidebar-menu a i {
-            font-size: 16px;
-            width: 20px;
-            opacity: 0.7;
-        }
-        
-        .sidebar-menu a:hover i,
-        .sidebar-menu a.active i { opacity: 1; }
-        
-        .sidebar-divider {
+        .nav-divider {
             height: 1px;
-            background: rgba(255,255,255,0.06);
-            margin: 12px 0;
+            background: var(--sidebar-border);
+            margin: 16px 12px;
         }
         
         /* Main */
         .main-wrapper {
             flex: 1;
-            margin-left: 240px;
+            margin-left: 256px;
             display: flex;
             flex-direction: column;
             min-height: 100vh;
         }
         
         .main-header {
+            height: 64px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 16px 24px;
+            padding: 0 24px;
             background: var(--bg-card);
             border-bottom: 1px solid var(--border-color);
             position: sticky;
             top: 0;
-            z-index: 10;
+            z-index: 50;
         }
         
         .main-header h1 {
@@ -142,12 +171,10 @@
             font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
         
-        .main-header h1 i {
-            color: var(--text-secondary);
-        }
+        .main-header h1 i { color: var(--primary); }
         
         .main-content {
             flex: 1;
@@ -160,7 +187,7 @@
             align-items: center;
             gap: 10px;
             padding: 6px 12px 6px 6px;
-            background: var(--bg-primary);
+            background: var(--bg-main);
             border: 1px solid var(--border-color);
             border-radius: var(--radius-full);
             cursor: pointer;
@@ -172,7 +199,7 @@
         .user-avatar {
             width: 28px;
             height: 28px;
-            background: var(--primary-color);
+            background: var(--primary);
             color: white;
             border-radius: 50%;
             display: flex;
@@ -183,19 +210,9 @@
         }
         
         /* Welcome */
-        .welcome-section {
-            margin-bottom: 24px;
-        }
-        
-        .welcome-section h1 {
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        
-        .welcome-section p {
-            color: var(--text-secondary);
-        }
+        .welcome-section { margin-bottom: 24px; }
+        .welcome-section h1 { font-size: 24px; font-weight: 600; margin-bottom: 4px; }
+        .welcome-section p { color: var(--text-secondary); }
         
         /* Stats */
         .stats-row {
@@ -212,17 +229,8 @@
             border: 1px solid var(--border-color);
         }
         
-        .stat-card .value {
-            font-size: 28px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        
-        .stat-card .label {
-            font-size: 13px;
-            color: var(--text-secondary);
-            margin-top: 2px;
-        }
+        .stat-card .value { font-size: 28px; font-weight: 700; }
+        .stat-card .label { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
         
         /* Section Header */
         .section-header {
@@ -258,14 +266,12 @@
             color: var(--text-primary);
         }
         
-        .btn:hover {
-            background: #f5f5f5;
-        }
+        .btn:hover { background: var(--bg-main); }
         
         .btn-primary {
-            background: var(--primary-color);
+            background: var(--primary);
             color: white;
-            border-color: var(--primary-color);
+            border-color: var(--primary);
         }
         
         .btn-primary:hover {
@@ -295,7 +301,7 @@
         }
         
         .expo-card:hover {
-            border-color: var(--primary-color);
+            border-color: var(--primary);
             box-shadow: var(--shadow-lg);
             transform: translateY(-2px);
         }
@@ -307,11 +313,7 @@
             margin-bottom: 12px;
         }
         
-        .expo-card h3 {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
+        .expo-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
         
         .expo-id {
             font-size: 11px;
@@ -341,10 +343,7 @@
             margin-bottom: 6px;
         }
         
-        .expo-info-item i {
-            width: 16px;
-            color: var(--text-muted);
-        }
+        .expo-info-item i { width: 16px; color: var(--text-muted); }
         
         .expo-stats {
             display: flex;
@@ -355,29 +354,11 @@
             margin-bottom: 16px;
         }
         
-        .expo-stat {
-            text-align: center;
-            flex: 1;
-        }
+        .expo-stat { text-align: center; flex: 1; }
+        .expo-stat-value { font-size: 18px; font-weight: 700; }
+        .expo-stat-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
         
-        .expo-stat-value {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-primary);
-        }
-        
-        .expo-stat-label {
-            font-size: 10px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .expo-actions {
-            display: flex;
-            gap: 8px;
-        }
-        
+        .expo-actions { display: flex; gap: 8px; }
         .expo-actions .btn { flex: 1; }
         
         /* Create Card */
@@ -397,25 +378,13 @@
         }
         
         .create-expo-card:hover {
-            border-color: var(--primary-color);
+            border-color: var(--primary);
             background: var(--primary-light);
         }
         
-        .create-expo-card i {
-            font-size: 32px;
-            color: var(--primary-color);
-            margin-bottom: 12px;
-        }
-        
-        .create-expo-card h3 {
-            font-size: 15px;
-            margin-bottom: 4px;
-        }
-        
-        .create-expo-card p {
-            font-size: 13px;
-            color: var(--text-secondary);
-        }
+        .create-expo-card i { font-size: 32px; color: var(--primary); margin-bottom: 12px; }
+        .create-expo-card h3 { font-size: 15px; margin-bottom: 4px; }
+        .create-expo-card p { font-size: 13px; color: var(--text-secondary); }
         
         /* Modal */
         .modal-overlay {
@@ -447,10 +416,7 @@
             align-items: center;
         }
         
-        .modal-header h2 {
-            font-size: 17px;
-            margin: 0;
-        }
+        .modal-header h2 { font-size: 17px; margin: 0; }
         
         .modal-close {
             background: none;
@@ -475,13 +441,7 @@
         
         /* Form */
         .form-group { margin-bottom: 16px; }
-        
-        .form-label {
-            display: block;
-            font-size: 13px;
-            font-weight: 500;
-            margin-bottom: 6px;
-        }
+        .form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
         
         .form-control {
             width: 100%;
@@ -495,28 +455,20 @@
         
         .form-control:focus {
             outline: none;
-            border-color: var(--primary-color);
+            border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(74, 111, 165, 0.1);
         }
         
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         
         /* Loading */
-        .loading-spinner {
-            display: flex;
-            justify-content: center;
-            padding: 60px;
-        }
+        .loading-spinner { display: flex; justify-content: center; padding: 60px; }
         
         .spinner {
             width: 32px;
             height: 32px;
             border: 2px solid var(--border-color);
-            border-top-color: var(--primary-color);
+            border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
         }
@@ -532,19 +484,10 @@
             border: 1px solid var(--border-color);
         }
         
-        .empty-state h3 {
-            margin-bottom: 8px;
-        }
+        .empty-state h3 { margin-bottom: 8px; }
+        .empty-state p { color: var(--text-secondary); margin-bottom: 16px; }
         
-        .empty-state p {
-            color: var(--text-secondary);
-            margin-bottom: 16px;
-        }
-        
-        @media (max-width: 1024px) {
-            .stats-row { grid-template-columns: repeat(2, 1fr); }
-        }
-        
+        @media (max-width: 1024px) { .stats-row { grid-template-columns: repeat(2, 1fr); } }
         @media (max-width: 768px) {
             .sidebar { display: none; }
             .main-wrapper { margin-left: 0; }
@@ -553,44 +496,32 @@
     </style>
 </head>
 <body>
-    <div class="app-container">
+    <div class="app-shell">
         <nav class="sidebar">
             <div class="sidebar-header">
                 <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-                <div class="sidebar-nav">
-                    <div class="nav-section">
-                        <div class="nav-section-title">Overview</div>
-                        <a class="nav-item active" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Management</div>
-                        <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
-                        <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
-                        <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
-                        <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Communication</div>
-                        <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
-                        <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Settings</div>
-                        <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
-                    </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Tools</div>
-                        <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
-                        <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
-                    </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item active" href="dashboard_new.html">
+                        <i class="bi bi-collection"></i>
+                        <span>My Expos</span>
+                    </a>
                 </div>
-</nav>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <a class="nav-item" href="#" onclick="logout()">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
         
         <div class="main-wrapper">
             <header class="main-header">
-                <h1><i class="bi bi-collection"></i> <span>My Expos</span></h1>
+                <h1><i class="bi bi-collection"></i> My Expos</h1>
                 <button class="user-btn">
                     <div class="user-avatar" id="userAvatar">?</div>
                     <span id="userName">Loading...</span>
@@ -739,7 +670,7 @@
         function enterExpo(id, name) {
             localStorage.setItem('selectedExpoId', id);
             localStorage.setItem('selectedExpoName', name);
-            window.location.href = 'main-panel.html';
+            window.location.href = 'main-panel-v2.html';
         }
         
         function showCreateModal() { document.getElementById('createModal').classList.add('show'); }
