@@ -253,4 +253,201 @@ router.post('/manual', async (req, res) => {
   }
 });
 
+// ✅ IMPORT VISITORS FROM EXCEL
+router.post('/import', authMiddleware, upload.single('file'), async (req, res) => {
+  console.log('📥 Import request received');
+  
+  try {
+    // Validate file
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
+    }
+
+    const { expo_id, visitor_type, source_override, send_email, template_id } = req.body;
+    const origin = 'massimport';
+
+    if (!expo_id) {
+      return res.status(400).json({ success: false, message: 'expo_id is required' });
+    }
+
+    // Get organizer_id from token
+    const organizerId = req.user?.id || req.user?.organizer_id || 1;
+
+    // Parse Excel
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    console.log(`📊 Parsed ${rows.length} rows from Excel`);
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, message: 'Excel file is empty' });
+    }
+
+    // Get email template if needed
+    let emailTemplate = null;
+    if (send_email === 'true' && template_id) {
+      const templateResult = await pool.query(
+        `SELECT * FROM email_templates WHERE id = $1`,
+        [template_id]
+      );
+      if (templateResult.rows.length) {
+        emailTemplate = templateResult.rows[0];
+      }
+    }
+
+    // Process each row
+    const results = {
+      success_count: 0,
+      failed_count: 0,
+      imported: [],
+      errors: []
+    };
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2; // Excel row number (1-indexed + header)
+
+      try {
+        // Map Excel columns (flexible mapping)
+        const name = row.name || row.Name || row.full_name || row['Full Name'] || '';
+        const last_name = row.last_name || row['Last Name'] || row.surname || row.Surname || '';
+        const email = row.email || row.Email || row.EMAIL || '';
+        const company = row.company || row.Company || row.COMPANY || row.organization || '';
+        const country = row.country || row.Country || row.COUNTRY || '';
+        const phone = row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || '';
+        const job_title = row.job_title || row['Job Title'] || row.title || row.Title || row.position || '';
+        const source = source_override || row.source || row.Source || 'import';
+
+        // Validate email
+        if (!email || !email.includes('@')) {
+          results.errors.push({ row: rowNum, message: `Invalid or missing email: "${email}"` });
+          results.failed_count++;
+          continue;
+        }
+
+        // Check for duplicate email in this expo
+        const duplicateCheck = await pool.query(
+          `SELECT id FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
+          [email.toLowerCase().trim(), expo_id]
+        );
+
+        if (duplicateCheck.rows.length > 0) {
+          results.errors.push({ row: rowNum, message: `Duplicate email: ${email}` });
+          results.failed_count++;
+          continue;
+        }
+
+        // Generate QR code and badge
+        const qrCode = uuidv4();
+        const badgeId = qrCode.substring(0, 8).toUpperCase();
+        const badgeUrl = generateBadgeUrl(qrCode);
+
+        // Insert visitor
+        const insertQuery = `
+          INSERT INTO visitors (
+            organizer_id, expo_id, name, last_name, email, company, country, 
+            job_title, phone, source, origin, visitor_type,
+            qr_code, badge_id, custom_fields, created_at
+          ) VALUES (
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW()
+          ) RETURNING id, name, email, qr_code, badge_id
+        `;
+
+        const values = [
+          organizerId,
+          expo_id,
+          name.trim(),
+          last_name.trim(),
+          email.toLowerCase().trim(),
+          company.trim(),
+          country.trim(),
+          job_title.trim(),
+          phone.trim(),
+          source,
+          origin,
+          visitor_type || 'visitor',
+          qrCode,
+          badgeId,
+          JSON.stringify(row) // Store original row as custom_fields
+        ];
+
+        const insertResult = await pool.query(insertQuery, values);
+        const visitor = insertResult.rows[0];
+
+        results.imported.push({
+          id: visitor.id,
+          name: name || last_name || email,
+          email: email,
+          badge_id: badgeId
+        });
+        results.success_count++;
+
+        // Send email if enabled
+        if (emailTemplate) {
+          try {
+            const templateData = {
+              name: name || 'Guest',
+              last_name: last_name,
+              email: email,
+              company: company,
+              country: country,
+              job_title: job_title,
+              phone: phone,
+              qr_code: qrCode,
+              badge_id: badgeId,
+              badge_url: badgeUrl
+            };
+
+            const emailHtml = processEmailTemplate(
+              emailTemplate.html_content || emailTemplate.body || '',
+              templateData
+            );
+            const emailSubject = processEmailTemplate(
+              emailTemplate.subject || 'Registration Confirmation',
+              templateData
+            );
+
+            await sendEmailWithReplyTo(
+              email,
+              emailSubject,
+              emailHtml,
+              'reply@replies.leena.app'
+            );
+
+            console.log(`📧 Email sent to: ${email}`);
+
+            // Small delay to avoid rate limits
+            await delay(100);
+          } catch (emailErr) {
+            console.error(`❌ Email failed for ${email}:`, emailErr.message);
+            // Don't fail the import, just log the email error
+          }
+        }
+
+      } catch (rowErr) {
+        console.error(`❌ Row ${rowNum} error:`, rowErr.message);
+        results.errors.push({ row: rowNum, message: rowErr.message });
+        results.failed_count++;
+      }
+    }
+
+    console.log(`✅ Import complete: ${results.success_count} success, ${results.failed_count} failed`);
+
+    res.json({
+      success: true,
+      message: `Import completed: ${results.success_count} visitors imported`,
+      ...results
+    });
+
+  } catch (err) {
+    console.error('❌ Import error:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Import failed: ' + err.message 
+    });
+  }
+});
+
 module.exports = router;
