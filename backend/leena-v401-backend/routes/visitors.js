@@ -188,8 +188,21 @@ router.post('/public', async (req, res) => {
 
       if (templateResult.rows.length) {
         const template = templateResult.rows[0];
-        const emailHtml = processEmailTemplate(template.html_content || template.content, visitorData);
-        const emailSubject = processEmailTemplate(template.subject || 'Registration Confirmation', visitorData);
+        
+        // Generate QR code image tag for email
+        const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+        const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
+        
+        // Build email data with QR image
+        const emailData = {
+          ...visitorData,
+          qr_code: qrImageTag,
+          badge_id: badgeId,
+          badge_url: badgeUrl
+        };
+        
+        const emailHtml = processEmailTemplate(template.html_content || template.content, emailData);
+        const emailSubject = processEmailTemplate(template.subject || 'Registration Confirmation', emailData);
 
         await sendEmailWithReplyTo(
           visitorData.email,
@@ -394,6 +407,10 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
         // Send email if enabled
         if (emailTemplate) {
           try {
+            // Generate QR code image tag (same as webhook.js)
+            const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+            const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
+            
             const templateData = {
               name: name || 'Guest',
               last_name: last_name,
@@ -402,7 +419,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
               country: country,
               job_title: job_title,
               phone: phone,
-              qr_code: qrCode,
+              qr_code: qrImageTag,  // Now sends img tag instead of UUID
               badge_id: badgeId,
               badge_url: badgeUrl
             };
