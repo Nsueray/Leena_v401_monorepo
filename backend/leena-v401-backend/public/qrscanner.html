@@ -418,6 +418,9 @@
                                 <option value="UK">UK</option>
                                 <option value="Germany">Germany</option>
                                 <option value="Italy">Italy</option>
+                                <option value="Nigeria">Nigeria</option>
+                                <option value="Ghana">Ghana</option>
+                                <option value="Turkey">Turkey</option>
                                 <option value="Other">Other</option>
                             </select>
                         </div>
@@ -503,43 +506,29 @@
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            // Initialize Bootstrap modal
             exhibitorModal = new bootstrap.Modal(document.getElementById('exhibitorModal'));
-            
-            // Process URL parameters first
             processUrlParameters();
-            
-            // Then get values from localStorage (URL params take priority if they exist)
             loadTerminalSettings();
-            
-            // Display terminal info
             updateTerminalDisplay();
-            
-            // Check for required data
             checkRequiredData();
-            
-            // Setup event listeners
             setupEventListeners();
         });
         
-        // Process URL parameters and save to localStorage
         function processUrlParameters() {
             const urlParams = new URLSearchParams(window.location.search);
             
             const urlHall = urlParams.get('hall');
             const urlTerminal = urlParams.get('terminal');
-            const urlTerminalKey = urlParams.get('terminalKey');
+            const urlTerminalKey = urlParams.get('terminalKey') || urlParams.get('terminal_key');
             
             if (urlHall) {
                 localStorage.setItem('hall', urlHall);
                 hall = urlHall;
-                console.log('Hall set from URL:', urlHall);
             }
             
             if (urlTerminal) {
                 localStorage.setItem('terminal', urlTerminal);
                 terminal = urlTerminal;
-                console.log('Terminal set from URL:', urlTerminal);
             }
             
             if (urlTerminalKey) {
@@ -549,67 +538,42 @@
             }
         }
         
-        // Load terminal settings from localStorage
         function loadTerminalSettings() {
-            // Only load from localStorage if not already set from URL
-            if (!hall) {
-                hall = localStorage.getItem('hall') || 'main';
-            }
-            if (!terminal) {
-                terminal = localStorage.getItem('terminal') || '1';
-            }
-            if (!terminalKey) {
-                terminalKey = localStorage.getItem('terminalKey') || null;
-            }
+            if (!hall) hall = localStorage.getItem('hall') || 'main';
+            if (!terminal) terminal = localStorage.getItem('terminal') || '1';
+            if (!terminalKey) terminalKey = localStorage.getItem('terminalKey') || null;
             
-            // v402: Log terminal mode if terminalKey is active
             if (terminalKey) {
-                console.log('Terminal mode active');
+                console.log('Terminal mode active with key:', terminalKey.substring(0, 8) + '...');
             }
-            
-            console.log('Terminal settings loaded - Hall:', hall, 'Terminal:', terminal);
         }
         
-        // Update terminal display
         function updateTerminalDisplay() {
             document.getElementById('hallDisplay').textContent = hall || 'Not Set';
             document.getElementById('terminalDisplay').textContent = terminal || 'Not Set';
         }
         
-        // Check for required data
         function checkRequiredData() {
             const expoId = localStorage.getItem('selectedExpoId');
             const token = localStorage.getItem('token');
             
-            // v402: If terminalKey is set, skip token/expo checks (terminal mode)
             if (terminalKey) {
                 if (!hall || !terminal) {
-                    showAlert('Terminal or Hall not configured. Check-in may not work properly. Please set terminal via URL parameters (?terminal=T1&hall=Main)', 'warning');
-                    console.warn('Missing terminal or hall configuration');
+                    showAlert('Terminal or Hall not configured.', 'warning');
                 }
                 return;
             }
             
             if (!expoId) {
                 showAlert('No expo selected. Please select an expo from the dashboard.', 'warning');
-                console.error('Missing expo_id in localStorage');
             }
             
             if (!token) {
                 showAlert('Authentication required. Redirecting to login...', 'danger');
-                console.error('Missing token in localStorage');
-                setTimeout(() => {
-                    window.location.href = 'login.html';
-                }, 2000);
-            }
-            
-            if (!hall || !terminal) {
-                showAlert('Terminal or Hall not configured. Check-in may not work properly. Please set terminal via URL parameters (?terminal=T1&hall=Main)', 'warning');
-                console.warn('Missing terminal or hall configuration');
+                setTimeout(() => { window.location.href = 'login.html'; }, 2000);
             }
         }
         
-        // Get expo_id and organizer_id from localStorage
         function getStorageData() {
             return {
                 expoId: localStorage.getItem('selectedExpoId'),
@@ -619,37 +583,34 @@
             };
         }
         
-        // v402: Build headers based on authentication mode
         function buildHeaders(includeContentType = false) {
             const headers = {};
+            if (includeContentType) headers['Content-Type'] = 'application/json';
             
-            if (includeContentType) {
-                headers['Content-Type'] = 'application/json';
-            }
-            
-            // v402: Use terminalKey if available, otherwise use JWT token
             if (terminalKey) {
                 headers['x-terminal-key'] = terminalKey;
             } else {
                 const token = localStorage.getItem('token');
-                if (token) {
-                    headers['Authorization'] = `Bearer ${token}`;
-                }
+                if (token) headers['Authorization'] = `Bearer ${token}`;
             }
-            
             return headers;
         }
         
+        // Build badge URL with terminal_key if available
+        function buildBadgeUrl(qrCode) {
+            let url = `badge.html?qr=${encodeURIComponent(qrCode)}`;
+            if (terminalKey) {
+                url += `&terminal_key=${encodeURIComponent(terminalKey)}`;
+            }
+            return url;
+        }
+        
         function setupEventListeners() {
-            // QR Scanner input
             const scanInput = document.getElementById('scanInput');
             scanInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !isProcessing) {
-                    handleQRScan();
-                }
+                if (e.key === 'Enter' && !isProcessing) handleQRScan();
             });
             
-            // Manual toggle
             const manualToggle = document.getElementById('manualToggle');
             manualToggle.addEventListener('change', (e) => {
                 const manualForm = document.getElementById('manualForm');
@@ -662,29 +623,23 @@
                 }
             });
             
-            // Registration form
             const registrationForm = document.getElementById('registrationForm');
             registrationForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
-                if (!isProcessing) {
-                    await handleManualRegistration();
-                }
+                if (!isProcessing) await handleManualRegistration();
             });
             
-            // Auto check-in toggle
             const autoCheckinToggle = document.getElementById('autoCheckin');
             autoCheckinToggle.addEventListener('change', (e) => {
                 autoCheckinEnabled = e.target.checked;
             });
             
-            // Re-focus scan input when modal closes
             document.getElementById('exhibitorModal').addEventListener('hidden.bs.modal', () => {
                 document.getElementById('scanInput').value = '';
                 document.getElementById('scanInput').focus();
             });
         }
         
-        // Show exhibitor info modal
         function showExhibitorModal(visitor) {
             const fullName = `${visitor.name || ''} ${visitor.lastName || ''}`.trim() || 'N/A';
             document.getElementById('exhibitorName').textContent = fullName;
@@ -704,7 +659,6 @@
             exhibitorModal.show();
         }
         
-        // Handle QR code scan
         async function handleQRScan() {
             const scanInput = document.getElementById('scanInput');
             const qrCode = scanInput.value.trim();
@@ -716,7 +670,6 @@
             
             const { expoId, token } = getStorageData();
             
-            // v402: Allow proceeding if terminalKey is set, even without token/expoId
             if (!terminalKey && (!expoId || !token)) {
                 showAlert('Missing required data. Please login again.', 'danger');
                 return;
@@ -727,56 +680,44 @@
             hideAlert();
             
             try {
-                // v402: Choose endpoint based on authentication mode
                 let response;
                 let visitor;
                 
                 if (terminalKey) {
-                    // v402: Use terminal endpoint for visitor lookup
                     response = await fetch(`${API_BASE_URL}/terminal/visitor-by-qr?qr=${encodeURIComponent(qrCode)}`, {
                         headers: buildHeaders()
                     });
                     
-                    if (!response.ok) {
-                        throw new Error('Badge not found');
-                    }
+                    if (!response.ok) throw new Error('Badge not found');
                     
                     const result = await response.json();
                     visitor = result.visitor;
-                    console.log('Visitor found for QR scan (terminal mode):', visitor);
+                    console.log('Visitor found (terminal mode):', visitor);
                     
-                    // v402: Check if exhibitor role
                     if (visitor.role === 'exhibitor') {
-                        // Show exhibitor info modal, do NOT check-in
                         showLoading(false);
                         isProcessing = false;
                         showExhibitorModal(visitor);
                         return;
                     }
                     
-                    // Auto check-in if enabled (terminal mode, non-exhibitor)
                     if (autoCheckinEnabled && visitor.id) {
                         await performCheckin(visitor.id);
                     }
                 } else {
-                    // Existing JWT-based lookup
                     response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`, {
                         headers: buildHeaders()
                     });
                     
-                    if (!response.ok) {
-                        throw new Error('Badge not found');
-                    }
+                    if (!response.ok) throw new Error('Badge not found');
                     
                     visitor = await response.json();
-                    console.log('Visitor found for QR scan:', visitor);
+                    console.log('Visitor found:', visitor);
                     
-                    // v402: Check if exhibitor role (JWT mode)
                     const visitorData = visitor.visitor || visitor;
                     const role = visitorData.role || visitorData.visitor_type || 'visitor';
                     
                     if (role === 'exhibitor') {
-                        // Show exhibitor info modal, do NOT check-in
                         showLoading(false);
                         isProcessing = false;
                         showExhibitorModal({
@@ -790,14 +731,13 @@
                         return;
                     }
                     
-                    // Auto check-in if enabled
                     if (autoCheckinEnabled) {
                         await performCheckin(visitorData.id || visitor.id);
                     }
                 }
                 
-                // Redirect to badge print page
-                window.location.href = `badge.html?qr=${qrCode}`;
+                // ✅ FIX: Include terminal_key in badge URL
+                window.location.href = buildBadgeUrl(qrCode);
                 
             } catch (error) {
                 console.error('Scan error:', error);
@@ -810,12 +750,9 @@
             }
         }
         
-        // Handle manual registration - UPDATED to redirect correctly
         async function handleManualRegistration() {
             const { expoId, organizerId, token } = getStorageData();
             
-            // v402: For terminal mode, manual registration still uses JWT endpoint
-            // (terminal endpoints don't support visitor creation)
             if (!expoId || !token) {
                 showAlert('Missing required data. Please login again.', 'danger');
                 return;
@@ -826,7 +763,6 @@
             hideAlert();
             
             try {
-                // Collect form data
                 const formData = {
                     name: document.getElementById('firstName').value.trim(),
                     last_name: document.getElementById('lastName').value.trim(),
@@ -843,9 +779,8 @@
                     terminal: terminal
                 };
                 
-                console.log('Submitting manual registration with data:', formData);
+                console.log('Submitting manual registration:', formData);
                 
-                // Send registration request (always uses JWT endpoint)
                 const response = await fetch(`${API_BASE_URL}/visitors/manual`, {
                     method: 'POST',
                     headers: {
@@ -861,30 +796,23 @@
                 }
                 
                 const result = await response.json();
-                console.log('Registration successful, response:', result);
+                console.log('Registration successful:', result);
                 
-                // Extract QR code from response
                 const qrCode = result.qr_code || result.qrCode || result.badge_id;
                 
                 if (!qrCode) {
-                    console.error('No QR code in response:', result);
                     throw new Error('Registration successful but no QR code received');
                 }
                 
-                // Auto check-in if enabled
                 if (autoCheckinEnabled && result.visitor_id) {
                     await performCheckin(result.visitor_id);
                 }
                 
-                // Show success message
                 showAlert('Registration successful! Redirecting to badge...', 'success');
                 
-                // Direct redirect to badge.html with QR code
-                console.log('Redirecting to badge.html with QR:', qrCode);
-                
-                // Small delay for user to see success message
+                // ✅ FIX: Include terminal_key in badge URL
                 setTimeout(() => {
-                    window.location.href = `badge.html?qr=${qrCode}`;
+                    window.location.href = buildBadgeUrl(qrCode);
                 }, 500);
                 
             } catch (error) {
@@ -893,27 +821,19 @@
                 isProcessing = false;
                 showLoading(false);
             }
-            // Note: Not resetting isProcessing here because we're redirecting
         }
         
-        // Perform check-in
         async function performCheckin(visitorId) {
             const { expoId, token } = getStorageData();
             
-            // v402: For terminal mode, use terminal check-in endpoint
             if (terminalKey) {
-                if (!visitorId) {
-                    console.error('Cannot perform check-in: missing visitor_id');
-                    return;
-                }
+                if (!visitorId) return;
                 
                 try {
                     const checkinData = {
                         visitor_id: visitorId,
                         notes: `Scanned at ${hall || 'main'} - Terminal ${terminal || '1'}`
                     };
-                    
-                    console.log('Performing check-in with terminal key:', checkinData);
                     
                     const response = await fetch(`${API_BASE_URL}/terminal/checkin`, {
                         method: 'POST',
@@ -922,26 +842,16 @@
                     });
                     
                     const result = await response.json();
-                    console.log('Terminal check-in response:', result);
-                    
-                    if (response.ok) {
-                        console.log('Terminal check-in recorded successfully');
-                    } else {
-                        console.warn('Terminal check-in failed but continuing:', result);
-                    }
+                    if (response.ok) console.log('Terminal check-in successful');
+                    else console.warn('Terminal check-in failed:', result);
                     
                 } catch (error) {
                     console.error('Terminal check-in error:', error);
-                    // Don't block the flow if check-in fails
                 }
                 return;
             }
             
-            // Existing JWT-based check-in
-            if (!expoId || !visitorId) {
-                console.error('Cannot perform check-in: missing data', { expoId, visitorId });
-                return;
-            }
+            if (!expoId || !visitorId) return;
             
             try {
                 const checkinData = {
@@ -953,8 +863,6 @@
                     checkin_time: new Date().toISOString()
                 };
                 
-                console.log('Performing check-in with data:', checkinData);
-                
                 const response = await fetch(`${API_BASE_URL}/checkins`, {
                     method: 'POST',
                     headers: buildHeaders(true),
@@ -962,21 +870,14 @@
                 });
                 
                 const result = await response.json();
-                console.log('Check-in response:', result);
-                
-                if (response.ok) {
-                    console.log('Check-in recorded successfully');
-                } else {
-                    console.warn('Check-in failed but continuing:', result);
-                }
+                if (response.ok) console.log('Check-in successful');
+                else console.warn('Check-in failed:', result);
                 
             } catch (error) {
                 console.error('Check-in error:', error);
-                // Don't block the flow if check-in fails
             }
         }
         
-        // UI Helper functions
         function showAlert(message, type) {
             const alertDiv = document.getElementById('alertMessage');
             alertDiv.className = `alert alert-${type}`;
@@ -985,8 +886,7 @@
         }
         
         function hideAlert() {
-            const alertDiv = document.getElementById('alertMessage');
-            alertDiv.style.display = 'none';
+            document.getElementById('alertMessage').style.display = 'none';
         }
         
         function showLoading(show) {
