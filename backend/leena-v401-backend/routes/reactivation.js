@@ -1,0 +1,691 @@
+/**
+ * Reactivation Campaign Routes
+ * Leena EMS v402
+ * 
+ * Re-activate previous year visitors for new expo
+ * Uses email_queue for async email sending (no timeout/rate limit issues)
+ */
+
+const express = require('express');
+const router = express.Router();
+const pool = require('../utils/db');
+const multer = require('multer');
+const XLSX = require('xlsx');
+const crypto = require('crypto');
+const { v4: uuidv4 } = require('uuid');
+const { generateBadgeUrl } = require('../utils/qrcode');
+const { processEmailTemplate } = require('../utils/email');
+const authMiddleware = require('../middleware/authMiddleware');
+
+const upload = multer({ storage: multer.memoryStorage() });
+
+// Generate secure token
+function generateToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+/**
+ * GET /api/reactivation/campaigns
+ * List all reactivation campaigns (grouped by target_expo)
+ */
+router.get('/campaigns', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        target_expo_id,
+        e.name as expo_name,
+        COUNT(*) as total_tokens,
+        COUNT(*) FILTER (WHERE rt.status = 'pending') as pending,
+        COUNT(*) FILTER (WHERE rt.status = 'activated') as activated,
+        COUNT(*) FILTER (WHERE rt.status = 'expired') as expired,
+        MIN(rt.created_at) as campaign_started,
+        MAX(rt.created_at) as last_added
+      FROM reactivation_tokens rt
+      JOIN expos e ON rt.target_expo_id = e.id
+      WHERE rt.organizer_id = $1
+      GROUP BY target_expo_id, e.name
+      ORDER BY campaign_started DESC
+    `, [req.organizer_id]);
+
+    res.json({ success: true, campaigns: result.rows });
+  } catch (err) {
+    console.error('[reactivation] List campaigns error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to list campaigns' });
+  }
+});
+
+/**
+ * GET /api/reactivation/campaign/:expoId
+ * Get details of a specific campaign
+ */
+router.get('/campaign/:expoId', authMiddleware, async (req, res) => {
+  try {
+    const { expoId } = req.params;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = (page - 1) * limit;
+
+    // Get tokens
+    const result = await pool.query(`
+      SELECT id, token, email, name, last_name, company, status, created_at, activated_at
+      FROM reactivation_tokens
+      WHERE target_expo_id = $1 AND organizer_id = $2
+      ORDER BY created_at DESC
+      LIMIT $3 OFFSET $4
+    `, [expoId, req.organizer_id, limit, offset]);
+
+    // Get total count
+    const countResult = await pool.query(`
+      SELECT COUNT(*) as total FROM reactivation_tokens
+      WHERE target_expo_id = $1 AND organizer_id = $2
+    `, [expoId, req.organizer_id]);
+
+    res.json({
+      success: true,
+      tokens: result.rows,
+      total: parseInt(countResult.rows[0].total),
+      page,
+      limit
+    });
+  } catch (err) {
+    console.error('[reactivation] Campaign details error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to get campaign details' });
+  }
+});
+
+/**
+ * POST /api/reactivation/create-from-excel
+ * Create reactivation campaign from Excel file
+ */
+router.post('/create-from-excel', authMiddleware, upload.single('file'), async (req, res) => {
+  try {
+    const { target_expo_id, template_id } = req.body;
+    const organizerId = req.organizer_id;
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Excel file is required' });
+    }
+
+    if (!target_expo_id) {
+      return res.status(400).json({ success: false, error: 'Target expo is required' });
+    }
+
+    // Verify target expo belongs to organizer
+    const expoCheck = await pool.query(
+      'SELECT id, name FROM expos WHERE id = $1 AND organizer_id = $2',
+      [target_expo_id, organizerId]
+    );
+    if (expoCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Target expo not found' });
+    }
+    const targetExpo = expoCheck.rows[0];
+
+    // Get email template
+    let emailTemplate = null;
+    if (template_id) {
+      const templateResult = await pool.query(
+        'SELECT * FROM email_templates WHERE id = $1 AND organizer_id = $2',
+        [template_id, organizerId]
+      );
+      if (templateResult.rows.length) {
+        emailTemplate = templateResult.rows[0];
+      }
+    }
+
+    // Parse Excel
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+    if (rows.length === 0) {
+      return res.status(400).json({ success: false, error: 'Excel file is empty' });
+    }
+
+    console.log(`📊 Processing ${rows.length} rows for reactivation campaign`);
+
+    const results = {
+      total: rows.length,
+      created: 0,
+      skipped_already_registered: 0,
+      skipped_duplicate: 0,
+      skipped_no_email: 0,
+      errors: []
+    };
+
+    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNum = i + 2;
+
+      try {
+        // Map columns
+        const email = (row.email || row.Email || row.EMAIL || '').toString().trim().toLowerCase();
+        const name = (row.name || row.Name || row.first_name || row['First Name'] || '').toString().trim();
+        const last_name = (row.last_name || row['Last Name'] || row.surname || '').toString().trim();
+        const company = (row.company || row.Company || row.organization || '').toString().trim();
+        const country = (row.country || row.Country || '').toString().trim();
+        const job_title = (row.job_title || row['Job Title'] || row.title || '').toString().trim();
+        const phone = (row.phone || row.Phone || row.mobile || '').toString().trim();
+
+        if (!email) {
+          results.skipped_no_email++;
+          continue;
+        }
+
+        // Check if already registered in target expo
+        const existingVisitor = await pool.query(
+          'SELECT id FROM visitors WHERE LOWER(email) = $1 AND expo_id = $2',
+          [email, target_expo_id]
+        );
+        if (existingVisitor.rows.length > 0) {
+          results.skipped_already_registered++;
+          continue;
+        }
+
+        // Check if token already exists for this email + target expo
+        const existingToken = await pool.query(
+          'SELECT id FROM reactivation_tokens WHERE LOWER(email) = $1 AND target_expo_id = $2',
+          [email, target_expo_id]
+        );
+        if (existingToken.rows.length > 0) {
+          results.skipped_duplicate++;
+          continue;
+        }
+
+        // Create token
+        const token = generateToken();
+
+        await pool.query(`
+          INSERT INTO reactivation_tokens (
+            token, target_expo_id, organizer_id,
+            email, name, last_name, company, country, job_title, phone,
+            status, created_at, expires_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', NOW(), NOW() + INTERVAL '30 days')
+        `, [token, target_expo_id, organizerId, email, name, last_name, company, country, job_title, phone]);
+
+        // Queue email if template provided
+        if (emailTemplate) {
+          const activationUrl = `${baseUrl}/reactivate.html?token=${token}`;
+          
+          const templateData = {
+            name: name || 'Valued Guest',
+            last_name: last_name,
+            email: email,
+            company: company,
+            country: country,
+            job_title: job_title,
+            activation_url: activationUrl,
+            expo_name: targetExpo.name
+          };
+
+          const htmlContent = processEmailTemplate(
+            emailTemplate.html_content || emailTemplate.body || '',
+            templateData
+          );
+          const subject = processEmailTemplate(
+            emailTemplate.subject || 'Activate Your Visitor Pass',
+            templateData
+          );
+
+          // Insert into email_queue (email_worker will send)
+          await pool.query(`
+            INSERT INTO email_queue (
+              organizer_id, expo_id, visitor_id, template_id,
+              recipient_email, subject, html_content,
+              status, created_at
+            ) VALUES ($1, $2, NULL, $3, $4, $5, $6, 'pending', NOW())
+          `, [organizerId, target_expo_id, template_id, email, subject, htmlContent]);
+        }
+
+        results.created++;
+
+      } catch (rowErr) {
+        console.error(`Row ${rowNum} error:`, rowErr.message);
+        results.errors.push({ row: rowNum, error: rowErr.message });
+      }
+    }
+
+    console.log(`✅ Reactivation campaign created: ${results.created} tokens, ${results.skipped_already_registered} already registered`);
+
+    res.json({
+      success: true,
+      message: `Campaign created successfully`,
+      results
+    });
+
+  } catch (err) {
+    console.error('[reactivation] Create from Excel error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to create campaign' });
+  }
+});
+
+/**
+ * POST /api/reactivation/create-from-expo
+ * Create reactivation campaign from existing expo visitors
+ */
+router.post('/create-from-expo', authMiddleware, async (req, res) => {
+  try {
+    const { source_expo_id, target_expo_id, template_id, filter } = req.body;
+    const organizerId = req.organizer_id;
+
+    if (!source_expo_id || !target_expo_id) {
+      return res.status(400).json({ success: false, error: 'Source and target expo are required' });
+    }
+
+    if (source_expo_id === target_expo_id) {
+      return res.status(400).json({ success: false, error: 'Source and target expo must be different' });
+    }
+
+    // Verify expos belong to organizer
+    const expoCheck = await pool.query(
+      'SELECT id, name FROM expos WHERE id IN ($1, $2) AND organizer_id = $3',
+      [source_expo_id, target_expo_id, organizerId]
+    );
+    if (expoCheck.rows.length !== 2) {
+      return res.status(404).json({ success: false, error: 'Expo not found' });
+    }
+
+    const targetExpo = expoCheck.rows.find(e => e.id == target_expo_id);
+
+    // Get email template
+    let emailTemplate = null;
+    if (template_id) {
+      const templateResult = await pool.query(
+        'SELECT * FROM email_templates WHERE id = $1 AND organizer_id = $2',
+        [template_id, organizerId]
+      );
+      if (templateResult.rows.length) {
+        emailTemplate = templateResult.rows[0];
+      }
+    }
+
+    // Build query based on filter
+    let visitorQuery = `
+      SELECT v.id, v.email, v.name, v.last_name, v.company, v.country, v.job_title, v.phone
+      FROM visitors v
+      WHERE v.expo_id = $1 AND v.organizer_id = $2 AND v.email IS NOT NULL AND v.email != ''
+    `;
+
+    // Filter: checked_in_only, no_shows_only, all
+    if (filter === 'checked_in_only') {
+      visitorQuery += ` AND EXISTS (SELECT 1 FROM checkins c WHERE c.visitor_id = v.id)`;
+    } else if (filter === 'no_shows_only') {
+      visitorQuery += ` AND NOT EXISTS (SELECT 1 FROM checkins c WHERE c.visitor_id = v.id)`;
+    }
+
+    const visitors = await pool.query(visitorQuery, [source_expo_id, organizerId]);
+
+    console.log(`📊 Found ${visitors.rows.length} visitors from source expo (filter: ${filter || 'all'})`);
+
+    const results = {
+      total: visitors.rows.length,
+      created: 0,
+      skipped_already_registered: 0,
+      skipped_duplicate: 0,
+      errors: []
+    };
+
+    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+
+    for (const visitor of visitors.rows) {
+      try {
+        const email = visitor.email.toLowerCase().trim();
+
+        // Check if already registered in target expo
+        const existingVisitor = await pool.query(
+          'SELECT id FROM visitors WHERE LOWER(email) = $1 AND expo_id = $2',
+          [email, target_expo_id]
+        );
+        if (existingVisitor.rows.length > 0) {
+          results.skipped_already_registered++;
+          continue;
+        }
+
+        // Check if token already exists
+        const existingToken = await pool.query(
+          'SELECT id FROM reactivation_tokens WHERE LOWER(email) = $1 AND target_expo_id = $2',
+          [email, target_expo_id]
+        );
+        if (existingToken.rows.length > 0) {
+          results.skipped_duplicate++;
+          continue;
+        }
+
+        // Create token
+        const token = generateToken();
+
+        await pool.query(`
+          INSERT INTO reactivation_tokens (
+            token, source_visitor_id, source_expo_id, target_expo_id, organizer_id,
+            email, name, last_name, company, country, job_title, phone,
+            status, created_at, expires_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', NOW(), NOW() + INTERVAL '30 days')
+        `, [
+          token, visitor.id, source_expo_id, target_expo_id, organizerId,
+          email, visitor.name, visitor.last_name, visitor.company, visitor.country, visitor.job_title, visitor.phone
+        ]);
+
+        // Queue email
+        if (emailTemplate) {
+          const activationUrl = `${baseUrl}/reactivate.html?token=${token}`;
+          
+          const templateData = {
+            name: visitor.name || 'Valued Guest',
+            last_name: visitor.last_name || '',
+            email: email,
+            company: visitor.company || '',
+            country: visitor.country || '',
+            job_title: visitor.job_title || '',
+            activation_url: activationUrl,
+            expo_name: targetExpo.name
+          };
+
+          const htmlContent = processEmailTemplate(
+            emailTemplate.html_content || emailTemplate.body || '',
+            templateData
+          );
+          const subject = processEmailTemplate(
+            emailTemplate.subject || 'Activate Your Visitor Pass',
+            templateData
+          );
+
+          // Insert into email_queue
+          await pool.query(`
+            INSERT INTO email_queue (
+              organizer_id, expo_id, visitor_id, template_id,
+              recipient_email, subject, html_content,
+              status, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+          `, [organizerId, target_expo_id, visitor.id, template_id, email, subject, htmlContent]);
+        }
+
+        results.created++;
+
+      } catch (err) {
+        console.error(`Visitor ${visitor.id} error:`, err.message);
+        results.errors.push({ visitor_id: visitor.id, error: err.message });
+      }
+    }
+
+    console.log(`✅ Reactivation campaign created from expo: ${results.created} tokens`);
+
+    res.json({
+      success: true,
+      message: 'Campaign created successfully',
+      results
+    });
+
+  } catch (err) {
+    console.error('[reactivation] Create from expo error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to create campaign' });
+  }
+});
+
+/**
+ * GET /api/reactivation/verify/:token
+ * Verify token and return visitor data (PUBLIC - no auth)
+ */
+router.get('/verify/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    const result = await pool.query(`
+      SELECT 
+        rt.*,
+        e.name as expo_name,
+        e.location as expo_location,
+        e.start_date,
+        e.end_date
+      FROM reactivation_tokens rt
+      JOIN expos e ON rt.target_expo_id = e.id
+      WHERE rt.token = $1
+    `, [token]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Invalid or expired token' });
+    }
+
+    const tokenData = result.rows[0];
+
+    // Check if expired
+    if (new Date(tokenData.expires_at) < new Date()) {
+      return res.status(410).json({ success: false, error: 'This activation link has expired' });
+    }
+
+    // Check if already activated
+    if (tokenData.status === 'activated') {
+      return res.status(409).json({ 
+        success: false, 
+        error: 'This visitor pass has already been activated',
+        already_activated: true 
+      });
+    }
+
+    res.json({
+      success: true,
+      visitor: {
+        name: tokenData.name,
+        last_name: tokenData.last_name,
+        email: tokenData.email,
+        company: tokenData.company,
+        country: tokenData.country,
+        job_title: tokenData.job_title,
+        phone: tokenData.phone
+      },
+      expo: {
+        id: tokenData.target_expo_id,
+        name: tokenData.expo_name,
+        location: tokenData.expo_location,
+        start_date: tokenData.start_date,
+        end_date: tokenData.end_date
+      }
+    });
+
+  } catch (err) {
+    console.error('[reactivation] Verify error:', err.message);
+    res.status(500).json({ success: false, error: 'Verification failed' });
+  }
+});
+
+/**
+ * POST /api/reactivation/activate
+ * Activate visitor pass - create visitor record (PUBLIC - no auth)
+ */
+router.post('/activate', async (req, res) => {
+  try {
+    const { token, name, last_name, company, country, job_title, phone } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ success: false, error: 'Token is required' });
+    }
+
+    // Get and validate token
+    const tokenResult = await pool.query(`
+      SELECT * FROM reactivation_tokens WHERE token = $1
+    `, [token]);
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Invalid token' });
+    }
+
+    const tokenData = tokenResult.rows[0];
+
+    if (new Date(tokenData.expires_at) < new Date()) {
+      return res.status(410).json({ success: false, error: 'Token expired' });
+    }
+
+    if (tokenData.status === 'activated') {
+      return res.status(409).json({ success: false, error: 'Already activated' });
+    }
+
+    // Check if email already registered in target expo
+    const existingCheck = await pool.query(
+      'SELECT id, qr_code, badge_id FROM visitors WHERE LOWER(email) = $1 AND expo_id = $2',
+      [tokenData.email.toLowerCase(), tokenData.target_expo_id]
+    );
+
+    if (existingCheck.rows.length > 0) {
+      // Already registered - mark token as activated
+      await pool.query(
+        'UPDATE reactivation_tokens SET status = $1, activated_at = NOW(), new_visitor_id = $2 WHERE id = $3',
+        ['activated', existingCheck.rows[0].id, tokenData.id]
+      );
+
+      return res.json({
+        success: true,
+        message: 'You are already registered for this event',
+        visitor: existingCheck.rows[0],
+        already_exists: true
+      });
+    }
+
+    // Create new visitor
+    const qrCode = uuidv4();
+    const badgeId = qrCode.substring(0, 8).toUpperCase();
+    const badgeUrl = generateBadgeUrl(qrCode);
+
+    const visitorResult = await pool.query(`
+      INSERT INTO visitors (
+        organizer_id, expo_id,
+        name, last_name, email, company, country, job_title, phone,
+        source, origin, visitor_type,
+        qr_code, badge_id, badge_url,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+      RETURNING *
+    `, [
+      tokenData.organizer_id,
+      tokenData.target_expo_id,
+      name || tokenData.name,
+      last_name || tokenData.last_name,
+      tokenData.email,
+      company || tokenData.company,
+      country || tokenData.country,
+      job_title || tokenData.job_title,
+      phone || tokenData.phone,
+      'reactivation',
+      'reactivation_campaign',
+      'visitor',
+      qrCode,
+      badgeId,
+      badgeUrl
+    ]);
+
+    const newVisitor = visitorResult.rows[0];
+
+    // Update token status
+    await pool.query(
+      'UPDATE reactivation_tokens SET status = $1, activated_at = NOW(), new_visitor_id = $2 WHERE id = $3',
+      ['activated', newVisitor.id, tokenData.id]
+    );
+
+    // Get form's email template for badge email
+    const formResult = await pool.query(`
+      SELECT f.email_template_id, et.html_content, et.subject
+      FROM forms f
+      JOIN email_templates et ON f.email_template_id = et.id
+      WHERE f.expo_id = $1 AND f.email_template_id IS NOT NULL
+      LIMIT 1
+    `, [tokenData.target_expo_id]);
+
+    // Queue badge email
+    if (formResult.rows.length > 0) {
+      const template = formResult.rows[0];
+      const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+      const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
+
+      const templateData = {
+        name: newVisitor.name || 'Guest',
+        last_name: newVisitor.last_name || '',
+        email: newVisitor.email,
+        company: newVisitor.company || '',
+        country: newVisitor.country || '',
+        job_title: newVisitor.job_title || '',
+        qr_code: qrImageTag,
+        badge_id: badgeId,
+        badge_url: badgeUrl
+      };
+
+      const htmlContent = processEmailTemplate(template.html_content, templateData);
+      const subject = processEmailTemplate(template.subject || 'Your Badge', templateData);
+
+      await pool.query(`
+        INSERT INTO email_queue (
+          organizer_id, expo_id, visitor_id, template_id,
+          recipient_email, subject, html_content,
+          status, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+      `, [
+        tokenData.organizer_id,
+        tokenData.target_expo_id,
+        newVisitor.id,
+        template.email_template_id,
+        newVisitor.email,
+        subject,
+        htmlContent
+      ]);
+    }
+
+    console.log(`✅ Visitor reactivated: ${newVisitor.email} for expo ${tokenData.target_expo_id}`);
+
+    res.json({
+      success: true,
+      message: 'Your visitor pass has been activated!',
+      visitor: {
+        id: newVisitor.id,
+        name: newVisitor.name,
+        email: newVisitor.email,
+        badge_id: badgeId,
+        qr_code: qrCode
+      }
+    });
+
+  } catch (err) {
+    console.error('[reactivation] Activate error:', err.message);
+    res.status(500).json({ success: false, error: 'Activation failed' });
+  }
+});
+
+/**
+ * GET /api/reactivation/stats/:expoId
+ * Get campaign statistics
+ */
+router.get('/stats/:expoId', authMiddleware, async (req, res) => {
+  try {
+    const { expoId } = req.params;
+
+    const result = await pool.query(`
+      SELECT 
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending,
+        COUNT(*) FILTER (WHERE status = 'activated') as activated,
+        COUNT(*) FILTER (WHERE status = 'expired') as expired
+      FROM reactivation_tokens
+      WHERE target_expo_id = $1 AND organizer_id = $2
+    `, [expoId, req.organizer_id]);
+
+    // Email queue stats
+    const emailStats = await pool.query(`
+      SELECT 
+        COUNT(*) as total_emails,
+        COUNT(*) FILTER (WHERE status = 'pending') as pending_emails,
+        COUNT(*) FILTER (WHERE status = 'sent') as sent_emails,
+        COUNT(*) FILTER (WHERE status = 'failed') as failed_emails
+      FROM email_queue
+      WHERE expo_id = $1 AND organizer_id = $2
+    `, [expoId, req.organizer_id]);
+
+    res.json({
+      success: true,
+      tokens: result.rows[0],
+      emails: emailStats.rows[0]
+    });
+
+  } catch (err) {
+    console.error('[reactivation] Stats error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to get stats' });
+  }
+});
+
+module.exports = router;
