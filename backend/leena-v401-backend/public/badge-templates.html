@@ -52,7 +52,7 @@
         .btn-sm { padding: 6px 12px; font-size: 12px; }
         
         /* Cards */
-        .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
         .template-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; position: relative; }
         .template-card.default { border-color: var(--primary); border-width: 2px; }
         .template-card .default-badge { position: absolute; top: 12px; right: 12px; background: var(--primary); color: white; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
@@ -65,7 +65,7 @@
         .template-card .actions { display: flex; gap: 8px; }
         
         /* Badge Preview */
-        .badge-preview { border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 10px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
+        .badge-preview { border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 10px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; background: #fafafa; min-height: 80px; }
         .badge-mini { transform: scale(0.4); transform-origin: center; }
         .badge-mini-wrapper { display: flex; align-items: center; background: white; border: 1px solid #ddd; padding: 4mm; }
         .badge-mini-qr { width: 25mm; height: 25mm; background: #eee; margin-right: 4mm; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #999; }
@@ -76,7 +76,7 @@
         /* Modal */
         .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.2s; }
         .modal-backdrop.show { opacity: 1; visibility: visible; }
-        .modal-content { background: var(--bg-card); border-radius: var(--radius-lg); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+        .modal-content { background: var(--bg-card); border-radius: var(--radius-lg); width: 100%; max-width: 650px; max-height: 90vh; overflow-y: auto; }
         .modal-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
         .modal-header h2 { font-size: 18px; font-weight: 600; }
         .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
@@ -89,8 +89,10 @@
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 14px; }
         .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
         .form-section { margin-bottom: 24px; }
         .form-section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
+        .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
         
         /* Checkbox */
         .checkbox-group { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -110,7 +112,7 @@
         @media (max-width: 768px) { 
             .sidebar { display: none; } 
             .main-wrapper { margin-left: 0; }
-            .form-row { grid-template-columns: 1fr; }
+            .form-row, .form-row-3 { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -121,35 +123,35 @@
             <div class="sidebar-header">
                 <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-                <div class="sidebar-nav">
-                    <div class="nav-section">
-                        <div class="nav-section-title">Overview</div>
-                        <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Management</div>
-                        <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
-                        <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
-                        <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
-                        <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Communication</div>
-                        <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
-                        <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Settings</div>
-                        <a class="nav-item active" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
-                    </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Tools</div>
-                        <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
-                        <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
-                    </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
                 </div>
-</nav>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item active" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
         
         <!-- Main Content -->
         <div class="main-wrapper">
@@ -197,7 +199,7 @@
                     </div>
                     
                     <div class="form-section">
-                        <div class="form-section-title">Badge Size</div>
+                        <div class="form-section-title">Badge Size & Position</div>
                         <div class="form-row">
                             <div class="form-group">
                                 <label>Width (mm)</label>
@@ -208,12 +210,24 @@
                                 <input type="number" id="height_mm" value="50" min="20" max="300">
                             </div>
                         </div>
-                        <div class="form-group">
-                            <label>Orientation</label>
-                            <select id="orientation">
-                                <option value="landscape">Landscape</option>
-                                <option value="portrait">Portrait</option>
-                            </select>
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Orientation</label>
+                                <select id="orientation">
+                                    <option value="landscape">Landscape</option>
+                                    <option value="portrait">Portrait</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Left Margin (mm)</label>
+                                <input type="number" id="margin_left_mm" value="0" min="-20" max="50">
+                                <div class="form-hint">Adjust print start position</div>
+                            </div>
+                            <div class="form-group">
+                                <label>Top Margin (mm)</label>
+                                <input type="number" id="margin_top_mm" value="0" min="-20" max="50">
+                                <div class="form-hint">Adjust vertical position</div>
+                            </div>
                         </div>
                     </div>
                     
@@ -233,12 +247,16 @@
                                 <label for="show_company">Company</label>
                             </div>
                             <div class="checkbox-item">
+                                <input type="checkbox" id="show_job_title">
+                                <label for="show_job_title">Job Title</label>
+                            </div>
+                            <div class="checkbox-item">
                                 <input type="checkbox" id="show_country">
                                 <label for="show_country">Country</label>
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="show_role">
-                                <label for="show_role">Role Badge</label>
+                                <label for="show_role">Visitor Type</label>
                             </div>
                             <div class="checkbox-item">
                                 <input type="checkbox" id="show_badge_id">
@@ -342,9 +360,14 @@
             if (content.show_qr) contentItems.push('QR');
             if (content.show_name) contentItems.push('Name');
             if (content.show_company) contentItems.push('Company');
+            if (content.show_job_title) contentItems.push('Job Title');
             if (content.show_country) contentItems.push('Country');
-            if (content.show_role) contentItems.push('Role');
+            if (content.show_role) contentItems.push('Type');
             if (content.show_badge_id) contentItems.push('Badge ID');
+
+            const marginInfo = (size.margin_left_mm || size.margin_top_mm) 
+                ? `L:${size.margin_left_mm || 0}mm T:${size.margin_top_mm || 0}mm` 
+                : 'None';
 
             return `
                 <div class="template-card ${t.is_default ? 'default' : ''}">
@@ -358,6 +381,7 @@
                             <div class="badge-mini-info">
                                 ${content.show_name ? '<div class="badge-mini-name">John Doe</div>' : ''}
                                 ${content.show_company ? '<div class="badge-mini-company">Acme Inc.</div>' : ''}
+                                ${content.show_job_title ? '<div style="font-size:9pt;color:#444;">Marketing Manager</div>' : ''}
                                 ${content.show_country ? '<div style="font-size:10pt;color:#777;">Nigeria</div>' : ''}
                             </div>
                         </div>
@@ -369,8 +393,8 @@
                             <span class="value">${size.width_mm || 100} × ${size.height_mm || 50} mm</span>
                         </div>
                         <div class="config-item">
-                            <span class="label">Orientation</span>
-                            <span class="value">${size.orientation || 'landscape'}</span>
+                            <span class="label">Margins</span>
+                            <span class="value">${marginInfo}</span>
                         </div>
                         <div class="config-item">
                             <span class="label">Content</span>
@@ -402,6 +426,15 @@
             // Reset form
             document.getElementById('templateForm').reset();
             
+            // Set defaults
+            document.getElementById('width_mm').value = 100;
+            document.getElementById('height_mm').value = 50;
+            document.getElementById('margin_left_mm').value = 0;
+            document.getElementById('margin_top_mm').value = 0;
+            document.getElementById('show_qr').checked = true;
+            document.getElementById('show_name').checked = true;
+            document.getElementById('show_company').checked = true;
+            
             if (template) {
                 const size = template.size_config || {};
                 const content = template.content_config || {};
@@ -414,11 +447,14 @@
                 
                 document.getElementById('width_mm').value = size.width_mm || 100;
                 document.getElementById('height_mm').value = size.height_mm || 50;
+                document.getElementById('margin_left_mm').value = size.margin_left_mm || 0;
+                document.getElementById('margin_top_mm').value = size.margin_top_mm || 0;
                 document.getElementById('orientation').value = size.orientation || 'landscape';
                 
                 document.getElementById('show_qr').checked = content.show_qr !== false;
                 document.getElementById('show_name').checked = content.show_name !== false;
                 document.getElementById('show_company').checked = content.show_company !== false;
+                document.getElementById('show_job_title').checked = content.show_job_title || false;
                 document.getElementById('show_country').checked = content.show_country || false;
                 document.getElementById('show_role').checked = content.show_role || false;
                 document.getElementById('show_badge_id').checked = content.show_badge_id || false;
@@ -454,12 +490,15 @@
                 size_config: {
                     width_mm: parseInt(document.getElementById('width_mm').value) || 100,
                     height_mm: parseInt(document.getElementById('height_mm').value) || 50,
+                    margin_left_mm: parseInt(document.getElementById('margin_left_mm').value) || 0,
+                    margin_top_mm: parseInt(document.getElementById('margin_top_mm').value) || 0,
                     orientation: document.getElementById('orientation').value
                 },
                 content_config: {
                     show_qr: document.getElementById('show_qr').checked,
                     show_name: document.getElementById('show_name').checked,
                     show_company: document.getElementById('show_company').checked,
+                    show_job_title: document.getElementById('show_job_title').checked,
                     show_country: document.getElementById('show_country').checked,
                     show_role: document.getElementById('show_role').checked,
                     show_badge_id: document.getElementById('show_badge_id').checked

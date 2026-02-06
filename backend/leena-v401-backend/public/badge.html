@@ -8,9 +8,12 @@
     :root {
       --badge-width: 100mm;
       --badge-height: 50mm;
+      --margin-left: 0mm;
+      --margin-top: 0mm;
       --font-size-name: 18pt;
       --font-size-company: 14pt;
       --font-size-country: 12pt;
+      --font-size-job-title: 11pt;
       --font-size-role: 10pt;
       --font-family: Arial, sans-serif;
     }
@@ -18,8 +21,8 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      width: var(--badge-width);
-      height: var(--badge-height);
+      width: calc(var(--badge-width) + var(--margin-left));
+      height: calc(var(--badge-height) + var(--margin-top));
       font-family: var(--font-family);
       overflow: hidden;
     }
@@ -33,6 +36,8 @@
       height: var(--badge-height);
       padding: 4mm;
       box-sizing: border-box;
+      margin-left: var(--margin-left);
+      margin-top: var(--margin-top);
     }
 
     .badge-wrapper.no-qr {
@@ -88,6 +93,13 @@
       margin-bottom: 1mm;
     }
 
+    .visitor-job-title {
+      font-size: var(--font-size-job-title);
+      line-height: 1.2;
+      color: #444;
+      margin-bottom: 1mm;
+    }
+
     .visitor-country {
       font-size: var(--font-size-country);
       line-height: 1.2;
@@ -136,9 +148,9 @@
         margin: 0;
       }
 
-      body {
-        width: var(--badge-width);
-        height: var(--badge-height);
+      html, body {
+        width: calc(var(--badge-width) + var(--margin-left));
+        height: calc(var(--badge-height) + var(--margin-top));
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -182,18 +194,25 @@
       if (size.width_mm) root.style.setProperty('--badge-width', size.width_mm + 'mm');
       if (size.height_mm) root.style.setProperty('--badge-height', size.height_mm + 'mm');
 
+      // Margins for print positioning
+      if (size.margin_left_mm !== undefined) root.style.setProperty('--margin-left', size.margin_left_mm + 'mm');
+      if (size.margin_top_mm !== undefined) root.style.setProperty('--margin-top', size.margin_top_mm + 'mm');
+
       // Fonts
       if (style.font_size_name) root.style.setProperty('--font-size-name', style.font_size_name);
       if (style.font_size_company) root.style.setProperty('--font-size-company', style.font_size_company);
       if (style.font_size_country) root.style.setProperty('--font-size-country', style.font_size_country);
+      if (style.font_size_job_title) root.style.setProperty('--font-size-job-title', style.font_size_job_title);
       if (style.font_family) root.style.setProperty('--font-family', style.font_family);
 
       // Update @page for print
+      const marginLeft = size.margin_left_mm || 0;
+      const marginTop = size.margin_top_mm || 0;
       const pageStyle = document.createElement('style');
       pageStyle.textContent = `
         @media print {
           @page {
-            size: ${size.width_mm || 100}mm ${size.height_mm || 50}mm ${size.orientation || 'landscape'};
+            size: ${(size.width_mm || 100) + marginLeft}mm ${(size.height_mm || 50) + marginTop}mm ${size.orientation || 'landscape'};
             margin: 0;
           }
         }
@@ -205,9 +224,9 @@
     async function getTemplate(terminalKey, templateId) {
       // Default template
       let template = {
-        size_config: { width_mm: 100, height_mm: 50, orientation: 'landscape' },
-        content_config: { show_qr: true, show_name: true, show_company: true, show_country: false, show_role: false, show_badge_id: false },
-        style_config: { font_size_name: '18pt', font_size_company: '14pt' }
+        size_config: { width_mm: 100, height_mm: 50, orientation: 'landscape', margin_left_mm: 0, margin_top_mm: 0 },
+        content_config: { show_qr: true, show_name: true, show_company: true, show_country: false, show_job_title: false, show_role: false, show_badge_id: false },
+        style_config: { font_size_name: '18pt', font_size_company: '14pt', font_size_job_title: '11pt' }
       };
 
       try {
@@ -218,6 +237,7 @@
             const data = await res.json();
             if (data.template) {
               template = data.template;
+              console.log('Loaded template from terminal:', template);
             }
           }
         } else if (templateId) {
@@ -230,6 +250,7 @@
             const data = await res.json();
             if (data.template) {
               template = data.template;
+              console.log('Loaded template by ID:', template);
             }
           }
         }
@@ -240,34 +261,7 @@
       return template;
     }
 
-    // Perform check-in via terminal API
-    async function performCheckin(visitorId, terminalKey) {
-      if (!terminalKey) {
-        console.log('No terminal key, skipping check-in');
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_URL}/terminal/checkin`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-terminal-key': terminalKey
-          },
-          body: JSON.stringify({ visitor_id: visitorId })
-        });
-
-        if (res.ok) {
-          console.log('✅ Check-in recorded');
-        } else {
-          console.warn('⚠️ Check-in response:', await res.text());
-        }
-      } catch (err) {
-        console.warn('⚠️ Check-in failed:', err);
-      }
-    }
-
-    // Update badge printed status
+    // Record badge print (may also create check-in based on expo settings)
     async function markBadgePrinted(visitorId, terminalKey) {
       if (!terminalKey) return;
 
@@ -303,6 +297,7 @@
       applyTemplateStyles(template);
 
       const content = template.content_config || {};
+      console.log('Content config:', content);
 
       // 2. Load visitor data
       let visitor = null;
@@ -335,17 +330,20 @@
         return;
       }
 
+      console.log('Visitor data:', visitor);
+
       // 3. Prepare display values
       let displayName = visitor.name || '';
-      if (visitor.lastName || visitor.last_name) {
-        displayName += ' ' + (visitor.lastName || visitor.last_name);
+      if (visitor.last_name || visitor.lastName) {
+        displayName += ' ' + (visitor.last_name || visitor.lastName);
       }
       displayName = displayName.trim() || 'Guest';
 
       const displayCompany = visitor.company || '';
       const displayCountry = visitor.country || '';
+      const displayJobTitle = visitor.job_title || visitor.jobTitle || '';
       const displayRole = visitor.role || visitor.visitor_type || '';
-      const displayBadgeId = visitor.badgeId || visitor.badge_id || '';
+      const displayBadgeId = visitor.badge_id || visitor.badgeId || '';
 
       // 4. Build badge HTML
       const showQR = content.show_qr !== false;
@@ -373,6 +371,11 @@
       if (content.show_company !== false && displayCompany) {
         const companyClass = getTextSizeClass(displayCompany);
         badgeHTML += `<div class="visitor-company ${companyClass}">${escapeHtml(displayCompany)}</div>`;
+      }
+
+      // Job Title field
+      if (content.show_job_title && displayJobTitle) {
+        badgeHTML += `<div class="visitor-job-title">${escapeHtml(displayJobTitle)}</div>`;
       }
 
       if (content.show_country && displayCountry) {
@@ -411,7 +414,7 @@
     }
 
     async function finalizePrint(visitor, terminalKey) {
-      // Record badge print (which may also create check-in based on expo settings)
+      // Record badge print
       if (visitor.id && terminalKey) {
         await markBadgePrinted(visitor.id, terminalKey);
       }
