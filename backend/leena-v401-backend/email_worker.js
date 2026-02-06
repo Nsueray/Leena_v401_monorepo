@@ -22,6 +22,23 @@ let isProcessing = false;
 
 async function fetchNextTask() {
   try {
+    // First, get and lock the queue item
+    const lockQuery = `
+      SELECT id FROM email_queue
+      WHERE status = 'pending' AND try_count < $1
+      ORDER BY created_at ASC
+      LIMIT 1
+      FOR UPDATE SKIP LOCKED
+    `;
+    const lockRes = await pool.query(lockQuery, [MAX_RETRIES]);
+    
+    if (lockRes.rows.length === 0) {
+      return null;
+    }
+    
+    const taskId = lockRes.rows[0].id;
+    
+    // Now fetch full details with JOINs (no FOR UPDATE needed)
     const query = `
       SELECT 
         eq.*,
@@ -42,12 +59,9 @@ async function fetchNextTask() {
       LEFT JOIN visitors v ON v.id = eq.visitor_id
       LEFT JOIN email_templates et ON et.id = eq.template_id
       LEFT JOIN expos e ON e.id = eq.expo_id
-      WHERE eq.status = 'pending' AND eq.try_count < $1
-      ORDER BY eq.created_at ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
+      WHERE eq.id = $1
     `;
-    const res = await pool.query(query, [MAX_RETRIES]);
+    const res = await pool.query(query, [taskId]);
     return res.rows[0] || null;
   } catch (err) {
     console.error('[EMAIL_WORKER] fetchNextTask error:', err.message);
