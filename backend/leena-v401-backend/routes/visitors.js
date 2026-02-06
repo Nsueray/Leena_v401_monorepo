@@ -311,13 +311,17 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
       try {
         // Map Excel columns (flexible mapping)
-        const name = row.name || row.Name || row.full_name || row['Full Name'] || '';
-        const last_name = row.last_name || row['Last Name'] || row.surname || row.Surname || '';
-        const email = row.email || row.Email || row.EMAIL || '';
-        const company = row.company || row.Company || row.COMPANY || row.organization || '';
+        const name = row.name || row.Name || row.first_name || row['First Name'] || row.full_name || row['Full Name'] || '';
+        const last_name = row.last_name || row['Last Name'] || row.surname || row.Surname || row.lastname || '';
+        const email = row.email || row.Email || row.EMAIL || row.e_mail || '';
+        const company = row.company || row.Company || row.COMPANY || row.organization || row.Organisation || '';
         const country = row.country || row.Country || row.COUNTRY || '';
-        const phone = row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || '';
-        const job_title = row.job_title || row['Job Title'] || row.title || row.Title || row.position || '';
+        const phone = row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || row.tel || '';
+        const job_title = row.job_title || row['Job Title'] || row.title || row.Title || row.position || row.Position || '';
+        const website = row.website || row.Website || row.web || row.url || '';
+        const visitor_type_val = visitor_type || row.visitor_type || row['Visitor Type'] || row.type || 'visitor';
+        const visitor_category = row.visitor_category || row['Visitor Category'] || row.category || '';
+        const sector = row.sector || row.Sector || row.industry || row.Industry || '';
         const source = source_override || row.source || row.Source || 'import';
 
         // Validate email
@@ -348,10 +352,10 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
         const insertQuery = `
           INSERT INTO visitors (
             organizer_id, expo_id, name, last_name, email, company, country, 
-            job_title, phone, source, origin, visitor_type,
+            job_title, phone, website, source, origin, visitor_type, visitor_category, sector,
             qr_code, badge_id, custom_fields, created_at
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW()
+            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW()
           ) RETURNING id, name, email, qr_code, badge_id
         `;
 
@@ -365,9 +369,12 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           country.trim(),
           job_title.trim(),
           phone.trim(),
+          website.trim(),
           source,
           origin,
-          visitor_type || 'visitor',
+          visitor_type_val,
+          visitor_category.trim(),
+          sector.trim(),
           qrCode,
           badgeId,
           JSON.stringify(row) // Store original row as custom_fields
