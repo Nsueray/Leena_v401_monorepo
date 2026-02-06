@@ -10,11 +10,13 @@
       --badge-height: 50mm;
       --margin-left: 0mm;
       --margin-top: 0mm;
+      --qr-size: 30mm;
       --font-size-name: 18pt;
       --font-size-company: 14pt;
-      --font-size-country: 12pt;
       --font-size-job-title: 11pt;
+      --font-size-country: 12pt;
       --font-size-role: 10pt;
+      --font-size-badge-id: 8pt;
       --font-family: Arial, sans-serif;
     }
 
@@ -45,8 +47,8 @@
     }
 
     .qr-section {
-      width: 32mm;
-      height: 32mm;
+      width: calc(var(--qr-size) + 2mm);
+      height: calc(var(--qr-size) + 2mm);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -55,8 +57,8 @@
     }
 
     .qr-code {
-      width: 30mm;
-      height: 30mm;
+      width: var(--qr-size);
+      height: var(--qr-size);
     }
 
     .qr-code img {
@@ -104,6 +106,7 @@
       font-size: var(--font-size-country);
       line-height: 1.2;
       color: #555;
+      margin-bottom: 1mm;
     }
 
     .visitor-role {
@@ -119,12 +122,11 @@
     }
 
     .visitor-badge-id {
-      font-size: 8pt;
+      font-size: var(--font-size-badge-id);
       color: #999;
       margin-top: 1mm;
     }
 
-    /* Dynamic text sizing */
     .text-small { font-size: 85%; }
     .text-very-small { font-size: 70%; }
 
@@ -138,9 +140,7 @@
       color: #666;
     }
 
-    .error {
-      color: #c00;
-    }
+    .error { color: #c00; }
 
     @media print {
       @page {
@@ -166,46 +166,41 @@
   <script>
     const API_URL = '/api';
 
-    // Get URL parameters
     function getParams() {
       const params = new URLSearchParams(window.location.search);
       return {
         qr: params.get('qr'),
         terminalKey: params.get('terminal_key') || params.get('tk'),
-        templateId: params.get('template_id')
+        templateId: params.get('template_id'),
+        preview: params.get('preview')
       };
     }
 
-    // Get text size class based on length
-    function getTextSizeClass(text, threshold1 = 25, threshold2 = 40) {
+    function getTextSizeClass(text, t1 = 25, t2 = 40) {
       if (!text) return '';
-      if (text.length > threshold2) return 'text-very-small';
-      if (text.length > threshold1) return 'text-small';
+      if (text.length > t2) return 'text-very-small';
+      if (text.length > t1) return 'text-small';
       return '';
     }
 
-    // Apply template config to CSS variables
     function applyTemplateStyles(template) {
       const root = document.documentElement;
       const size = template.size_config || {};
       const style = template.style_config || {};
 
-      // Size
       if (size.width_mm) root.style.setProperty('--badge-width', size.width_mm + 'mm');
       if (size.height_mm) root.style.setProperty('--badge-height', size.height_mm + 'mm');
-
-      // Margins for print positioning
       if (size.margin_left_mm !== undefined) root.style.setProperty('--margin-left', size.margin_left_mm + 'mm');
       if (size.margin_top_mm !== undefined) root.style.setProperty('--margin-top', size.margin_top_mm + 'mm');
+      if (size.qr_size_mm) root.style.setProperty('--qr-size', size.qr_size_mm + 'mm');
 
-      // Fonts
       if (style.font_size_name) root.style.setProperty('--font-size-name', style.font_size_name);
       if (style.font_size_company) root.style.setProperty('--font-size-company', style.font_size_company);
-      if (style.font_size_country) root.style.setProperty('--font-size-country', style.font_size_country);
       if (style.font_size_job_title) root.style.setProperty('--font-size-job-title', style.font_size_job_title);
-      if (style.font_family) root.style.setProperty('--font-family', style.font_family);
+      if (style.font_size_country) root.style.setProperty('--font-size-country', style.font_size_country);
+      if (style.font_size_role) root.style.setProperty('--font-size-role', style.font_size_role);
+      if (style.font_size_badge_id) root.style.setProperty('--font-size-badge-id', style.font_size_badge_id);
 
-      // Update @page for print
       const marginLeft = size.margin_left_mm || 0;
       const marginTop = size.margin_top_mm || 0;
       const pageStyle = document.createElement('style');
@@ -220,109 +215,101 @@
       document.head.appendChild(pageStyle);
     }
 
-    // Fetch badge template
     async function getTemplate(terminalKey, templateId) {
-      // Default template
       let template = {
-        size_config: { width_mm: 100, height_mm: 50, orientation: 'landscape', margin_left_mm: 0, margin_top_mm: 0 },
+        size_config: { width_mm: 100, height_mm: 50, orientation: 'landscape', margin_left_mm: 0, margin_top_mm: 0, qr_size_mm: 30 },
         content_config: { show_qr: true, show_name: true, show_company: true, show_country: false, show_job_title: false, show_role: false, show_badge_id: false },
-        style_config: { font_size_name: '18pt', font_size_company: '14pt', font_size_job_title: '11pt' }
+        style_config: { font_size_name: '18pt', font_size_company: '14pt', font_size_job_title: '11pt', font_size_country: '12pt', font_size_role: '10pt', font_size_badge_id: '8pt' }
       };
 
       try {
         if (terminalKey) {
-          // Get template for terminal
           const res = await fetch(`${API_URL}/badge-templates/for-terminal/${terminalKey}`);
           if (res.ok) {
             const data = await res.json();
-            if (data.template) {
-              template = data.template;
-              console.log('Loaded template from terminal:', template);
-            }
+            if (data.template) template = data.template;
           }
         } else if (templateId) {
-          // Get specific template (requires auth)
           const token = localStorage.getItem('token');
           const res = await fetch(`${API_URL}/badge-templates/${templateId}`, {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           if (res.ok) {
             const data = await res.json();
-            if (data.template) {
-              template = data.template;
-              console.log('Loaded template by ID:', template);
-            }
+            if (data.template) template = data.template;
           }
         }
       } catch (err) {
-        console.warn('Could not load template, using default:', err);
+        console.warn('Could not load template:', err);
       }
 
+      console.log('Template loaded:', template);
       return template;
     }
 
-    // Record badge print (may also create check-in based on expo settings)
     async function markBadgePrinted(visitorId, terminalKey) {
       if (!terminalKey) return;
-
       try {
-        const res = await fetch(`${API_URL}/terminal/badge-print`, {
+        await fetch(`${API_URL}/terminal/badge-print`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-terminal-key': terminalKey
-          },
+          headers: { 'Content-Type': 'application/json', 'x-terminal-key': terminalKey },
           body: JSON.stringify({ visitor_id: visitorId })
         });
-
-        if (res.ok) {
-          console.log('✅ Badge print recorded');
-        }
-      } catch (err) {
-        console.warn('⚠️ Badge print record failed:', err);
-      }
+      } catch (err) { console.warn('Badge print record failed:', err); }
     }
 
-    // Main function
     async function loadBadge() {
-      const { qr, terminalKey, templateId } = getParams();
+      const { qr, terminalKey, templateId, preview } = getParams();
 
       if (!qr) {
         document.getElementById('badgeContent').innerHTML = '<div class="loading error">Invalid QR code</div>';
         return;
       }
 
-      // 1. Load template
       const template = await getTemplate(terminalKey, templateId);
       applyTemplateStyles(template);
 
       const content = template.content_config || {};
+      const size = template.size_config || {};
       console.log('Content config:', content);
 
-      // 2. Load visitor data
+      // For preview mode, use sample data
       let visitor = null;
-      try {
-        // Try terminal endpoint first (if terminal key available)
-        if (terminalKey) {
-          const res = await fetch(`${API_URL}/terminal/visitor-by-qr?qr=${encodeURIComponent(qr)}`, {
-            headers: { 'x-terminal-key': terminalKey }
-          });
-          if (res.ok) {
-            const data = await res.json();
-            visitor = data.visitor;
+      if (preview === '1' || qr === 'SAMPLE') {
+        visitor = {
+          id: 0,
+          name: 'John',
+          last_name: 'Doe',
+          company: 'Acme Corporation',
+          country: 'Nigeria',
+          job_title: 'Marketing Manager',
+          visitor_type: 'VIP',
+          badge_id: 'ABC12345',
+          qr_code: 'SAMPLE'
+        };
+      } else {
+        // Load real visitor data
+        try {
+          if (terminalKey) {
+            const res = await fetch(`${API_URL}/terminal/visitor-by-qr?qr=${encodeURIComponent(qr)}`, {
+              headers: { 'x-terminal-key': terminalKey }
+            });
+            if (res.ok) {
+              const data = await res.json();
+              visitor = data.visitor;
+            }
           }
-        }
-        
-        // Fallback to public badge endpoint
-        if (!visitor) {
-          const res = await fetch(`${API_URL}/visitors/badge/${qr}`);
-          if (res.ok) {
-            const data = await res.json();
-            visitor = data.visitor;
+          
+          if (!visitor) {
+            const res = await fetch(`${API_URL}/visitors/badge/${qr}`);
+            if (res.ok) {
+              const data = await res.json();
+              visitor = data.visitor;
+            }
           }
+        } catch (err) {
+          console.error('Visitor fetch error:', err);
         }
-      } catch (err) {
-        console.error('❌ Visitor fetch error:', err);
       }
 
       if (!visitor) {
@@ -332,7 +319,7 @@
 
       console.log('Visitor data:', visitor);
 
-      // 3. Prepare display values
+      // Prepare display values
       let displayName = visitor.name || '';
       if (visitor.last_name || visitor.lastName) {
         displayName += ' ' + (visitor.last_name || visitor.lastName);
@@ -341,97 +328,88 @@
 
       const displayCompany = visitor.company || '';
       const displayCountry = visitor.country || '';
-      const displayJobTitle = visitor.job_title || visitor.jobTitle || '';
+      const displayJobTitle = visitor.job_title || visitor.jobTitle || visitor.job || '';
       const displayRole = visitor.role || visitor.visitor_type || '';
       const displayBadgeId = visitor.badge_id || visitor.badgeId || '';
 
-      // 4. Build badge HTML
+      console.log('Display values:', { displayName, displayCompany, displayCountry, displayJobTitle, displayRole, displayBadgeId });
+
+      // Build badge HTML
       const showQR = content.show_qr !== false;
       const wrapperClass = showQR ? 'badge-wrapper' : 'badge-wrapper no-qr';
 
       let badgeHTML = `<div class="${wrapperClass}">`;
 
-      // QR Section
       if (showQR) {
-        badgeHTML += `
-          <div class="qr-section">
-            <div class="qr-code" id="qrcode"></div>
-          </div>
-        `;
+        badgeHTML += `<div class="qr-section"><div class="qr-code" id="qrcode"></div></div>`;
       }
 
-      // Info Section
       badgeHTML += `<div class="info-section">`;
 
       if (content.show_name !== false) {
-        const nameClass = getTextSizeClass(displayName);
-        badgeHTML += `<div class="visitor-name ${nameClass}">${escapeHtml(displayName)}</div>`;
+        const cls = getTextSizeClass(displayName);
+        badgeHTML += `<div class="visitor-name ${cls}">${esc(displayName)}</div>`;
       }
 
       if (content.show_company !== false && displayCompany) {
-        const companyClass = getTextSizeClass(displayCompany);
-        badgeHTML += `<div class="visitor-company ${companyClass}">${escapeHtml(displayCompany)}</div>`;
+        const cls = getTextSizeClass(displayCompany);
+        badgeHTML += `<div class="visitor-company ${cls}">${esc(displayCompany)}</div>`;
       }
 
-      // Job Title field
-      if (content.show_job_title && displayJobTitle) {
-        badgeHTML += `<div class="visitor-job-title">${escapeHtml(displayJobTitle)}</div>`;
+      if (content.show_job_title === true && displayJobTitle) {
+        badgeHTML += `<div class="visitor-job-title">${esc(displayJobTitle)}</div>`;
       }
 
-      if (content.show_country && displayCountry) {
-        badgeHTML += `<div class="visitor-country">${escapeHtml(displayCountry)}</div>`;
+      if (content.show_country === true && displayCountry) {
+        badgeHTML += `<div class="visitor-country">${esc(displayCountry)}</div>`;
       }
 
-      if (content.show_role && displayRole && displayRole !== 'visitor') {
-        badgeHTML += `<div class="visitor-role">${escapeHtml(displayRole)}</div>`;
+      if (content.show_role === true && displayRole && displayRole.toLowerCase() !== 'visitor') {
+        badgeHTML += `<div class="visitor-role">${esc(displayRole)}</div>`;
       }
 
-      if (content.show_badge_id && displayBadgeId) {
-        badgeHTML += `<div class="visitor-badge-id">${escapeHtml(displayBadgeId)}</div>`;
+      if (content.show_badge_id === true && displayBadgeId) {
+        badgeHTML += `<div class="visitor-badge-id">${esc(displayBadgeId)}</div>`;
       }
 
       badgeHTML += `</div></div>`;
 
       document.getElementById('badgeContent').innerHTML = badgeHTML;
 
-      // 5. Generate QR code (if needed)
+      // Generate QR code
       if (showQR) {
-        QRCode.toDataURL(qr, { width: 150, margin: 0 }, async function(err, url) {
+        const qrSizePx = (size.qr_size_mm || 30) * 3.78; // mm to px approx
+        QRCode.toDataURL(qr, { width: Math.round(qrSizePx), margin: 0 }, async function(err, url) {
           if (!err) {
             const img = document.createElement('img');
             img.src = url;
             img.alt = 'QR Code';
             document.getElementById('qrcode').appendChild(img);
           }
-
-          // 6. Record badge print and trigger print
-          await finalizePrint(visitor, terminalKey);
+          await finalizePrint(visitor, terminalKey, preview);
         });
       } else {
-        // No QR, just finalize
-        await finalizePrint(visitor, terminalKey);
+        await finalizePrint(visitor, terminalKey, preview);
       }
     }
 
-    async function finalizePrint(visitor, terminalKey) {
-      // Record badge print
-      if (visitor.id && terminalKey) {
+    async function finalizePrint(visitor, terminalKey, preview) {
+      if (visitor.id && terminalKey && preview !== '1') {
         await markBadgePrinted(visitor.id, terminalKey);
       }
 
-      // Auto-print after short delay
-      setTimeout(() => {
-        window.print();
-      }, 300);
+      // Auto-print (skip for preview)
+      if (preview !== '1') {
+        setTimeout(() => { window.print(); }, 300);
+      }
     }
 
-    function escapeHtml(text) {
+    function esc(text) {
       const div = document.createElement('div');
       div.textContent = text || '';
       return div.innerHTML;
     }
 
-    // Initialize
     document.addEventListener('DOMContentLoaded', loadBadge);
   </script>
 </body>
