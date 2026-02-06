@@ -59,6 +59,7 @@ let checkinReportRoutes;
 let terminalCheckinRoutes; // ✅ v402 Mini
 let emailSegmentRoutes; // ✅ v402 Mini - Email Segments
 let emailInboundRoutes; // ✅ Inbound Email (NEW)
+let reactivationRoutes; // ✅ v402 - Reactivation Campaigns
 
 try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
 try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
@@ -76,6 +77,7 @@ try { checkinReportRoutes = require('./routes/checkinReports'); console.log('✓
 try { terminalCheckinRoutes = require('./routes/terminalCheckins'); console.log('✓ Terminal Checkin routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load terminalCheckins routes:', err.message); }
 try { emailSegmentRoutes = require('./routes/emailSegments'); console.log('✓ Email Segment routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load emailSegments routes:', err.message); }
 try { emailInboundRoutes = require('./routes/emailInbound'); console.log('✓ Email Inbound routes loaded'); } catch (err) { console.error('✗ Failed to load emailInbound routes:', err.message); }
+try { reactivationRoutes = require('./routes/reactivation'); console.log('✓ Reactivation routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load reactivation routes:', err.message); }
 let badgeTemplateRoutes;
 try { badgeTemplateRoutes = require('./routes/badgeTemplates'); console.log('✓ Badge Template routes loaded'); } catch (err) { console.error('✗ Failed to load badgeTemplates routes:', err.message); }
 
@@ -96,6 +98,7 @@ if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes);
 if (terminalCheckinRoutes) app.use('/api/terminal', terminalCheckinRoutes); // ✅ v402 Mini
 if (emailSegmentRoutes) app.use('/api/email-segments', emailSegmentRoutes); // ✅ v402 Mini - Email Segments
 if (emailInboundRoutes) app.use('/api/email', emailInboundRoutes); // ✅ Inbound Email
+if (reactivationRoutes) app.use('/api/reactivation', reactivationRoutes); // ✅ Reactivation Campaigns
 if (badgeTemplateRoutes) app.use('/api/badge-templates', badgeTemplateRoutes); // ✅ Badge Templates
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
@@ -138,8 +141,8 @@ app.get('/api/qr-image/:qrcode', async (req, res) => {
 // --- Root Endpoint ---
 app.get('/', (req, res) => {
     res.json({
-        message: 'Leena.app v401 API is running',
-        version: '4.0.1',
+        message: 'Leena.app v402 API is running',
+        version: '4.0.2',
         port: PORT,
         endpoints: {
             auth: '/api/auth',
@@ -157,7 +160,9 @@ app.get('/', (req, res) => {
             terminal_checkins: '/api/terminal',
             import_checkins: '/api/import-checkins',
             checkin_reports: '/api/checkins/reports',
-            email_inbound: '/api/email/inbound'
+            email_inbound: '/api/email/inbound',
+            reactivation: '/api/reactivation',
+            badge_templates: '/api/badge-templates'
         }
     });
 });
@@ -190,7 +195,7 @@ app.use((err, req, res, next) => {
 // --- Server Start ---
 const server = app.listen(PORT, () => {
     console.log('═══════════════════════════════════════');
-    console.log(`✅ Leena.app v401 backend is running`);
+    console.log(`✅ Leena.app v402 backend is running`);
     console.log(`📍 URL: http://localhost:${PORT}`);
     console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log('═══════════════════════════════════════');
