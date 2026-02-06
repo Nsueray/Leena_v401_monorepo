@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activate Your Visitor Pass - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #FECC00;
+            --primary-dark: #111827;
+            --bg-light: #f6f7fb;
+            --card-bg: #ffffff;
+            --text-dark: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--bg-light);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 520px;
+            width: 100%;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: var(--primary);
+            padding: 28px;
+            text-align: center;
+        }
+        
+        .card-header h1 {
+            color: var(--text-dark);
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .card-header p {
+            color: var(--text-dark);
+            opacity: 0.8;
+            font-size: 14px;
+        }
+        
+        .card-body {
+            padding: 28px;
+        }
+        
+        .expo-info {
+            background: #f3f4f6;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .expo-info h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+        
+        .expo-info p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin: 4px 0;
+        }
+        
+        .form-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .form-section-title i {
+            color: var(--primary);
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-dark);
+            margin-bottom: 6px;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(254, 204, 0, 0.15);
+        }
+        
+        .form-control:disabled {
+            background: #f9fafb;
+            color: var(--text-muted);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: var(--text-dark);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(254, 204, 0, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .alert {
+            padding: 14px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .alert-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .loading-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .success-state {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--success);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        
+        .success-icon i {
+            font-size: 40px;
+            color: white;
+        }
+        
+        .success-state h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 12px;
+        }
+        
+        .success-state p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        
+        .badge-info {
+            background: #f3f4f6;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        
+        .badge-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .badge-info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .badge-info-label {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        
+        .badge-info-value {
+            color: var(--text-dark);
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: #fee2e2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        
+        .error-icon i {
+            font-size: 40px;
+            color: var(--danger);
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        
+        @media (max-width: 480px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-state">
+                <div class="spinner"></div>
+                <p>Verifying your activation link...</p>
+            </div>
+            
+            <!-- Error State -->
+            <div id="errorState" class="error-state" style="display: none;">
+                <div class="error-icon">
+                    <i class="bi bi-x-lg"></i>
+                </div>
+                <h2>Activation Failed</h2>
+                <p id="errorMessage">This link is invalid or has expired.</p>
+            </div>
+            
+            <!-- Form State -->
+            <div id="formState" style="display: none;">
+                <div class="card-header">
+                    <h1><i class="bi bi-person-check"></i> Activate Your Pass</h1>
+                    <p>Confirm your details to get your visitor badge</p>
+                </div>
+                
+                <div class="card-body">
+                    <div class="expo-info">
+                        <h3 id="expoName">Loading...</h3>
+                        <p><i class="bi bi-calendar3"></i> <span id="expoDates">-</span></p>
+                        <p><i class="bi bi-geo-alt"></i> <span id="expoLocation">-</span></p>
+                    </div>
+                    
+                    <div id="alertBox" class="alert" style="display: none;"></div>
+                    
+                    <form id="activationForm">
+                        <div class="form-section-title">
+                            <i class="bi bi-person"></i> Your Information
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">First Name *</label>
+                                <input type="text" class="form-control" id="name" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Last Name</label>
+                                <input type="text" class="form-control" id="lastName">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" disabled>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Company *</label>
+                            <input type="text" class="form-control" id="company" required>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Country</label>
+                                <input type="text" class="form-control" id="country">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Job Title</label>
+                                <input type="text" class="form-control" id="jobTitle">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="phone">
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-check-circle"></i>
+                            Confirm & Activate My Pass
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- Success State -->
+            <div id="successState" style="display: none;">
+                <div class="card-header" style="background: var(--success);">
+                    <h1 style="color: white;"><i class="bi bi-check-circle"></i> Success!</h1>
+                    <p style="color: white; opacity: 0.9;">Your visitor pass has been activated</p>
+                </div>
+                
+                <div class="card-body">
+                    <div class="success-state">
+                        <div class="success-icon">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <h2>You're All Set!</h2>
+                        <p>Your badge confirmation email is on its way. Please check your inbox.</p>
+                        
+                        <div class="badge-info">
+                            <div class="badge-info-item">
+                                <span class="badge-info-label">Name</span>
+                                <span class="badge-info-value" id="successName">-</span>
+                            </div>
+                            <div class="badge-info-item">
+                                <span class="badge-info-label">Email</span>
+                                <span class="badge-info-value" id="successEmail">-</span>
+                            </div>
+                            <div class="badge-info-item">
+                                <span class="badge-info-label">Badge ID</span>
+                                <span class="badge-info-value" id="successBadgeId">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            Powered by Leena EMS · © Elan Expo
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api/reactivation';
+        let currentToken = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentToken = urlParams.get('token');
+
+            if (!currentToken) {
+                showError('No activation token provided. Please use the link from your email.');
+                return;
+            }
+
+            verifyToken();
+        });
+
+        async function verifyToken() {
+            try {
+                const response = await fetch(`${API_URL}/verify/${currentToken}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    if (data.already_activated) {
+                        showError('This visitor pass has already been activated. Check your email for your badge.');
+                    } else {
+                        showError(data.error || 'Invalid or expired activation link.');
+                    }
+                    return;
+                }
+
+                // Populate form
+                document.getElementById('name').value = data.visitor.name || '';
+                document.getElementById('lastName').value = data.visitor.last_name || '';
+                document.getElementById('email').value = data.visitor.email || '';
+                document.getElementById('company').value = data.visitor.company || '';
+                document.getElementById('country').value = data.visitor.country || '';
+                document.getElementById('jobTitle').value = data.visitor.job_title || '';
+                document.getElementById('phone').value = data.visitor.phone || '';
+
+                // Populate expo info
+                document.getElementById('expoName').textContent = data.expo.name;
+                
+                if (data.expo.start_date) {
+                    const startDate = new Date(data.expo.start_date);
+                    const endDate = data.expo.end_date ? new Date(data.expo.end_date) : null;
+                    const options = { day: 'numeric', month: 'long', year: 'numeric' };
+                    
+                    let dateStr = startDate.toLocaleDateString('en-US', options);
+                    if (endDate && endDate > startDate) {
+                        dateStr = `${startDate.getDate()}–${endDate.toLocaleDateString('en-US', options)}`;
+                    }
+                    document.getElementById('expoDates').textContent = dateStr;
+                }
+                
+                document.getElementById('expoLocation').textContent = data.expo.location || 'TBA';
+
+                showForm();
+
+            } catch (err) {
+                console.error('Verify error:', err);
+                showError('Failed to verify your activation link. Please try again.');
+            }
+        }
+
+        document.getElementById('activationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-width:2px;margin:0;"></span> Processing...';
+
+            try {
+                const response = await fetch(`${API_URL}/activate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: currentToken,
+                        name: document.getElementById('name').value.trim(),
+                        last_name: document.getElementById('lastName').value.trim(),
+                        company: document.getElementById('company').value.trim(),
+                        country: document.getElementById('country').value.trim(),
+                        job_title: document.getElementById('jobTitle').value.trim(),
+                        phone: document.getElementById('phone').value.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    showAlert(data.error || 'Activation failed. Please try again.', 'danger');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Confirm & Activate My Pass';
+                    return;
+                }
+
+                // Show success
+                document.getElementById('successName').textContent = data.visitor.name || '-';
+                document.getElementById('successEmail').textContent = data.visitor.email || '-';
+                document.getElementById('successBadgeId').textContent = data.visitor.badge_id || '-';
+
+                showSuccess();
+
+            } catch (err) {
+                console.error('Activation error:', err);
+                showAlert('An error occurred. Please try again.', 'danger');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Confirm & Activate My Pass';
+            }
+        });
+
+        function showForm() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'none';
+            document.getElementById('formState').style.display = 'block';
+            document.getElementById('successState').style.display = 'none';
+        }
+
+        function showError(message) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+            document.getElementById('formState').style.display = 'none';
+            document.getElementById('successState').style.display = 'none';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        function showSuccess() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'none';
+            document.getElementById('formState').style.display = 'none';
+            document.getElementById('successState').style.display = 'block';
+        }
+
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.className = `alert alert-${type}`;
+            alertBox.textContent = message;
+            alertBox.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
