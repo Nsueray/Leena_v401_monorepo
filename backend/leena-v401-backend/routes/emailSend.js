@@ -40,23 +40,24 @@ router.post('/single', authMiddleware, async (req, res) => {
                 badgeUrl = `${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/badge-print.html?qr=${qrCode}`;
             }
 
-            if (record_type === 'visitor') {
-                const result = await pool.query(`
-                    INSERT INTO visitors (name, email, company, expo_id, organizer_id, badge_id, qr_code, source, origin, badge_url, created_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', 'manual_email_send', $8, NOW())
-                    RETURNING id
-                `, [
-                    recipient.name || 'Guest',
-                    recipient.email,
-                    recipient.company || null,
-                    expo_id,
-                    organizerId,
-                    badge_id,
-                    qrCode,
-                    badgeUrl
-                ]);
-                visitorId = result.rows[0].id;
-            }
+            const visitorType = record_type || 'visitor';
+
+            const result = await pool.query(`
+                INSERT INTO visitors (name, email, company, expo_id, organizer_id, badge_id, qr_code, visitor_type, source, origin, badge_url, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'email', 'manual_email_send', $9, NOW())
+                RETURNING id
+            `, [
+                recipient.name || 'Guest',
+                recipient.email,
+                recipient.company || null,
+                expo_id,
+                organizerId,
+                badge_id,
+                qrCode,
+                visitorType,
+                badgeUrl
+            ]);
+            visitorId = result.rows[0].id;
         }
 
         const emailData = {
@@ -74,7 +75,7 @@ router.post('/single', authMiddleware, async (req, res) => {
 
         const success = await sendEmailWithReplyTo(recipient.email, subject, html, 'reply@replies.leena.app');
 
-        // Log email - using correct column names from initial.sql
+        // Log email
         await pool.query(`
             INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
@@ -120,6 +121,7 @@ router.post('/bulk', authMiddleware, async (req, res) => {
         const expo = expoRes.rows[0];
 
         let sent = 0, saved = 0, errors = [];
+        const visitorType = record_type || 'visitor';
 
         for (const recipient of recipients) {
             try {
@@ -138,26 +140,25 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                         badgeUrl = `${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/badge-print.html?qr=${qrCode}`;
                     }
 
-                    if (record_type === 'visitor') {
-                        const existing = await pool.query(`SELECT id FROM visitors WHERE email = $1 AND expo_id = $2`, [recipient.email, expo_id]);
-                        if (existing.rows.length === 0) {
-                            const result = await pool.query(`
-                                INSERT INTO visitors (name, email, company, expo_id, organizer_id, badge_id, qr_code, source, origin, badge_url, created_at)
-                                VALUES ($1, $2, $3, $4, $5, $6, $7, 'email', 'manual_email_send', $8, NOW())
-                                RETURNING id
-                            `, [
-                                recipient.name || 'Guest',
-                                recipient.email,
-                                recipient.company || null,
-                                expo_id,
-                                organizerId,
-                                badge_id,
-                                qrCode,
-                                badgeUrl
-                            ]);
-                            visitorId = result.rows[0].id;
-                            saved++;
-                        }
+                    const existing = await pool.query(`SELECT id FROM visitors WHERE email = $1 AND expo_id = $2`, [recipient.email, expo_id]);
+                    if (existing.rows.length === 0) {
+                        const result = await pool.query(`
+                            INSERT INTO visitors (name, email, company, expo_id, organizer_id, badge_id, qr_code, visitor_type, source, origin, badge_url, created_at)
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'email', 'manual_email_send', $9, NOW())
+                            RETURNING id
+                        `, [
+                            recipient.name || 'Guest',
+                            recipient.email,
+                            recipient.company || null,
+                            expo_id,
+                            organizerId,
+                            badge_id,
+                            qrCode,
+                            visitorType,
+                            badgeUrl
+                        ]);
+                        visitorId = result.rows[0].id;
+                        saved++;
                     }
                 }
 
@@ -177,7 +178,7 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                 const success = await sendEmailWithReplyTo(recipient.email, subject, html, 'reply@replies.leena.app');
                 if (success) sent++;
 
-                // Log email - using correct column names from initial.sql
+                // Log email
                 await pool.query(`
                     INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
                     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
