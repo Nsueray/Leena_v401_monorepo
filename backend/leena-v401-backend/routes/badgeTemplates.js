@@ -31,7 +31,11 @@ const DEFAULT_CONTENT_CONFIG = {
   show_company: true,
   show_country: false,
   show_role: false,
-  show_badge_id: false
+  show_badge_id: false,
+  show_job_title: false,
+  show_booth_number: false,
+  show_phone: false,
+  show_sector: false
 };
 
 const DEFAULT_STYLE_CONFIG = {
@@ -98,7 +102,7 @@ router.get('/:id', authMiddleware, async (req, res) => {
  */
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { name, description, size_config, content_config, style_config, is_default } = req.body;
+    const { name, description, size_config, content_config, style_config, is_default, visitor_type } = req.body;
 
     if (!name) {
       return res.status(400).json({ success: false, error: 'Name is required' });
@@ -114,8 +118,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO badge_templates 
-       (organizer_id, name, description, size_config, content_config, style_config, is_default)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       (organizer_id, name, description, size_config, content_config, style_config, is_default, visitor_type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         req.organizer_id,
@@ -124,7 +128,8 @@ router.post('/', authMiddleware, async (req, res) => {
         size_config || DEFAULT_SIZE_CONFIG,
         content_config || DEFAULT_CONTENT_CONFIG,
         style_config || DEFAULT_STYLE_CONFIG,
-        is_default || false
+        is_default || false,
+        visitor_type || 'all'
       ]
     );
 
@@ -145,7 +150,7 @@ router.post('/', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, size_config, content_config, style_config, is_default } = req.body;
+    const { name, description, size_config, content_config, style_config, is_default, visitor_type } = req.body;
 
     // Check ownership
     const check = await pool.query(
@@ -172,10 +177,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
          size_config = COALESCE($3, size_config),
          content_config = COALESCE($4, content_config),
          style_config = COALESCE($5, style_config),
-         is_default = COALESCE($6, is_default)
-       WHERE id = $7 AND organizer_id = $8
+         is_default = COALESCE($6, is_default),
+         visitor_type = COALESCE($7, visitor_type)
+       WHERE id = $8 AND organizer_id = $9
        RETURNING *`,
-      [name, description, size_config, content_config, style_config, is_default, id, req.organizer_id]
+      [name, description, size_config, content_config, style_config, is_default, visitor_type, id, req.organizer_id]
     );
 
     res.json({
