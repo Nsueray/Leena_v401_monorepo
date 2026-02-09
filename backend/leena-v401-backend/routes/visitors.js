@@ -411,6 +411,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           id: visitor.id,
           name: name || last_name || email,
           email: email,
+          qr_code: visitor.qr_code,
           badge_id: badgeId
         });
         results.success_count++;

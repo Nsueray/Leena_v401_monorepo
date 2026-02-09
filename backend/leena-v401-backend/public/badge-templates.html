@@ -786,25 +786,82 @@
             if (src === 'excel') {
                 const file = document.getElementById('bulkExcelFile').files[0];
                 if (!file) { alert('Please select an Excel file'); return; }
-                
-                const data = await file.arrayBuffer();
-                const workbook = XLSX.read(data);
-                const sheet = workbook.Sheets[workbook.SheetNames[0]];
-                const rows = XLSX.utils.sheet_to_json(sheet);
 
-                bulkData = rows.map(r => ({
-                    name: r.name || r.Name || r.first_name || r['First Name'] || '',
-                    last_name: r.last_name || r['Last Name'] || r.surname || r.Surname || '',
-                    email: r.email || r.Email || '',
-                    company: r.company || r.Company || '',
-                    country: r.country || r.Country || '',
-                    job_title: r.job_title || r['Job Title'] || r.title || r.Title || '',
-                    booth_number: r.booth_number || r['Booth Number'] || r.booth || r.Booth || r.stand || r.Stand || '',
-                    phone: r.phone || r.Phone || r.mobile || r.Mobile || '',
-                    sector: r.sector || r.Sector || r.industry || r.Industry || '',
-                    visitor_type: r.visitor_type || r['Visitor Type'] || r.type || 'exhibitor',
-                    badge_id: r.badge_id || ''
-                }));
+                const expoId = localStorage.getItem('selectedExpoId');
+                if (!expoId) { alert('No expo selected. Go to dashboard first.'); return; }
+
+                // Get visitor_type from template
+                const selTemplateId = document.getElementById('bulkTemplateSelect').value;
+                const selTemplate = templates.find(t => t.id == selTemplateId);
+                const vType = (selTemplate && selTemplate.visitor_type !== 'all') ? selTemplate.visitor_type : 'exhibitor';
+
+                // Upload to import API (creates visitors in DB with QR codes)
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('expo_id', expoId);
+                formData.append('visitor_type', vType);
+                formData.append('source_override', 'import');
+
+                document.getElementById('bulkLoadBtn').disabled = true;
+                document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-hourglass-split"></i> Importing...';
+
+                try {
+                    const importRes = await fetch(API_URL + '/api/visitors/import', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        body: formData
+                    });
+                    if (!importRes.ok) { const err = await importRes.json(); throw new Error(err.message || 'Import failed'); }
+                    const importData = await importRes.json();
+
+                    if (importData.failed_count > 0) {
+                        const errMsgs = (importData.errors || []).slice(0, 5).map(e => 'Row ' + e.row + ': ' + e.message).join('\n');
+                        alert('Import partial: ' + importData.success_count + ' OK, ' + importData.failed_count + ' failed.\n' + errMsgs);
+                    }
+
+                    if (!importData.imported || importData.imported.length === 0) {
+                        alert('No visitors imported. Check for duplicates.');
+                        document.getElementById('bulkLoadBtn').disabled = false;
+                        document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+                        return;
+                    }
+
+                    // Use imported data with qr_codes
+                    bulkData = importData.imported.map(v => ({
+                        name: v.name || '', last_name: '', email: v.email || '',
+                        company: '', country: '', job_title: '',
+                        booth_number: '', phone: '', sector: '',
+                        visitor_type: vType, badge_id: v.badge_id || '', qr_code: v.qr_code || ''
+                    }));
+
+                    // Fetch full details from DB
+                    const ids = importData.imported.map(v => v.id);
+                    const fetchUrl = API_URL + '/api/visitors/paginated?expo_id=' + expoId + '&limit=9999&visitor_type=' + vType;
+                    const fetchRes = await fetch(fetchUrl, { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (fetchRes.ok) {
+                        const fetchData = await fetchRes.json();
+                        const allVisitors = fetchData.visitors || [];
+                        const importedIds = new Set(ids);
+                        const matched = allVisitors.filter(v => importedIds.has(v.id));
+                        if (matched.length > 0) {
+                            bulkData = matched.map(v => ({
+                                name: v.name || '', last_name: v.last_name || '', email: v.email || '',
+                                company: v.company || '', country: v.country || '', job_title: v.job_title || '',
+                                booth_number: v.booth_number || '', phone: v.phone || '', sector: v.sector || '',
+                                visitor_type: v.visitor_type || vType, badge_id: v.badge_id || '', qr_code: v.qr_code || ''
+                            }));
+                        }
+                    }
+
+                } catch(e) {
+                    alert('Import failed: ' + e.message);
+                    document.getElementById('bulkLoadBtn').disabled = false;
+                    document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+                    return;
+                }
+                document.getElementById('bulkLoadBtn').disabled = false;
+                document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+
             } else {
                 // From database
                 const expoId = document.getElementById('bulkExpoSelect').value;
