@@ -59,6 +59,13 @@ router.get('/paginated', authMiddleware, async (req, res) => {
       idx++;
     }
 
+    if (req.query.visitor_type) {
+      const typeList = req.query.visitor_type.split(',');
+      filters.push(`visitor_type = ANY($${idx})`);
+      values.push(typeList);
+      idx++;
+    }
+
     const whereClause = `WHERE ${filters.join(' AND ')}`;
 
     const totalResult = await pool.query(`SELECT COUNT(*) FROM visitors ${whereClause}`, values);
@@ -66,7 +73,7 @@ router.get('/paginated', authMiddleware, async (req, res) => {
 
     const dataResult = await pool.query(
       `
-      SELECT id, name, last_name, company, country, email, source, origin, created_at, qr_code
+      SELECT id, name, last_name, company, country, email, source, origin, visitor_type, booth_number, phone, job_title, created_at, qr_code
       FROM visitors
       ${whereClause}
       ORDER BY created_at DESC
