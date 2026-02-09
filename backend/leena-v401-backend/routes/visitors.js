@@ -244,6 +244,36 @@ router.post('/manual', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
+    // Check for existing visitor with same email in this expo
+    const existing = await pool.query(
+      'SELECT id, qr_code, badge_id FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1',
+      [email.toLowerCase().trim(), expo_id]
+    );
+
+    if (existing.rows.length > 0) {
+      // Update existing visitor, keep QR code
+      const ex = existing.rows[0];
+      await pool.query(
+        `UPDATE visitors SET
+          name = COALESCE(NULLIF($1, ''), name),
+          last_name = COALESCE(NULLIF($2, ''), last_name),
+          company = COALESCE(NULLIF($3, ''), company),
+          job_title = COALESCE(NULLIF($4, ''), job_title),
+          country = COALESCE(NULLIF($5, ''), country),
+          updated_at = NOW()
+        WHERE id = $6`,
+        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id]
+      );
+      console.log('🔄 [MANUAL] Updated existing visitor:', email, 'ID:', ex.id);
+      return res.json({
+        success: true,
+        qr_code: ex.qr_code,
+        badge_id: ex.badge_id,
+        visitor_id: ex.id
+      });
+    }
+
+    // New visitor - create with QR
     const qrCode = uuidv4();
     const badgeId = qrCode.substring(0, 8).toUpperCase();
     const badgeUrl = generateBadgeUrl(qrCode);
