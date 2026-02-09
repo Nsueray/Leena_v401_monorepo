@@ -73,7 +73,6 @@
       justify-content: center;
       overflow: hidden;
       min-width: 0;
-      max-height: 100%;
     }
 
     .badge-wrapper.no-qr .info-section {
@@ -86,19 +85,13 @@
       font-weight: bold;
       margin-bottom: 2mm;
       line-height: 1.2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
+      word-break: break-word;
     }
 
     .visitor-company {
       font-size: var(--font-size-company);
       line-height: 1.2;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 100%;
+      word-break: break-word;
       margin-bottom: 1mm;
     }
 
