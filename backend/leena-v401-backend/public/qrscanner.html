@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Badge Scanner - Leena EMS v401</title>
+    <title>Badge Scanner - Leena EMS v402</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <style>
@@ -65,320 +65,87 @@
             display: inline-block;
         }
         
-        .scanner-body {
-            padding: 30px;
-        }
+        .scanner-body { padding: 30px; }
+        .scan-section { margin-bottom: 30px; }
+        .scan-input-wrapper { position: relative; }
+        .scan-input-wrapper i { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; color: var(--primary-color); }
+        .scan-input { width: 100%; padding: 20px 20px 20px 60px; font-size: 1.2rem; border: 2px solid #e9ecef; border-radius: 15px; transition: all 0.3s; }
+        .scan-input:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15); }
+        .scan-input::placeholder { color: #adb5bd; }
         
-        .scan-section {
-            margin-bottom: 30px;
-        }
+        .divider { text-align: center; margin: 30px 0; position: relative; }
+        .divider::before { content: ''; position: absolute; left: 0; top: 50%; width: 100%; height: 1px; background: #e9ecef; }
+        .divider span { background: white; padding: 0 20px; position: relative; color: #6c757d; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
         
-        .scan-input-wrapper {
-            position: relative;
-        }
+        .toggle-manual { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; cursor: pointer; user-select: none; }
+        .toggle-manual input[type="checkbox"] { width: 20px; height: 20px; cursor: pointer; }
+        .toggle-manual label { margin: 0; cursor: pointer; font-weight: 500; color: #495057; }
         
-        .scan-input-wrapper i {
-            position: absolute;
-            left: 20px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 1.5rem;
-            color: var(--primary-color);
-        }
+        .manual-form { display: none; animation: slideDown 0.3s ease-out; }
+        .manual-form.active { display: block; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
         
-        .scan-input {
-            width: 100%;
-            padding: 20px 20px 20px 60px;
-            font-size: 1.2rem;
-            border: 2px solid #e9ecef;
-            border-radius: 15px;
-            transition: all 0.3s;
-        }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+        .form-group { margin-bottom: 15px; }
+        .form-label { font-weight: 500; color: #495057; margin-bottom: 8px; font-size: 0.9rem; }
+        .form-label .required { color: #e74c3c; }
+        .form-control { border: 1px solid #dee2e6; border-radius: 10px; padding: 12px 15px; font-size: 1rem; transition: all 0.3s; }
+        .form-control:focus { border-color: var(--primary-color); box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15); }
+        .form-select { border: 1px solid #dee2e6; border-radius: 10px; padding: 12px 15px; font-size: 1rem; }
         
-        .scan-input:focus {
-            outline: none;
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
-        }
+        .btn { padding: 15px 30px; font-size: 1.1rem; font-weight: 500; border-radius: 10px; border: none; transition: all 0.3s; cursor: pointer; width: 100%; }
+        .btn-primary { background: var(--primary-gradient); color: white; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
         
-        .scan-input::placeholder {
-            color: #adb5bd;
-        }
+        .settings-section { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-top: 20px; }
+        .setting-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+        .setting-label { font-weight: 500; color: #495057; }
+        .setting-description { font-size: 0.85rem; color: #6c757d; margin-top: 5px; }
+        .form-switch { margin: 0; }
+        .form-switch .form-check-input { width: 50px; height: 25px; cursor: pointer; }
+        .form-switch .form-check-input:checked { background-color: var(--primary-color); border-color: var(--primary-color); }
         
-        .divider {
-            text-align: center;
-            margin: 30px 0;
-            position: relative;
-        }
+        .alert { border-radius: 10px; padding: 15px 20px; margin-bottom: 20px; border: none; }
+        .alert-info { background: #d1ecf1; color: #0c5460; }
+        .alert-danger { background: #f8d7da; color: #721c24; }
+        .alert-success { background: #d4edda; color: #155724; }
+        .alert-warning { background: #fff3cd; color: #856404; }
         
-        .divider::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 50%;
-            width: 100%;
-            height: 1px;
-            background: #e9ecef;
-        }
+        .loading-spinner { display: none; text-align: center; padding: 20px; }
+        .loading-spinner.active { display: block; }
+        .spinner-border { width: 3rem; height: 3rem; border-width: 0.3rem; color: var(--primary-color); }
         
-        .divider span {
-            background: white;
-            padding: 0 20px;
-            position: relative;
-            color: #6c757d;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .toggle-manual {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            margin-bottom: 20px;
-            cursor: pointer;
-            user-select: none;
-        }
-        
-        .toggle-manual input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            cursor: pointer;
-        }
-        
-        .toggle-manual label {
-            margin: 0;
-            cursor: pointer;
-            font-weight: 500;
-            color: #495057;
-        }
-        
-        .manual-form {
-            display: none;
-            animation: slideDown 0.3s ease-out;
-        }
-        
-        .manual-form.active {
-            display: block;
-        }
-        
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        
-        .form-group {
-            margin-bottom: 15px;
-        }
-        
-        .form-label {
-            font-weight: 500;
-            color: #495057;
-            margin-bottom: 8px;
-            font-size: 0.9rem;
-        }
-        
-        .form-label .required {
-            color: #e74c3c;
-        }
-        
-        .form-control {
-            border: 1px solid #dee2e6;
-            border-radius: 10px;
-            padding: 12px 15px;
-            font-size: 1rem;
-            transition: all 0.3s;
-        }
-        
-        .form-control:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
-        }
-        
-        .form-select {
-            border: 1px solid #dee2e6;
-            border-radius: 10px;
-            padding: 12px 15px;
-            font-size: 1rem;
-        }
-        
-        .btn {
-            padding: 15px 30px;
-            font-size: 1.1rem;
-            font-weight: 500;
-            border-radius: 10px;
-            border: none;
-            transition: all 0.3s;
-            cursor: pointer;
-            width: 100%;
-        }
-        
-        .btn-primary {
-            background: var(--primary-gradient);
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
-        }
-        
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .settings-section {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
-        }
-        
-        .setting-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 0;
-        }
-        
-        .setting-label {
-            font-weight: 500;
-            color: #495057;
-        }
-        
-        .setting-description {
-            font-size: 0.85rem;
-            color: #6c757d;
-            margin-top: 5px;
-        }
-        
-        .form-switch {
-            margin: 0;
-        }
-        
-        .form-switch .form-check-input {
-            width: 50px;
-            height: 25px;
-            cursor: pointer;
-        }
-        
-        .form-switch .form-check-input:checked {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        
-        .alert {
-            border-radius: 10px;
-            padding: 15px 20px;
-            margin-bottom: 20px;
-            border: none;
-        }
-        
-        .alert-info {
-            background: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        .alert-danger {
-            background: #f8d7da;
-            color: #721c24;
-        }
-        
-        .alert-success {
-            background: #d4edda;
-            color: #155724;
-        }
-        
-        .alert-warning {
-            background: #fff3cd;
-            color: #856404;
-        }
-        
-        .loading-spinner {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .loading-spinner.active {
-            display: block;
-        }
-        
-        .spinner-border {
-            width: 3rem;
-            height: 3rem;
-            border-width: 0.3rem;
-            color: var(--primary-color);
-        }
-        
-        @media (max-width: 768px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .scanner-header h1 {
-                font-size: 1.5rem;
-            }
-        }
+        @media (max-width: 768px) { .form-row { grid-template-columns: 1fr; } .scanner-header h1 { font-size: 1.5rem; } }
     </style>
 </head>
 <body>
     <div class="scanner-container">
         <div class="scanner-header">
-            <h1>
-                <i class="bi bi-qr-code-scan"></i>
-                Badge Scanner
-            </h1>
-            <div class="subtitle">Leena EMS v401 - Exhibition Badge System</div>
+            <h1><i class="bi bi-qr-code-scan"></i> Badge Scanner</h1>
+            <div class="subtitle">Leena EMS v402 - Exhibition Badge System</div>
             <div class="terminal-info" id="terminalInfo">
                 <i class="bi bi-geo-alt"></i> Hall: <span id="hallDisplay">-</span> | Terminal: <span id="terminalDisplay">-</span>
             </div>
         </div>
         
         <div class="scanner-body">
-            <!-- Alert Messages -->
             <div id="alertMessage" class="alert" style="display: none;"></div>
             
-            <!-- QR Code Scanner Section -->
             <div class="scan-section">
                 <div class="scan-input-wrapper">
                     <i class="bi bi-qr-code"></i>
-                    <input type="text" 
-                           class="scan-input" 
-                           id="scanInput" 
-                           placeholder="Scan or enter badge QR code..." 
-                           autofocus>
+                    <input type="text" class="scan-input" id="scanInput" placeholder="Scan or enter badge QR code..." autofocus>
                 </div>
             </div>
             
-            <!-- Divider -->
-            <div class="divider">
-                <span>or</span>
-            </div>
+            <div class="divider"><span>or</span></div>
             
-            <!-- Manual Registration Toggle -->
             <div class="toggle-manual">
                 <input type="checkbox" id="manualToggle">
                 <label for="manualToggle">Manual Registration</label>
             </div>
             
-            <!-- Manual Registration Form -->
             <div class="manual-form" id="manualForm">
                 <form id="registrationForm">
                     <div class="form-row">
@@ -391,17 +158,14 @@
                             <input type="text" class="form-control" id="lastName" required>
                         </div>
                     </div>
-                    
                     <div class="form-group">
                         <label class="form-label">Email <span class="required">*</span></label>
                         <input type="email" class="form-control" id="email" required>
                     </div>
-                    
                     <div class="form-group">
                         <label class="form-label">Company <span class="required">*</span></label>
                         <input type="text" class="form-control" id="company" required>
                     </div>
-                    
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Job Title</label>
@@ -425,21 +189,16 @@
                             </select>
                         </div>
                     </div>
-                    
                     <button type="submit" class="btn btn-primary" id="registerBtn">
                         <i class="bi bi-person-plus"></i> Register & Print Badge
                     </button>
                 </form>
             </div>
             
-            <!-- Loading Spinner -->
             <div class="loading-spinner" id="loadingSpinner">
-                <div class="spinner-border" role="status">
-                    <span class="visually-hidden">Processing...</span>
-                </div>
+                <div class="spinner-border" role="status"><span class="visually-hidden">Processing...</span></div>
             </div>
             
-            <!-- Settings Section -->
             <div class="settings-section">
                 <div class="setting-item">
                     <div>
@@ -454,59 +213,16 @@
         </div>
     </div>
 
-    <!-- Exhibitor Info Modal -->
-    <div class="modal fade" id="exhibitorModal" tabindex="-1" aria-labelledby="exhibitorModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header" style="background: var(--primary-gradient); color: white;">
-                    <h5 class="modal-title" id="exhibitorModalLabel">
-                        <i class="bi bi-building"></i> Exhibitor Information
-                    </h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <strong>Name:</strong>
-                        <span id="exhibitorName">-</span>
-                    </div>
-                    <div class="mb-3">
-                        <strong>Company:</strong>
-                        <span id="exhibitorCompany">-</span>
-                    </div>
-                    <div class="mb-3">
-                        <strong>Country:</strong>
-                        <span id="exhibitorCountry">-</span>
-                    </div>
-                    <div class="mb-3">
-                        <strong>Job Title:</strong>
-                        <span id="exhibitorJobTitle">-</span>
-                    </div>
-                    <div class="mb-3" id="exhibitorEmailRow">
-                        <strong>Email:</strong>
-                        <span id="exhibitorEmail">-</span>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Configuration
         const API_BASE_URL = '/api';
         let hall = null;
         let terminal = null;
         let terminalKey = null;
         let autoCheckinEnabled = true;
         let isProcessing = false;
-        let exhibitorModal = null;
         
-        // Initialize
         document.addEventListener('DOMContentLoaded', () => {
-            exhibitorModal = new bootstrap.Modal(document.getElementById('exhibitorModal'));
             processUrlParameters();
             loadTerminalSettings();
             updateTerminalDisplay();
@@ -516,36 +232,20 @@
         
         function processUrlParameters() {
             const urlParams = new URLSearchParams(window.location.search);
-            
             const urlHall = urlParams.get('hall');
             const urlTerminal = urlParams.get('terminal');
             const urlTerminalKey = urlParams.get('terminalKey') || urlParams.get('terminal_key');
             
-            if (urlHall) {
-                localStorage.setItem('hall', urlHall);
-                hall = urlHall;
-            }
-            
-            if (urlTerminal) {
-                localStorage.setItem('terminal', urlTerminal);
-                terminal = urlTerminal;
-            }
-            
-            if (urlTerminalKey) {
-                localStorage.setItem('terminalKey', urlTerminalKey);
-                terminalKey = urlTerminalKey;
-                console.log('Terminal key set from URL');
-            }
+            if (urlHall) { localStorage.setItem('hall', urlHall); hall = urlHall; }
+            if (urlTerminal) { localStorage.setItem('terminal', urlTerminal); terminal = urlTerminal; }
+            if (urlTerminalKey) { localStorage.setItem('terminalKey', urlTerminalKey); terminalKey = urlTerminalKey; console.log('Terminal key set from URL'); }
         }
         
         function loadTerminalSettings() {
             if (!hall) hall = localStorage.getItem('hall') || 'main';
             if (!terminal) terminal = localStorage.getItem('terminal') || '1';
             if (!terminalKey) terminalKey = localStorage.getItem('terminalKey') || null;
-            
-            if (terminalKey) {
-                console.log('Terminal mode active with key:', terminalKey.substring(0, 8) + '...');
-            }
+            if (terminalKey) console.log('Terminal mode active with key:', terminalKey.substring(0, 8) + '...');
         }
         
         function updateTerminalDisplay() {
@@ -558,20 +258,11 @@
             const token = localStorage.getItem('token');
             
             if (terminalKey) {
-                if (!hall || !terminal) {
-                    showAlert('Terminal or Hall not configured.', 'warning');
-                }
+                if (!hall || !terminal) showAlert('Terminal or Hall not configured.', 'warning');
                 return;
             }
-            
-            if (!expoId) {
-                showAlert('No expo selected. Please select an expo from the dashboard.', 'warning');
-            }
-            
-            if (!token) {
-                showAlert('Authentication required. Redirecting to login...', 'danger');
-                setTimeout(() => { window.location.href = 'login.html'; }, 2000);
-            }
+            if (!expoId) showAlert('No expo selected. Please select an expo from the dashboard.', 'warning');
+            if (!token) { showAlert('Authentication required. Redirecting to login...', 'danger'); setTimeout(() => { window.location.href = 'login.html'; }, 2000); }
         }
         
         function getStorageData() {
@@ -586,157 +277,77 @@
         function buildHeaders(includeContentType = false) {
             const headers = {};
             if (includeContentType) headers['Content-Type'] = 'application/json';
-            
-            if (terminalKey) {
-                headers['x-terminal-key'] = terminalKey;
-            } else {
-                const token = localStorage.getItem('token');
-                if (token) headers['Authorization'] = `Bearer ${token}`;
-            }
+            if (terminalKey) { headers['x-terminal-key'] = terminalKey; }
+            else { const token = localStorage.getItem('token'); if (token) headers['Authorization'] = `Bearer ${token}`; }
             return headers;
         }
         
-        // Build badge URL with terminal_key if available
         function buildBadgeUrl(qrCode) {
             let url = `badge.html?qr=${encodeURIComponent(qrCode)}`;
-            if (terminalKey) {
-                url += `&terminal_key=${encodeURIComponent(terminalKey)}`;
-            }
+            if (terminalKey) url += `&terminal_key=${encodeURIComponent(terminalKey)}`;
             return url;
         }
         
         function setupEventListeners() {
             const scanInput = document.getElementById('scanInput');
-            scanInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !isProcessing) handleQRScan();
-            });
+            scanInput.addEventListener('keypress', (e) => { if (e.key === 'Enter' && !isProcessing) handleQRScan(); });
             
-            const manualToggle = document.getElementById('manualToggle');
-            manualToggle.addEventListener('change', (e) => {
+            document.getElementById('manualToggle').addEventListener('change', (e) => {
                 const manualForm = document.getElementById('manualForm');
-                if (e.target.checked) {
-                    manualForm.classList.add('active');
-                    document.getElementById('firstName').focus();
-                } else {
-                    manualForm.classList.remove('active');
-                    scanInput.focus();
-                }
+                if (e.target.checked) { manualForm.classList.add('active'); document.getElementById('firstName').focus(); }
+                else { manualForm.classList.remove('active'); scanInput.focus(); }
             });
             
-            const registrationForm = document.getElementById('registrationForm');
-            registrationForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                if (!isProcessing) await handleManualRegistration();
-            });
-            
-            const autoCheckinToggle = document.getElementById('autoCheckin');
-            autoCheckinToggle.addEventListener('change', (e) => {
-                autoCheckinEnabled = e.target.checked;
-            });
-            
-            document.getElementById('exhibitorModal').addEventListener('hidden.bs.modal', () => {
-                document.getElementById('scanInput').value = '';
-                document.getElementById('scanInput').focus();
-            });
+            document.getElementById('registrationForm').addEventListener('submit', async (e) => { e.preventDefault(); if (!isProcessing) await handleManualRegistration(); });
+            document.getElementById('autoCheckin').addEventListener('change', (e) => { autoCheckinEnabled = e.target.checked; });
         }
         
-        function showExhibitorModal(visitor) {
-            const fullName = `${visitor.name || ''} ${visitor.lastName || ''}`.trim() || 'N/A';
-            document.getElementById('exhibitorName').textContent = fullName;
-            document.getElementById('exhibitorCompany').textContent = visitor.company || 'N/A';
-            document.getElementById('exhibitorCountry').textContent = visitor.country || 'N/A';
-            document.getElementById('exhibitorJobTitle').textContent = visitor.jobTitle || 'N/A';
-            
-            const emailRow = document.getElementById('exhibitorEmailRow');
-            const emailSpan = document.getElementById('exhibitorEmail');
-            if (visitor.email) {
-                emailSpan.textContent = visitor.email;
-                emailRow.style.display = 'block';
-            } else {
-                emailRow.style.display = 'none';
-            }
-            
-            exhibitorModal.show();
-        }
-        
+        // ==================== QR SCAN ====================
+        // All visitor types (visitor, exhibitor, vip, press, staff) go through the same flow:
+        // 1. Look up visitor by QR
+        // 2. Auto check-in (if enabled)
+        // 3. Redirect to badge print page
         async function handleQRScan() {
             const scanInput = document.getElementById('scanInput');
             const qrCode = scanInput.value.trim();
             
-            if (!qrCode) {
-                showAlert('Please scan or enter a QR code', 'danger');
-                return;
-            }
+            if (!qrCode) { showAlert('Please scan or enter a QR code', 'danger'); return; }
             
             const { expoId, token } = getStorageData();
-            
-            if (!terminalKey && (!expoId || !token)) {
-                showAlert('Missing required data. Please login again.', 'danger');
-                return;
-            }
+            if (!terminalKey && (!expoId || !token)) { showAlert('Missing required data. Please login again.', 'danger'); return; }
             
             isProcessing = true;
             showLoading(true);
             hideAlert();
             
             try {
-                let response;
-                let visitor;
-                
                 if (terminalKey) {
-                    response = await fetch(`${API_BASE_URL}/terminal/visitor-by-qr?qr=${encodeURIComponent(qrCode)}`, {
-                        headers: buildHeaders()
-                    });
-                    
+                    // Terminal mode
+                    const response = await fetch(`${API_BASE_URL}/terminal/visitor-by-qr?qr=${encodeURIComponent(qrCode)}`, { headers: buildHeaders() });
                     if (!response.ok) throw new Error('Badge not found');
                     
                     const result = await response.json();
-                    visitor = result.visitor;
+                    const visitor = result.visitor;
                     console.log('Visitor found (terminal mode):', visitor);
-                    
-                    if (visitor.role === 'exhibitor') {
-                        showLoading(false);
-                        isProcessing = false;
-                        showExhibitorModal(visitor);
-                        return;
-                    }
                     
                     if (autoCheckinEnabled && visitor.id) {
                         await performCheckin(visitor.id);
                     }
                 } else {
-                    response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`, {
-                        headers: buildHeaders()
-                    });
-                    
+                    // Normal mode
+                    const response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`, { headers: buildHeaders() });
                     if (!response.ok) throw new Error('Badge not found');
                     
-                    visitor = await response.json();
-                    console.log('Visitor found:', visitor);
-                    
-                    const visitorData = visitor.visitor || visitor;
-                    const role = visitorData.role || visitorData.visitor_type || 'visitor';
-                    
-                    if (role === 'exhibitor') {
-                        showLoading(false);
-                        isProcessing = false;
-                        showExhibitorModal({
-                            name: visitorData.name,
-                            lastName: visitorData.last_name || visitorData.lastName,
-                            company: visitorData.company,
-                            country: visitorData.country,
-                            jobTitle: visitorData.job_title || visitorData.jobTitle,
-                            email: visitorData.email
-                        });
-                        return;
-                    }
+                    const result = await response.json();
+                    const visitorData = result.visitor || result;
+                    console.log('Visitor found:', visitorData);
                     
                     if (autoCheckinEnabled) {
-                        await performCheckin(visitorData.id || visitor.id);
+                        await performCheckin(visitorData.id || result.id);
                     }
                 }
                 
-                // ✅ FIX: Include terminal_key in badge URL
+                // Badge print for ALL visitor types
                 window.location.href = buildBadgeUrl(qrCode);
                 
             } catch (error) {
@@ -750,13 +361,10 @@
             }
         }
         
+        // ==================== MANUAL REGISTRATION ====================
         async function handleManualRegistration() {
             const { expoId, organizerId, token } = getStorageData();
-            
-            if (!expoId || !token) {
-                showAlert('Missing required data. Please login again.', 'danger');
-                return;
-            }
+            if (!expoId || !token) { showAlert('Missing required data. Please login again.', 'danger'); return; }
             
             isProcessing = true;
             showLoading(true);
@@ -783,37 +391,24 @@
                 
                 const response = await fetch(`${API_BASE_URL}/visitors/manual`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify(formData)
                 });
                 
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.message || 'Registration failed');
-                }
+                if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Registration failed'); }
                 
                 const result = await response.json();
                 console.log('Registration successful:', result);
                 
                 const qrCode = result.qr_code || result.qrCode || result.badge_id;
-                
-                if (!qrCode) {
-                    throw new Error('Registration successful but no QR code received');
-                }
+                if (!qrCode) throw new Error('Registration successful but no QR code received');
                 
                 if (autoCheckinEnabled && result.visitor_id) {
                     await performCheckin(result.visitor_id);
                 }
                 
                 showAlert('Registration successful! Redirecting to badge...', 'success');
-                
-                // ✅ FIX: Include terminal_key in badge URL
-                setTimeout(() => {
-                    window.location.href = buildBadgeUrl(qrCode);
-                }, 500);
+                setTimeout(() => { window.location.href = buildBadgeUrl(qrCode); }, 500);
                 
             } catch (error) {
                 console.error('Registration error:', error);
@@ -823,83 +418,55 @@
             }
         }
         
+        // ==================== CHECK-IN ====================
         async function performCheckin(visitorId) {
-            const { expoId, token } = getStorageData();
+            const { expoId } = getStorageData();
             
             if (terminalKey) {
                 if (!visitorId) return;
-                
                 try {
-                    const checkinData = {
-                        visitor_id: visitorId,
-                        notes: `Scanned at ${hall || 'main'} - Terminal ${terminal || '1'}`
-                    };
-                    
                     const response = await fetch(`${API_BASE_URL}/terminal/checkin`, {
                         method: 'POST',
                         headers: buildHeaders(true),
-                        body: JSON.stringify(checkinData)
+                        body: JSON.stringify({ visitor_id: visitorId, notes: `Scanned at ${hall || 'main'} - Terminal ${terminal || '1'}` })
                     });
-                    
                     const result = await response.json();
                     if (response.ok) console.log('Terminal check-in successful');
                     else console.warn('Terminal check-in failed:', result);
-                    
-                } catch (error) {
-                    console.error('Terminal check-in error:', error);
-                }
+                } catch (error) { console.error('Terminal check-in error:', error); }
                 return;
             }
             
             if (!expoId || !visitorId) return;
-            
             try {
-                const checkinData = {
-                    visitor_id: visitorId,
-                    expo_id: expoId,
-                    hall: hall || 'main',
-                    terminal: terminal || '1',
-                    checkin_type: 'entry',
-                    checkin_time: new Date().toISOString()
-                };
-                
                 const response = await fetch(`${API_BASE_URL}/checkins`, {
                     method: 'POST',
                     headers: buildHeaders(true),
-                    body: JSON.stringify(checkinData)
+                    body: JSON.stringify({
+                        visitor_id: visitorId, expo_id: expoId,
+                        hall: hall || 'main', terminal: terminal || '1',
+                        checkin_type: 'entry', checkin_time: new Date().toISOString()
+                    })
                 });
-                
                 const result = await response.json();
                 if (response.ok) console.log('Check-in successful');
                 else console.warn('Check-in failed:', result);
-                
-            } catch (error) {
-                console.error('Check-in error:', error);
-            }
+            } catch (error) { console.error('Check-in error:', error); }
         }
         
+        // ==================== UI HELPERS ====================
         function showAlert(message, type) {
             const alertDiv = document.getElementById('alertMessage');
             alertDiv.className = `alert alert-${type}`;
             alertDiv.textContent = message;
             alertDiv.style.display = 'block';
         }
-        
-        function hideAlert() {
-            document.getElementById('alertMessage').style.display = 'none';
-        }
-        
+        function hideAlert() { document.getElementById('alertMessage').style.display = 'none'; }
         function showLoading(show) {
             const spinner = document.getElementById('loadingSpinner');
             const registerBtn = document.getElementById('registerBtn');
-            
-            if (show) {
-                spinner.classList.add('active');
-                if (registerBtn) registerBtn.disabled = true;
-            } else {
-                spinner.classList.remove('active');
-                if (registerBtn) registerBtn.disabled = false;
-            }
+            if (show) { spinner.classList.add('active'); if (registerBtn) registerBtn.disabled = true; }
+            else { spinner.classList.remove('active'); if (registerBtn) registerBtn.disabled = false; }
         }
     </script>
 </body>
