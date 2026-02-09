@@ -355,15 +355,42 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           continue;
         }
 
-        // Check for duplicate email in this expo
+        // Check for duplicate email in this expo - UPDATE if exists, keep QR
         const duplicateCheck = await pool.query(
-          `SELECT id FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
+          `SELECT id, qr_code, badge_id FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
           [email.toLowerCase().trim(), expo_id]
         );
 
         if (duplicateCheck.rows.length > 0) {
-          results.errors.push({ row: rowNum, message: `Duplicate email: ${email}` });
-          results.failed_count++;
+          const existing = duplicateCheck.rows[0];
+          // Update existing visitor info but keep QR code
+          await pool.query(
+            `UPDATE visitors SET
+              name = COALESCE(NULLIF($1, ''), name),
+              last_name = COALESCE(NULLIF($2, ''), last_name),
+              company = COALESCE(NULLIF($3, ''), company),
+              country = COALESCE(NULLIF($4, ''), country),
+              job_title = COALESCE(NULLIF($5, ''), job_title),
+              phone = COALESCE(NULLIF($6, ''), phone),
+              visitor_type = COALESCE(NULLIF($7, ''), visitor_type),
+              sector = COALESCE(NULLIF($8, ''), sector),
+              booth_number = COALESCE(NULLIF($9, ''), booth_number),
+              updated_at = NOW()
+            WHERE id = $10`,
+            [name.trim(), last_name.trim(), company.trim(), country.trim(),
+             job_title.trim(), phone.trim(), visitor_type_val, sector.trim(),
+             (row.booth_number || row['Booth Number'] || row.booth || row.Booth || '').toString().trim(),
+             existing.id]
+          );
+          results.imported.push({
+            id: existing.id,
+            name: name || last_name || email,
+            email: email,
+            qr_code: existing.qr_code,
+            badge_id: existing.badge_id
+          });
+          results.success_count++;
+          console.log(`🔄 Updated existing visitor: ${email} (ID: ${existing.id})`);
           continue;
         }
 
