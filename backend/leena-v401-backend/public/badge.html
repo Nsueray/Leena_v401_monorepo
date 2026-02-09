@@ -85,19 +85,17 @@
       font-size: var(--font-size-name);
       font-weight: bold;
       margin-bottom: 2mm;
-      line-height: 1.2;
-      white-space: nowrap;
+      line-height: 1.1;
+      word-break: break-word;
       overflow: hidden;
-      text-overflow: ellipsis;
       max-width: 100%;
     }
 
     .visitor-company {
       font-size: var(--font-size-company);
-      line-height: 1.2;
-      white-space: nowrap;
+      line-height: 1.1;
+      word-break: break-word;
       overflow: hidden;
-      text-overflow: ellipsis;
       max-width: 100%;
       margin-bottom: 1mm;
     }
@@ -183,7 +181,7 @@
       };
     }
 
-    function getTextSizeClass(text, t1 = 25, t2 = 40) {
+    function getTextSizeClass(text, t1 = 15, t2 = 25) {
       if (!text) return '';
       if (text.length > t2) return 'text-very-small';
       if (text.length > t1) return 'text-small';
