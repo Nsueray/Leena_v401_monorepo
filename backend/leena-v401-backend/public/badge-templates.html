@@ -1024,11 +1024,18 @@
             size: ${w}mm ${h}mm;
             margin: 0;
         }
-        body { width: ${w}mm; }
+        html, body { width: ${w}mm; height: ${h}mm; }
+        .print-header { display: none !important; }
         .badge-page {
-            margin-left: ${ml}mm;
-            margin-top: ${mt}mm;
+            width: ${w}mm;
+            height: ${h}mm;
+            margin: 0;
+            padding-left: ${ml}mm;
+            padding-top: ${mt}mm;
+            page-break-after: always;
+            overflow: hidden;
         }
+        .badge-page:last-child { page-break-after: auto; }
     }
 
     @media screen {
