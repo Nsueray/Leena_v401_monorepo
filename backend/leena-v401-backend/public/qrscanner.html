@@ -514,7 +514,7 @@
                 }
                 
                 // Badge print for ALL visitor types
-                window.open(buildBadgeUrl(qrCode), '_blank', 'width=450,height=300'); document.getElementById('scanInput').value = ''; document.getElementById('scanInput').focus();
+                window.open(buildBadgeUrl(qrCode), '_blank', 'width=600,height=400'); document.getElementById('scanInput').value = ''; document.getElementById('scanInput').focus();
                 
             } catch (error) {
                 console.error('Scan error:', error);
@@ -573,8 +573,10 @@
                     await performCheckin(result.visitor_id);
                 }
                 
-                showAlert('Registration successful! Redirecting to badge...', 'success');
-                setTimeout(() => { window.open(buildBadgeUrl(qrCode), '_blank', 'width=450,height=300'); document.getElementById('scanInput').value = ''; document.getElementById('scanInput').focus(); document.getElementById('manualToggle').checked = false; document.getElementById('manualForm').classList.remove('active'); document.getElementById('registrationForm').reset(); }, 500);
+                showAlert('Registration successful!', 'success');
+                isProcessing = false;
+                showLoading(false);
+                setTimeout(() => { window.open(buildBadgeUrl(qrCode), '_blank', 'width=600,height=400'); document.getElementById('scanInput').value = ''; document.getElementById('scanInput').focus(); document.getElementById('manualToggle').checked = false; document.getElementById('manualForm').classList.remove('active'); document.getElementById('registrationForm').reset(); }, 500);
                 
             } catch (error) {
                 console.error('Registration error:', error);
