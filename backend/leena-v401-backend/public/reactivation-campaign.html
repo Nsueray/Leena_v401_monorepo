@@ -558,10 +558,20 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="card-footer" style="padding:16px 20px; border-top:1px solid var(--border-color); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                    <select id="resendTemplate_${c.target_expo_id}" class="form-select" style="width:auto; padding:6px 10px; font-size:13px; flex:1; min-width:200px;">
+                                        <option value="">Select email template...</option>
+                                    </select>
+                                    <button class="btn btn-primary btn-sm" onclick="resendPending(${c.target_expo_id})" style="white-space:nowrap;">
+                                        <i class="bi bi-envelope-arrow-up"></i> Resend to ${c.pending} Pending
+                                    </button>
+                                </div>
                             </div>
                         `;
                     });
                     document.getElementById('campaignsList').innerHTML = html;
+                    // Load email templates into resend dropdowns
+                    loadResendTemplates();
                 }
 
             } catch (err) {
@@ -589,6 +599,46 @@
             const div = document.createElement('div');
             div.textContent = text || '';
             return div.innerHTML;
+        }
+
+        async function loadResendTemplates() {
+            try {
+                const res = await fetch(API_URL + '/api/email-templates', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const templates = data.templates || data || [];
+                document.querySelectorAll('select[id^="resendTemplate_"]').forEach(sel => {
+                    templates.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t.id;
+                        opt.textContent = t.name || t.subject || 'Template #' + t.id;
+                        sel.appendChild(opt);
+                    });
+                });
+            } catch(e) { console.error('Failed to load templates:', e); }
+        }
+
+        async function resendPending(targetExpoId) {
+            const sel = document.getElementById('resendTemplate_' + targetExpoId);
+            if (!sel || !sel.value) { alert('Please select an email template first'); return; }
+            
+            const countEl = sel.closest('.card').querySelector('.stat-card.pending .stat-value');
+            const count = countEl ? countEl.textContent : '?';
+            if (!confirm('Resend to ' + count + ' pending recipients?')) return;
+
+            try {
+                const res = await fetch(API_URL + '/api/reactivation/resend-pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ target_expo_id: targetExpoId, template_id: parseInt(sel.value) })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed');
+                alert('Success! ' + data.sent + ' emails queued for sending.');
+                loadCampaigns();
+            } catch(e) { alert('Resend failed: ' + e.message); }
         }
     </script>
 </body>

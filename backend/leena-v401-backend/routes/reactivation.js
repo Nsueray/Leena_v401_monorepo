@@ -688,4 +688,101 @@ router.get('/stats/:expoId', authMiddleware, async (req, res) => {
   }
 });
 
+
+/**
+ * POST /api/reactivation/resend-pending
+ * Resend emails to pending (non-activated) tokens for a target expo
+ * Optionally with a different email template
+ */
+router.post('/resend-pending', authMiddleware, async (req, res) => {
+  try {
+    const { target_expo_id, template_id } = req.body;
+    const organizerId = req.organizer_id;
+
+    if (!target_expo_id || !template_id) {
+      return res.status(400).json({ success: false, error: 'target_expo_id and template_id are required' });
+    }
+
+    // Get email template
+    const templateResult = await pool.query(
+      'SELECT * FROM email_templates WHERE id = $1 AND organizer_id = $2',
+      [template_id, organizerId]
+    );
+    if (templateResult.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Email template not found' });
+    }
+    const emailTemplate = templateResult.rows[0];
+
+    // Get target expo name
+    const expoResult = await pool.query('SELECT name FROM expos WHERE id = $1', [target_expo_id]);
+    const expoName = expoResult.rows.length > 0 ? expoResult.rows[0].name : '';
+
+    // Get all pending tokens for this expo
+    const pendingTokens = await pool.query(
+      `SELECT token, email, name, last_name, company, country, job_title
+       FROM reactivation_tokens
+       WHERE target_expo_id = $1 AND organizer_id = $2 AND status = 'pending'`,
+      [target_expo_id, organizerId]
+    );
+
+    if (pendingTokens.rows.length === 0) {
+      return res.json({ success: true, message: 'No pending tokens to resend', sent: 0 });
+    }
+
+    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+    let queuedCount = 0;
+
+    for (const row of pendingTokens.rows) {
+      try {
+        const activationUrl = baseUrl + '/reactivate.html?token=' + row.token;
+
+        const templateData = {
+          name: row.name || 'Valued Guest',
+          last_name: row.last_name || '',
+          email: row.email,
+          company: row.company || '',
+          country: row.country || '',
+          job_title: row.job_title || '',
+          activation_url: activationUrl,
+          expo_name: expoName
+        };
+
+        const htmlContent = processEmailTemplate(
+          emailTemplate.html_content || emailTemplate.body || '',
+          templateData
+        );
+        const subject = processEmailTemplate(
+          emailTemplate.subject || 'Reminder: Activate Your Visitor Pass',
+          templateData
+        );
+
+        await pool.query(
+          `INSERT INTO email_queue (
+            organizer_id, expo_id, visitor_id, template_id,
+            recipient_email, subject, html_content,
+            status, created_at
+          ) VALUES ($1, $2, NULL, $3, $4, $5, $6, 'pending', NOW())`,
+          [organizerId, target_expo_id, template_id, row.email, subject, htmlContent]
+        );
+        queuedCount++;
+      } catch (rowErr) {
+        console.error('[reactivation] Resend row error:', rowErr.message);
+      }
+    }
+
+    console.log('[reactivation] Resend queued:', queuedCount, 'emails for expo', target_expo_id);
+
+    res.json({
+      success: true,
+      message: queuedCount + ' emails queued for sending',
+      sent: queuedCount,
+      total_pending: pendingTokens.rows.length
+    });
+
+  } catch (err) {
+    console.error('[reactivation] Resend error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to resend' });
+  }
+});
+
 module.exports = router;
