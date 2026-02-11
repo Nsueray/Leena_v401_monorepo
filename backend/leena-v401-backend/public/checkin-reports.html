@@ -294,10 +294,10 @@
                 <div class="charts-grid">
                     <div class="table-card">
                         <div class="table-card-header">
-                            <h3><i class="bi bi-building"></i> Top Companies by Check-ins</h3>
+                            <h3><i class="bi bi-briefcase"></i> Top Job Titles by Check-ins</h3>
                         </div>
-                        <table><thead><tr><th>#</th><th>Company</th><th>Check-ins</th><th>Share</th></tr></thead>
-                        <tbody id="topCompaniesTable"></tbody></table>
+                        <table><thead><tr><th>#</th><th>Job Title</th><th>Check-ins</th><th>Share</th></tr></thead>
+                        <tbody id="topJobTitlesTable"></tbody></table>
                     </div>
                     <div class="table-card">
                         <div class="table-card-header">
@@ -388,7 +388,7 @@
             renderTypeChart();
             renderConversionBySource(totalRegistrations);
             renderConversionByCountry();
-            renderTopCompanies();
+            renderTopJobTitles();
             renderTopCountries();
             renderNoShowAnalysis();
         }
@@ -617,16 +617,16 @@
             });
         }
 
-        // ============ Top Companies ============
-        function renderTopCompanies() {
-            const companies = {};
+        // ============ Top Job Titles ============
+        function renderTopJobTitles() {
+            const jobs = {};
             allCheckins.forEach(c => {
-                const comp = c.visitor_company || c.company || '';
-                if (comp) companies[comp] = (companies[comp] || 0) + 1;
+                const job = c.visitor_job_title || c.job_title || '';
+                if (job) jobs[job] = (jobs[job] || 0) + 1;
             });
-            const sorted = Object.entries(companies).sort((a,b) => b[1]-a[1]).slice(0, 15);
+            const sorted = Object.entries(jobs).sort((a,b) => b[1]-a[1]).slice(0, 15);
             const max = sorted.length > 0 ? sorted[0][1] : 1;
-            document.getElementById('topCompaniesTable').innerHTML = sorted.map((s, i) => {
+            document.getElementById('topJobTitlesTable').innerHTML = sorted.map((s, i) => {
                 const pct = ((s[1] / allCheckins.length) * 100).toFixed(1);
                 const rankClass = i < 3 ? `rank-${i+1}` : 'rank-n';
                 return `<tr>
