@@ -223,6 +223,18 @@
         async function authWithQR(qrCode) {
             if (!qrCode || !qrCode.trim()) return;
             qrCode = qrCode.trim();
+            // If scanned as URL, extract qr parameter
+            if (qrCode.includes('qr=')) {
+                try { qrCode = new URL(qrCode).searchParams.get('qr') || qrCode; } catch(e) {
+                    const match = qrCode.match(/qr=([^&]+)/);
+                    if (match) qrCode = decodeURIComponent(match[1]);
+                }
+            }
+            // If scanned as badge URL path, extract UUID
+            if (qrCode.includes('/')) {
+                const parts = qrCode.split('/');
+                qrCode = parts[parts.length - 1];
+            }
 
             showAlert('authAlert', 'Verifying...', 'warning');
 
@@ -291,6 +303,17 @@
         async function scanVisitor(qrCode) {
             if (!qrCode || !qrCode.trim()) return;
             qrCode = qrCode.trim();
+            // If scanned as URL, extract qr parameter
+            if (qrCode.includes('qr=')) {
+                try { qrCode = new URL(qrCode).searchParams.get('qr') || qrCode; } catch(e) {
+                    const match = qrCode.match(/qr=([^&]+)/);
+                    if (match) qrCode = decodeURIComponent(match[1]);
+                }
+            }
+            if (qrCode.includes('/')) {
+                const parts = qrCode.split('/');
+                qrCode = parts[parts.length - 1];
+            }
             document.getElementById('scanQrInput').value = '';
 
             try {
