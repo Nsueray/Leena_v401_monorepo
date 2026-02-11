@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Lead Scanner - Leena EMS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --bg: #f8fafc; --card: #fff; --border: #e2e8f0;
+            --text: #0f172a; --text-sec: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5;
+            --warning: #f59e0b; --warning-bg: #fef3c7;
+            --danger: #ef4444; --danger-bg: #fee2e2;
+            --radius: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* Top Bar */
+        .top-bar { background: #1a1a2e; color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+        .top-bar .logo { height: 32px; }
+        .top-bar .company-name { font-size: 14px; font-weight: 600; }
+        .top-bar .lead-count { background: var(--success); padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+
+        /* Container */
+        .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+
+        /* Auth Screen */
+        .auth-screen { text-align: center; padding: 40px 20px; }
+        .auth-screen .icon { width: 80px; height: 80px; background: var(--primary-light); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 36px; }
+        .auth-screen h1 { font-size: 22px; margin-bottom: 8px; }
+        .auth-screen p { color: var(--text-sec); margin-bottom: 24px; font-size: 14px; }
+
+        /* Scanner */
+        #scanner-container { width: 100%; border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; background: #000; min-height: 250px; }
+        #scanner-container video { width: 100% !important; border-radius: var(--radius); }
+
+        /* Manual Input */
+        .manual-input { display: flex; gap: 8px; margin-bottom: 16px; }
+        .manual-input input { flex: 1; padding: 12px; border: 2px solid var(--border); border-radius: var(--radius); font-size: 14px; }
+        .manual-input input:focus { border-color: var(--primary); outline: none; }
+        .manual-input button { padding: 12px 20px; background: var(--primary); color: white; border: none; border-radius: var(--radius); font-weight: 600; cursor: pointer; white-space: nowrap; }
+
+        /* Buttons */
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 24px; font-size: 15px; font-weight: 600; border-radius: var(--radius); border: none; cursor: pointer; width: 100%; transition: all 0.15s; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-outline { background: white; color: var(--primary); border: 2px solid var(--primary); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-sm { padding: 10px 16px; font-size: 13px; width: auto; }
+
+        /* Tabs */
+        .tabs { display: flex; background: var(--card); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 16px; overflow: hidden; }
+        .tab { flex: 1; padding: 12px; text-align: center; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.15s; color: var(--text-sec); }
+        .tab.active { background: var(--primary); color: white; }
+
+        /* Lead Card */
+        .lead-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; animation: slideUp 0.3s ease; }
+        .lead-card.just-scanned { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
+        .lead-card.duplicate { border-color: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
+        .lead-card .lead-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+        .lead-card .lead-company { font-size: 14px; color: var(--primary); font-weight: 500; margin-bottom: 8px; }
+        .lead-card .lead-details { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 13px; color: var(--text-sec); }
+        .lead-card .lead-detail { display: flex; align-items: center; gap: 6px; }
+        .lead-card .lead-detail .icon { font-size: 14px; color: var(--text-muted); width: 16px; }
+        .lead-card .lead-time { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+        .lead-card .lead-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .lead-card .lead-actions a, .lead-card .lead-actions button { padding: 8px 14px; font-size: 12px; border-radius: 8px; text-decoration: none; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); background: white; color: var(--text); cursor: pointer; }
+        .lead-card .lead-actions a:hover, .lead-card .lead-actions button:hover { background: var(--bg); }
+        .lead-card .scanned-by { font-size: 11px; color: var(--text-muted); margin-top: 6px; font-style: italic; }
+
+        /* Alert */
+        .alert { padding: 14px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 14px; font-weight: 500; display: none; animation: slideUp 0.3s ease; }
+        .alert.show { display: block; }
+        .alert-success { background: var(--success-bg); color: #065f46; }
+        .alert-warning { background: var(--warning-bg); color: #92400e; }
+        .alert-danger { background: var(--danger-bg); color: #991b1b; }
+
+        /* Stats Bar */
+        .stats-bar { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .stat-mini { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; text-align: center; }
+        .stat-mini .val { font-size: 24px; font-weight: 700; }
+        .stat-mini .lbl { font-size: 11px; color: var(--text-muted); }
+
+        /* Empty */
+        .empty { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+        .empty .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+        /* Export */
+        .export-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Hide scanner when not active */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <!-- AUTH SCREEN -->
+    <div id="authScreen">
+        <div class="top-bar">
+            <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="logo">
+            <span style="font-size:13px;color:#9ca3af;">Lead Scanner</span>
+        </div>
+        <div class="container">
+            <div class="auth-screen">
+                <div class="icon">📇</div>
+                <h1>Lead Scanner</h1>
+                <p>Scan your exhibitor badge to start collecting visitor contacts</p>
+                <div id="authScannerContainer" style="margin-bottom:16px;"></div>
+                <div class="manual-input">
+                    <input type="text" id="authQrInput" placeholder="Or enter your badge QR code...">
+                    <button onclick="authWithQR(document.getElementById('authQrInput').value)">Login</button>
+                </div>
+                <div class="alert" id="authAlert"></div>
+                <div style="margin-top:24px;padding:16px;background:var(--primary-light);border-radius:var(--radius);text-align:left;">
+                    <p style="font-size:13px;color:var(--text-sec);line-height:1.5;">
+                        <strong>How it works:</strong><br>
+                        1. Scan your exhibitor badge to log in<br>
+                        2. Scan visitor badges to save their contact info<br>
+                        3. All your team members' scans are shared under your company<br>
+                        4. Export contacts anytime as CSV
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN SCREEN -->
+    <div id="mainScreen" class="hidden">
+        <div class="top-bar">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="logo">
+                <span class="company-name" id="companyName">-</span>
+            </div>
+            <span class="lead-count" id="leadCountBadge">0 leads</span>
+        </div>
+        <div class="container">
+            <!-- Tabs -->
+            <div class="tabs">
+                <div class="tab active" data-tab="scan" onclick="switchTab('scan')">📷 Scan</div>
+                <div class="tab" data-tab="leads" onclick="switchTab('leads')">📋 Leads</div>
+            </div>
+
+            <!-- SCAN TAB -->
+            <div id="scanTab">
+                <div id="scannerContainer" style="margin-bottom:16px;"></div>
+                <div class="manual-input">
+                    <input type="text" id="scanQrInput" placeholder="Or enter visitor QR code..." autofocus>
+                    <button onclick="scanVisitor(document.getElementById('scanQrInput').value)">Scan</button>
+                </div>
+                <div class="alert" id="scanAlert"></div>
+                <div id="lastScanned"></div>
+            </div>
+
+            <!-- LEADS TAB -->
+            <div id="leadsTab" class="hidden">
+                <div class="stats-bar">
+                    <div class="stat-mini"><div class="val" id="statTotal">0</div><div class="lbl">Total Leads</div></div>
+                    <div class="stat-mini"><div class="val" id="statToday">0</div><div class="lbl">Today</div></div>
+                    <div class="stat-mini"><div class="val" id="statTeam">0</div><div class="lbl">Team Members</div></div>
+                </div>
+                <div class="export-bar">
+                    <button class="btn btn-outline btn-sm" onclick="exportLeadsCSV()" style="flex:1;">📥 Export CSV</button>
+                    <button class="btn btn-outline btn-sm" onclick="loadLeads()" style="flex:1;">🔄 Refresh</button>
+                </div>
+                <div id="leadsList"></div>
+            </div>
+
+            <!-- Logout -->
+            <div style="margin-top:24px;text-align:center;">
+                <button class="btn btn-outline btn-sm" onclick="logout()" style="width:auto;color:var(--danger);border-color:var(--danger);">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        const EXPO_ID = 3; // Mega Horeca Nigeria
+        let exhibitor = null;
+        let authScanner = null;
+        let leadScanner = null;
+        let allLeads = [];
+
+        // ============ AUTH ============
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if already logged in
+            const saved = localStorage.getItem('leadScannerAuth');
+            if (saved) {
+                try {
+                    exhibitor = JSON.parse(saved);
+                    showMainScreen();
+                    return;
+                } catch(e) {}
+            }
+            startAuthScanner();
+        });
+
+        function startAuthScanner() {
+            try {
+                authScanner = new Html5Qrcode('authScannerContainer');
+                authScanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => {
+                        authScanner.stop().catch(() => {});
+                        authWithQR(decodedText);
+                    },
+                    () => {}
+                ).catch(err => {
+                    console.log('Camera not available:', err);
+                    document.getElementById('authScannerContainer').innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:12px;">Camera not available. Please enter QR code manually.</p>';
+                });
+            } catch(e) {
+                console.log('Scanner init error:', e);
+            }
+        }
+
+        async function authWithQR(qrCode) {
+            if (!qrCode || !qrCode.trim()) return;
+            qrCode = qrCode.trim();
+
+            showAlert('authAlert', 'Verifying...', 'warning');
+
+            try {
+                const res = await fetch(`${API_URL}/leads/auth`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ qr_code: qrCode, expo_id: EXPO_ID })
+                });
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    showAlert('authAlert', data.message || 'Authentication failed', 'danger');
+                    // Restart scanner
+                    setTimeout(() => startAuthScanner(), 1500);
+                    return;
+                }
+
+                exhibitor = data.exhibitor;
+                exhibitor.lead_count = data.lead_count;
+                localStorage.setItem('leadScannerAuth', JSON.stringify(exhibitor));
+                
+                if (authScanner) authScanner.stop().catch(() => {});
+                showMainScreen();
+
+            } catch(e) {
+                showAlert('authAlert', 'Connection error. Try again.', 'danger');
+                setTimeout(() => startAuthScanner(), 1500);
+            }
+        }
+
+        function showMainScreen() {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainScreen').classList.remove('hidden');
+            document.getElementById('companyName').textContent = exhibitor.company;
+            document.getElementById('leadCountBadge').textContent = (exhibitor.lead_count || 0) + ' leads';
+            startLeadScanner();
+            loadLeads();
+        }
+
+        // ============ LEAD SCANNING ============
+        function startLeadScanner() {
+            try {
+                leadScanner = new Html5Qrcode('scannerContainer');
+                leadScanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => {
+                        // Pause scanner briefly
+                        leadScanner.pause();
+                        scanVisitor(decodedText);
+                        setTimeout(() => {
+                            try { leadScanner.resume(); } catch(e) {}
+                        }, 2000);
+                    },
+                    () => {}
+                ).catch(err => {
+                    console.log('Lead camera not available:', err);
+                    document.getElementById('scannerContainer').innerHTML = '<p style="color:var(--text-muted);font-size:13px;padding:12px;">Camera not available. Enter QR code manually below.</p>';
+                });
+            } catch(e) {
+                console.log('Lead scanner init error:', e);
+            }
+        }
+
+        async function scanVisitor(qrCode) {
+            if (!qrCode || !qrCode.trim()) return;
+            qrCode = qrCode.trim();
+            document.getElementById('scanQrInput').value = '';
+
+            try {
+                const res = await fetch(`${API_URL}/leads/scan`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        qr_code: qrCode,
+                        exhibitor_id: exhibitor.id,
+                        exhibitor_company: exhibitor.company,
+                        expo_id: EXPO_ID
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok || !data.success) {
+                    showAlert('scanAlert', data.message || 'Scan failed', 'danger');
+                    return;
+                }
+
+                if (data.duplicate) {
+                    showAlert('scanAlert', '⚠️ Already scanned: ' + (data.visitor.name || '') + ' ' + (data.visitor.last_name || ''), 'warning');
+                    showLastScanned(data.visitor, true);
+                } else {
+                    showAlert('scanAlert', '✅ Lead saved: ' + (data.visitor.name || '') + ' ' + (data.visitor.last_name || ''), 'success');
+                    showLastScanned(data.visitor, false);
+                    document.getElementById('leadCountBadge').textContent = data.total_leads + ' leads';
+                    exhibitor.lead_count = data.total_leads;
+                    localStorage.setItem('leadScannerAuth', JSON.stringify(exhibitor));
+                }
+
+            } catch(e) {
+                showAlert('scanAlert', 'Connection error', 'danger');
+            }
+        }
+
+        function showLastScanned(v, isDuplicate) {
+            const fullName = [v.name, v.last_name].filter(Boolean).join(' ') || 'Unknown';
+            const cls = isDuplicate ? 'duplicate' : 'just-scanned';
+            document.getElementById('lastScanned').innerHTML = `
+                <div class="lead-card ${cls}">
+                    <div class="lead-name">${esc(fullName)}</div>
+                    ${v.company ? `<div class="lead-company">${esc(v.company)}</div>` : ''}
+                    <div class="lead-details">
+                        ${v.job_title ? `<div class="lead-detail"><span class="icon">💼</span> ${esc(v.job_title)}</div>` : ''}
+                        ${v.country ? `<div class="lead-detail"><span class="icon">🌍</span> ${esc(v.country)}</div>` : ''}
+                        ${v.email ? `<div class="lead-detail"><span class="icon">📧</span> ${esc(v.email)}</div>` : ''}
+                        ${v.phone ? `<div class="lead-detail"><span class="icon">📱</span> ${esc(v.phone)}</div>` : ''}
+                    </div>
+                    <div class="lead-actions">
+                        ${v.email ? `<a href="mailto:${esc(v.email)}">📧 Email</a>` : ''}
+                        ${v.phone ? `<a href="tel:${esc(v.phone)}">📱 Call</a>` : ''}
+                        <button onclick="saveVCard('${esc(fullName)}','${esc(v.email||'')}','${esc(v.phone||'')}','${esc(v.company||'')}','${esc(v.job_title||'')}')">💾 Save Contact</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ============ LEADS LIST ============
+        async function loadLeads() {
+            try {
+                const res = await fetch(`${API_URL}/leads/list?exhibitor_company=${encodeURIComponent(exhibitor.company)}&expo_id=${EXPO_ID}`);
+                const data = await res.json();
+
+                if (!data.success) return;
+
+                allLeads = data.leads || [];
+                renderLeadsList();
+            } catch(e) {
+                console.error('Load leads error:', e);
+            }
+        }
+
+        function renderLeadsList() {
+            const today = new Date().toISOString().split('T')[0];
+            const todayLeads = allLeads.filter(l => l.scanned_at && l.scanned_at.startsWith(today));
+            const teamMembers = new Set(allLeads.map(l => l.scanned_by_name + ' ' + l.scanned_by_last_name));
+
+            document.getElementById('statTotal').textContent = allLeads.length;
+            document.getElementById('statToday').textContent = todayLeads.length;
+            document.getElementById('statTeam').textContent = teamMembers.size;
+            document.getElementById('leadCountBadge').textContent = allLeads.length + ' leads';
+
+            if (allLeads.length === 0) {
+                document.getElementById('leadsList').innerHTML = '<div class="empty"><div class="empty-icon">📇</div><p>No leads yet.<br>Start scanning visitor badges!</p></div>';
+                return;
+            }
+
+            document.getElementById('leadsList').innerHTML = allLeads.map(l => {
+                const fullName = [l.name, l.last_name].filter(Boolean).join(' ') || 'Unknown';
+                const scannedBy = [l.scanned_by_name, l.scanned_by_last_name].filter(Boolean).join(' ');
+                const time = new Date(l.scanned_at).toLocaleString('en-GB', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+                return `
+                    <div class="lead-card">
+                        <div class="lead-name">${esc(fullName)}</div>
+                        ${l.company ? `<div class="lead-company">${esc(l.company)}</div>` : ''}
+                        <div class="lead-details">
+                            ${l.job_title ? `<div class="lead-detail"><span class="icon">💼</span> ${esc(l.job_title)}</div>` : ''}
+                            ${l.country ? `<div class="lead-detail"><span class="icon">🌍</span> ${esc(l.country)}</div>` : ''}
+                            ${l.email ? `<div class="lead-detail"><span class="icon">📧</span> ${esc(l.email)}</div>` : ''}
+                            ${l.phone ? `<div class="lead-detail"><span class="icon">📱</span> ${esc(l.phone)}</div>` : ''}
+                        </div>
+                        <div class="lead-actions">
+                            ${l.email ? `<a href="mailto:${esc(l.email)}">📧 Email</a>` : ''}
+                            ${l.phone ? `<a href="tel:${esc(l.phone)}">📱 Call</a>` : ''}
+                            <button onclick="saveVCard('${esc(fullName)}','${esc(l.email||'')}','${esc(l.phone||'')}','${esc(l.company||'')}','${esc(l.job_title||'')}')">💾 Save</button>
+                        </div>
+                        <div class="scanned-by">Scanned by ${esc(scannedBy)} · ${time}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ============ TABS ============
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+            document.getElementById('scanTab').classList.toggle('hidden', tab !== 'scan');
+            document.getElementById('leadsTab').classList.toggle('hidden', tab !== 'leads');
+            if (tab === 'leads') loadLeads();
+        }
+
+        // ============ EXPORT ============
+        function exportLeadsCSV() {
+            if (allLeads.length === 0) { alert('No leads to export'); return; }
+            const headers = ['Name', 'Last Name', 'Email', 'Company', 'Country', 'Job Title', 'Phone', 'Scanned By', 'Scanned At'];
+            const rows = allLeads.map(l => [
+                (l.name || '').replace(/,/g, ' '),
+                (l.last_name || '').replace(/,/g, ' '),
+                l.email || '',
+                (l.company || '').replace(/,/g, ' '),
+                l.country || '',
+                (l.job_title || '').replace(/,/g, ' '),
+                l.phone || '',
+                [l.scanned_by_name, l.scanned_by_last_name].filter(Boolean).join(' '),
+                l.scanned_at || ''
+            ]);
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `leads-${exhibitor.company.replace(/\s+/g, '_')}-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ============ VCARD ============
+        function saveVCard(name, email, phone, company, title) {
+            const vcard = `BEGIN:VCARD
+VERSION:3.0
+FN:${name}
+ORG:${company}
+TITLE:${title}
+EMAIL:${email}
+TEL:${phone}
+END:VCARD`;
+            const blob = new Blob([vcard], { type: 'text/vcard' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = name.replace(/\s+/g, '_') + '.vcf';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ============ LOGOUT ============
+        function logout() {
+            if (!confirm('Logout?')) return;
+            localStorage.removeItem('leadScannerAuth');
+            if (leadScanner) leadScanner.stop().catch(() => {});
+            exhibitor = null;
+            document.getElementById('mainScreen').classList.add('hidden');
+            document.getElementById('authScreen').classList.remove('hidden');
+            startAuthScanner();
+        }
+
+        // ============ UTILS ============
+        function showAlert(id, msg, type) {
+            const el = document.getElementById(id);
+            el.className = `alert alert-${type} show`;
+            el.textContent = msg;
+            setTimeout(() => el.classList.remove('show'), 3000);
+        }
+
+        function esc(t) {
+            if (!t) return '';
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+    </script>
+</body>
+</html>

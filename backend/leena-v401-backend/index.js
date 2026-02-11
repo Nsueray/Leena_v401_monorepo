@@ -77,6 +77,8 @@ try { checkinReportRoutes = require('./routes/checkinReports'); console.log('✓
 try { terminalCheckinRoutes = require('./routes/terminalCheckins'); console.log('✓ Terminal Checkin routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load terminalCheckins routes:', err.message); }
 try { emailSegmentRoutes = require('./routes/emailSegments'); console.log('✓ Email Segment routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load emailSegments routes:', err.message); }
 try { emailInboundRoutes = require('./routes/emailInbound'); console.log('✓ Email Inbound routes loaded'); } catch (err) { console.error('✗ Failed to load emailInbound routes:', err.message); }
+let leadRoutes;
+try { leadRoutes = require('./routes/leads'); console.log('✓ Lead scanner routes loaded'); } catch (err) { console.error('✗ Failed to load lead routes:', err.message); }
 try { reactivationRoutes = require('./routes/reactivation'); console.log('✓ Reactivation routes loaded (v402)'); } catch (err) { console.error('✗ Failed to load reactivation routes:', err.message); }
 let badgeTemplateRoutes;
 try { badgeTemplateRoutes = require('./routes/badgeTemplates'); console.log('✓ Badge Template routes loaded'); } catch (err) { console.error('✗ Failed to load badgeTemplates routes:', err.message); }
@@ -97,7 +99,8 @@ if (importCheckinsRoutes) app.use('/api/import-checkins', importCheckinsRoutes);
 if (checkinReportRoutes) app.use('/api/checkins/reports', checkinReportRoutes);
 if (terminalCheckinRoutes) app.use('/api/terminal', terminalCheckinRoutes); // ✅ v402 Mini
 if (emailSegmentRoutes) app.use('/api/email-segments', emailSegmentRoutes); // ✅ v402 Mini - Email Segments
-if (emailInboundRoutes) app.use('/api/email', emailInboundRoutes); // ✅ Inbound Email
+if (emailInboundRoutes) app.use('/api/email', emailInboundRoutes);
+if (leadRoutes) app.use('/api/leads', leadRoutes); // ✅ Inbound Email
 if (reactivationRoutes) app.use('/api/reactivation', reactivationRoutes); // ✅ Reactivation Campaigns
 if (badgeTemplateRoutes) app.use('/api/badge-templates', badgeTemplateRoutes); // ✅ Badge Templates
 
