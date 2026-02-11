@@ -212,6 +212,60 @@ router.get('/visitor-by-qr', async (req, res) => {
 });
 
 /**
+ * GET /api/terminal/visitor-by-email
+ * Look up visitor by email (terminal auth via x-terminal-key)
+ */
+router.get('/visitor-by-email', async (req, res) => {
+    try {
+        const { email } = req.query;
+        const { expoId, organizerId } = req.terminal;
+
+        if (!email) {
+            return res.status(400).json({ success: false, error: 'Email is required' });
+        }
+
+        const visitorResult = await pool.query(
+            `SELECT id, name, last_name, email, phone, company, country, job_title,
+                    qr_code, badge_id, badge_url, source, origin, visitor_type
+             FROM visitors
+             WHERE LOWER(email) = LOWER($1) AND expo_id = $2 AND organizer_id = $3
+             LIMIT 1`,
+            [email.trim(), expoId, organizerId]
+        );
+
+        if (visitorResult.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Visitor not found with this email' });
+        }
+
+        const v = visitorResult.rows[0];
+        console.log('[terminal/visitor-by-email] Found:', v.email, 'ID:', v.id);
+
+        return res.json({
+            success: true,
+            visitor: {
+                id: v.id,
+                name: v.name,
+                lastName: v.last_name,
+                email: v.email,
+                phone: v.phone,
+                company: v.company,
+                country: v.country,
+                jobTitle: v.job_title,
+                qrCode: v.qr_code,
+                badgeId: v.badge_id,
+                badgeUrl: v.badge_url,
+                source: v.source,
+                origin: v.origin,
+                role: v.visitor_type || 'visitor'
+            }
+        });
+    } catch (err) {
+        console.error('[terminal/visitor-by-email] Error:', err.message);
+        return res.status(500).json({ success: false, error: 'Failed to look up visitor' });
+    }
+});
+
+/**
  * POST /api/terminal/badge-print
  * 
  * Record badge print event

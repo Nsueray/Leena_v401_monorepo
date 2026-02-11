@@ -500,8 +500,8 @@
                     if (searchRes.ok) {
                         const searchData = await searchRes.json();
                         const found = searchData.visitors ? searchData.visitors[0] : (searchData.visitor || null);
-                        if (found && found.qr_code) {
-                            qrCode = found.qr_code;
+                        if (found && (found.qr_code || found.qrCode)) {
+                            qrCode = found.qr_code || found.qrCode;
                             hideAlert();
                         } else {
                             throw new Error('No visitor found with this email');
