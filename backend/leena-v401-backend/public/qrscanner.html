@@ -475,7 +475,7 @@
         // 3. Redirect to badge print page
         async function handleQRScan() {
             const scanInput = document.getElementById('scanInput');
-            const qrCode = scanInput.value.trim();
+            let qrCode = scanInput.value.trim();
             
             if (!qrCode) { showAlert('Please scan or enter a QR code', 'danger'); return; }
             
@@ -487,6 +487,29 @@
             hideAlert();
             
             try {
+                // If input looks like email, search by email first
+                if (qrCode.includes('@')) {
+                    showAlert('Searching by email...', 'warning');
+                    const searchUrl = terminalKey
+                        ? `${API_BASE_URL}/terminal/visitor-by-email?email=${encodeURIComponent(qrCode)}`
+                        : `${API_BASE_URL}/visitors/paginated?expo_id=${expoId}&search=${encodeURIComponent(qrCode)}&limit=1`;
+                    const searchHeaders = terminalKey
+                        ? { 'x-terminal-key': terminalKey }
+                        : { 'Authorization': `Bearer ${token}` };
+                    const searchRes = await fetch(searchUrl, { headers: searchHeaders });
+                    if (searchRes.ok) {
+                        const searchData = await searchRes.json();
+                        const found = searchData.visitors ? searchData.visitors[0] : (searchData.visitor || null);
+                        if (found && found.qr_code) {
+                            qrCode = found.qr_code;
+                            hideAlert();
+                        } else {
+                            throw new Error('No visitor found with this email');
+                        }
+                    } else {
+                        throw new Error('Email search failed');
+                    }
+                }
                 if (terminalKey) {
                     // Terminal mode
                     const response = await fetch(`${API_BASE_URL}/terminal/visitor-by-qr?qr=${encodeURIComponent(qrCode)}`, { headers: buildHeaders() });
