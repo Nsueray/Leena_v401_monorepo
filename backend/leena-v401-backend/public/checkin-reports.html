@@ -6,14 +6,153 @@
     <title>Check-in Reports - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="/assets/leena.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5;
+            --info: #3b82f6; --info-bg: #dbeafe;
+            --warning: #f59e0b; --warning-bg: #fef3c7;
+            --danger: #ef4444; --danger-bg: #fee2e2;
+            --purple: #8b5cf6; --purple-bg: #ede9fe;
+            --cyan: #06b6d4; --cyan-bg: #cffafe;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .header-actions { display: flex; gap: 10px; }
+        .main-content { flex: 1; padding: 24px; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-secondary:hover { background: var(--bg-main); }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+        /* Stats */
+        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
+        .stat-card .stat-icon { width: 44px; height: 44px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 12px; }
+        .stat-card .stat-icon.blue { background: var(--info-bg); color: var(--info); }
+        .stat-card .stat-icon.green { background: var(--success-bg); color: var(--success); }
+        .stat-card .stat-icon.orange { background: var(--warning-bg); color: var(--warning); }
+        .stat-card .stat-icon.red { background: var(--danger-bg); color: var(--danger); }
+        .stat-card .stat-icon.purple { background: var(--purple-bg); color: var(--purple); }
+        .stat-card .stat-icon.cyan { background: var(--cyan-bg); color: var(--cyan); }
+        .stat-card .stat-value { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+        .stat-card .stat-label { font-size: 13px; color: var(--text-secondary); }
+        .stat-card .stat-sub { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+        /* Charts */
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+        .charts-grid.full { grid-template-columns: 1fr; }
+        .chart-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
+        .chart-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .chart-card h3 i { color: var(--primary); }
+        .chart-container { position: relative; height: 300px; }
+        .chart-container.tall { height: 350px; }
+
+        /* Tables */
+        .table-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; margin-bottom: 24px; }
+        .table-card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .table-card-header h3 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .table-card-header h3 i { color: var(--primary); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--bg-main); padding: 10px 16px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color); }
+        td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        tr:hover { background: #fafbfc; }
+        .rank { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 50%; font-size: 11px; font-weight: 600; }
+        .rank-1 { background: #fef3c7; color: #92400e; }
+        .rank-2 { background: #e5e7eb; color: #374151; }
+        .rank-3 { background: #fed7aa; color: #9a3412; }
+        .rank-n { background: var(--bg-main); color: var(--text-muted); }
+        .bar-cell { display: flex; align-items: center; gap: 8px; }
+        .bar-fill { height: 8px; border-radius: 4px; background: var(--primary); min-width: 4px; }
+        .bar-value { font-size: 12px; color: var(--text-secondary); white-space: nowrap; }
+        .badge-type { padding: 3px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
+        .badge-green { background: var(--success-bg); color: #065f46; }
+        .badge-red { background: var(--danger-bg); color: #991b1b; }
+        .badge-blue { background: var(--info-bg); color: #1e40af; }
+        .badge-orange { background: var(--warning-bg); color: #92400e; }
+        .badge-purple { background: var(--purple-bg); color: #5b21b6; }
+
+        /* Section Title */
+        .section-title { font-size: 16px; font-weight: 700; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 2px solid var(--primary); display: flex; align-items: center; gap: 8px; }
+        .section-title i { color: var(--primary); }
+
+        /* Loading */
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; flex-direction: column; gap: 12px; }
+        .loading-overlay.active { display: flex; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 13px; color: var(--text-secondary); }
+
+        /* Print */
+        @media print {
+            .sidebar, .main-header, .no-print { display: none !important; }
+            .main-wrapper { margin-left: 0 !important; }
+            .main-content { padding: 0 !important; }
+            .stats-grid { grid-template-columns: repeat(5, 1fr); }
+            .charts-grid { grid-template-columns: 1fr 1fr; }
+            .chart-card, .stat-card, .table-card { break-inside: avoid; border: 1px solid #ddd; }
+            body { background: white; font-size: 12px; }
+            .stat-card .stat-value { font-size: 22px; }
+            .print-title { display: block !important; text-align: center; font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+            .print-date { display: block !important; text-align: center; color: #666; margin-bottom: 20px; font-size: 12px; }
+        }
+        .print-title, .print-date { display: none; }
+
+        /* Mobile */
+        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main-wrapper { margin-left: 0; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            .charts-grid { grid-template-columns: 1fr; }
+            .main-header { padding: 0 16px; }
+            .main-content { padding: 16px; }
+            table { font-size: 12px; }
+            th, td { padding: 8px 10px; }
+            .header-actions { gap: 4px; }
+            .btn { padding: 7px 10px; font-size: 12px; }
+        }
+        @media (max-width: 480px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .stat-card .stat-value { font-size: 22px; }
+        }
+
+        /* Mobile sidebar toggle */
+        .mobile-menu-btn { display: none; background: none; border: none; font-size: 24px; color: var(--text-primary); cursor: pointer; }
+        @media (max-width: 768px) { .mobile-menu-btn { display: block; } }
+    </style>
 </head>
 <body>
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <img src="/logo.png" alt="Leena logo" class="sidebar-logo">
-            <span>Leena EMS</span>
-        </div>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
             <div class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title">Overview</div>
@@ -22,7 +161,7 @@
                 <div class="nav-section">
                     <div class="nav-section-title">Management</div>
                     <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
-                    <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
                     <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
                     <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
                 </div>
@@ -30,6 +169,7 @@
                     <div class="nav-section-title">Communication</div>
                     <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
                     <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                    <a class="nav-item" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
                 </div>
                 <div class="nav-section">
                     <div class="nav-section-title">Settings</div>
@@ -38,330 +178,556 @@
                 <div class="nav-divider"></div>
                 <div class="nav-section">
                     <div class="nav-section-title">Tools</div>
-                    <a class="nav-item active" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item active" href="checkin-reports.html"><i class="bi bi-clipboard-data"></i><span>Check-in Reports</span></a>
                     <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
                 </div>
             </div>
-</nav>
+        </nav>
 
-    <div class="main-wrapper">
-        <header class="page-header">
-            <div>
-                <h1>
-                    <i class="bi bi-graph-up"></i>
-                    Check-in Analytics Report
-                </h1>
-                <div class="subtitle">Real-time analytics for badge-print terminal check-ins</div>
+        <div class="main-wrapper">
+            <div class="loading-overlay" id="loadingOverlay">
+                <div class="spinner"></div>
+                <div class="loading-text">Loading check-in data...</div>
             </div>
-            <div class="header-buttons">
-                <a class="btn btn-light" href="main-panel.html">
-                    <i class="bi bi-arrow-left"></i> Back to Panel
-                </a>
-            </div>
-        </header>
 
-        <main class="main-container">
+            <header class="main-header">
+                <div style="display:flex;align-items:center;gap:12px;">
+                    <button class="mobile-menu-btn no-print" onclick="document.querySelector('.sidebar').classList.toggle('show')"><i class="bi bi-list"></i></button>
+                    <h1><i class="bi bi-clipboard-data"></i> Check-in Reports</h1>
+                </div>
+                <div class="header-actions no-print">
+                    <button class="btn btn-primary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+                    <button class="btn btn-secondary" onclick="exportCSV()"><i class="bi bi-download"></i> Export CSV</button>
+                    <button class="btn btn-secondary" onclick="loadAllData()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+                </div>
+            </header>
 
-        <!-- Filter Section -->
-        <div class="filter-section">
-            <h5 class="mb-3">Date Range Filter</h5>
-            <div class="date-range-inputs">
-                <div class="form-group">
-                    <label class="form-label">Start Date</label>
-                    <input type="date" class="form-control" id="startDate">
+            <main class="main-content">
+                <div class="print-title">Check-in Analytics Report</div>
+                <div class="print-date" id="printDate"></div>
+
+                <!-- KPI Cards -->
+                <div class="stats-grid" id="statsGrid">
+                    <div class="stat-card">
+                        <div class="stat-icon blue"><i class="bi bi-people-fill"></i></div>
+                        <div class="stat-value" id="totalRegistrations">-</div>
+                        <div class="stat-label">Total Registrations</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green"><i class="bi bi-check2-circle"></i></div>
+                        <div class="stat-value" id="totalCheckins">-</div>
+                        <div class="stat-label">Total Check-ins</div>
+                        <div class="stat-sub" id="uniqueCheckins"></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon purple"><i class="bi bi-percent"></i></div>
+                        <div class="stat-value" id="conversionRate">-</div>
+                        <div class="stat-label">Show-up Rate</div>
+                        <div class="stat-sub">Registration → Check-in</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange"><i class="bi bi-calendar-check"></i></div>
+                        <div class="stat-value" id="todayCheckins">-</div>
+                        <div class="stat-label">Today's Check-ins</div>
+                        <div class="stat-sub" id="todayUnique"></div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red"><i class="bi bi-person-x"></i></div>
+                        <div class="stat-value" id="noShowCount">-</div>
+                        <div class="stat-label">No-Shows</div>
+                        <div class="stat-sub">Registered but didn't attend</div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">End Date</label>
-                    <input type="date" class="form-control" id="endDate">
+
+                <!-- Section: Check-in Timeline -->
+                <div class="section-title"><i class="bi bi-clock-history"></i> Check-in Timeline</div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3><i class="bi bi-bar-chart"></i> Hourly Distribution (Today)</h3>
+                        <div class="chart-container"><canvas id="hourlyChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3><i class="bi bi-graph-up"></i> Daily Check-ins</h3>
+                        <div class="chart-container"><canvas id="dailyChart"></canvas></div>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label class="form-label">&nbsp;</label>
-                    <button class="btn btn-primary w-100" onclick="loadReport()">
-                        <i class="bi bi-funnel"></i> Generate Report
-                    </button>
+
+                <!-- Section: Distribution Analysis -->
+                <div class="section-title"><i class="bi bi-pie-chart"></i> Distribution Analysis</div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3><i class="bi bi-door-open"></i> By Terminal / Hall</h3>
+                        <div class="chart-container"><canvas id="hallChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3><i class="bi bi-funnel"></i> By Source (Registration Channel)</h3>
+                        <div class="chart-container"><canvas id="sourceChart"></canvas></div>
+                    </div>
                 </div>
-            </div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3><i class="bi bi-globe"></i> By Country</h3>
+                        <div class="chart-container"><canvas id="countryChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3><i class="bi bi-person-badge"></i> By Visitor Type</h3>
+                        <div class="chart-container"><canvas id="typeChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Section: Conversion Analysis -->
+                <div class="section-title"><i class="bi bi-arrow-right-circle"></i> Conversion: Registration → Check-in</div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3><i class="bi bi-bar-chart-steps"></i> Show-up Rate by Source</h3>
+                        <div class="chart-container tall"><canvas id="conversionSourceChart"></canvas></div>
+                    </div>
+                    <div class="chart-card">
+                        <h3><i class="bi bi-bar-chart-steps"></i> Show-up Rate by Country (Top 10)</h3>
+                        <div class="chart-container tall"><canvas id="conversionCountryChart"></canvas></div>
+                    </div>
+                </div>
+
+                <!-- Section: Top Tables -->
+                <div class="section-title"><i class="bi bi-trophy"></i> Top Rankings</div>
+                <div class="charts-grid">
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <h3><i class="bi bi-building"></i> Top Companies by Check-ins</h3>
+                        </div>
+                        <table><thead><tr><th>#</th><th>Company</th><th>Check-ins</th><th>Share</th></tr></thead>
+                        <tbody id="topCompaniesTable"></tbody></table>
+                    </div>
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <h3><i class="bi bi-globe2"></i> Top Countries by Check-ins</h3>
+                        </div>
+                        <table><thead><tr><th>#</th><th>Country</th><th>Check-ins</th><th>Share</th></tr></thead>
+                        <tbody id="topCountriesTable"></tbody></table>
+                    </div>
+                </div>
+
+                <!-- Section: No-Show Analysis -->
+                <div class="section-title"><i class="bi bi-person-x"></i> No-Show Analysis</div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <h3><i class="bi bi-pie-chart-fill"></i> No-Show by Source</h3>
+                        <div class="chart-container"><canvas id="noShowSourceChart"></canvas></div>
+                    </div>
+                    <div class="table-card">
+                        <div class="table-card-header">
+                            <h3><i class="bi bi-list-check"></i> No-Show Summary</h3>
+                        </div>
+                        <table><thead><tr><th>Source</th><th>Registered</th><th>Checked-in</th><th>No-Show</th><th>No-Show %</th></tr></thead>
+                        <tbody id="noShowTable"></tbody></table>
+                    </div>
+                </div>
+
+            </main>
         </div>
-
-        <!-- Alert Container -->
-        <div id="alertContainer"></div>
-
-        <!-- Summary Cards -->
-        <div class="summary-cards" id="summaryCards" style="display: none;">
-            <div class="summary-card">
-                <div class="summary-value" id="totalCheckins">0</div>
-                <div class="summary-label">Valid Check-ins</div>
-            </div>
-            <div class="summary-card">
-                <div class="summary-value" id="uniqueVisitors">0</div>
-                <div class="summary-label">Unique Visitors</div>
-            </div>
-        </div>
-
-        <!-- Reports Grid -->
-        <div class="report-grid" id="reportGrid" style="display: none;">
-            <!-- By Date -->
-            <div class="report-section">
-                <div class="section-header">
-                    <i class="bi bi-calendar3"></i>
-                    Daily Breakdown
-                </div>
-                <div class="section-body" id="byDateContent">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-calendar-x"></i>
-                        </div>
-                        <p>No data available</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- By Source -->
-            <div class="report-section">
-                <div class="section-header">
-                    <i class="bi bi-diagram-3"></i>
-                    By Source
-                </div>
-                <div class="section-body" id="bySourceContent">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-inbox"></i>
-                        </div>
-                        <p>No data available</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- By Origin -->
-            <div class="report-section">
-                <div class="section-header">
-                    <i class="bi bi-pin-map"></i>
-                    By Origin
-                </div>
-                <div class="section-body" id="byOriginContent">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-inbox"></i>
-                        </div>
-                        <p>No data available</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- By Country -->
-            <div class="report-section">
-                <div class="section-header">
-                    <i class="bi bi-globe2"></i>
-                    By Country
-                </div>
-                <div class="section-body" id="byCountryContent">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-globe"></i>
-                        </div>
-                        <p>No data available</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- By Sector -->
-            <div class="report-section">
-                <div class="section-header">
-                    <i class="bi bi-building"></i>
-                    By Sector
-                </div>
-                <div class="section-body" id="bySectorContent">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-briefcase"></i>
-                        </div>
-                        <p>No data available</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- By Job Title -->
-            <div class="report-section">
-                <div class="section-header">
-                    <i class="bi bi-person-badge"></i>
-                    By Job Title
-                </div>
-                <div class="section-body" id="byJobTitleContent">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-person"></i>
-                        </div>
-                        <p>No data available</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Loading Spinner -->
-        <div id="loadingSpinner" class="loading-spinner" style="display: none;">
-            <div class="spinner-border" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-        </main>
     </div>
 
     <script>
-        const API_BASE_URL = '/api';
-        let currentExpoId = localStorage.getItem('selectedExpoId');
-        let token = localStorage.getItem('token');
+        const API_URL = '/api';
+        const token = localStorage.getItem('token');
+        const expoId = localStorage.getItem('selectedExpoId');
+        let allCheckins = [];
+        let allVisitors = [];
+        let chartInstances = {};
 
-        // Initialize
+        const COLORS = ['#4a6fa5','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#ec4899','#f97316','#14b8a6','#6366f1','#84cc16','#e11d48'];
+
         document.addEventListener('DOMContentLoaded', () => {
-            if (!token || !currentExpoId) {
-                showAlert('Authentication required. Please login.', 'danger');
-                return;
-            }
-            
-            // Set default dates (last 30 days)
-            const today = new Date();
-            const thirtyDaysAgo = new Date(today);
-            thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-            
-            document.getElementById('endDate').value = today.toISOString().split('T')[0];
-            document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
-            
-            // Load initial report
-            loadReport();
+            if (!token) { window.location.href = 'login_new.html'; return; }
+            if (!expoId) { alert('No expo selected'); window.location.href = 'main-panel-v2.html'; return; }
+            document.getElementById('printDate').textContent = new Date().toLocaleDateString('en-GB', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+            loadAllData();
         });
 
-        async function loadReport() {
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            
-            if (!startDate || !endDate) {
-                showAlert('Please select both start and end dates', 'warning');
-                return;
-            }
-            
+        async function loadAllData() {
             showLoading(true);
-            hideContent();
-            
             try {
-                const params = new URLSearchParams({
-                    expo_id: currentExpoId,
-                    startDate: startDate,
-                    endDate: endDate
+                // Fetch all checkins
+                const checkinRes = await fetch(`${API_URL}/checkins?expo_id=${expoId}&limit=99999&includeVisitorDetails=true`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
-                const response = await fetch(`${API_BASE_URL}/checkins/reports?${params}`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+                if (!checkinRes.ok) throw new Error('Failed to load checkins');
+                const checkinData = await checkinRes.json();
+                allCheckins = checkinData.checkins || [];
+
+                // Fetch total registrations
+                const visitorRes = await fetch(`${API_URL}/visitors/paginated?expo_id=${expoId}&limit=1`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || 'Failed to load report');
-                }
-                
-                const data = await response.json();
-                renderReport(data);
-                
-            } catch (error) {
-                console.error('Report error:', error);
-                showAlert(`Error loading report: ${error.message}`, 'danger');
-            } finally {
-                showLoading(false);
+                const visitorData = await visitorRes.json();
+                const totalRegistrations = visitorData.total || 0;
+
+                // Fetch visitors with source info for conversion analysis
+                const visitorFullRes = await fetch(`${API_URL}/visitors/paginated?expo_id=${expoId}&limit=99999`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const visitorFullData = await visitorFullRes.json();
+                allVisitors = visitorFullData.visitors || [];
+
+                renderAll(totalRegistrations);
+            } catch(e) {
+                console.error('Load error:', e);
+                alert('Failed to load data: ' + e.message);
             }
+            showLoading(false);
         }
 
-        function renderReport(data) {
-            // Show content containers
-            document.getElementById('summaryCards').style.display = 'grid';
-            document.getElementById('reportGrid').style.display = 'grid';
-            
-            // Update summary cards
-            document.getElementById('totalCheckins').textContent = 
-                data.summary.total_valid_checkins.toLocaleString();
-            document.getElementById('uniqueVisitors').textContent = 
-                data.summary.unique_visitors.toLocaleString();
-            
-            // Render each section
-            renderSection('byDateContent', data.by_date, formatDate);
-            renderSection('bySourceContent', data.by_source);
-            renderSection('byOriginContent', data.by_origin);
-            renderSection('byCountryContent', data.by_country);
-            renderSection('bySectorContent', data.by_sector);
-            renderSection('byJobTitleContent', data.by_job_title);
+        function renderAll(totalRegistrations) {
+            renderKPIs(totalRegistrations);
+            renderHourlyChart();
+            renderDailyChart();
+            renderHallChart();
+            renderSourceChart();
+            renderCountryChart();
+            renderTypeChart();
+            renderConversionBySource(totalRegistrations);
+            renderConversionByCountry();
+            renderTopCompanies();
+            renderTopCountries();
+            renderNoShowAnalysis();
         }
 
-        function renderSection(containerId, data, formatLabel) {
-            const container = document.getElementById(containerId);
-            
-            if (!data || Object.keys(data).length === 0) {
-                container.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">
-                            <i class="bi bi-inbox"></i>
-                        </div>
-                        <p>No data available</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            let html = '';
-            for (const [key, value] of Object.entries(data)) {
-                const label = formatLabel ? formatLabel(key) : key;
-                html += `
-                    <div class="data-row">
-                        <span class="data-label">${escapeHtml(label)}</span>
-                        <span class="data-value">${value.toLocaleString()}</span>
-                    </div>
-                `;
-            }
-            
-            container.innerHTML = html;
+        // ============ KPIs ============
+        function renderKPIs(totalReg) {
+            const uniqueVisitorIds = new Set(allCheckins.map(c => c.visitor_id));
+            const today = new Date().toISOString().split('T')[0];
+            const todayCheckins = allCheckins.filter(c => c.checkin_time && c.checkin_time.startsWith(today));
+            const todayUnique = new Set(todayCheckins.map(c => c.visitor_id));
+            const showUpRate = totalReg > 0 ? ((uniqueVisitorIds.size / totalReg) * 100).toFixed(1) : 0;
+            const noShows = totalReg - uniqueVisitorIds.size;
+
+            document.getElementById('totalRegistrations').textContent = totalReg.toLocaleString();
+            document.getElementById('totalCheckins').textContent = allCheckins.length.toLocaleString();
+            document.getElementById('uniqueCheckins').textContent = uniqueVisitorIds.size.toLocaleString() + ' unique visitors';
+            document.getElementById('conversionRate').textContent = showUpRate + '%';
+            document.getElementById('todayCheckins').textContent = todayCheckins.length.toLocaleString();
+            document.getElementById('todayUnique').textContent = todayUnique.size + ' unique today';
+            document.getElementById('noShowCount').textContent = Math.max(0, noShows).toLocaleString();
         }
 
-        function formatDate(dateStr) {
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('en-US', { 
-                month: 'short', 
-                day: 'numeric',
-                year: 'numeric'
+        // ============ Hourly Chart ============
+        function renderHourlyChart() {
+            const today = new Date().toISOString().split('T')[0];
+            const todayCheckins = allCheckins.filter(c => c.checkin_time && c.checkin_time.startsWith(today));
+            const hours = {};
+            for (let h = 7; h <= 21; h++) hours[h] = 0;
+            todayCheckins.forEach(c => {
+                const h = new Date(c.checkin_time).getHours();
+                if (hours[h] !== undefined) hours[h]++;
+                else hours[h] = 1;
+            });
+            const labels = Object.keys(hours).map(h => h + ':00');
+            const data = Object.values(hours);
+            const maxVal = Math.max(...data, 1);
+
+            destroyChart('hourlyChart');
+            chartInstances['hourlyChart'] = new Chart(document.getElementById('hourlyChart'), {
+                type: 'bar',
+                data: {
+                    labels, datasets: [{
+                        label: 'Check-ins',
+                        data,
+                        backgroundColor: data.map(v => v === maxVal ? '#ef4444' : '#4a6fa5'),
+                        borderRadius: 4
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
             });
         }
 
-        function showAlert(message, type) {
-            const alertContainer = document.getElementById('alertContainer');
-            alertContainer.innerHTML = `
-                <div class="alert alert-${type} alert-dismissible fade show" role="alert">
-                    ${message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                </div>
-            `;
-            
-            // Auto-dismiss after 5 seconds
-            setTimeout(() => {
-                const alert = alertContainer.querySelector('.alert');
-                if (alert) {
-                    alert.remove();
+        // ============ Daily Chart ============
+        function renderDailyChart() {
+            const days = {};
+            allCheckins.forEach(c => {
+                if (!c.checkin_time) return;
+                const d = c.checkin_time.split('T')[0];
+                days[d] = (days[d] || 0) + 1;
+            });
+            const sorted = Object.entries(days).sort((a,b) => a[0].localeCompare(b[0]));
+            const labels = sorted.map(s => { const d = new Date(s[0]); return d.toLocaleDateString('en-GB', {day:'numeric', month:'short'}); });
+            const data = sorted.map(s => s[1]);
+            // Also compute unique per day
+            const uniqueDays = {};
+            allCheckins.forEach(c => {
+                if (!c.checkin_time) return;
+                const d = c.checkin_time.split('T')[0];
+                if (!uniqueDays[d]) uniqueDays[d] = new Set();
+                uniqueDays[d].add(c.visitor_id);
+            });
+            const uniqueData = sorted.map(s => uniqueDays[s[0]] ? uniqueDays[s[0]].size : 0);
+
+            destroyChart('dailyChart');
+            chartInstances['dailyChart'] = new Chart(document.getElementById('dailyChart'), {
+                type: 'bar',
+                data: {
+                    labels, datasets: [
+                        { label: 'Total Scans', data, backgroundColor: '#4a6fa5', borderRadius: 4 },
+                        { label: 'Unique Visitors', data: uniqueData, backgroundColor: '#10b981', borderRadius: 4 }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } }
+            });
+        }
+
+        // ============ Hall / Terminal Chart ============
+        function renderHallChart() {
+            const halls = {};
+            allCheckins.forEach(c => { const h = c.hall || 'Unknown'; halls[h] = (halls[h] || 0) + 1; });
+            const sorted = Object.entries(halls).sort((a,b) => b[1]-a[1]);
+            destroyChart('hallChart');
+            chartInstances['hallChart'] = new Chart(document.getElementById('hallChart'), {
+                type: 'doughnut',
+                data: { labels: sorted.map(s=>s[0]), datasets: [{ data: sorted.map(s=>s[1]), backgroundColor: COLORS }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+        }
+
+        // ============ Source Chart ============
+        function renderSourceChart() {
+            const sources = {};
+            allCheckins.forEach(c => { const s = c.source || 'Unknown'; sources[s] = (sources[s] || 0) + 1; });
+            const sorted = Object.entries(sources).sort((a,b) => b[1]-a[1]);
+            destroyChart('sourceChart');
+            chartInstances['sourceChart'] = new Chart(document.getElementById('sourceChart'), {
+                type: 'doughnut',
+                data: { labels: sorted.map(s=>s[0]), datasets: [{ data: sorted.map(s=>s[1]), backgroundColor: COLORS }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+        }
+
+        // ============ Country Chart ============
+        function renderCountryChart() {
+            const countries = {};
+            const uniqueByCountry = {};
+            allCheckins.forEach(c => {
+                const country = c.visitor_country || c.country || 'Unknown';
+                countries[country] = (countries[country] || 0) + 1;
+                if (!uniqueByCountry[country]) uniqueByCountry[country] = new Set();
+                uniqueByCountry[country].add(c.visitor_id);
+            });
+            const sorted = Object.entries(countries).sort((a,b) => b[1]-a[1]).slice(0, 10);
+            destroyChart('countryChart');
+            chartInstances['countryChart'] = new Chart(document.getElementById('countryChart'), {
+                type: 'bar',
+                data: {
+                    labels: sorted.map(s=>s[0]),
+                    datasets: [
+                        { label: 'Total Scans', data: sorted.map(s=>s[1]), backgroundColor: '#4a6fa5', borderRadius: 4 },
+                        { label: 'Unique Visitors', data: sorted.map(s => uniqueByCountry[s[0]] ? uniqueByCountry[s[0]].size : 0), backgroundColor: '#8b5cf6', borderRadius: 4 }
+                    ]
+                },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
+            });
+        }
+
+        // ============ Visitor Type Chart ============
+        function renderTypeChart() {
+            const types = {};
+            const seen = {};
+            allCheckins.forEach(c => {
+                if (seen[c.visitor_id]) return;
+                seen[c.visitor_id] = true;
+                const t = c.visitor_type || 'visitor';
+                types[t] = (types[t] || 0) + 1;
+            });
+            const sorted = Object.entries(types).sort((a,b) => b[1]-a[1]);
+            destroyChart('typeChart');
+            chartInstances['typeChart'] = new Chart(document.getElementById('typeChart'), {
+                type: 'pie',
+                data: { labels: sorted.map(s=>s[0]), datasets: [{ data: sorted.map(s=>s[1]), backgroundColor: COLORS }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+        }
+
+        // ============ Conversion by Source ============
+        function renderConversionBySource() {
+            const regBySource = {};
+            allVisitors.forEach(v => { const s = v.source || 'Unknown'; regBySource[s] = (regBySource[s] || 0) + 1; });
+
+            const checkinVisitorIds = new Set(allCheckins.map(c => c.visitor_id));
+            const checkedInBySource = {};
+            allVisitors.forEach(v => {
+                if (checkinVisitorIds.has(v.id)) {
+                    const s = v.source || 'Unknown';
+                    checkedInBySource[s] = (checkedInBySource[s] || 0) + 1;
                 }
-            }, 5000);
+            });
+
+            const sources = Object.keys(regBySource).sort((a,b) => regBySource[b] - regBySource[a]);
+            const regData = sources.map(s => regBySource[s] || 0);
+            const cinData = sources.map(s => checkedInBySource[s] || 0);
+            const rateData = sources.map(s => regBySource[s] > 0 ? ((checkedInBySource[s] || 0) / regBySource[s] * 100).toFixed(1) : 0);
+
+            destroyChart('conversionSourceChart');
+            chartInstances['conversionSourceChart'] = new Chart(document.getElementById('conversionSourceChart'), {
+                type: 'bar',
+                data: {
+                    labels: sources,
+                    datasets: [
+                        { label: 'Registered', data: regData, backgroundColor: '#cbd5e1', borderRadius: 4 },
+                        { label: 'Checked-in', data: cinData, backgroundColor: '#10b981', borderRadius: 4 }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: { callbacks: { afterBody: (ctx) => 'Show-up rate: ' + rateData[ctx[0].dataIndex] + '%' } }
+                    },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
         }
 
-        function showLoading(show) {
-            document.getElementById('loadingSpinner').style.display = show ? 'flex' : 'none';
+        // ============ Conversion by Country ============
+        function renderConversionByCountry() {
+            const regByCountry = {};
+            allVisitors.forEach(v => { const c = v.country || 'Unknown'; regByCountry[c] = (regByCountry[c] || 0) + 1; });
+
+            const checkinVisitorIds = new Set(allCheckins.map(c => c.visitor_id));
+            const checkedInByCountry = {};
+            allVisitors.forEach(v => {
+                if (checkinVisitorIds.has(v.id)) {
+                    const c = v.country || 'Unknown';
+                    checkedInByCountry[c] = (checkedInByCountry[c] || 0) + 1;
+                }
+            });
+
+            const countries = Object.keys(regByCountry).sort((a,b) => regByCountry[b] - regByCountry[a]).slice(0, 10);
+            const regData = countries.map(c => regByCountry[c] || 0);
+            const cinData = countries.map(c => checkedInByCountry[c] || 0);
+
+            destroyChart('conversionCountryChart');
+            chartInstances['conversionCountryChart'] = new Chart(document.getElementById('conversionCountryChart'), {
+                type: 'bar',
+                data: {
+                    labels: countries,
+                    datasets: [
+                        { label: 'Registered', data: regData, backgroundColor: '#cbd5e1', borderRadius: 4 },
+                        { label: 'Checked-in', data: cinData, backgroundColor: '#8b5cf6', borderRadius: 4 }
+                    ]
+                },
+                options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
+            });
         }
 
-        function hideContent() {
-            document.getElementById('summaryCards').style.display = 'none';
-            document.getElementById('reportGrid').style.display = 'none';
+        // ============ Top Companies ============
+        function renderTopCompanies() {
+            const companies = {};
+            allCheckins.forEach(c => {
+                const comp = c.visitor_company || c.company || '';
+                if (comp) companies[comp] = (companies[comp] || 0) + 1;
+            });
+            const sorted = Object.entries(companies).sort((a,b) => b[1]-a[1]).slice(0, 15);
+            const max = sorted.length > 0 ? sorted[0][1] : 1;
+            document.getElementById('topCompaniesTable').innerHTML = sorted.map((s, i) => {
+                const pct = ((s[1] / allCheckins.length) * 100).toFixed(1);
+                const rankClass = i < 3 ? `rank-${i+1}` : 'rank-n';
+                return `<tr>
+                    <td><span class="rank ${rankClass}">${i+1}</span></td>
+                    <td><strong>${esc(s[0])}</strong></td>
+                    <td>${s[1]}</td>
+                    <td><div class="bar-cell"><div class="bar-fill" style="width:${(s[1]/max)*100}%"></div><span class="bar-value">${pct}%</span></div></td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No data</td></tr>';
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text || '';
-            return div.innerHTML;
+        // ============ Top Countries ============
+        function renderTopCountries() {
+            const countries = {};
+            allCheckins.forEach(c => {
+                const country = c.visitor_country || c.country || '';
+                if (country) countries[country] = (countries[country] || 0) + 1;
+            });
+            const sorted = Object.entries(countries).sort((a,b) => b[1]-a[1]).slice(0, 15);
+            const max = sorted.length > 0 ? sorted[0][1] : 1;
+            document.getElementById('topCountriesTable').innerHTML = sorted.map((s, i) => {
+                const pct = ((s[1] / allCheckins.length) * 100).toFixed(1);
+                const rankClass = i < 3 ? `rank-${i+1}` : 'rank-n';
+                return `<tr>
+                    <td><span class="rank ${rankClass}">${i+1}</span></td>
+                    <td><strong>${esc(s[0])}</strong></td>
+                    <td>${s[1]}</td>
+                    <td><div class="bar-cell"><div class="bar-fill" style="width:${(s[1]/max)*100}%"></div><span class="bar-value">${pct}%</span></div></td>
+                </tr>`;
+            }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);padding:20px;">No data</td></tr>';
         }
+
+        // ============ No-Show Analysis ============
+        function renderNoShowAnalysis() {
+            const checkinVisitorIds = new Set(allCheckins.map(c => c.visitor_id));
+            const regBySource = {};
+            const cinBySource = {};
+
+            allVisitors.forEach(v => {
+                const s = v.source || 'Unknown';
+                regBySource[s] = (regBySource[s] || 0) + 1;
+                if (checkinVisitorIds.has(v.id)) {
+                    cinBySource[s] = (cinBySource[s] || 0) + 1;
+                }
+            });
+
+            const sources = Object.keys(regBySource).sort((a,b) => regBySource[b] - regBySource[a]);
+            const noShowData = sources.map(s => (regBySource[s] || 0) - (cinBySource[s] || 0));
+
+            // Pie chart
+            destroyChart('noShowSourceChart');
+            chartInstances['noShowSourceChart'] = new Chart(document.getElementById('noShowSourceChart'), {
+                type: 'pie',
+                data: { labels: sources, datasets: [{ data: noShowData, backgroundColor: COLORS }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
+            });
+
+            // Table
+            document.getElementById('noShowTable').innerHTML = sources.map(s => {
+                const reg = regBySource[s] || 0;
+                const cin = cinBySource[s] || 0;
+                const noShow = reg - cin;
+                const noShowPct = reg > 0 ? ((noShow / reg) * 100).toFixed(1) : 0;
+                const badgeClass = noShowPct > 70 ? 'badge-red' : noShowPct > 40 ? 'badge-orange' : 'badge-green';
+                return `<tr>
+                    <td><strong>${esc(s)}</strong></td>
+                    <td>${reg.toLocaleString()}</td>
+                    <td>${cin.toLocaleString()}</td>
+                    <td>${noShow.toLocaleString()}</td>
+                    <td><span class="badge-type ${badgeClass}">${noShowPct}%</span></td>
+                </tr>`;
+            }).join('');
+        }
+
+        // ============ CSV Export ============
+        function exportCSV() {
+            if (allCheckins.length === 0) { alert('No data to export'); return; }
+            const headers = ['Checkin ID','Visitor ID','Name','Email','Company','Country','Source','Terminal','Hall','Check-in Time'];
+            const rows = allCheckins.map(c => [
+                c.id, c.visitor_id,
+                (c.visitor_full_name || c.visitor_name || c.name || '').replace(/,/g, ' '),
+                (c.visitor_email || c.email || ''),
+                (c.visitor_company || c.company || '').replace(/,/g, ' '),
+                (c.visitor_country || c.country || ''),
+                (c.source || ''),
+                (c.terminal || ''),
+                (c.hall || ''),
+                (c.checkin_time || '')
+            ]);
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `checkin-report-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+        }
+
+        // ============ Utilities ============
+        function destroyChart(id) { if (chartInstances[id]) { chartInstances[id].destroy(); delete chartInstances[id]; } }
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+        function esc(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
     </script>
 </body>
 </html>
