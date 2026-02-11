@@ -604,7 +604,7 @@
         async function loadResendTemplates() {
             try {
                 const res = await fetch(API_URL + '/email-templates', {
-                    headers: { 'Authorization': 'Bearer ' + token }
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
                 });
                 if (!res.ok) return;
                 const data = await res.json();
@@ -631,7 +631,7 @@
             try {
                 const res = await fetch(API_URL + '/reactivation/resend-pending', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
                     body: JSON.stringify({ target_expo_id: targetExpoId, template_id: parseInt(sel.value) })
                 });
                 const data = await res.json();
