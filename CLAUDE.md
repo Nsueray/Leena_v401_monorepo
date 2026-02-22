@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 22 Şubat 2026 | Versiyon: v4.0.2+
+> Son güncelleme: 23 Şubat 2026 | Versiyon: v4.0.2+
 
 ---
 
@@ -323,6 +323,23 @@ Exhibitor: leena.app/lead-scan.html açar
   → QR URL formatı parse edilir (kamera URL döndürürse qr parametresi çıkarılır)
 ```
 
+### J. Email Gönderim Mimarisi
+
+**Queue Kullanan (Doğru):**
+- Reactivation campaign emailleri → email_queue → email_worker (Direct HTML modu)
+
+**Queue Bypass Eden (Riskli — Senkron SendGrid):**
+- `webhook.js:232` — Zoho form submit → direkt sgMail.send()
+- `visitors.js:214` — Public form submit → direkt sgMail.send()
+- `visitors.js:505` — Excel import (satır başı) → direkt sgMail.send()
+- `emailSend.js:76,178` — Single + bulk send → direkt sgMail.send()
+- `emailSegments.js:159` — Segment send (300ms delay) → direkt sgMail.send()
+
+**Etkisi:**
+- Büyük import'larda (500+ satır) timeout riski
+- SendGrid rate limit'e takılınca email sessizce kaybolur
+- Fuar sırasında yaşanan "email gitmiyor" sorununun muhtemel kaynağı
+
 ---
 
 ## API Endpoint Özeti
@@ -458,6 +475,53 @@ Exhibitor: leena.app/lead-scan.html açar
 
 ---
 
+## Bilinen Buglar ve Güvenlik Sorunları
+
+### KRİTİK (Tek organizer olduğu için şu an tetiklenmiyor ama düzeltilmeli)
+
+1. **Import organizer_id bug** — `visitors.js:328`
+   - `req.user?.id || req.user?.organizer_id || 1` — authMiddleware `req.organizer_id` set ediyor, `req.user` DEĞİL
+   - Sonuç: Tüm import INSERT'leri `organizer_id=1` ile yazılıyor
+   - Birden fazla organizer eklendiğinde veri karışır
+
+2. **Manual registration auth yok** — `visitors.js:239`
+   - `router.post('/manual', async ...)` — middleware YOK
+   - Frontend token gönderiyor ama backend doğrulamıyor
+   - Herkes POST atarak visitor oluşturabilir
+
+3. **localStorage key uyumsuzluğu** — `qrscanner.html:437`
+   - Login `organizerId` (camelCase) kaydediyor, scanner `organizer_id` (snake_case) okuyor
+   - Hiçbir zaman eşleşmez → manual registration her zaman `organizer_id='1'` gönderiyor
+
+4. **Hardcoded webhook secret** — `webhook.js:8`
+   - Zoho webhook token source code'da hardcoded
+   - Repo'yu gören herkes webhook taklit edebilir, env variable'a taşınmalı
+
+### YÜKSEK
+
+5. **Badge endpoint PII leak** — `visitors.js:99`
+   - `GET /api/visitors/badge/:qr_code` → SELECT * ile tüm PII (email, phone) public dönüyor
+
+6. **email_worker FOR UPDATE transaction'sız** — `email_worker.js:26-33`
+   - Kilit auto-commit'te anında serbest kalıyor, çift worker aynı task'ı alabilir
+
+7. **BASE_BADGE_URL fallback yok** — `emailSend.js:68,170`
+   - Env variable undefined ise QR resmi `src="undefined/api/qr-image/..."` olur
+
+8. **Race condition** — `leads.js:99-128`, `visitors.js:248,389`
+   - Check-then-insert pattern, ON CONFLICT kullanılmıyor, eşzamanlı request'te duplicate oluşabilir
+
+### ORTA
+
+9. Hata yanıt formatı tutarsız (5 farklı format: `{error}`, `{success,message}`, `{success,error}`, `{success,error,code}`, `{error,details}`)
+10. Sidebar tutarsız — 9 sayfa eski form-builder.html'e link veriyor, Re-activation 13/18 sayfada yok
+11. Frontend auth kontrol boşlukları: form-builder, checkin-import, expo-create'te auth check eksik/hatalı
+12. Login redirect tutarsız: eski sayfalar login.html'e, yeniler login_new.html'e yönlendiriyor
+13. Template placeholder uyumsuz: `{{date}}` ve `{{expo_name}}` bazı akışlarda boş kalıyor
+14. Leads endpoint'te server-side session yok — exhibitor_company bilen herkes lead yazabilir/okuyabilir
+
+---
+
 ## Bilinen Sorunlar ve Kısıtlar
 
 1. **CORS:** `https://leena.app` ve `https://www.leena.app` ile sınırlı
@@ -465,6 +529,29 @@ Exhibitor: leena.app/lead-scan.html açar
 3. **Sidebar tutarsızlığı:** Sadece bazı sayfalarda güncel (main-panel-v2, reports, reactivation-campaign). Diğerleri: terminals, checkins, email-templates, email-segments, form-list, import — eksik linkler olabilir
 4. **leena.css merkezi stil dosyası:** CLAUDE.md'de referans verilmiş ama **aslında her sayfa kendi inline CSS'ini taşıyor.** Ortak stil dosyası kullanımı henüz tam uygulanmadı. Yeni sayfa yaparken mevcut sayfaların CSS pattern'ini takip et.
 5. **QR kod içeriği:** Badge QR'ların içinde sadece UUID var (URL değil). Telefonla okutunca düz text görünür. lead-scan.html'de kamera scanner ile okunan QR'lar URL formatında gelebilir — parse logic mevcut.
+
+### Frontend Nesil Haritası
+Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 pattern kullanılmalı.
+
+| Nesil | Primary | Sidebar | Sidebar Width | Sayfalar |
+|-------|---------|---------|---------------|----------|
+| Gen 0 | #e53935 | Yok | - | login.html |
+| Gen 1 | #0066ff | leena.css (harici) | 240px | dashboard.html, checkin-import.html |
+| Gen 2 | #4a6fa5 | Inline CSS | 256px | terminals, checkins, form-list, email-templates, email-segments, email-send, import, visitorlog-paginated |
+| Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder |
+| Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | main-panel-v2, dashboard_new, login_new |
+
+### Sidebar Tutarsızlıkları
+- 8 sayfa Forms linkini yanlış hedefe (form-builder.html) yönlendiriyor, doğrusu form-list.html
+- checkin-reports 11/15 sayfada eksik, email-send 13/15'te eksik, reactivation 9/15'te eksik
+- Mobil sidebar sadece main-panel-v2'de çalışıyor, diğer 12 sayfada 768px altında sidebar kaybolur
+- Login redirect tutarsız: 13 sayfa → login.html, 2 sayfa → login_new.html
+
+### Navigasyon Kuralları (Yeni Geliştirme İçin)
+- Login sayfası: login.html (aktif, main-panel-v2'ye yönlendirir)
+- Ana dashboard: main-panel-v2.html
+- Forms listesi: form-list.html (form-builder.html DEĞİL)
+- Public sayfalar (auth yok): lead-scan.html, reactivate.html, form-public.html, badge.html
 
 ---
 
