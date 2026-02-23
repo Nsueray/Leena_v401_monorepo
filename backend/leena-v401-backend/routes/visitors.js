@@ -140,15 +140,17 @@ router.post('/public', async (req, res) => {
 
     let emailTemplateId = null;
     let organizerId = null;
+    let formVisitorType = 'visitor';
 
     if (form_id) {
       const formResult = await pool.query(
-        `SELECT email_template_id, organizer_id FROM forms WHERE id = $1`,
+        `SELECT email_template_id, organizer_id, visitor_type FROM forms WHERE id = $1`,
         [form_id]
       );
       if (formResult.rows.length) {
         emailTemplateId = formResult.rows[0].email_template_id;
         organizerId = formResult.rows[0].organizer_id;
+        formVisitorType = formResult.rows[0].visitor_type || 'visitor';
       }
     }
 
@@ -160,9 +162,10 @@ router.post('/public', async (req, res) => {
       INSERT INTO visitors (
         name, last_name, email, company, country, job_title, phone,
         source, origin, expo_id, organizer_id,
-        qr_code, badge_id, badge_url, custom_fields, created_at
+        qr_code, badge_id, badge_url, custom_fields,
+        visitor_type, form_id, created_at
       ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,NOW()
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()
       ) RETURNING *
     `;
 
@@ -181,7 +184,9 @@ router.post('/public', async (req, res) => {
       qrCode,
       badgeId,
       badgeUrl,
-      visitorData.custom_fields
+      visitorData.custom_fields,
+      formVisitorType,
+      form_id || null
     ];
 
     const result = await pool.query(insertQuery, values);
