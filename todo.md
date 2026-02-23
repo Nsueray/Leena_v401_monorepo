@@ -11,6 +11,13 @@
 - [x] Exhibitor form → visitor_type fix (backend: visitors.js POST /public) — 23 Şubat 2026
 - [x] Mevcut exhibitor kayıtları DB'de düzeltildi (36 kayıt expo 5+6) — 23 Şubat 2026
 - [x] Participant ID Badge Registration kayıtları düzeltildi (3 kayıt) — 23 Şubat 2026
+- [x] Email templates expo bazlı gruplama + clone — 23 Şubat 2026
+- [x] Email templates UI: kompakt liste + İngilizce — 23 Şubat 2026
+- [x] Forms expo bazlı gruplama + cross-expo clone — 23 Şubat 2026
+- [x] email_templates tablosuna expo_id eklendi, mevcut template'ler expo'lara atandı — 23 Şubat 2026
+- [x] Form 23 (Nigeria webhook) expo_id NULL → expo 3 düzeltildi — 23 Şubat 2026
+- [x] Terminals expo gruplama + cross-expo clone — 23 Şubat 2026
+- [x] Forms istatistik kartları sadece mevcut expo'dan hesaplanıyor — 23 Şubat 2026
 
 ---
 
@@ -29,7 +36,7 @@ Bunlar teknik borç değil, açık kapı. Tek organizer olduğu sürece tetiklen
 Yaprak Hanım'ın talep listesinden gelen işler.
 
 - [ ] Check-in export'a visitor_type + job_title kolonu ekle
-- [ ] Email templates expo bazlı gruplama (üstte mevcut expo card, altta diğerleri liste) + clone butonu
+- [x] Email templates expo bazlı gruplama (üstte mevcut expo card, altta diğerleri liste) + clone butonu ✅
 - [ ] Send Email sayfasından gönderilen maillerde QR görünmüyor (BASE_BADGE_URL fix)
 - [ ] Reports detaylandırma (ülke × job title × sektör kırılımı, post-show analiz)
 - [ ] email-send.html sidebar'dan kaybolmuş — sidebar'a geri ekle
@@ -45,6 +52,7 @@ CSS'e dokunma, layout'a dokunma — sadece sidebar link listesini düzelt.
 - [ ] Tüm admin sayfalara `reactivation-campaign.html` sidebar linki ekle (9 sayfada eksik)
 - [ ] `email-send.html` active state bug'ını düzelt (Email Templates yerine Email Send aktif olmalı)
 - [ ] Login redirect tekleştir: tüm sayfalar login.html'e yönlensin, login.html → main-panel-v2.html
+- [ ] Aktif expo göstergesi: sidebar veya header'da hangi expo seçili olduğu her sayfada görünsün
 
 ## 🟡 Sprint 3 — Email Stabilizasyon (Fuar sonrası, 1 hafta)
 

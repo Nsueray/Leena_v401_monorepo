@@ -172,12 +172,17 @@
                 
                 <div class="card">
                     <div class="card-header">
-                        <span><i class="bi bi-list"></i> Terminals</span>
+                        <span><i class="bi bi-list"></i> Current Expo Terminals</span>
                         <button class="btn btn-sm btn-secondary" onclick="loadTerminals()"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
                     </div>
                     <div class="card-body" style="padding:0;">
                         <div id="terminalsContent"><div class="loading-spinner"><div class="spinner"></div></div></div>
                     </div>
+                </div>
+
+                <div id="otherTerminalsSection" style="display:none;margin-top:24px;">
+                    <h5 style="margin:0 0 8px;color:var(--text-secondary);"><i class="bi bi-collection"></i> Other Expo Terminals</h5>
+                    <div id="otherTerminalsContent"></div>
                 </div>
             </main>
         </div>
@@ -186,7 +191,7 @@
 
     <script>
         const API_BASE_URL = '/api';
-        let terminals = [], badgeTemplates = [], expoId = null, token = null;
+        let terminals = [], allTerminals = [], badgeTemplates = [], expoId = null, token = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             token = localStorage.getItem('token');
@@ -196,6 +201,7 @@
             document.getElementById('addTerminalForm').addEventListener('submit', handleAddTerminal);
             loadBadgeTemplates();
             loadTerminals();
+            loadAllTerminals();
             displayInfo();
         });
 
@@ -362,6 +368,58 @@
                 showToast('Terminal deleted');
                 loadTerminals();
             } catch (e) { showAlert('Failed to delete', 'danger'); }
+        }
+
+        async function loadAllTerminals() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/terminals/all`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Failed');
+                const data = await response.json();
+                allTerminals = data.terminals || [];
+                renderOtherTerminals();
+            } catch (e) { console.warn('Failed to load all terminals:', e); }
+        }
+
+        function renderOtherTerminals() {
+            const otherTerminals = allTerminals.filter(t => t.expo_id != expoId);
+            const section = document.getElementById('otherTerminalsSection');
+            const container = document.getElementById('otherTerminalsContent');
+
+            if (otherTerminals.length === 0) { section.style.display = 'none'; return; }
+
+            section.style.display = 'block';
+            let html = `<div style="border:1px solid var(--border-color);border-radius:8px;padding:8px;background:rgba(0,0,0,0.02);">`;
+            html += otherTerminals.map((t, i) => {
+                const expoPill = t.expo_name ? `<span style="background:#e0f2fe;color:#0369a1;font-size:0.7rem;padding:2px 8px;border-radius:10px;white-space:nowrap;">${escapeHtml(t.expo_name)}</span>` : `<span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;padding:2px 8px;border-radius:10px;">Global</span>`;
+                const borderBottom = i < otherTerminals.length - 1 ? 'border-bottom:1px solid rgba(0,0,0,0.06);' : '';
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;${borderBottom}opacity:0.75;font-size:0.85rem;">
+                    <div style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;">
+                        <strong style="white-space:nowrap;">${escapeHtml(t.hall)}</strong>
+                        <span style="color:var(--text-muted);">${escapeHtml(t.terminal_no)}</span>
+                        ${expoPill}
+                    </div>
+                    <div style="flex-shrink:0;">
+                        <button class="btn btn-sm btn-secondary" onclick="cloneTerminalToExpo(${t.id})" title="Clone to this expo" style="padding:4px 8px;font-size:0.75rem;"><i class="bi bi-files"></i></button>
+                    </div>
+                </div>`;
+            }).join('');
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        async function cloneTerminalToExpo(id) {
+            if (!confirm('Clone this terminal to the current expo?')) return;
+            try {
+                const response = await fetch(`${API_BASE_URL}/terminals/clone/${id}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ expo_id: expoId })
+                });
+                if (!response.ok) throw new Error('Failed');
+                showToast('Terminal cloned to this expo!');
+                loadTerminals();
+                loadAllTerminals();
+            } catch (e) { showAlert('Failed to clone terminal', 'danger'); }
         }
 
         function showAlert(msg, type) {

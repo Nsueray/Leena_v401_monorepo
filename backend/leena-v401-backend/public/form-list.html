@@ -180,10 +180,10 @@
                     <div><strong>Note:</strong> Zoho webhooks use FORM ID. Email templates are selected via the form settings.</div>
                 </div>
                 <div class="stats-grid">
-                    <div class="stat-card"><h6><i class="bi bi-collection"></i> Total Forms</h6><div class="value" id="totalForms">0</div></div>
+                    <div class="stat-card"><h6><i class="bi bi-collection"></i> Expo Forms</h6><div class="value" id="totalForms">0</div></div>
                     <div class="stat-card"><h6><i class="bi bi-toggle-on"></i> Active Forms</h6><div class="value text-success" id="activeForms">0</div></div>
-                    <div class="stat-card"><h6><i class="bi bi-people-fill"></i> Total Submissions</h6><div class="value text-primary" id="totalSubmissions">0</div></div>
-                    <div class="stat-card"><h6><i class="bi bi-calendar-check"></i> This Expo Forms</h6><div class="value text-info" id="expoForms">0</div></div>
+                    <div class="stat-card"><h6><i class="bi bi-people-fill"></i> Submissions</h6><div class="value text-primary" id="totalSubmissions">0</div></div>
+                    <div class="stat-card"><h6><i class="bi bi-collection"></i> Other Expo Forms</h6><div class="value text-info" id="expoForms">0</div></div>
                 </div>
                 <div id="formsContainer"><div class="loading-spinner"><div class="spinner"></div></div></div>
             </main>
@@ -313,10 +313,12 @@
             container.innerHTML = html;
         }
         function updateStatistics() {
-            document.getElementById('totalForms').textContent = forms.length;
-            document.getElementById('activeForms').textContent = forms.filter(f => f.is_active).length;
-            document.getElementById('totalSubmissions').textContent = forms.reduce((s, f) => s + (f.submission_count || 0), 0).toLocaleString();
-            document.getElementById('expoForms').textContent = forms.filter(f => f.expo_id == currentExpoId).length;
+            const expoForms = forms.filter(f => f.expo_id && f.expo_id == currentExpoId);
+            const otherForms = forms.filter(f => !f.expo_id || f.expo_id != currentExpoId);
+            document.getElementById('totalForms').textContent = expoForms.length;
+            document.getElementById('activeForms').textContent = expoForms.filter(f => f.is_active).length;
+            document.getElementById('totalSubmissions').textContent = expoForms.reduce((s, f) => s + (f.submission_count || 0), 0).toLocaleString();
+            document.getElementById('expoForms').textContent = otherForms.length;
         }
         function goBackToDashboard() { window.location.href = 'main-panel-v2.html'; }
         function previewForm(id) {

@@ -349,6 +349,21 @@ form-public.html → POST /api/visitors/public
 - SendGrid rate limit'e takılınca email sessizce kaybolur
 - Fuar sırasında yaşanan "email gitmiyor" sorununun muhtemel kaynağı
 
+### L. Expo-Based Resource Grouping (23 Şubat 2026)
+
+Email templates, forms, and terminals now support expo-based grouping with cross-expo clone:
+
+| Resource | expo_id Column | Clone Endpoint | Frontend Grouping |
+|----------|---------------|----------------|-------------------|
+| Email Templates | `email_templates.expo_id` (ALTER ile eklendi) | `POST /api/email-templates/clone/:id` | email-templates.html: current expo cards + other compact list |
+| Forms | `forms.expo_id` (zaten vardı) | `POST /api/forms/clone/:id` | form-list.html: current expo cards + other compact list |
+| Terminals | `terminals.expo_id` (zaten vardı) | `POST /api/terminals/clone/:id` | terminals.html: current expo table + other compact list |
+
+- Clone always creates with `is_active: false` (safety — admin must manually activate)
+- Terminals clone generates a new `terminal_key` (UUID v4)
+- Frontend pattern: current expo resources shown as full cards/table, other expo resources as compact single-row list with clone + edit buttons
+- Statistics (form-list.html) calculated from current expo forms only
+
 ---
 
 ## API Endpoint Özeti
@@ -386,6 +401,7 @@ form-public.html → POST /api/visitors/public
 - `POST /api/forms` — Yeni form oluştur
 - `PUT /api/forms/:id` — Form güncelle
 - `PATCH /api/forms/:id/toggle` — Form aktif/pasif toggle
+- `POST /api/forms/clone/:id` — Form klonla (cross-expo clone)
 - `DELETE /api/forms/:id` — Form sil
 
 ### Terminal
@@ -396,8 +412,10 @@ form-public.html → POST /api/visitors/public
 - `GET /api/terminal/status` — Terminal durum kontrolü
 
 ### Terminals (CRUD)
-- `GET /api/terminals` — Terminal listesi
+- `GET /api/terminals` — Terminal listesi (expo_id required)
+- `GET /api/terminals/all` — Tüm terminaller (expo_name dahil)
 - `POST /api/terminals` — Yeni terminal oluştur
+- `POST /api/terminals/clone/:id` — Terminal klonla (cross-expo clone, yeni terminal_key)
 - `PUT /api/terminals/:id` — Terminal güncelle
 - `PATCH /api/terminals/:id/toggle` — Terminal aktif/pasif toggle
 - `DELETE /api/terminals/:id` — Terminal sil

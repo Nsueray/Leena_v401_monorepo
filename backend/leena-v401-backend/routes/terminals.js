@@ -27,6 +27,69 @@ router.get('/', authMiddleware, async (req, res) => {
   }
 });
 
+// GET /api/terminals/all - Get all terminals for organizer with expo names
+router.get('/all', authMiddleware, async (req, res) => {
+  try {
+    const organizer_id = req.organizer_id;
+
+    const result = await pool.query(
+      `SELECT t.*, e.name as expo_name
+       FROM terminals t
+       LEFT JOIN expos e ON e.id = t.expo_id
+       WHERE t.organizer_id = $1
+       ORDER BY t.id DESC`,
+      [organizer_id]
+    );
+
+    res.json({ success: true, terminals: result.rows });
+  } catch (err) {
+    console.error('Error fetching all terminals:', err);
+    res.status(500).json({ success: false, message: 'Failed to load terminals' });
+  }
+});
+
+// POST /api/terminals/clone/:id - Clone terminal to a different expo
+router.post('/clone/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizer_id = req.organizer_id;
+    const { expo_id } = req.body;
+
+    const sourceResult = await pool.query(
+      `SELECT * FROM terminals WHERE id = $1 AND organizer_id = $2`,
+      [id, organizer_id]
+    );
+
+    if (sourceResult.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Terminal not found' });
+    }
+
+    const source = sourceResult.rows[0];
+    const terminalKey = uuidv4();
+
+    const result = await pool.query(
+      `INSERT INTO terminals (
+        organizer_id, expo_id, hall, terminal_no, auto_checkin, is_active, terminal_key, badge_template_id
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [
+        organizer_id,
+        expo_id || source.expo_id,
+        source.hall,
+        source.terminal_no,
+        source.auto_checkin ?? true,
+        false,
+        terminalKey,
+        source.badge_template_id || null
+      ]
+    );
+
+    res.status(201).json({ success: true, message: 'Terminal cloned successfully', terminal: result.rows[0] });
+  } catch (err) {
+    console.error('Error cloning terminal:', err);
+    res.status(500).json({ success: false, message: 'Failed to clone terminal' });
+  }
+});
+
 // ✅ POST /api/terminals
 router.post('/', authMiddleware, async (req, res) => {
   try {
