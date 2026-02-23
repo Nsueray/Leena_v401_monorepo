@@ -226,7 +226,7 @@
         async function loadForms() {
             if (!currentExpoId) return;
             try {
-                const res = await fetch(`${API_URL}/forms/expo/${currentExpoId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                const res = await fetch(`${API_URL}/forms`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
                 if (res.status === 401) { localStorage.clear(); window.location.href = 'login_new.html'; return; }
                 if (!res.ok) throw new Error('Failed');
                 const data = await res.json();
@@ -235,13 +235,8 @@
                 updateStatistics();
             } catch (e) { showError('Failed to load forms.'); }
         }
-        function displayForms() {
-            const container = document.getElementById('formsContainer');
-            if (forms.length === 0) {
-                container.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><h4>No Forms Yet</h4><p>Create your first registration form for this expo</p><a href="form-builder.html" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create Your First Form</a></div>';
-                return;
-            }
-            container.innerHTML = '<div class="forms-grid">' + forms.map(form => `
+        function renderFormCard(form) {
+            return `
                 <div class="form-card" onclick="previewForm(${form.id})">
                     <div class="form-card-header">
                         <h3>${esc(form.name)}</h3>
@@ -266,8 +261,56 @@
                         </div>
                     </div>
                     <div class="form-card-footer"><i class="bi bi-calendar"></i> Created: ${new Date(form.created_at).toLocaleDateString()}</div>
-                </div>
-            `).join('') + '</div>';
+                </div>`;
+        }
+        function displayForms() {
+            const container = document.getElementById('formsContainer');
+            if (forms.length === 0) {
+                container.innerHTML = '<div class="empty-state"><i class="bi bi-inbox"></i><h4>No Forms Yet</h4><p>Create your first registration form for this expo</p><a href="form-builder.html" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Create Your First Form</a></div>';
+                return;
+            }
+
+            if (!currentExpoId) {
+                container.innerHTML = '<div class="forms-grid">' + forms.map(f => renderFormCard(f)).join('') + '</div>';
+                return;
+            }
+
+            const currentExpoForms = forms.filter(f => f.expo_id && f.expo_id == currentExpoId);
+            const otherForms = forms.filter(f => !f.expo_id || f.expo_id != currentExpoId);
+
+            let html = '';
+
+            // Current expo section header
+            html += `<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;"><h5 style="margin:0;"><i class="bi bi-calendar-event" style="color:var(--primary);"></i> ${esc(currentExpoName || 'Current Expo')}</h5><span style="background:var(--primary);color:#fff;font-size:0.7rem;padding:2px 8px;border-radius:10px;">${currentExpoForms.length} forms</span></div>`;
+
+            if (currentExpoForms.length > 0) {
+                html += '<div class="forms-grid" style="margin-bottom:32px;">' + currentExpoForms.map(f => renderFormCard(f)).join('') + '</div>';
+            } else {
+                html += `<div style="background:var(--primary-light);border:1px solid #c7d9f1;border-radius:var(--radius-md);padding:20px;text-align:center;margin-bottom:32px;"><i class="bi bi-info-circle" style="color:var(--primary);margin-right:8px;"></i>No forms for this expo yet. You can clone from forms below or <a href="form-builder.html" onclick="return true;">create a new one</a>.</div>`;
+            }
+
+            // Other forms section — compact list
+            if (otherForms.length > 0) {
+                html += `<div style="margin-bottom:8px;"><h5 style="margin:0;color:var(--text-secondary);"><i class="bi bi-collection"></i> Other Expo Forms</h5></div>`;
+                html += `<div style="border:1px solid var(--border-color);border-radius:8px;padding:8px;background:rgba(0,0,0,0.02);">`;
+                html += otherForms.map((f, i) => {
+                    const expoPill = f.expo_name && f.expo_name !== 'All Expos' ? `<span style="background:#e0f2fe;color:#0369a1;font-size:0.7rem;padding:2px 8px;border-radius:10px;white-space:nowrap;">${esc(f.expo_name)}</span>` : `<span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;padding:2px 8px;border-radius:10px;">Global</span>`;
+                    const borderBottom = i < otherForms.length - 1 ? 'border-bottom:1px solid rgba(0,0,0,0.06);' : '';
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;${borderBottom}opacity:0.75;font-size:0.85rem;">
+                        <div style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;">
+                            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(f.name)}</span>${expoPill}
+                            <span style="color:var(--text-muted);font-size:0.75rem;white-space:nowrap;"><i class="bi bi-people"></i> ${f.submission_count || 0}</span>
+                        </div>
+                        <div style="display:flex;gap:4px;flex-shrink:0;">
+                            <button class="btn btn-sm btn-outline-info" onclick="cloneFormToExpo(${f.id})" title="Clone to this expo" style="padding:4px 8px;font-size:0.75rem;"><i class="bi bi-files"></i></button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editForm(${f.id})" title="Edit" style="padding:4px 8px;font-size:0.75rem;"><i class="bi bi-pencil"></i></button>
+                        </div>
+                    </div>`;
+                }).join('');
+                html += `</div>`;
+            }
+
+            container.innerHTML = html;
         }
         function updateStatistics() {
             document.getElementById('totalForms').textContent = forms.length;
@@ -300,6 +343,13 @@
             return `<div class="mb-3"><label class="form-label">${f.label}${f.required?'<span class="text-danger">*</span>':''}</label>${input}</div>`;
         }
         function editForm(id) { location.href = `form-builder.html?id=${id}`; }
+        async function cloneFormToExpo(id) {
+            if (!confirm('Clone this form to the current expo?')) return;
+            try {
+                const res = await fetch(`${API_URL}/forms/clone/${id}`, { method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ expo_id: currentExpoId }) });
+                if (res.ok) { showSuccess('Form cloned to this expo!'); loadForms(); } else throw new Error();
+            } catch (e) { showError('Failed to clone form'); }
+        }
         async function duplicateForm(id) {
             if (!confirm('Copy this form?')) return;
             const form = forms.find(f => f.id === id); if (!form) return;

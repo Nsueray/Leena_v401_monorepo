@@ -219,6 +219,61 @@ router.get('/:id/submissions', authMiddleware, async (req, res) => {
     }
 });
 
+// POST /api/forms/clone/:id - Clone form (optionally to a different expo)
+router.post('/clone/:id', authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const organizerId = req.organizer_id;
+        const { expo_id } = req.body;
+
+        const sourceResult = await pool.query(
+            `SELECT * FROM forms WHERE id = $1 AND organizer_id = $2`,
+            [id, organizerId]
+        );
+
+        if (sourceResult.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Form not found' });
+        }
+
+        const source = sourceResult.rows[0];
+
+        const query = `
+            INSERT INTO forms (
+                name, description, expo_id, organizer_id,
+                fields, is_active, email_template_id,
+                visitor_type, source, origin,
+                created_at, updated_at
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+            RETURNING *
+        `;
+
+        const values = [
+            source.name + ' (Copy)',
+            source.description,
+            expo_id || source.expo_id || null,
+            organizerId,
+            JSON.stringify(source.fields || []),
+            false,
+            source.email_template_id,
+            source.visitor_type || 'visitor',
+            source.source || 'form-builder',
+            source.origin || 'form-builder'
+        ];
+
+        const result = await pool.query(query, values);
+
+        res.status(201).json({
+            success: true,
+            message: 'Form cloned successfully',
+            form: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error cloning form:', error);
+        res.status(500).json({ success: false, message: 'Failed to clone form' });
+    }
+});
+
 // ✅ NEW – POST /api/forms - Create a new form
 router.post('/', authMiddleware, async (req, res) => {
     try {
