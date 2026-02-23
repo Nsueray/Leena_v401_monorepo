@@ -42,7 +42,7 @@ Yaprak Hanım'ın talep listesinden gelen işler.
 - [x] Check-in export'a visitor_type + job_title kolonu ekle ✅
 - [x] Email templates expo bazlı gruplama (üstte mevcut expo card, altta diğerleri liste) + clone butonu ✅
 - [x] Send Email sayfasından gönderilen maillerde QR görünmüyor (BASE_BADGE_URL fix) ✅
-- [ ] Reports detaylandırma (ülke × job title × sektör kırılımı, post-show analiz)
+- [x] Reports detaylandırma (ülke × job title × visitor_type × hall kırılımı, overlay chart, 6 stat cards) ✅
 - [x] email-send.html sidebar'dan kaybolmuş — sidebar'a geri ekle ✅
 
 ## 🟠 Sprint 2 — Sidebar Stabilizasyon (Fuar öncesi, 2-3 gün)

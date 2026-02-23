@@ -226,6 +226,76 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
     hourly_distribution: hourlyResult.rows
   };
 
+  // Visitor type breakdown
+  const visitorTypeQuery = `
+    SELECT
+      COALESCE(visitor_type, 'visitor') as visitor_type,
+      COUNT(*) as count
+    FROM visitors
+    WHERE expo_id = $1
+    GROUP BY visitor_type
+    ORDER BY count DESC
+  `;
+  const visitorTypeResult = await pool.query(visitorTypeQuery, [expoId]);
+  report.visitor_type_breakdown = visitorTypeResult.rows;
+
+  // Job title breakdown (top 15)
+  const jobTitleQuery = `
+    SELECT
+      job_title,
+      COUNT(*) as count
+    FROM visitors
+    WHERE expo_id = $1
+    AND job_title IS NOT NULL AND job_title != ''
+    GROUP BY job_title
+    ORDER BY count DESC
+    LIMIT 15
+  `;
+  const jobTitleResult = await pool.query(jobTitleQuery, [expoId]);
+  report.job_title_breakdown = jobTitleResult.rows;
+
+  // Daily check-in trend
+  const dailyCheckinQuery = `
+    SELECT
+      DATE(checkin_time) as date,
+      COUNT(*) as count,
+      COUNT(DISTINCT visitor_id) as unique_count
+    FROM checkins
+    WHERE expo_id = $1
+    GROUP BY DATE(checkin_time)
+    ORDER BY date
+  `;
+  const dailyCheckinResult = await pool.query(dailyCheckinQuery, [expoId]);
+  report.daily_checkin_trend = dailyCheckinResult.rows;
+
+  // Check-in by hall
+  const checkinByHallQuery = `
+    SELECT
+      hall,
+      COUNT(*) as count
+    FROM checkins
+    WHERE expo_id = $1
+    AND hall IS NOT NULL
+    GROUP BY hall
+    ORDER BY count DESC
+  `;
+  const checkinByHallResult = await pool.query(checkinByHallQuery, [expoId]);
+  report.checkin_by_hall = checkinByHallResult.rows;
+
+  // Check-in by terminal
+  const checkinByTerminalQuery = `
+    SELECT
+      terminal,
+      COUNT(*) as count
+    FROM checkins
+    WHERE expo_id = $1
+    AND terminal IS NOT NULL
+    GROUP BY terminal
+    ORDER BY count DESC
+  `;
+  const checkinByTerminalResult = await pool.query(checkinByTerminalQuery, [expoId]);
+  report.checkin_by_terminal = checkinByTerminalResult.rows;
+
   // Add detailed data if requested
   if (includeDetails) {
     // Recent registrations

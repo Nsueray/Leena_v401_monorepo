@@ -457,7 +457,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - `POST /api/email/inbound` — Inbound email webhook (SendGrid parse)
 
 ### Reports
-- `GET /api/reports/summary` — Özet rapor
+- `GET /api/reports/summary` — Özet rapor (visitor_type_breakdown, job_title_breakdown, daily_checkin_trend, checkin_by_hall, checkin_by_terminal dahil)
 - `GET /api/reports/export` — Rapor export
 - `GET /api/reports/comparison` — Karşılaştırma raporu
 
@@ -713,6 +713,7 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 - Terminals expo-based grouping + cross-expo clone
 - Sidebar standardization: all 15 admin pages unified link list (13 links, 5 sections)
 - CLAUDE.md English-only language rule added
+- Reports page enhanced for Ghana fair: backend added visitor_type_breakdown, job_title_breakdown, daily_checkin_trend, checkin_by_hall, checkin_by_terminal queries to /summary; frontend added 6 stat cards, overlay line chart (reg+checkin), visitor type doughnut, country horizontal bar, job title horizontal bar, hall bar chart
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
