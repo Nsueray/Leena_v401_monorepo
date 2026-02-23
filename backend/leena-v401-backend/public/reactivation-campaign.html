@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Re-activation Campaigns - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5; --warning: #f59e0b; --warning-bg: #fef3c7; --danger: #ef4444;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .main-content { flex: 1; padding: 24px; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-success { background: var(--success); color: white; }
+        .btn-warning { background: var(--warning); color: white; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); margin-bottom: 24px; }
+        .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .card-body { padding: 20px; }
+        .form-label { font-size: 13px; font-weight: 500; margin-bottom: 6px; display: block; }
+        .form-control, .form-select { padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; width: 100%; }
+        .form-control:focus, .form-select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,111,165,0.1); }
+        .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+        .form-group { margin-bottom: 16px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .radio-group { display: flex; gap: 20px; margin: 12px 0; }
+        .radio-item { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+        .radio-item input { width: 18px; height: 18px; }
+        .upload-zone { border: 2px dashed var(--border-color); border-radius: var(--radius-lg); padding: 32px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .upload-zone:hover, .upload-zone.dragover { border-color: var(--primary); background: var(--primary-light); }
+        .upload-zone i { font-size: 36px; color: var(--primary); margin-bottom: 12px; display: block; }
+        .file-info { background: var(--success-bg); border: 1px solid #a7f3d0; border-radius: var(--radius-md); padding: 12px 16px; margin-top: 12px; display: none; }
+        .file-info.active { display: flex; justify-content: space-between; align-items: center; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; text-align: center; }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
+        .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+        .stat-card.pending .stat-value { color: var(--warning); }
+        .stat-card.activated .stat-value { color: var(--success); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--bg-main); padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color); }
+        td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        tr:hover { background: var(--bg-main); }
+        .badge { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+        .badge-success { background: var(--success-bg); color: #065f46; }
+        .badge-warning { background: var(--warning-bg); color: #92400e; }
+        .badge-secondary { background: #f3f4f6; color: #6b7280; }
+        .empty-state { text-align: center; padding: 60px 24px; color: var(--text-muted); }
+        .empty-state i { font-size: 48px; margin-bottom: 16px; display: block; }
+        .alert { padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 16px; }
+        .alert-success { background: var(--success-bg); color: #065f46; }
+        .alert-danger { background: #fee2e2; color: #991b1b; }
+        .alert-info { background: #dbeafe; color: #1e40af; }
+        .loading-spinner { display: flex; justify-content: center; padding: 40px; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 20px; }
+        .tab { padding: 12px 20px; cursor: pointer; color: var(--text-muted); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+        .tab:hover { color: var(--text-primary); }
+        .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .results-box { background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-top: 16px; }
+        .results-box h4 { font-size: 14px; margin-bottom: 12px; }
+        .results-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                    <a class="nav-item active" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
+        
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-arrow-repeat"></i> Re-activation Campaigns</h1>
+                <button class="btn btn-secondary" onclick="window.location.href='main-panel-v2.html'"><i class="bi bi-arrow-left"></i> Back</button>
+            </header>
+            
+            <main class="main-content">
+                <div id="alertBox" class="alert" style="display: none;"></div>
+                
+                <!-- Tabs -->
+                <div class="tabs">
+                    <div class="tab active" data-tab="create">Create Campaign</div>
+                    <div class="tab" data-tab="campaigns">View Campaigns</div>
+                </div>
+                
+                <!-- Create Campaign Tab -->
+                <div id="createTab" class="tab-content active">
+                    <div class="card">
+                        <div class="card-header">
+                            <span><i class="bi bi-plus-circle"></i> New Re-activation Campaign</span>
+                        </div>
+                        <div class="card-body">
+                            <!-- Source Selection -->
+                            <div class="form-group">
+                                <label class="form-label">Data Source</label>
+                                <div class="radio-group">
+                                    <label class="radio-item">
+                                        <input type="radio" name="sourceType" value="excel" checked onchange="toggleSourceType()">
+                                        <span>Import from Excel</span>
+                                    </label>
+                                    <label class="radio-item">
+                                        <input type="radio" name="sourceType" value="expo" onchange="toggleSourceType()">
+                                        <span>Select from Expo</span>
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Excel Upload Section -->
+                            <div id="excelSection">
+                                <div class="form-group">
+                                    <label class="form-label">Upload Excel File</label>
+                                    <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+                                        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleFileSelect(event)">
+                                        <i class="bi bi-file-earmark-excel"></i>
+                                        <div>Click to upload or drag & drop</div>
+                                        <small style="color: var(--text-muted);">.xlsx, .xls, .csv (max 10MB)</small>
+                                    </div>
+                                    <div class="file-info" id="fileInfo">
+                                        <span><i class="bi bi-file-earmark-check"></i> <span id="fileName"></span></span>
+                                        <button class="btn btn-sm" onclick="clearFile()" style="color: var(--danger);"><i class="bi bi-x"></i></button>
+                                    </div>
+                                    <div class="form-hint">
+                                        Required columns: email. Optional: name, last_name, company, country, job_title, phone
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Expo Selection Section -->
+                            <div id="expoSection" style="display: none;">
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label class="form-label">Source Expo (Previous Year)</label>
+                                        <select class="form-select" id="sourceExpo">
+                                            <option value="">Select source expo...</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Filter Visitors</label>
+                                        <select class="form-select" id="visitorFilter">
+                                            <option value="all">All Registered Visitors</option>
+                                            <option value="checked_in_only">Checked-in Only (Attended)</option>
+                                            <option value="no_shows_only">No-shows (Registered but didn't attend)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr style="margin: 24px 0; border-color: var(--border-color);">
+                            
+                            <!-- Target Expo -->
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">Target Expo (This Year) *</label>
+                                    <select class="form-select" id="targetExpo" required>
+                                        <option value="">Select target expo...</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email Template *</label>
+                                    <select class="form-select" id="emailTemplate" required>
+                                        <option value="">Select template...</option>
+                                    </select>
+                                    <div class="form-hint">Template should contain {{activation_url}} placeholder</div>
+                                </div>
+                            </div>
+                            
+                            <!-- Preview Info -->
+                            <div class="alert alert-info" style="display: block;">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>How it works:</strong> 
+                                Visitors will receive an email with a personalized activation link. 
+                                When they click and confirm, they'll be registered for the target expo and receive their badge email.
+                            </div>
+                            
+                            <div style="display: flex; gap: 12px; margin-top: 20px;">
+                                <button class="btn btn-primary" onclick="startCampaign()" id="startBtn">
+                                    <i class="bi bi-send"></i> Start Campaign
+                                </button>
+                            </div>
+                            
+                            <!-- Results -->
+                            <div id="resultsBox" class="results-box" style="display: none;">
+                                <h4><i class="bi bi-check-circle" style="color: var(--success);"></i> Campaign Created</h4>
+                                <div class="results-item">
+                                    <span>Total Processed</span>
+                                    <strong id="resultTotal">0</strong>
+                                </div>
+                                <div class="results-item">
+                                    <span>Emails Queued</span>
+                                    <strong id="resultCreated" style="color: var(--success);">0</strong>
+                                </div>
+                                <div class="results-item">
+                                    <span>Already Registered (Skipped)</span>
+                                    <strong id="resultSkippedRegistered">0</strong>
+                                </div>
+                                <div class="results-item">
+                                    <span>Duplicate Tokens (Skipped)</span>
+                                    <strong id="resultSkippedDuplicate">0</strong>
+                                </div>
+                                <div class="results-item">
+                                    <span>No Email (Skipped)</span>
+                                    <strong id="resultSkippedNoEmail">0</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- View Campaigns Tab -->
+                <div id="campaignsTab" class="tab-content">
+                    <div id="campaignsLoading" class="loading-spinner" style="display: none;">
+                        <div class="spinner"></div>
+                    </div>
+                    
+                    <div id="campaignsList"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let selectedFile = null;
+        let expos = [];
+        let templates = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!localStorage.getItem('token')) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            loadExpos();
+            loadTemplates();
+            setupTabs();
+            setupDragDrop();
+        });
+
+        function setupTabs() {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    
+                    tab.classList.add('active');
+                    const tabId = tab.dataset.tab;
+                    document.getElementById(tabId + 'Tab').classList.add('active');
+                    
+                    if (tabId === 'campaigns') {
+                        loadCampaigns();
+                    }
+                });
+            });
+        }
+
+        function setupDragDrop() {
+            const zone = document.getElementById('uploadZone');
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', e => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+            });
+        }
+
+        function toggleSourceType() {
+            const sourceType = document.querySelector('input[name="sourceType"]:checked').value;
+            document.getElementById('excelSection').style.display = sourceType === 'excel' ? 'block' : 'none';
+            document.getElementById('expoSection').style.display = sourceType === 'expo' ? 'block' : 'none';
+        }
+
+        async function loadExpos() {
+            try {
+                const response = await fetch(`${API_URL}/expos`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) throw new Error();
+                expos = await response.json();
+                
+                const sourceSelect = document.getElementById('sourceExpo');
+                const targetSelect = document.getElementById('targetExpo');
+                
+                sourceSelect.innerHTML = '<option value="">Select source expo...</option>';
+                targetSelect.innerHTML = '<option value="">Select target expo...</option>';
+                
+                expos.forEach(e => {
+                    sourceSelect.innerHTML += `<option value="${e.id}">${e.name}</option>`;
+                    targetSelect.innerHTML += `<option value="${e.id}">${e.name}</option>`;
+                });
+                
+                // Pre-select if available
+                const selectedExpoId = localStorage.getItem('selectedExpoId');
+                if (selectedExpoId) {
+                    targetSelect.value = selectedExpoId;
+                }
+            } catch (err) {
+                console.error('Error loading expos:', err);
+            }
+        }
+
+        async function loadTemplates() {
+            try {
+                const response = await fetch(`${API_URL}/email-templates`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                templates = data.templates || [];
+                
+                const select = document.getElementById('emailTemplate');
+                select.innerHTML = '<option value="">Select template...</option>';
+                templates.filter(t => t.is_active).forEach(t => {
+                    select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+                });
+            } catch (err) {
+                console.error('Error loading templates:', err);
+            }
+        }
+
+        function handleFileSelect(e) {
+            if (e.target.files[0]) handleFile(e.target.files[0]);
+        }
+
+        function handleFile(file) {
+            if (file.size > 10 * 1024 * 1024) {
+                showAlert('File too large (max 10MB)', 'danger');
+                return;
+            }
+            if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
+                showAlert('Please select an Excel or CSV file', 'danger');
+                return;
+            }
+            selectedFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            document.getElementById('fileInfo').classList.add('active');
+        }
+
+        function clearFile() {
+            selectedFile = null;
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').classList.remove('active');
+        }
+
+        async function startCampaign() {
+            const sourceType = document.querySelector('input[name="sourceType"]:checked').value;
+            const targetExpoId = document.getElementById('targetExpo').value;
+            const templateId = document.getElementById('emailTemplate').value;
+
+            if (!targetExpoId) {
+                showAlert('Please select a target expo', 'danger');
+                return;
+            }
+
+            if (!templateId) {
+                showAlert('Please select an email template', 'danger');
+                return;
+            }
+
+            const startBtn = document.getElementById('startBtn');
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin-right:8px;"></span> Processing...';
+
+            try {
+                let response;
+                
+                if (sourceType === 'excel') {
+                    if (!selectedFile) {
+                        showAlert('Please upload an Excel file', 'danger');
+                        startBtn.disabled = false;
+                        startBtn.innerHTML = '<i class="bi bi-send"></i> Start Campaign';
+                        return;
+                    }
+
+                    const formData = new FormData();
+                    formData.append('file', selectedFile);
+                    formData.append('target_expo_id', targetExpoId);
+                    formData.append('template_id', templateId);
+
+                    response = await fetch(`${API_URL}/reactivation/create-from-excel`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: formData
+                    });
+                } else {
+                    const sourceExpoId = document.getElementById('sourceExpo').value;
+                    const filter = document.getElementById('visitorFilter').value;
+
+                    if (!sourceExpoId) {
+                        showAlert('Please select a source expo', 'danger');
+                        startBtn.disabled = false;
+                        startBtn.innerHTML = '<i class="bi bi-send"></i> Start Campaign';
+                        return;
+                    }
+
+                    if (sourceExpoId === targetExpoId) {
+                        showAlert('Source and target expo must be different', 'danger');
+                        startBtn.disabled = false;
+                        startBtn.innerHTML = '<i class="bi bi-send"></i> Start Campaign';
+                        return;
+                    }
+
+                    response = await fetch(`${API_URL}/reactivation/create-from-expo`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({
+                            source_expo_id: sourceExpoId,
+                            target_expo_id: targetExpoId,
+                            template_id: templateId,
+                            filter: filter
+                        })
+                    });
+                }
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Campaign creation failed');
+                }
+
+                // Show results
+                document.getElementById('resultTotal').textContent = data.results.total || 0;
+                document.getElementById('resultCreated').textContent = data.results.created || 0;
+                document.getElementById('resultSkippedRegistered').textContent = data.results.skipped_already_registered || 0;
+                document.getElementById('resultSkippedDuplicate').textContent = data.results.skipped_duplicate || 0;
+                document.getElementById('resultSkippedNoEmail').textContent = data.results.skipped_no_email || 0;
+                document.getElementById('resultsBox').style.display = 'block';
+
+                showAlert(`Campaign created! ${data.results.created} emails queued for sending.`, 'success');
+
+            } catch (err) {
+                console.error('Campaign error:', err);
+                showAlert(err.message || 'Failed to create campaign', 'danger');
+            } finally {
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="bi bi-send"></i> Start Campaign';
+            }
+        }
+
+        async function loadCampaigns() {
+            document.getElementById('campaignsLoading').style.display = 'flex';
+            document.getElementById('campaignsList').innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_URL}/reactivation/campaigns`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+
+                if (!response.ok) throw new Error();
+
+                const data = await response.json();
+                const campaigns = data.campaigns || [];
+
+                if (campaigns.length === 0) {
+                    document.getElementById('campaignsList').innerHTML = `
+                        <div class="empty-state">
+                            <i class="bi bi-inbox"></i>
+                            <p>No campaigns created yet</p>
+                        </div>
+                    `;
+                } else {
+                    let html = '';
+                    campaigns.forEach(c => {
+                        const activationRate = c.total_tokens > 0 
+                            ? Math.round((c.activated / c.total_tokens) * 100) 
+                            : 0;
+
+                        html += `
+                            <div class="card">
+                                <div class="card-header">
+                                    <span><i class="bi bi-calendar-event"></i> ${escapeHtml(c.expo_name)}</span>
+                                    <span class="badge badge-secondary">${c.total_tokens} total</span>
+                                </div>
+                                <div class="card-body">
+                                    <div class="stats-grid" style="margin-bottom: 0;">
+                                        <div class="stat-card">
+                                            <div class="stat-value">${c.total_tokens}</div>
+                                            <div class="stat-label">Total Sent</div>
+                                        </div>
+                                        <div class="stat-card pending">
+                                            <div class="stat-value">${c.pending}</div>
+                                            <div class="stat-label">Pending</div>
+                                        </div>
+                                        <div class="stat-card activated">
+                                            <div class="stat-value">${c.activated}</div>
+                                            <div class="stat-label">Activated</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-value">${activationRate}%</div>
+                                            <div class="stat-label">Activation Rate</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-footer" style="padding:16px 20px; border-top:1px solid var(--border-color); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                                    <select id="resendTemplate_${c.target_expo_id}" class="form-select" style="width:auto; padding:6px 10px; font-size:13px; flex:1; min-width:200px;">
+                                        <option value="">Select email template...</option>
+                                    </select>
+                                    <button class="btn btn-primary btn-sm" onclick="resendPending(${c.target_expo_id})" style="white-space:nowrap;">
+                                        <i class="bi bi-envelope-arrow-up"></i> Resend to ${c.pending} Pending
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('campaignsList').innerHTML = html;
+                    // Load email templates into resend dropdowns
+                    loadResendTemplates();
+                }
+
+            } catch (err) {
+                console.error('Load campaigns error:', err);
+                document.getElementById('campaignsList').innerHTML = `
+                    <div class="alert alert-danger">Failed to load campaigns</div>
+                `;
+            } finally {
+                document.getElementById('campaignsLoading').style.display = 'none';
+            }
+        }
+
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.className = `alert alert-${type}`;
+            alertBox.innerHTML = message;
+            alertBox.style.display = 'block';
+            
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 5000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text || '';
+            return div.innerHTML;
+        }
+
+        async function loadResendTemplates() {
+            try {
+                const res = await fetch(API_URL + '/email-templates', {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const templates = data.templates || data || [];
+                document.querySelectorAll('select[id^="resendTemplate_"]').forEach(sel => {
+                    templates.forEach(t => {
+                        const opt = document.createElement('option');
+                        opt.value = t.id;
+                        opt.textContent = t.name || t.subject || 'Template #' + t.id;
+                        sel.appendChild(opt);
+                    });
+                });
+            } catch(e) { console.error('Failed to load templates:', e); }
+        }
+
+        async function resendPending(targetExpoId) {
+            const sel = document.getElementById('resendTemplate_' + targetExpoId);
+            if (!sel || !sel.value) { alert('Please select an email template first'); return; }
+            
+            const countEl = sel.closest('.card').querySelector('.stat-card.pending .stat-value');
+            const count = countEl ? countEl.textContent : '?';
+            if (!confirm('Resend to ' + count + ' pending recipients?')) return;
+
+            try {
+                const res = await fetch(API_URL + '/reactivation/resend-pending', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('token') },
+                    body: JSON.stringify({ target_expo_id: targetExpoId, template_id: parseInt(sel.value) })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed');
+                alert('Success! ' + data.sent + ' emails queued for sending.');
+                loadCampaigns();
+            } catch(e) { alert('Resend failed: ' + e.message); }
+        }
+    </script>
+</body>
+</html>

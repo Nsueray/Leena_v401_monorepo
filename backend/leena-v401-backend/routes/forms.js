@@ -4,7 +4,7 @@ const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 
-// routes/forms.js - EXHIBITORS DESTEĞİ EKLENMİŞ VERSİYON
+// routes/forms.js - v402: EXHIBITOR = visitors.visitor_type (no separate exhibitors table)
 
 // GET /api/forms - Get all forms for current organizer
 router.get('/', authMiddleware, async (req, res) => {
@@ -28,15 +28,11 @@ router.get('/', authMiddleware, async (req, res) => {
                 f.updated_at,
                 e.name as expo_name,
                 et.name as email_template_name,
-                CASE 
-                    WHEN f.visitor_type = 'exhibitor' THEN COALESCE(COUNT(DISTINCT ex.id), 0)
-                    ELSE COALESCE(COUNT(DISTINCT v.id), 0)
-                END as submission_count
+                COALESCE(COUNT(DISTINCT v.id), 0) as submission_count
             FROM forms f
             LEFT JOIN expos e ON e.id = f.expo_id
             LEFT JOIN email_templates et ON et.id = f.email_template_id
-            LEFT JOIN visitors v ON v.form_id = f.id AND f.visitor_type = 'visitor'
-            LEFT JOIN exhibitors ex ON ex.form_id = f.id AND f.visitor_type = 'exhibitor'
+            LEFT JOIN visitors v ON v.form_id = f.id
             WHERE f.organizer_id = $1
             GROUP BY f.id, e.name, et.name
             ORDER BY f.created_at DESC
@@ -73,15 +69,11 @@ router.get('/expo/:expo_id', authMiddleware, async (req, res) => {
                 f.*,
                 e.name as expo_name,
                 et.name as email_template_name,
-                CASE 
-                    WHEN f.visitor_type = 'exhibitor' THEN COALESCE(COUNT(DISTINCT ex.id), 0)
-                    ELSE COALESCE(COUNT(DISTINCT v.id), 0)
-                END as submission_count
+                COALESCE(COUNT(DISTINCT v.id), 0) as submission_count
             FROM forms f
             LEFT JOIN expos e ON e.id = f.expo_id
             LEFT JOIN email_templates et ON et.id = f.email_template_id
-            LEFT JOIN visitors v ON v.form_id = f.id AND f.visitor_type = 'visitor'
-            LEFT JOIN exhibitors ex ON ex.form_id = f.id AND f.visitor_type = 'exhibitor'
+            LEFT JOIN visitors v ON v.form_id = f.id
             WHERE (f.expo_id = $1 OR f.expo_id IS NULL) AND f.organizer_id = $2
             GROUP BY f.id, e.name, et.name
             ORDER BY f.created_at DESC
@@ -118,15 +110,11 @@ router.get('/:id', authMiddleware, async (req, res) => {
                 f.*,
                 e.name as expo_name,
                 et.name as email_template_name,
-                CASE 
-                    WHEN f.visitor_type = 'exhibitor' THEN COALESCE(COUNT(DISTINCT ex.id), 0)
-                    ELSE COALESCE(COUNT(DISTINCT v.id), 0)
-                END as submission_count
+                COALESCE(COUNT(DISTINCT v.id), 0) as submission_count
             FROM forms f
             LEFT JOIN expos e ON e.id = f.expo_id
             LEFT JOIN email_templates et ON et.id = f.email_template_id
-            LEFT JOIN visitors v ON v.form_id = f.id AND f.visitor_type = 'visitor'
-            LEFT JOIN exhibitors ex ON ex.form_id = f.id AND f.visitor_type = 'exhibitor'
+            LEFT JOIN visitors v ON v.form_id = f.id
             WHERE f.id = $1 AND f.organizer_id = $2
             GROUP BY f.id, e.name, et.name
         `;
@@ -177,6 +165,7 @@ router.get('/:id/submissions', authMiddleware, async (req, res) => {
 
         let submissionsQuery;
         if (visitorType === 'exhibitor') {
+            // Exhibitors are in visitors table with visitor_type = 'exhibitor'
             submissionsQuery = `
                 SELECT 
                     id,
@@ -189,11 +178,11 @@ router.get('/:id/submissions', authMiddleware, async (req, res) => {
                     booth_number,
                     badge_id,
                     custom_fields,
-                    timestamp as created_at,
+                    created_at,
                     'exhibitor' as type
-                FROM exhibitors 
-                WHERE form_id = $1 AND organizer_id = $2
-                ORDER BY timestamp DESC
+                FROM visitors 
+                WHERE form_id = $1 AND organizer_id = $2 AND visitor_type = 'exhibitor'
+                ORDER BY created_at DESC
             `;
         } else {
             submissionsQuery = `
@@ -462,14 +451,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         const { id } = req.params;
         const organizerId = req.organizer_id;
 
-        // Check if form has submissions
+        // Check if form has submissions (all types are in visitors table now)
         const checkSubmissionsQuery = `
             SELECT 
                 f.visitor_type,
-                CASE 
-                    WHEN f.visitor_type = 'exhibitor' THEN (SELECT COUNT(*) FROM exhibitors WHERE form_id = f.id)
-                    ELSE (SELECT COUNT(*) FROM visitors WHERE form_id = f.id)
-                END as submission_count
+                (SELECT COUNT(*) FROM visitors WHERE form_id = f.id) as submission_count
             FROM forms f
             WHERE f.id = $1 AND f.organizer_id = $2
         `;

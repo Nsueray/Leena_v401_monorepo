@@ -13,15 +13,13 @@
             --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
             --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
             --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
-            --success: #10b981; --success-bg: #d1fae5;
-            --danger: #ef4444; --danger-bg: #fee2e2;
+            --success: #10b981; --danger: #ef4444;
             --radius-md: 8px; --radius-lg: 12px;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
         .app-shell { display: flex; min-height: 100vh; }
         
-        /* Sidebar */
         .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
         .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
         .sidebar-logo { height: 80px; }
@@ -34,7 +32,6 @@
         .nav-item i { font-size: 18px; width: 20px; }
         .nav-item span { font-size: 13px; font-weight: 500; }
         
-        /* Main Content */
         .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
         .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
         .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
@@ -42,120 +39,130 @@
         .header-actions { display: flex; gap: 10px; }
         .main-content { flex: 1; padding: 24px; }
         
-        /* Buttons */
         .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
         .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
         .btn-primary:hover { background: var(--primary-hover); }
         .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
         .btn-secondary:hover { background: var(--bg-main); }
+        .btn-success { background: var(--success); color: white; border-color: var(--success); }
+        .btn-success:hover { background: #0d9668; }
         .btn-danger { background: var(--danger); color: white; }
         .btn-sm { padding: 6px 12px; font-size: 12px; }
         
-        /* Cards */
-        .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
         .template-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; position: relative; }
         .template-card.default { border-color: var(--primary); border-width: 2px; }
         .template-card .default-badge { position: absolute; top: 12px; right: 12px; background: var(--primary); color: white; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600; }
+        .template-card .type-badge { position: absolute; top: 12px; right: 12px; background: #f59e0b; color: white; font-size: 10px; padding: 3px 8px; border-radius: 4px; font-weight: 600; text-transform: uppercase; }
+        .template-card.default .type-badge { right: 90px; }
         .template-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
         .template-card .description { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
         .template-card .config-preview { background: var(--bg-main); border-radius: var(--radius-md); padding: 12px; margin-bottom: 16px; }
         .template-card .config-item { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
         .template-card .config-item .label { color: var(--text-muted); }
         .template-card .config-item .value { font-weight: 500; }
-        .template-card .actions { display: flex; gap: 8px; }
+        .template-card .actions { display: flex; gap: 8px; flex-wrap: wrap; }
         
-        /* Badge Preview */
-        .badge-preview { border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 10px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; background: #fafafa; }
-        .badge-mini { transform: scale(0.4); transform-origin: center; }
+        .badge-preview { border: 1px dashed var(--border-color); border-radius: var(--radius-md); padding: 10px; margin-bottom: 16px; display: flex; align-items: center; justify-content: center; background: #fafafa; min-height: 80px; }
         .badge-mini-wrapper { display: flex; align-items: center; background: white; border: 1px solid #ddd; padding: 4mm; }
-        .badge-mini-qr { width: 25mm; height: 25mm; background: #eee; margin-right: 4mm; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #999; }
+        .badge-mini-qr { background: #eee; margin-right: 4mm; display: flex; align-items: center; justify-content: center; font-size: 8px; color: #999; }
         .badge-mini-info { flex: 1; }
         .badge-mini-name { font-weight: bold; font-size: 14pt; }
         .badge-mini-company { font-size: 11pt; color: #555; }
         
-        /* Modal */
         .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.2s; }
         .modal-backdrop.show { opacity: 1; visibility: visible; }
-        .modal-content { background: var(--bg-card); border-radius: var(--radius-lg); width: 100%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+        .modal-content { background: var(--bg-card); border-radius: var(--radius-lg); width: 100%; max-width: 800px; max-height: 90vh; overflow-y: auto; }
         .modal-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
         .modal-header h2 { font-size: 18px; font-weight: 600; }
         .modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-muted); }
         .modal-body { padding: 20px; }
         .modal-footer { padding: 20px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
         
-        /* Form */
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; }
         .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 14px; }
         .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .form-row-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px; }
         .form-section { margin-bottom: 24px; }
         .form-section-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color); }
         
-        /* Checkbox */
         .checkbox-group { display: flex; flex-wrap: wrap; gap: 12px; }
         .checkbox-item { display: flex; align-items: center; gap: 8px; }
         .checkbox-item input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
         .checkbox-item label { font-size: 13px; cursor: pointer; }
+
+        /* Field config table */
+        .field-config-table { width: 100%; border-collapse: collapse; }
+        .field-config-table th { font-size: 12px; font-weight: 600; color: var(--text-muted); text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--border-color); }
+        .field-config-table td { padding: 6px; vertical-align: middle; }
+        .field-config-table tr { border-bottom: 1px solid #f1f5f9; }
+        .field-config-table .field-name { font-size: 13px; font-weight: 500; }
+        .field-config-table select { padding: 6px 8px; font-size: 12px; border: 1px solid var(--border-color); border-radius: 4px; }
+        .field-config-table input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; }
+        .style-toggle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--border-color); border-radius: 4px; cursor: pointer; font-size: 13px; background: white; transition: all 0.15s; }
+        .style-toggle:hover { border-color: var(--primary); }
+        .style-toggle.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .style-toggles { display: flex; gap: 4px; }
         
-        /* Loading */
         .loading { display: flex; justify-content: center; padding: 40px; }
         .spinner { width: 32px; height: 32px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         
-        /* Empty State */
         .empty-state { text-align: center; padding: 60px 20px; color: var(--text-muted); }
         .empty-state i { font-size: 48px; margin-bottom: 16px; }
         
         @media (max-width: 768px) { 
             .sidebar { display: none; } 
             .main-wrapper { margin-left: 0; }
-            .form-row { grid-template-columns: 1fr; }
+            .form-row, .form-row-3, .form-row-4 { grid-template-columns: 1fr; }
         }
     </style>
 </head>
 <body>
     <div class="app-shell">
-        <!-- Sidebar -->
         <nav class="sidebar">
             <div class="sidebar-header">
                 <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-                <div class="sidebar-nav">
-                    <div class="nav-section">
-                        <div class="nav-section-title">Overview</div>
-                        <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Management</div>
-                        <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
-                        <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
-                        <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
-                        <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Communication</div>
-                        <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
-                        <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Settings</div>
-                        <a class="nav-item active" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
-                    </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Tools</div>
-                        <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
-                        <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
-                    </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
                 </div>
-</nav>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                    <a class="nav-item" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item active" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
         
-        <!-- Main Content -->
         <div class="main-wrapper">
             <header class="main-header">
                 <h1><i class="bi bi-person-badge"></i> Badge Templates</h1>
                 <div class="header-actions">
+                    <button class="btn btn-success" onclick="openBulkPrintModal()"><i class="bi bi-printer"></i> Bulk Print</button>
                     <button class="btn btn-primary" onclick="openModal()"><i class="bi bi-plus-lg"></i> New Template</button>
                     <button class="btn btn-secondary" onclick="window.location.href='main-panel-v2.html'"><i class="bi bi-arrow-left"></i> Back</button>
                 </div>
@@ -167,7 +174,7 @@
         </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Template Create/Edit Modal -->
     <div class="modal-backdrop" id="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -180,9 +187,23 @@
                     
                     <div class="form-section">
                         <div class="form-section-title">Basic Info</div>
-                        <div class="form-group">
-                            <label>Template Name *</label>
-                            <input type="text" id="name" required placeholder="e.g., VIP Badge, Exhibitor Badge">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Template Name *</label>
+                                <input type="text" id="name" required placeholder="e.g., VIP Badge, Exhibitor Badge">
+                            </div>
+                            <div class="form-group">
+                                <label>Visitor Type</label>
+                                <select id="visitor_type">
+                                    <option value="all">All Types</option>
+                                    <option value="visitor">Visitor</option>
+                                    <option value="exhibitor">Exhibitor</option>
+                                    <option value="vip">VIP</option>
+                                    <option value="press">Press</option>
+                                    <option value="staff">Staff</option>
+                                    <option value="speaker">Speaker</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="form-group">
                             <label>Description</label>
@@ -197,8 +218,8 @@
                     </div>
                     
                     <div class="form-section">
-                        <div class="form-section-title">Badge Size</div>
-                        <div class="form-row">
+                        <div class="form-section-title">Badge Size & Position</div>
+                        <div class="form-row-3">
                             <div class="form-group">
                                 <label>Width (mm)</label>
                                 <input type="number" id="width_mm" value="100" min="20" max="300">
@@ -207,68 +228,158 @@
                                 <label>Height (mm)</label>
                                 <input type="number" id="height_mm" value="50" min="20" max="300">
                             </div>
+                            <div class="form-group">
+                                <label>Orientation</label>
+                                <select id="orientation">
+                                    <option value="landscape">Landscape</option>
+                                    <option value="portrait">Portrait</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>Orientation</label>
-                            <select id="orientation">
-                                <option value="landscape">Landscape</option>
-                                <option value="portrait">Portrait</option>
-                            </select>
-                        </div>
-                    </div>
-                    
-                    <div class="form-section">
-                        <div class="form-section-title">Content to Display</div>
-                        <div class="checkbox-group">
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="show_qr" checked>
-                                <label for="show_qr">QR Code</label>
+                        <div class="form-row-3">
+                            <div class="form-group">
+                                <label>Left Margin (mm)</label>
+                                <input type="number" id="margin_left_mm" value="0" min="-20" max="50">
                             </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="show_name" checked>
-                                <label for="show_name">Name</label>
+                            <div class="form-group">
+                                <label>Top Margin (mm)</label>
+                                <input type="number" id="margin_top_mm" value="0" min="-20" max="50">
                             </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="show_company" checked>
-                                <label for="show_company">Company</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="show_country">
-                                <label for="show_country">Country</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="show_role">
-                                <label for="show_role">Role Badge</label>
-                            </div>
-                            <div class="checkbox-item">
-                                <input type="checkbox" id="show_badge_id">
-                                <label for="show_badge_id">Badge ID</label>
+                            <div class="form-group">
+                                <label>QR Code Size (mm)</label>
+                                <input type="number" id="qr_size_mm" value="30" min="10" max="80">
                             </div>
                         </div>
                     </div>
                     
                     <div class="form-section">
-                        <div class="form-section-title">Font Sizes</div>
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label>Name Size</label>
-                                <select id="font_size_name">
-                                    <option value="14pt">Small (14pt)</option>
-                                    <option value="16pt">Medium (16pt)</option>
-                                    <option value="18pt" selected>Large (18pt)</option>
-                                    <option value="20pt">Extra Large (20pt)</option>
-                                </select>
-                            </div>
-                            <div class="form-group">
-                                <label>Company Size</label>
-                                <select id="font_size_company">
-                                    <option value="10pt">Small (10pt)</option>
-                                    <option value="12pt">Medium (12pt)</option>
-                                    <option value="14pt" selected>Large (14pt)</option>
-                                    <option value="16pt">Extra Large (16pt)</option>
-                                </select>
-                            </div>
-                        </div>
+                        <div class="form-section-title">Content Fields & Styling</div>
+                        <table class="field-config-table">
+                            <thead>
+                                <tr>
+                                    <th>Show</th>
+                                    <th>Field</th>
+                                    <th>Font Size</th>
+                                    <th>Style</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><input type="checkbox" id="show_qr" checked></td>
+                                    <td class="field-name">QR Code</td>
+                                    <td>-</td>
+                                    <td>-</td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_name" checked></td>
+                                    <td class="field-name">Name</td>
+                                    <td><select id="font_size_name">
+                                        <option value="12pt">12pt</option><option value="14pt">14pt</option><option value="16pt">16pt</option>
+                                        <option value="18pt" selected>18pt</option><option value="20pt">20pt</option><option value="22pt">22pt</option><option value="24pt">24pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle active" data-field="name" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="name" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_company" checked></td>
+                                    <td class="field-name">Company</td>
+                                    <td><select id="font_size_company">
+                                        <option value="8pt">8pt</option><option value="10pt">10pt</option><option value="12pt">12pt</option>
+                                        <option value="14pt" selected>14pt</option><option value="16pt">16pt</option><option value="18pt">18pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle" data-field="company" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="company" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_job_title"></td>
+                                    <td class="field-name">Job Title</td>
+                                    <td><select id="font_size_job_title">
+                                        <option value="8pt">8pt</option><option value="9pt">9pt</option><option value="10pt">10pt</option>
+                                        <option value="11pt" selected>11pt</option><option value="12pt">12pt</option><option value="14pt">14pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle" data-field="job_title" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="job_title" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_booth_number"></td>
+                                    <td class="field-name">Booth Number</td>
+                                    <td><select id="font_size_booth_number">
+                                        <option value="10pt">10pt</option><option value="12pt">12pt</option>
+                                        <option value="14pt" selected>14pt</option><option value="16pt">16pt</option><option value="18pt">18pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle active" data-field="booth_number" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="booth_number" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_country"></td>
+                                    <td class="field-name">Country</td>
+                                    <td><select id="font_size_country">
+                                        <option value="8pt">8pt</option><option value="9pt">9pt</option><option value="10pt">10pt</option>
+                                        <option value="11pt">11pt</option><option value="12pt" selected>12pt</option><option value="14pt">14pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle" data-field="country" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="country" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_phone"></td>
+                                    <td class="field-name">Phone</td>
+                                    <td><select id="font_size_phone">
+                                        <option value="8pt">8pt</option><option value="9pt">9pt</option>
+                                        <option value="10pt" selected>10pt</option><option value="11pt">11pt</option><option value="12pt">12pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle" data-field="phone" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="phone" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_sector"></td>
+                                    <td class="field-name">Sector</td>
+                                    <td><select id="font_size_sector">
+                                        <option value="8pt">8pt</option><option value="9pt">9pt</option>
+                                        <option value="10pt" selected>10pt</option><option value="11pt">11pt</option><option value="12pt">12pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle" data-field="sector" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="sector" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_role"></td>
+                                    <td class="field-name">Visitor Type</td>
+                                    <td><select id="font_size_role">
+                                        <option value="8pt">8pt</option><option value="9pt">9pt</option>
+                                        <option value="10pt" selected>10pt</option><option value="11pt">11pt</option><option value="12pt">12pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle" data-field="role" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="role" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                                <tr>
+                                    <td><input type="checkbox" id="show_badge_id"></td>
+                                    <td class="field-name">Badge ID</td>
+                                    <td><select id="font_size_badge_id">
+                                        <option value="6pt">6pt</option><option value="7pt">7pt</option>
+                                        <option value="8pt" selected>8pt</option><option value="9pt">9pt</option><option value="10pt">10pt</option>
+                                    </select></td>
+                                    <td><div class="style-toggles">
+                                        <button type="button" class="style-toggle" data-field="badge_id" data-style="bold" title="Bold"><b>B</b></button>
+                                        <button type="button" class="style-toggle" data-field="badge_id" data-style="italic" title="Italic"><i>I</i></button>
+                                    </div></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </form>
             </div>
@@ -279,259 +390,691 @@
         </div>
     </div>
 
+    <!-- Bulk Print Modal -->
+    <div class="modal-backdrop" id="bulkPrintModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="bi bi-printer"></i> Bulk Badge Print</h2>
+                <button class="modal-close" onclick="closeBulkPrintModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-section">
+                    <div class="form-section-title">1. Select Badge Template</div>
+                    <div class="form-group">
+                        <label>Badge Template *</label>
+                        <select id="bulkTemplateSelect">
+                            <option value="">-- Select Template --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <div class="form-section-title">2. Data Source</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Source</label>
+                            <select id="bulkDataSource" onchange="toggleBulkSource()">
+                                <option value="excel">Upload Excel File</option>
+                                <option value="database">From Database (Expo)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" id="bulkExpoGroup" style="display:none">
+                            <label>Select Expo</label>
+                            <select id="bulkExpoSelect">
+                                <option value="">-- Select Expo --</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="bulkExcelGroup">
+                        <div class="form-group">
+                            <label>Excel File (.xlsx, .xls, .csv)</label>
+                            <input type="file" id="bulkExcelFile" accept=".xlsx,.xls,.csv">
+                        </div>
+                        <div style="background:#fffbeb; border:1px solid #fbbf24; border-radius:8px; padding:12px; font-size:12px; color:#92400e;">
+                            <b>Excel columns:</b> name, last_name, email, company, country, job_title, booth_number, phone, sector, visitor_type
+                        </div>
+                    </div>
+                    <div id="bulkDbFilterGroup" style="display:none; margin-top:12px;">
+                        <div class="form-group">
+                            <label>Filter by Visitor Type</label>
+                            <select id="bulkDbFilter">
+                                <option value="all">All Types</option>
+                                <option value="visitor">Visitor</option>
+                                <option value="exhibitor">Exhibitor</option>
+                                <option value="vip">VIP</option>
+                                <option value="press">Press</option>
+                                <option value="staff">Staff</option>
+                                <option value="speaker">Speaker</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="bulkPreviewArea" style="display:none">
+                    <div class="form-section">
+                        <div class="form-section-title">3. Preview (<span id="bulkCount">0</span> badges)</div>
+                        <div style="max-height:200px; overflow-y:auto; border:1px solid var(--border-color); border-radius:8px;">
+                            <table style="width:100%; font-size:12px; border-collapse:collapse;">
+                                <thead><tr style="background:#f8fafc; position:sticky; top:0;">
+                                    <th style="padding:8px; text-align:left;">#</th>
+                                    <th style="padding:8px; text-align:left;">Name</th>
+                                    <th style="padding:8px; text-align:left;">Company</th>
+                                    <th style="padding:8px; text-align:left;">Booth</th>
+                                    <th style="padding:8px; text-align:left;">Type</th>
+                                </tr></thead>
+                                <tbody id="bulkPreviewTable"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeBulkPrintModal()">Cancel</button>
+                <button class="btn btn-primary" id="bulkLoadBtn" onclick="loadBulkData()"><i class="bi bi-arrow-clockwise"></i> Load Data</button>
+                <button class="btn btn-success" id="bulkPrintBtn" onclick="executeBulkPrint()" style="display:none"><i class="bi bi-printer"></i> Print All Badges</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
         const token = localStorage.getItem('token');
+        const API_URL = '';
         let templates = [];
         let editingId = null;
+        let bulkData = [];
 
         document.addEventListener('DOMContentLoaded', () => {
             if (!token) { window.location.href = 'login_new.html'; return; }
             loadTemplates();
+            initStyleToggles();
         });
 
+        // ==================== STYLE TOGGLES ====================
+        function initStyleToggles() {
+            document.querySelectorAll('.style-toggle').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    this.classList.toggle('active');
+                });
+            });
+        }
+
+        function getStyleToggleState(field, style) {
+            const btn = document.querySelector(`.style-toggle[data-field="${field}"][data-style="${style}"]`);
+            return btn ? btn.classList.contains('active') : false;
+        }
+
+        function setStyleToggleState(field, style, active) {
+            const btn = document.querySelector(`.style-toggle[data-field="${field}"][data-style="${style}"]`);
+            if (btn) {
+                if (active) btn.classList.add('active');
+                else btn.classList.remove('active');
+            }
+        }
+
+        // ==================== TEMPLATES ====================
         async function loadTemplates() {
             try {
-                const res = await fetch('/api/badge-templates', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (!res.ok) throw new Error('Failed to load');
-                
+                const res = await fetch(`${API_URL}/api/badge-templates`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Failed');
                 const data = await res.json();
                 templates = data.templates || [];
                 renderTemplates();
             } catch (e) {
-                console.error('Load error:', e);
-                document.getElementById('content').innerHTML = `
-                    <div class="empty-state">
-                        <i class="bi bi-exclamation-circle"></i>
-                        <h3>Failed to load templates</h3>
-                    </div>
-                `;
+                document.getElementById('content').innerHTML = '<div class="empty-state"><i class="bi bi-exclamation-circle"></i><h3>Failed to load</h3></div>';
             }
         }
 
         function renderTemplates() {
             if (templates.length === 0) {
-                document.getElementById('content').innerHTML = `
-                    <div class="empty-state">
-                        <i class="bi bi-person-badge"></i>
-                        <h3>No Badge Templates</h3>
-                        <p>Create your first badge template to get started</p>
-                        <button class="btn btn-primary" onclick="openModal()" style="margin-top: 16px;">
-                            <i class="bi bi-plus-lg"></i> Create Template
-                        </button>
-                    </div>
-                `;
+                document.getElementById('content').innerHTML = '<div class="empty-state"><i class="bi bi-person-badge"></i><h3>No Badge Templates</h3><p>Create your first badge template</p><button class="btn btn-primary" onclick="openModal()" style="margin-top:16px"><i class="bi bi-plus-lg"></i> Create Template</button></div>';
                 return;
             }
-
-            document.getElementById('content').innerHTML = `
-                <div class="template-grid">
-                    ${templates.map(t => renderTemplateCard(t)).join('')}
-                </div>
-            `;
+            document.getElementById('content').innerHTML = '<div class="template-grid">' + templates.map(t => renderTemplateCard(t)).join('') + '</div>';
         }
 
         function renderTemplateCard(t) {
             const size = t.size_config || {};
             const content = t.content_config || {};
-            const style = t.style_config || {};
-            
-            const contentItems = [];
-            if (content.show_qr) contentItems.push('QR');
-            if (content.show_name) contentItems.push('Name');
-            if (content.show_company) contentItems.push('Company');
-            if (content.show_country) contentItems.push('Country');
-            if (content.show_role) contentItems.push('Role');
-            if (content.show_badge_id) contentItems.push('Badge ID');
+            const items = [];
+            if (content.show_qr) items.push('QR');
+            if (content.show_name) items.push('Name');
+            if (content.show_company) items.push('Company');
+            if (content.show_job_title) items.push('Job');
+            if (content.show_booth_number) items.push('Booth');
+            if (content.show_country) items.push('Country');
+            if (content.show_phone) items.push('Phone');
+            if (content.show_sector) items.push('Sector');
+            if (content.show_role) items.push('Type');
+            if (content.show_badge_id) items.push('ID');
+            const margin = (size.margin_left_mm || size.margin_top_mm) ? `L:${size.margin_left_mm||0} T:${size.margin_top_mm||0}` : 'None';
+            const vType = t.visitor_type || 'all';
 
-            return `
-                <div class="template-card ${t.is_default ? 'default' : ''}">
-                    ${t.is_default ? '<span class="default-badge">DEFAULT</span>' : ''}
-                    <h3>${escapeHtml(t.name)}</h3>
-                    <p class="description">${escapeHtml(t.description || 'No description')}</p>
-                    
-                    <div class="badge-preview">
-                        <div class="badge-mini-wrapper" style="width: ${size.width_mm || 100}mm; height: ${size.height_mm || 50}mm; transform: scale(0.35);">
-                            ${content.show_qr ? '<div class="badge-mini-qr">QR</div>' : ''}
-                            <div class="badge-mini-info">
-                                ${content.show_name ? '<div class="badge-mini-name">John Doe</div>' : ''}
-                                ${content.show_company ? '<div class="badge-mini-company">Acme Inc.</div>' : ''}
-                                ${content.show_country ? '<div style="font-size:10pt;color:#777;">Nigeria</div>' : ''}
-                            </div>
+            return `<div class="template-card ${t.is_default?'default':''}">
+                ${t.is_default?'<span class="default-badge">DEFAULT</span>':''}
+                ${vType !== 'all' ? `<span class="type-badge">${esc(vType)}</span>` : ''}
+                <h3>${esc(t.name)}</h3>
+                <p class="description">${esc(t.description||'No description')}</p>
+                <div class="badge-preview">
+                    <div class="badge-mini-wrapper" style="width:${size.width_mm||100}mm;height:${size.height_mm||50}mm;transform:scale(0.35)">
+                        ${content.show_qr?`<div class="badge-mini-qr" style="width:${size.qr_size_mm||30}mm;height:${size.qr_size_mm||30}mm">QR</div>`:''}
+                        <div class="badge-mini-info">
+                            ${content.show_name?'<div class="badge-mini-name">John Doe</div>':''}
+                            ${content.show_company?'<div class="badge-mini-company">Acme Inc.</div>':''}
+                            ${content.show_job_title?'<div style="font-size:9pt;color:#444">Manager</div>':''}
+                            ${content.show_booth_number?'<div style="font-size:11pt;font-weight:bold;color:#c2410c">Booth: A-15</div>':''}
+                            ${content.show_country?'<div style="font-size:10pt;color:#777">Turkey</div>':''}
                         </div>
-                    </div>
-                    
-                    <div class="config-preview">
-                        <div class="config-item">
-                            <span class="label">Size</span>
-                            <span class="value">${size.width_mm || 100} × ${size.height_mm || 50} mm</span>
-                        </div>
-                        <div class="config-item">
-                            <span class="label">Orientation</span>
-                            <span class="value">${size.orientation || 'landscape'}</span>
-                        </div>
-                        <div class="config-item">
-                            <span class="label">Content</span>
-                            <span class="value">${contentItems.join(', ') || 'None'}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="actions">
-                        <button class="btn btn-secondary btn-sm" onclick="editTemplate(${t.id})">
-                            <i class="bi bi-pencil"></i> Edit
-                        </button>
-                        <button class="btn btn-secondary btn-sm" onclick="previewTemplate(${t.id})">
-                            <i class="bi bi-eye"></i> Preview
-                        </button>
-                        ${!t.is_default ? `
-                            <button class="btn btn-danger btn-sm" onclick="deleteTemplate(${t.id})">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        ` : ''}
                     </div>
                 </div>
-            `;
+                <div class="config-preview">
+                    <div class="config-item"><span class="label">Type</span><span class="value" style="text-transform:capitalize">${vType}</span></div>
+                    <div class="config-item"><span class="label">Size</span><span class="value">${size.width_mm||100}×${size.height_mm||50}mm</span></div>
+                    <div class="config-item"><span class="label">QR Size</span><span class="value">${size.qr_size_mm||30}mm</span></div>
+                    <div class="config-item"><span class="label">Margins</span><span class="value">${margin}</span></div>
+                    <div class="config-item"><span class="label">Content</span><span class="value">${items.join(', ')||'None'}</span></div>
+                </div>
+                <div class="actions">
+                    <button class="btn btn-secondary btn-sm" onclick="editTemplate(${t.id})"><i class="bi bi-pencil"></i> Edit</button>
+                    <button class="btn btn-secondary btn-sm" onclick="previewTemplate(${t.id})"><i class="bi bi-eye"></i> Preview</button>
+                    <button class="btn btn-success btn-sm" onclick="openBulkPrintModal(${t.id})"><i class="bi bi-printer"></i> Bulk</button>
+                    ${!t.is_default?`<button class="btn btn-danger btn-sm" onclick="deleteTemplate(${t.id})"><i class="bi bi-trash"></i></button>`:''}
+                </div>
+            </div>`;
         }
+
+        // ==================== CREATE/EDIT MODAL ====================
+        const ALL_FIELDS = ['name','company','job_title','booth_number','country','phone','sector','role','badge_id'];
 
         function openModal(template = null) {
             editingId = template ? template.id : null;
             document.getElementById('modalTitle').textContent = template ? 'Edit Template' : 'New Badge Template';
-            
-            // Reset form
             document.getElementById('templateForm').reset();
             
+            // Reset defaults
+            document.getElementById('width_mm').value = 100;
+            document.getElementById('height_mm').value = 50;
+            document.getElementById('margin_left_mm').value = 0;
+            document.getElementById('margin_top_mm').value = 0;
+            document.getElementById('qr_size_mm').value = 30;
+            document.getElementById('orientation').value = 'landscape';
+            document.getElementById('visitor_type').value = 'all';
+            document.getElementById('show_qr').checked = true;
+            document.getElementById('show_name').checked = true;
+            document.getElementById('show_company').checked = true;
+
+            // Reset all style toggles
+            document.querySelectorAll('.style-toggle').forEach(btn => btn.classList.remove('active'));
+            // Name defaults to bold
+            setStyleToggleState('name', 'bold', true);
+            // Booth defaults to bold
+            setStyleToggleState('booth_number', 'bold', true);
+
+            // Reset font sizes to defaults
+            document.getElementById('font_size_name').value = '18pt';
+            document.getElementById('font_size_company').value = '14pt';
+            document.getElementById('font_size_job_title').value = '11pt';
+            document.getElementById('font_size_booth_number').value = '14pt';
+            document.getElementById('font_size_country').value = '12pt';
+            document.getElementById('font_size_phone').value = '10pt';
+            document.getElementById('font_size_sector').value = '10pt';
+            document.getElementById('font_size_role').value = '10pt';
+            document.getElementById('font_size_badge_id').value = '8pt';
+            
             if (template) {
-                const size = template.size_config || {};
-                const content = template.content_config || {};
-                const style = template.style_config || {};
+                const s = template.size_config || {};
+                const c = template.content_config || {};
+                const st = template.style_config || {};
                 
                 document.getElementById('templateId').value = template.id;
                 document.getElementById('name').value = template.name || '';
                 document.getElementById('description').value = template.description || '';
                 document.getElementById('is_default').checked = template.is_default || false;
+                document.getElementById('visitor_type').value = template.visitor_type || 'all';
                 
-                document.getElementById('width_mm').value = size.width_mm || 100;
-                document.getElementById('height_mm').value = size.height_mm || 50;
-                document.getElementById('orientation').value = size.orientation || 'landscape';
+                document.getElementById('width_mm').value = s.width_mm || 100;
+                document.getElementById('height_mm').value = s.height_mm || 50;
+                document.getElementById('margin_left_mm').value = s.margin_left_mm || 0;
+                document.getElementById('margin_top_mm').value = s.margin_top_mm || 0;
+                document.getElementById('qr_size_mm').value = s.qr_size_mm || 30;
+                document.getElementById('orientation').value = s.orientation || 'landscape';
                 
-                document.getElementById('show_qr').checked = content.show_qr !== false;
-                document.getElementById('show_name').checked = content.show_name !== false;
-                document.getElementById('show_company').checked = content.show_company !== false;
-                document.getElementById('show_country').checked = content.show_country || false;
-                document.getElementById('show_role').checked = content.show_role || false;
-                document.getElementById('show_badge_id').checked = content.show_badge_id || false;
+                document.getElementById('show_qr').checked = c.show_qr !== false;
+                document.getElementById('show_name').checked = c.show_name !== false;
+                document.getElementById('show_company').checked = c.show_company !== false;
+                document.getElementById('show_job_title').checked = c.show_job_title || false;
+                document.getElementById('show_booth_number').checked = c.show_booth_number || false;
+                document.getElementById('show_country').checked = c.show_country || false;
+                document.getElementById('show_phone').checked = c.show_phone || false;
+                document.getElementById('show_sector').checked = c.show_sector || false;
+                document.getElementById('show_role').checked = c.show_role || false;
+                document.getElementById('show_badge_id').checked = c.show_badge_id || false;
                 
-                document.getElementById('font_size_name').value = style.font_size_name || '18pt';
-                document.getElementById('font_size_company').value = style.font_size_company || '14pt';
+                // Font sizes
+                ALL_FIELDS.forEach(f => {
+                    const el = document.getElementById(`font_size_${f}`);
+                    if (el && st[`font_size_${f}`]) el.value = st[`font_size_${f}`];
+                });
+
+                // Bold/italic
+                ALL_FIELDS.forEach(f => {
+                    setStyleToggleState(f, 'bold', st[`bold_${f}`] || false);
+                    setStyleToggleState(f, 'italic', st[`italic_${f}`] || false);
+                });
             }
             
             document.getElementById('modal').classList.add('show');
         }
 
-        function closeModal() {
-            document.getElementById('modal').classList.remove('show');
-            editingId = null;
-        }
-
-        function editTemplate(id) {
-            const template = templates.find(t => t.id === id);
-            if (template) openModal(template);
-        }
+        function closeModal() { document.getElementById('modal').classList.remove('show'); editingId = null; }
+        function editTemplate(id) { const t = templates.find(x => x.id === id); if (t) openModal(t); }
 
         async function saveTemplate() {
             const name = document.getElementById('name').value.trim();
-            if (!name) {
-                alert('Please enter a template name');
-                return;
-            }
+            if (!name) { alert('Please enter a template name'); return; }
+
+            const style_config = {};
+            ALL_FIELDS.forEach(f => {
+                const fontEl = document.getElementById(`font_size_${f}`);
+                if (fontEl) style_config[`font_size_${f}`] = fontEl.value;
+                style_config[`bold_${f}`] = getStyleToggleState(f, 'bold');
+                style_config[`italic_${f}`] = getStyleToggleState(f, 'italic');
+            });
 
             const payload = {
-                name: name,
+                name,
                 description: document.getElementById('description').value.trim(),
                 is_default: document.getElementById('is_default').checked,
+                visitor_type: document.getElementById('visitor_type').value,
                 size_config: {
                     width_mm: parseInt(document.getElementById('width_mm').value) || 100,
                     height_mm: parseInt(document.getElementById('height_mm').value) || 50,
+                    margin_left_mm: parseInt(document.getElementById('margin_left_mm').value) || 0,
+                    margin_top_mm: parseInt(document.getElementById('margin_top_mm').value) || 0,
+                    qr_size_mm: parseInt(document.getElementById('qr_size_mm').value) || 30,
                     orientation: document.getElementById('orientation').value
                 },
                 content_config: {
                     show_qr: document.getElementById('show_qr').checked,
                     show_name: document.getElementById('show_name').checked,
                     show_company: document.getElementById('show_company').checked,
+                    show_job_title: document.getElementById('show_job_title').checked,
+                    show_booth_number: document.getElementById('show_booth_number').checked,
                     show_country: document.getElementById('show_country').checked,
+                    show_phone: document.getElementById('show_phone').checked,
+                    show_sector: document.getElementById('show_sector').checked,
                     show_role: document.getElementById('show_role').checked,
                     show_badge_id: document.getElementById('show_badge_id').checked
                 },
-                style_config: {
-                    font_size_name: document.getElementById('font_size_name').value,
-                    font_size_company: document.getElementById('font_size_company').value
-                }
+                style_config
             };
 
             try {
-                const url = editingId ? `/api/badge-templates/${editingId}` : '/api/badge-templates';
-                const method = editingId ? 'PUT' : 'POST';
-                
+                const url = editingId ? `${API_URL}/api/badge-templates/${editingId}` : `${API_URL}/api/badge-templates`;
                 const res = await fetch(url, {
-                    method: method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
+                    method: editingId ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                     body: JSON.stringify(payload)
                 });
-
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || 'Failed to save');
-                }
-
+                if (!res.ok) throw new Error((await res.json()).error || 'Failed');
                 closeModal();
                 loadTemplates();
-            } catch (e) {
-                console.error('Save error:', e);
-                alert('Failed to save template: ' + e.message);
-            }
+            } catch (e) { alert('Failed to save: ' + e.message); }
         }
 
         async function deleteTemplate(id) {
-            if (!confirm('Are you sure you want to delete this template?')) return;
-
+            if (!confirm('Delete this template?')) return;
             try {
-                const res = await fetch(`/api/badge-templates/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                const res = await fetch(`${API_URL}/api/badge-templates/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error((await res.json()).error || 'Failed');
+                loadTemplates();
+            } catch (e) { alert('Failed: ' + e.message); }
+        }
 
-                if (!res.ok) {
-                    const err = await res.json();
-                    throw new Error(err.error || 'Failed to delete');
+        function previewTemplate(id) { window.open(`/badge.html?qr=SAMPLE&template_id=${id}&preview=1`, '_blank', 'width=500,height=350'); }
+
+        // ==================== BULK PRINT ====================
+        function openBulkPrintModal(preselectedId) {
+            bulkData = [];
+            document.getElementById('bulkPreviewArea').style.display = 'none';
+            document.getElementById('bulkPrintBtn').style.display = 'none';
+            document.getElementById('bulkExcelFile').value = '';
+
+            // Populate template select
+            const sel = document.getElementById('bulkTemplateSelect');
+            sel.innerHTML = '<option value="">-- Select Template --</option>' + 
+                templates.map(t => `<option value="${t.id}">${esc(t.name)} (${(t.visitor_type||'all').toUpperCase()})</option>`).join('');
+            
+            if (preselectedId) sel.value = preselectedId;
+
+            // Load expos
+            loadExpos();
+
+            toggleBulkSource();
+            document.getElementById('bulkPrintModal').classList.add('show');
+        }
+
+        function closeBulkPrintModal() { document.getElementById('bulkPrintModal').classList.remove('show'); }
+
+        async function loadExpos() {
+            try {
+                const expoId = localStorage.getItem('selectedExpoId');
+                const res = await fetch(`${API_URL}/api/expos`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) return;
+                const data = await res.json();
+                const expos = data.expos || data || [];
+                const sel = document.getElementById('bulkExpoSelect');
+                sel.innerHTML = '<option value="">-- Select Expo --</option>' + 
+                    expos.map(e => `<option value="${e.id}" ${e.id == expoId ? 'selected' : ''}>${esc(e.name)}</option>`).join('');
+            } catch(e) { console.error('Failed to load expos:', e); }
+        }
+
+        function toggleBulkSource() {
+            const src = document.getElementById('bulkDataSource').value;
+            document.getElementById('bulkExcelGroup').style.display = src === 'excel' ? 'block' : 'none';
+            document.getElementById('bulkExpoGroup').style.display = src === 'database' ? 'block' : 'none';
+            document.getElementById('bulkDbFilterGroup').style.display = src === 'database' ? 'block' : 'none';
+            document.getElementById('bulkPreviewArea').style.display = 'none';
+            document.getElementById('bulkPrintBtn').style.display = 'none';
+        }
+
+        async function loadBulkData() {
+            const src = document.getElementById('bulkDataSource').value;
+            bulkData = [];
+
+            if (src === 'excel') {
+                const file = document.getElementById('bulkExcelFile').files[0];
+                if (!file) { alert('Please select an Excel file'); return; }
+
+                const expoId = localStorage.getItem('selectedExpoId');
+                if (!expoId) { alert('No expo selected. Go to dashboard first.'); return; }
+
+                // Get visitor_type from template
+                const selTemplateId = document.getElementById('bulkTemplateSelect').value;
+                const selTemplate = templates.find(t => t.id == selTemplateId);
+                const vType = (selTemplate && selTemplate.visitor_type !== 'all') ? selTemplate.visitor_type : 'exhibitor';
+
+                // Upload to import API (creates visitors in DB with QR codes)
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('expo_id', expoId);
+                formData.append('visitor_type', vType);
+                formData.append('source_override', 'import');
+
+                document.getElementById('bulkLoadBtn').disabled = true;
+                document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-hourglass-split"></i> Importing...';
+
+                try {
+                    const importRes = await fetch(API_URL + '/api/visitors/import', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + token },
+                        body: formData
+                    });
+                    if (!importRes.ok) { const err = await importRes.json(); throw new Error(err.message || 'Import failed'); }
+                    const importData = await importRes.json();
+
+                    if (importData.failed_count > 0) {
+                        const errMsgs = (importData.errors || []).slice(0, 5).map(e => 'Row ' + e.row + ': ' + e.message).join('\n');
+                        alert('Import partial: ' + importData.success_count + ' OK, ' + importData.failed_count + ' failed.\n' + errMsgs);
+                    }
+
+                    if (!importData.imported || importData.imported.length === 0) {
+                        alert('No visitors imported. Check for duplicates.');
+                        document.getElementById('bulkLoadBtn').disabled = false;
+                        document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+                        return;
+                    }
+
+                    // Use imported data with qr_codes
+                    bulkData = importData.imported.map(v => ({
+                        name: v.name || '', last_name: '', email: v.email || '',
+                        company: '', country: '', job_title: '',
+                        booth_number: '', phone: '', sector: '',
+                        visitor_type: vType, badge_id: v.badge_id || '', qr_code: v.qr_code || ''
+                    }));
+
+                    // Fetch full details from DB
+                    const ids = importData.imported.map(v => v.id);
+                    const fetchUrl = API_URL + '/api/visitors/paginated?expo_id=' + expoId + '&limit=9999&visitor_type=' + vType;
+                    const fetchRes = await fetch(fetchUrl, { headers: { 'Authorization': 'Bearer ' + token } });
+                    if (fetchRes.ok) {
+                        const fetchData = await fetchRes.json();
+                        const allVisitors = fetchData.visitors || [];
+                        const importedIds = new Set(ids);
+                        const matched = allVisitors.filter(v => importedIds.has(v.id));
+                        if (matched.length > 0) {
+                            bulkData = matched.map(v => ({
+                                name: v.name || '', last_name: v.last_name || '', email: v.email || '',
+                                company: v.company || '', country: v.country || '', job_title: v.job_title || '',
+                                booth_number: v.booth_number || '', phone: v.phone || '', sector: v.sector || '',
+                                visitor_type: v.visitor_type || vType, badge_id: v.badge_id || '', qr_code: v.qr_code || ''
+                            }));
+                        }
+                    }
+
+                } catch(e) {
+                    alert('Import failed: ' + e.message);
+                    document.getElementById('bulkLoadBtn').disabled = false;
+                    document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+                    return;
+                }
+                document.getElementById('bulkLoadBtn').disabled = false;
+                document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+
+            } else {
+                // From database
+                const expoId = document.getElementById('bulkExpoSelect').value;
+                if (!expoId) { alert('Please select an expo'); return; }
+
+                const filter = document.getElementById('bulkDbFilter').value;
+                let url = `${API_URL}/api/visitors/paginated?expo_id=${expoId}&limit=9999`;
+                if (filter !== 'all') url += `&visitor_type=${filter}`;
+
+                try {
+                    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                    if (!res.ok) throw new Error('Failed');
+                    const data = await res.json();
+                    const visitors = data.visitors || data.rows || [];
+                    bulkData = visitors.map(v => ({
+                        name: v.name || '',
+                        last_name: v.last_name || '',
+                        email: v.email || '',
+                        company: v.company || '',
+                        country: v.country || '',
+                        job_title: v.job_title || '',
+                        booth_number: v.booth_number || '',
+                        phone: v.phone || '',
+                        sector: v.sector || '',
+                        visitor_type: v.visitor_type || 'visitor',
+                        badge_id: v.badge_id || '',
+                        qr_code: v.qr_code || ''
+                    }));
+                } catch(e) { alert('Failed to load visitors: ' + e.message); return; }
+            }
+
+            if (bulkData.length === 0) { alert('No data found'); return; }
+
+            // Show preview
+            document.getElementById('bulkCount').textContent = bulkData.length;
+            document.getElementById('bulkPreviewTable').innerHTML = bulkData.slice(0, 50).map((d, i) => 
+                `<tr>
+                    <td style="padding:6px 8px">${i+1}</td>
+                    <td style="padding:6px 8px">${esc(d.name)} ${esc(d.last_name)}</td>
+                    <td style="padding:6px 8px">${esc(d.company)}</td>
+                    <td style="padding:6px 8px">${esc(d.booth_number)}</td>
+                    <td style="padding:6px 8px;text-transform:capitalize">${esc(d.visitor_type)}</td>
+                </tr>`
+            ).join('') + (bulkData.length > 50 ? `<tr><td colspan="5" style="padding:8px;text-align:center;color:var(--text-muted)">... and ${bulkData.length - 50} more</td></tr>` : '');
+
+            document.getElementById('bulkPreviewArea').style.display = 'block';
+            document.getElementById('bulkPrintBtn').style.display = 'inline-flex';
+        }
+
+        function executeBulkPrint() {
+            const templateId = document.getElementById('bulkTemplateSelect').value;
+            if (!templateId) { alert('Please select a badge template'); return; }
+            
+            const template = templates.find(t => t.id == templateId);
+            if (!template) { alert('Template not found'); return; }
+
+            // Open print window
+            const printWin = window.open('', '_blank');
+            printWin.document.write(generateBulkPrintHTML(template, bulkData));
+            printWin.document.close();
+        }
+
+        function generateBulkPrintHTML(template, data) {
+            const s = template.size_config || {};
+            const c = template.content_config || {};
+            const st = template.style_config || {};
+
+            const w = s.width_mm || 100;
+            const h = s.height_mm || 50;
+            const ml = s.margin_left_mm || 0;
+            const mt = s.margin_top_mm || 0;
+            const qrSize = s.qr_size_mm || 30;
+
+            function fieldStyle(field, defaultSize) {
+                const size = st[`font_size_${field}`] || defaultSize;
+                const bold = st[`bold_${field}`] ? 'font-weight:bold;' : '';
+                const italic = st[`italic_${field}`] ? 'font-style:italic;' : '';
+                return `font-size:${size};${bold}${italic}`;
+            }
+
+            const badges = data.map(person => {
+                const fullName = [person.name, person.last_name].filter(Boolean).join(' ') || 'Guest';
+                const qrValue = person.qr_code || person.email || fullName;
+                
+                let infoHtml = '';
+                if (c.show_name) infoHtml += `<div style="${fieldStyle('name','18pt')};margin-bottom:2mm;line-height:1.2;word-break:break-word;">${esc(fullName)}</div>`;
+                if (c.show_company && person.company) infoHtml += `<div style="${fieldStyle('company','14pt')};margin-bottom:1mm;line-height:1.2;">${esc(person.company)}</div>`;
+                if (c.show_job_title && person.job_title) infoHtml += `<div style="${fieldStyle('job_title','11pt')};color:#444;line-height:1.2;">${esc(person.job_title)}</div>`;
+                if (c.show_booth_number && person.booth_number) infoHtml += `<div style="${fieldStyle('booth_number','14pt')};color:#c2410c;margin-top:1mm;">Booth: ${esc(person.booth_number)}</div>`;
+                if (c.show_country && person.country) infoHtml += `<div style="${fieldStyle('country','12pt')};color:#555;">${esc(person.country)}</div>`;
+                if (c.show_phone && person.phone) infoHtml += `<div style="${fieldStyle('phone','10pt')};color:#666;">${esc(person.phone)}</div>`;
+                if (c.show_sector && person.sector) infoHtml += `<div style="${fieldStyle('sector','10pt')};color:#666;">${esc(person.sector)}</div>`;
+                if (c.show_role && person.visitor_type) infoHtml += `<div style="${fieldStyle('role','10pt')};color:#888;text-transform:uppercase;">${esc(person.visitor_type)}</div>`;
+                if (c.show_badge_id && person.badge_id) infoHtml += `<div style="${fieldStyle('badge_id','8pt')};color:#aaa;margin-top:1mm;">${esc(person.badge_id)}</div>`;
+
+                let qrHtml = '';
+                if (c.show_qr) {
+                    if (person.qr_code) {
+                        qrHtml = `<div style="width:${qrSize}mm;height:${qrSize}mm;margin-right:4mm;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+                            <img src="/api/qr-image/${person.qr_code}" style="width:${qrSize}mm;height:${qrSize}mm;" />
+                        </div>`;
+                    } else {
+                        qrHtml = `<div style="width:${qrSize}mm;height:${qrSize}mm;margin-right:4mm;flex-shrink:0;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#999;">No QR</div>`;
+                    }
                 }
 
-                loadTemplates();
-            } catch (e) {
-                console.error('Delete error:', e);
-                alert('Failed to delete: ' + e.message);
-            }
+                return `<div class="badge-page">
+                    <div class="badge-wrapper ${c.show_qr ? '' : 'no-qr'}">
+                        ${qrHtml}
+                        <div class="info-section">${infoHtml}</div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>Bulk Badge Print - ${esc(template.name)}</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: Arial, sans-serif; }
+    
+    .badge-page {
+        width: ${w}mm;
+        height: ${h}mm;
+        page-break-after: always;
+        overflow: hidden;
+        margin-left: ${ml}mm;
+        margin-top: ${mt}mm;
+    }
+    .badge-page:last-child { page-break-after: auto; }
+
+    .badge-wrapper {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        width: ${w}mm;
+        height: ${h}mm;
+        padding: 4mm;
+    }
+    .badge-wrapper.no-qr {
+        justify-content: center;
+    }
+    .badge-wrapper.no-qr .info-section {
+        text-align: center;
+        align-items: center;
+    }
+    .info-section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        overflow: hidden;
+        min-width: 0;
+    }
+
+    @media print {
+        @page {
+            size: ${w}mm ${h}mm;
+            margin: 0;
+        }
+        html, body { width: ${w}mm; height: ${h}mm; }
+        .print-header { display: none !important; }
+        .badge-page {
+            width: ${w}mm;
+            height: ${h}mm;
+            margin: 0;
+            padding-left: ${ml}mm;
+            padding-top: ${mt}mm;
+            page-break-after: always;
+            overflow: hidden;
+        }
+        .badge-page:last-child { page-break-after: auto; }
+    }
+
+    @media screen {
+        body { background: #eee; padding: 20px; }
+        .badge-page { 
+            background: white; 
+            border: 1px solid #ccc; 
+            margin: 10px auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .print-header {
+            text-align: center; padding: 20px; background: white; 
+            margin-bottom: 20px; border-radius: 8px;
+            font-family: Arial, sans-serif;
+        }
+        .print-header h2 { margin-bottom: 8px; }
+        .print-header button { 
+            padding: 10px 24px; font-size: 14px; background: #4a6fa5; 
+            color: white; border: none; border-radius: 6px; cursor: pointer;
+            margin-top: 8px;
+        }
+        .print-header button:hover { background: #3d5d8a; }
+    }
+</style>
+</head>
+<body>
+    <div class="print-header">
+        <h2>${esc(template.name)} - ${data.length} Badges</h2>
+        <p>Press Ctrl+P or click the button below to print</p>
+        <button onclick="window.print()">🖨️ Print All Badges</button>
+    </div>
+    ${badges}
+</body></html>`;
         }
 
-        function previewTemplate(id) {
-            // Open badge preview with sample data
-            window.open(`/badge.html?qr=SAMPLE&template_id=${id}&preview=1`, '_blank', 'width=450,height=300');
-        }
-
-        function escapeHtml(t) {
-            const d = document.createElement('div');
-            d.textContent = t || '';
-            return d.innerHTML;
-        }
-
-        // Close modal on backdrop click
-        document.getElementById('modal').addEventListener('click', function(e) {
-            if (e.target === this) closeModal();
-        });
+        // ==================== UTILS ====================
+        function esc(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
+        document.getElementById('modal').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+        document.getElementById('bulkPrintModal').addEventListener('click', function(e) { if (e.target === this) closeBulkPrintModal(); });
     </script>
 </body>
 </html>

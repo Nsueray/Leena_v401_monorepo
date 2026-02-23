@@ -58,6 +58,10 @@
         .form-check { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
         .form-check-input { width: 18px; height: 18px; }
         .form-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+        .info-box { background: var(--primary-light); border: 1px solid #c7d9f1; border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px; }
+        .info-box h5 { font-size: 13px; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .info-box ul { margin: 0; padding-left: 20px; font-size: 12px; color: var(--text-secondary); }
+        .info-box li { margin-bottom: 4px; }
         .results-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; margin-top: 24px; display: none; }
         .result-item { padding: 8px 12px; border-radius: var(--radius-md); margin-bottom: 4px; font-size: 13px; }
         .result-item.success { background: var(--success-bg); color: #065f46; }
@@ -75,35 +79,35 @@
             <div class="sidebar-header">
                 <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-                <div class="sidebar-nav">
-                    <div class="nav-section">
-                        <div class="nav-section-title">Overview</div>
-                        <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Management</div>
-                        <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
-                        <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
-                        <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
-                        <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Communication</div>
-                        <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
-                        <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Settings</div>
-                        <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
-                    </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Tools</div>
-                        <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
-                        <a class="nav-item active" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
-                    </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
                 </div>
-</nav>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item active" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
         
         <div class="main-wrapper">
             <div class="spinner-overlay" id="loadingSpinner"><div class="spinner"></div></div>
@@ -114,13 +118,23 @@
             </header>
             
             <main class="main-content">
+                <div class="info-box">
+                    <h5><i class="bi bi-info-circle"></i> Supported Excel Columns</h5>
+                    <ul>
+                        <li><strong>Required:</strong> email</li>
+                        <li><strong>Name:</strong> name (or first_name), last_name</li>
+                        <li><strong>Contact:</strong> phone, company, country, website</li>
+                        <li><strong>Professional:</strong> job_title, sector, visitor_category</li>
+                    </ul>
+                </div>
+
                 <div class="card">
                     <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
-                        <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none;" onchange="handleFileSelect(event)">
+                        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleFileSelect(event)">
                         <i class="bi bi-file-earmark-excel"></i>
                         <h4>Click to Upload Excel File</h4>
                         <p>or drag and drop here (Max: 10MB)</p>
-                        <p>Accepted: .xlsx, .xls</p>
+                        <p>Accepted: .xlsx, .xls, .csv</p>
                     </div>
                     <div class="file-info" id="fileInfo">
                         <span><strong>File:</strong> <span id="fileName"></span> (<span id="fileSize"></span>)</span>
@@ -139,6 +153,10 @@
                             <select class="form-select" id="visitorType">
                                 <option value="visitor">Visitor</option>
                                 <option value="exhibitor">Exhibitor</option>
+                                <option value="speaker">Speaker</option>
+                                <option value="vip">VIP</option>
+                                <option value="press">Press</option>
+                                <option value="staff">Staff</option>
                             </select>
                         </div>
                     </div>
@@ -146,8 +164,8 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label"><i class="bi bi-tag"></i> Source (Optional)</label>
-                            <input type="text" class="form-control" id="sourceInput" placeholder="Will use 'manual' if not in Excel">
-                            <div class="form-hint">Leave empty to use value from Excel or default</div>
+                            <input type="text" class="form-control" id="sourceInput" placeholder="e.g., zoho, website, partner">
+                            <div class="form-hint">Leave empty to use value from Excel or default to 'import'</div>
                         </div>
                         <div class="form-group">
                             <label class="form-label"><i class="bi bi-geo-alt"></i> Origin</label>
@@ -181,7 +199,6 @@
     </div>
 
     <script>
-        // FIXED: Use relative URL instead of hardcoded https://leena.app/api
         const API_URL = '/api';
         let selectedFile = null, expos = [], templates = [];
 
@@ -203,7 +220,7 @@
 
         function handleFile(file) {
             if (file.size > 10 * 1024 * 1024) { alert('File too large (max 10MB)'); return; }
-            if (!file.name.match(/\.(xlsx|xls)$/i)) { alert('Please select Excel file'); return; }
+            if (!file.name.match(/\.(xlsx|xls|csv)$/i)) { alert('Please select Excel or CSV file'); return; }
             selectedFile = file;
             document.getElementById('fileName').textContent = file.name;
             document.getElementById('fileSize').textContent = formatFileSize(file.size);
@@ -292,18 +309,24 @@
                 result.errors.forEach(e => { html += `<div class="result-item error">Row ${e.row}: ${e.message}</div>`; });
             }
             if (result.imported?.length) {
-                result.imported.slice(0, 10).forEach(i => { html += `<div class="result-item success">${i.name} - ${i.email}</div>`; });
+                result.imported.slice(0, 10).forEach(i => { html += `<div class="result-item success">${i.name || 'No name'} - ${i.email}</div>`; });
                 if (result.imported.length > 10) html += `<div class="result-item">...and ${result.imported.length - 10} more</div>`;
             }
             list.innerHTML = html;
         }
 
         function downloadSampleExcel() {
-            const csv = 'name,email,company,phone,country,job_title\nJohn Doe,john@example.com,ABC Corp,+1234567890,USA,Manager\nJane Smith,jane@example.com,XYZ Ltd,+9876543210,UK,Director';
-            const blob = new Blob([csv], { type: 'text/csv' });
+            // CSV with all supported columns
+            const headers = 'name,last_name,email,phone,company,country,job_title,website,sector,visitor_category';
+            const row1 = 'John,Doe,john@example.com,+1234567890,ABC Corporation,USA,Marketing Manager,www.abc.com,Technology,General';
+            const row2 = 'Jane,Smith,jane@example.com,+9876543210,XYZ Limited,UK,CEO,,Finance,VIP';
+            const row3 = 'Ahmed,Hassan,ahmed@example.com,+2341234567,Global Trade Co,Nigeria,Sales Director,www.globaltrade.ng,Import/Export,Exhibitor';
+            
+            const csv = `${headers}\n${row1}\n${row2}\n${row3}`;
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = 'sample_import.csv';
+            a.download = 'visitor_import_template.csv';
             a.click();
         }
     </script>

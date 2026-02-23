@@ -70,6 +70,13 @@
         .badge-pill { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
         .badge-source { background: #dbeafe; color: #1e40af; }
         .badge-origin { background: #f3e8ff; color: #7c3aed; }
+        .badge-type { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+        .badge-type-visitor { background: #dbeafe; color: #1e40af; }
+        .badge-type-exhibitor { background: #fef3c7; color: #92400e; }
+        .badge-type-vip { background: #fce7f3; color: #9d174d; }
+        .badge-type-press { background: #d1fae5; color: #065f46; }
+        .badge-type-staff { background: #e0e7ff; color: #3730a3; }
+        .badge-type-speaker { background: #ede9fe; color: #5b21b6; }
         .empty-state { text-align: center; padding: 60px 24px; display: none; }
         .empty-state-icon { width: 64px; height: 64px; background: var(--bg-main); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; color: var(--text-muted); }
         .empty-state h3 { font-size: 16px; margin-bottom: 8px; }
@@ -83,12 +90,11 @@
         .page-item .page-link { padding: 6px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); color: var(--text-primary); text-decoration: none; font-size: 13px; }
         .page-item.active .page-link { background: var(--primary); color: white; border-color: var(--primary); }
         .page-item.disabled .page-link { color: var(--text-muted); cursor: not-allowed; }
-        .qr-btn { padding: 4px 8px; font-size: 11px; background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; }
+        .qr-btn { padding: 4px 8px; font-size: 11px; background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; text-decoration: none; }
         .qr-btn:hover { background: var(--primary); color: white; }
         .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
         .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        /* QR Modal */
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
         .modal-overlay.show { display: flex; }
         .modal-box { background: white; border-radius: var(--radius-lg); padding: 24px; max-width: 400px; width: 90%; text-align: center; }
@@ -106,35 +112,36 @@
             <div class="sidebar-header">
                 <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
-                <div class="sidebar-nav">
-                    <div class="nav-section">
-                        <div class="nav-section-title">Overview</div>
-                        <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Management</div>
-                        <a class="nav-item active" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
-                        <a class="nav-item" href="form-builder.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
-                        <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
-                        <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Communication</div>
-                        <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
-                        <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
-                    </div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Settings</div>
-                        <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
-                    </div>
-                    <div class="nav-divider"></div>
-                    <div class="nav-section">
-                        <div class="nav-section-title">Tools</div>
-                        <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
-                        <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
-                    </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
                 </div>
-</nav>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item active" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                    <a class="nav-item" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
         
         <div class="main-wrapper">
             <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
@@ -180,6 +187,7 @@
                                 <label class="filter-pill"><input type="checkbox" value="form"> Form</label>
                                 <label class="filter-pill"><input type="checkbox" value="import"> Import</label>
                                 <label class="filter-pill"><input type="checkbox" value="webhook"> Webhook</label>
+                                <label class="filter-pill"><input type="checkbox" value="email"> Email</label>
                             </div>
                         </div>
                         <div class="filter-group">
@@ -188,6 +196,20 @@
                                 <label class="filter-pill"><input type="checkbox" value="massimport"> Mass Import</label>
                                 <label class="filter-pill"><input type="checkbox" value="manual_entry"> Manual Entry</label>
                                 <label class="filter-pill"><input type="checkbox" value="zoho"> Zoho</label>
+                                <label class="filter-pill"><input type="checkbox" value="manual_email_send"> Email Send</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label>Visitor Type</label>
+                            <div class="filter-pills" id="typeFilters">
+                                <label class="filter-pill"><input type="checkbox" value="visitor"> 👤 Visitor</label>
+                                <label class="filter-pill"><input type="checkbox" value="exhibitor"> 🏢 Exhibitor</label>
+                                <label class="filter-pill"><input type="checkbox" value="vip"> ⭐ VIP</label>
+                                <label class="filter-pill"><input type="checkbox" value="press"> 📰 Press</label>
+                                <label class="filter-pill"><input type="checkbox" value="staff"> 🔧 Staff</label>
+                                <label class="filter-pill"><input type="checkbox" value="speaker"> 🎤 Speaker</label>
                             </div>
                         </div>
                     </div>
@@ -202,7 +224,7 @@
                         <div class="table-title"><i class="bi bi-list"></i> Visitor Records</div>
                         <div id="resultsInfo" style="color:var(--text-muted);font-size:13px;">Showing 0 of 0</div>
                     </div>
-                    <div id="tableContent">
+                    <div id="tableContent" style="overflow-x:auto;">
                         <table>
                             <thead>
                                 <tr>
@@ -212,8 +234,8 @@
                                     <th>Company</th>
                                     <th>Country</th>
                                     <th>Email</th>
+                                    <th>Type</th>
                                     <th>Source</th>
-                                    <th>Origin</th>
                                     <th>Registered</th>
                                     <th>QR</th>
                                 </tr>
@@ -291,6 +313,12 @@
             finally { showLoading(false); }
         }
 
+        function getTypeBadgeClass(type) {
+            const t = (type || 'visitor').toLowerCase();
+            const map = { visitor: 'badge-type-visitor', exhibitor: 'badge-type-exhibitor', vip: 'badge-type-vip', press: 'badge-type-press', staff: 'badge-type-staff', speaker: 'badge-type-speaker' };
+            return map[t] || 'badge-type-visitor';
+        }
+
         function renderTable(visitors) {
             const tbody = document.getElementById('visitorsTableBody');
             const emptyState = document.getElementById('emptyState');
@@ -309,15 +337,16 @@
             
             tbody.innerHTML = visitors.map(v => {
                 const date = new Date(v.created_at);
+                const vType = v.visitor_type || 'visitor';
                 return `<tr>
                     <td>${v.id}</td>
                     <td><strong>${escapeHtml(v.name || '-')}</strong></td>
-                    <td>${escapeHtml(v.lastName || v.last_name || '-')}</td>
+                    <td>${escapeHtml(v.last_name || '-')}</td>
                     <td>${escapeHtml(v.company || '-')}</td>
                     <td>${escapeHtml(v.country || '-')}</td>
                     <td>${escapeHtml(v.email || '-')}</td>
+                    <td><span class="badge-type ${getTypeBadgeClass(vType)}">${vType}</span></td>
                     <td><span class="badge-pill badge-source">${v.source || '-'}</span></td>
-                    <td><span class="badge-pill badge-origin">${v.origin || '-'}</span></td>
                     <td><small>${date.toLocaleDateString()}<br>${date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></td>
                     <td>${v.qr_code ? `<a href="badge.html?qr=${encodeURIComponent(v.qr_code)}" target="_blank" class="qr-btn" title="View Badge"><i class="bi bi-qr-code"></i></a>` : '-'}</td>
                 </tr>`;
@@ -327,21 +356,15 @@
         function showQrModal(qrCode, visitorName) {
             currentQrCode = qrCode;
             document.getElementById('qrCodeText').textContent = qrCode;
-            // Generate QR image using Google Charts API
             const qrImageUrl = `https://chart.googleapis.com/chart?chs=200x200&cht=qr&chl=${encodeURIComponent(qrCode)}&choe=UTF-8`;
             document.getElementById('qrImage').innerHTML = `<img src="${qrImageUrl}" alt="QR Code" style="width:100%;height:100%;">`;
             document.getElementById('qrModal').classList.add('show');
         }
 
-        function closeQrModal() {
-            document.getElementById('qrModal').classList.remove('show');
-        }
+        function closeQrModal() { document.getElementById('qrModal').classList.remove('show'); }
 
         function copyQrCode() {
-            navigator.clipboard.writeText(currentQrCode).then(() => {
-                showToast('QR code copied!');
-                closeQrModal();
-            }).catch(() => alert('Failed to copy'));
+            navigator.clipboard.writeText(currentQrCode).then(() => { showToast('QR code copied!'); closeQrModal(); }).catch(() => alert('Failed to copy'));
         }
 
         function renderPagination() {
@@ -374,6 +397,8 @@
             if (sources.length) currentFilters.source = sources.join(',');
             const origins = [...document.querySelectorAll('#originFilters input:checked')].map(c => c.value);
             if (origins.length) currentFilters.origin = origins.join(',');
+            const types = [...document.querySelectorAll('#typeFilters input:checked')].map(c => c.value);
+            if (types.length) currentFilters.visitor_type = types.join(',');
             currentPage = 1;
             loadVisitors();
         }

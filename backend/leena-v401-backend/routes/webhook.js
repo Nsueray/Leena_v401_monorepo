@@ -8,11 +8,12 @@ const { sendEmail, sendEmailWithReplyTo, processEmailTemplate } = require('../ut
 const ZOHO_TOKEN = '98uy237fbiweuhr8h23g9rg239';
 
 // ✅ POST /api/webhook/zoho/:organizer_id/:expo_id/:form_id
-// With duplicate email handling (upsert logic)
+// With duplicate email handling (upsert logic) + resend email for existing visitors
 router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
   try {
     const token = req.headers['x-webhook-token'];
     if (token !== ZOHO_TOKEN) {
+      console.log('❌ [WEBHOOK] Invalid token received - rejecting request');
       return res.status(403).json({ success: false, message: 'Invalid token' });
     }
 
@@ -34,10 +35,20 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     const website = req.body.website ?? '';
     const origin = req.body.origin ?? '';
 
-    console.log('📥 Incoming Zoho webhook:', req.body);
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('📥 [WEBHOOK] Incoming Zoho Form Submission');
+    console.log(`   📧 Email: ${email}`);
+    console.log(`   👤 Name: ${name} ${lastName}`);
+    console.log(`   🏢 Company: ${company}`);
+    console.log(`   🌍 Country: ${country}`);
+    console.log(`   💼 Job Title: ${jobTitle}`);
+    console.log(`   📱 Phone: ${phone}`);
+    console.log(`   🎯 Expo ID: ${expo_id} | Form ID: ${form_id}`);
+    console.log('═══════════════════════════════════════════════════════════');
 
     // Validate email
     if (!email || email.trim() === '') {
+      console.log('❌ [WEBHOOK] Rejected - No email provided');
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
@@ -47,13 +58,15 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       [expo_id, organizer_id]
     );
     if (expoResult.rows.length === 0) {
+      console.log(`❌ [WEBHOOK] Rejected - Expo ${expo_id} not found for organizer ${organizer_id}`);
       return res.status(400).json({ success: false, message: 'Expo not found' });
     }
     const expo_name = expoResult.rows[0].name;
+    console.log(`✓ [WEBHOOK] Expo found: "${expo_name}"`);
 
     // 🔍 Check for existing visitor with same email in this expo
     const existingResult = await pool.query(
-      `SELECT id, qr_code, badge_id, badge_url, name, email
+      `SELECT id, qr_code, badge_id, badge_url, name, last_name, email, company
        FROM visitors 
        WHERE lower(email) = lower($1) 
          AND expo_id = $2 
@@ -66,11 +79,19 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     let isNewVisitor = false;
 
     if (existingResult.rows.length > 0) {
-      // ✅ Existing visitor found - UPDATE with new data
-      const existingId = existingResult.rows[0].id;
-      console.log('ℹ️ Existing visitor found:', email, '- updating with new data');
+      // ✅ Existing visitor found - UPDATE with new data but KEEP existing QR code
+      const existingVisitor = existingResult.rows[0];
+      console.log('');
+      console.log('🔄 [WEBHOOK] EXISTING VISITOR DETECTED');
+      console.log(`   📋 Existing Record ID: ${existingVisitor.id}`);
+      console.log(`   📧 Email: ${existingVisitor.email}`);
+      console.log(`   👤 Previous Name: ${existingVisitor.name} ${existingVisitor.last_name || ''}`);
+      console.log(`   🏢 Previous Company: ${existingVisitor.company}`);
+      console.log(`   🔑 Existing QR Code: ${existingVisitor.qr_code}`);
+      console.log(`   🎫 Existing Badge ID: ${existingVisitor.badge_id}`);
+      console.log('   ➡️  Updating info but KEEPING existing QR code...');
       
-      // Update existing record with new information
+      // Update existing record with new information (keep QR code!)
       const updateResult = await pool.query(
         `UPDATE visitors SET
            name = $1,
@@ -84,13 +105,14 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
            visitor_category = $9,
            visitor_status = $10,
            visitor_type = $11,
-           badge_id = CASE WHEN $12 != '' THEN $12 ELSE badge_id END
+           badge_id = CASE WHEN $12 != '' THEN $12 ELSE badge_id END,
+           updated_at = NOW()
          WHERE id = $13
          RETURNING *`,
         [
-          name || 'No Name',
-          lastName || '',
-          company,
+          name || existingVisitor.name || 'No Name',
+          lastName || existingVisitor.last_name || '',
+          company || existingVisitor.company || '',
           phone,
           jobTitle,
           country,
@@ -100,17 +122,25 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
           visitorStatus,
           visitorType || 'visitor',
           badgeNumber,
-          existingId
+          existingVisitor.id
         ]
       );
       visitor = updateResult.rows[0];
-      console.log('✅ Existing visitor updated:', visitor.email);
+      console.log(`✅ [WEBHOOK] Existing visitor UPDATED: ${visitor.email}`);
+      console.log(`   👤 New Name: ${visitor.name} ${visitor.last_name || ''}`);
+      console.log(`   🏢 New Company: ${visitor.company}`);
+      
     } else {
-      // ✅ New visitor - create record
+      // ✅ New visitor - create record with new QR code
       isNewVisitor = true;
       const badge_id = badgeNumber || `BADGE-${Date.now()}`;
       const qr_code = uuidv4();
       const badge_url = generateBadgeUrl(qr_code);
+
+      console.log('');
+      console.log('🆕 [WEBHOOK] NEW VISITOR - Creating record...');
+      console.log(`   🔑 Generated QR Code: ${qr_code}`);
+      console.log(`   🎫 Generated Badge ID: ${badge_id}`);
 
       const insertQuery = `
         INSERT INTO visitors (
@@ -155,11 +185,11 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
 
       const result = await pool.query(insertQuery, values);
       visitor = result.rows[0];
-      console.log('✅ New visitor created:', visitor.email);
+      console.log(`✅ [WEBHOOK] New visitor CREATED: ${visitor.email} (ID: ${visitor.id})`);
     }
 
-    // ✉️ Send email only for NEW visitors
-    if (isNewVisitor && form_id && email) {
+    // ✉️ Send email for BOTH new and existing visitors
+    if (form_id && email) {
       const templateResult = await pool.query(`
         SELECT et.subject, et.html_content
         FROM forms f
@@ -170,6 +200,10 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       if (templateResult.rows.length > 0) {
         const { subject, html_content } = templateResult.rows[0];
 
+        // Build QR code image tag
+        const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+        const qrImageTag = `<img src="${baseUrl}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width:200px;">`;
+
         const emailData = {
           name: visitor.name || name,
           last_name: visitor.last_name || lastName,
@@ -177,31 +211,64 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
           email: visitor.email,
           badge_id: visitor.badge_id,
           expo_name,
-          qr_code: `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width:200px;">`,
+          qr_code: qrImageTag,
           badge_url: visitor.badge_url
         };
 
+        // Customize subject for existing visitors
+        let emailSubject = subject || 'Your Badge';
+        if (!isNewVisitor) {
+          // Check if subject already mentions "reminder" or similar
+          if (!emailSubject.toLowerCase().includes('reminder') && 
+              !emailSubject.toLowerCase().includes('again') &&
+              !emailSubject.toLowerCase().includes('resend')) {
+            emailSubject = `${emailSubject} (Resent)`;
+          }
+        }
+
         const html = processEmailTemplate(html_content, emailData);
-        const subjectLine = processEmailTemplate(subject || 'Your Badge', emailData);
+        const subjectLine = processEmailTemplate(emailSubject, emailData);
 
         await sendEmailWithReplyTo(email, subjectLine, html, 'reply@replies.leena.app');
-        console.log('📧 Email sent to:', email, '(reply-to: reply@replies.leena.app)');
+        
+        console.log('');
+        console.log('📧 [WEBHOOK] EMAIL SENT SUCCESSFULLY');
+        console.log(`   📬 To: ${email}`);
+        console.log(`   📝 Subject: ${subjectLine}`);
+        console.log(`   🔑 QR Code in email: ${visitor.qr_code}`);
+        console.log(`   📨 Type: ${isNewVisitor ? 'NEW REGISTRATION' : 'RESEND (existing visitor)'}`);
+        console.log(`   ↩️  Reply-To: reply@replies.leena.app`);
+        
       } else {
-        console.log('ℹ️ No template found for form', form_id);
+        console.log(`⚠️ [WEBHOOK] No email template found for form ${form_id} - skipping email`);
       }
-    } else if (!isNewVisitor) {
-      console.log('ℹ️ Skipping email - existing visitor');
     }
+
+    console.log('');
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log(`✅ [WEBHOOK] COMPLETED - ${isNewVisitor ? 'NEW VISITOR' : 'EXISTING VISITOR UPDATED'}`);
+    console.log(`   🆔 Visitor ID: ${visitor.id}`);
+    console.log(`   📧 Email: ${visitor.email}`);
+    console.log(`   🎫 Badge ID: ${visitor.badge_id}`);
+    console.log(`   🔑 QR Code: ${visitor.qr_code}`);
+    console.log('═══════════════════════════════════════════════════════════');
+    console.log('');
 
     res.status(200).json({ 
       success: true, 
-      message: isNewVisitor ? 'Visitor saved from Zoho' : 'Existing visitor returned',
+      message: isNewVisitor ? 'New visitor registered' : 'Existing visitor updated and QR code resent',
       isNewVisitor: isNewVisitor,
-      visitorId: visitor.id
+      visitorId: visitor.id,
+      badgeId: visitor.badge_id,
+      qrCode: visitor.qr_code
     });
 
   } catch (err) {
-    console.error('❌ Webhook error:', err);
+    console.error('');
+    console.error('❌❌❌ [WEBHOOK] ERROR ❌❌❌');
+    console.error(`   Message: ${err.message}`);
+    console.error(`   Stack: ${err.stack}`);
+    console.error('');
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });

@@ -415,7 +415,7 @@ const UI = {
      * Set active menu item
      */
     setActiveMenu(selector) {
-        document.querySelectorAll('.sidebar-menu a').forEach(a => {
+        document.querySelectorAll('.sidebar-menu a, .nav-item').forEach(a => {
             a.classList.remove('active');
         });
         const active = document.querySelector(selector);

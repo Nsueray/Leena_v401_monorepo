@@ -238,74 +238,40 @@ router.post('/public', async (req, res) => {
 // ✅ MANUAL REGISTRATION
 router.post('/manual', async (req, res) => {
   try {
-    const { name, last_name, email, company, job_title, country, expo_id, organizer_id, visitor_type, origin, source } = req.body;
+    const { name, last_name, email, company } = req.body;
 
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
 
-    // Check for existing visitor with same email in this expo
-    const existing = await pool.query(
-      'SELECT id, qr_code, badge_id FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1',
-      [email.toLowerCase().trim(), expo_id]
-    );
-
-    if (existing.rows.length > 0) {
-      // Update existing visitor, keep QR code
-      const ex = existing.rows[0];
-      await pool.query(
-        `UPDATE visitors SET
-          name = COALESCE(NULLIF($1, ''), name),
-          last_name = COALESCE(NULLIF($2, ''), last_name),
-          company = COALESCE(NULLIF($3, ''), company),
-          job_title = COALESCE(NULLIF($4, ''), job_title),
-          country = COALESCE(NULLIF($5, ''), country),
-          updated_at = NOW()
-        WHERE id = $6`,
-        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id]
-      );
-      console.log('🔄 [MANUAL] Updated existing visitor:', email, 'ID:', ex.id);
-      return res.json({
-        success: true,
-        qr_code: ex.qr_code,
-        badge_id: ex.badge_id,
-        visitor_id: ex.id
-      });
-    }
-
-    // New visitor - create with QR
     const qrCode = uuidv4();
     const badgeId = qrCode.substring(0, 8).toUpperCase();
     const badgeUrl = generateBadgeUrl(qrCode);
 
-    const result = await pool.query(
-      `INSERT INTO visitors (name, last_name, email, company, job_title, country,
-        expo_id, organizer_id, visitor_type, origin, source,
-        qr_code, badge_id, badge_url, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
-      RETURNING id, qr_code, badge_id`,
-      [name || '', last_name || '', email, company || '',
-       job_title || '', country || '',
-       expo_id || null, organizer_id || null,
-       visitor_type || 'visitor', origin || 'onsite', source || 'manual',
-       qrCode, badgeId, badgeUrl]
+    await pool.query(
+      `
+      INSERT INTO visitors (name,last_name,email,company,qr_code,badge_id,badge_url,created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,NOW())
+      `,
+      [name || '', last_name || '', email, company || '', qrCode, badgeId, badgeUrl]
     );
 
-    const visitor = result.rows[0];
+    const emailHtml = `<p>Your registration is confirmed.</p>`;
 
-    res.json({
-      success: true,
-      qr_code: visitor.qr_code,
-      badge_id: visitor.badge_id,
-      visitor_id: visitor.id
-    });
+    await sendEmailWithReplyTo(
+      email,
+      'Registration Confirmation',
+      emailHtml,
+      'reply@replies.leena.app'
+    );
+
+    res.json({ success: true });
 
   } catch (err) {
     console.error('❌ Manual registration error:', err);
     res.status(500).json({ success: false, message: 'Registration failed' });
   }
 });
-
 
 // ✅ IMPORT VISITORS FROM EXCEL
 router.post('/import', authMiddleware, upload.single('file'), async (req, res) => {
@@ -385,42 +351,15 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           continue;
         }
 
-        // Check for duplicate email in this expo - UPDATE if exists, keep QR
+        // Check for duplicate email in this expo
         const duplicateCheck = await pool.query(
-          `SELECT id, qr_code, badge_id FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
+          `SELECT id FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
           [email.toLowerCase().trim(), expo_id]
         );
 
         if (duplicateCheck.rows.length > 0) {
-          const existing = duplicateCheck.rows[0];
-          // Update existing visitor info but keep QR code
-          await pool.query(
-            `UPDATE visitors SET
-              name = COALESCE(NULLIF($1, ''), name),
-              last_name = COALESCE(NULLIF($2, ''), last_name),
-              company = COALESCE(NULLIF($3, ''), company),
-              country = COALESCE(NULLIF($4, ''), country),
-              job_title = COALESCE(NULLIF($5, ''), job_title),
-              phone = COALESCE(NULLIF($6, ''), phone),
-              visitor_type = COALESCE(NULLIF($7, ''), visitor_type),
-              sector = COALESCE(NULLIF($8, ''), sector),
-              booth_number = COALESCE(NULLIF($9, ''), booth_number),
-              updated_at = NOW()
-            WHERE id = $10`,
-            [name.trim(), last_name.trim(), company.trim(), country.trim(),
-             job_title.trim(), phone.trim(), visitor_type_val, sector.trim(),
-             (row.booth_number || row['Booth Number'] || row.booth || row.Booth || '').toString().trim(),
-             existing.id]
-          );
-          results.imported.push({
-            id: existing.id,
-            name: name || last_name || email,
-            email: email,
-            qr_code: existing.qr_code,
-            badge_id: existing.badge_id
-          });
-          results.success_count++;
-          console.log(`🔄 Updated existing visitor: ${email} (ID: ${existing.id})`);
+          results.errors.push({ row: rowNum, message: `Duplicate email: ${email}` });
+          results.failed_count++;
           continue;
         }
 
@@ -468,7 +407,6 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           id: visitor.id,
           name: name || last_name || email,
           email: email,
-          qr_code: visitor.qr_code,
           badge_id: badgeId
         });
         results.success_count++;
