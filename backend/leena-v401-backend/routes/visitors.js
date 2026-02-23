@@ -95,12 +95,14 @@ router.get('/paginated', authMiddleware, async (req, res) => {
   }
 });
 
-// ✅ Get visitor by QR code
+// ✅ Get visitor by QR code (PII restricted — no email/phone exposed)
 router.get('/badge/:qr_code', async (req, res) => {
   try {
     const qrCode = req.params.qr_code;
     const result = await pool.query(
-      `SELECT * FROM visitors WHERE qr_code = $1 LIMIT 1`,
+      `SELECT id, name, last_name, company, country, job_title, visitor_type,
+              badge_id, qr_code, booth_number, badge_url, expo_id
+       FROM visitors WHERE qr_code = $1 LIMIT 1`,
       [qrCode]
     );
 
@@ -240,8 +242,8 @@ router.post('/public', async (req, res) => {
   }
 });
 
-// ✅ MANUAL REGISTRATION
-router.post('/manual', async (req, res) => {
+// ✅ MANUAL REGISTRATION (authMiddleware added — Sprint 1 security fix)
+router.post('/manual', authMiddleware, async (req, res) => {
   try {
     const { name, last_name, email, company, job_title, country, expo_id, organizer_id, visitor_type, origin, source } = req.body;
 
@@ -329,8 +331,8 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
       return res.status(400).json({ success: false, message: 'expo_id is required' });
     }
 
-    // Get organizer_id from token
-    const organizerId = req.user?.id || req.user?.organizer_id || 1;
+    // Get organizer_id from token (authMiddleware sets req.organizer_id)
+    const organizerId = req.organizer_id || 1;
 
     // Parse Excel
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });

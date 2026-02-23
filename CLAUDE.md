@@ -527,30 +527,18 @@ Email templates, forms, and terminals now support expo-based grouping with cross
   - 9 pages had wrong Forms link (form-builder.html → form-list.html), 13 missing Send Emails, 8 missing Re-activation, 5 missing Check-in Reports
   - Fix: all 15 admin pages standardized with unified 13-link sidebar
 
-### KRİTİK (Tek organizer olduğu için şu an tetiklenmiyor ama düzeltilmeli)
+### ✅ FIXED (24 Feb 2026 — Sprint 1 Security Hotfix)
 
-1. **Import organizer_id bug** — `visitors.js:328`
-   - `req.user?.id || req.user?.organizer_id || 1` — authMiddleware `req.organizer_id` set ediyor, `req.user` DEĞİL
-   - Sonuç: Tüm import INSERT'leri `organizer_id=1` ile yazılıyor
-   - Birden fazla organizer eklendiğinde veri karışır
+- ~~**Import organizer_id bug**~~ — `visitors.js:333` → Changed `req.user?.id || req.user?.organizer_id || 1` to `req.organizer_id || 1` (authMiddleware sets req.organizer_id)
+- ~~**Manual registration auth missing**~~ — `visitors.js:244` → Added `authMiddleware` to `router.post('/manual')`. Frontend already sends Bearer token.
+- ~~**localStorage key mismatch**~~ — `qrscanner.html:437` → Changed `localStorage.getItem('organizer_id')` to `localStorage.getItem('organizerId')` to match login.html
+- ~~**Hardcoded webhook secret**~~ — `webhook.js:8` → Changed to `process.env.ZOHO_WEBHOOK_TOKEN || 'fallback'`. Env var must be set on Render.
+- ~~**Badge endpoint PII leak**~~ — `visitors.js:99` → Replaced `SELECT *` with explicit columns (id, name, last_name, company, country, job_title, visitor_type, badge_id, qr_code, booth_number, badge_url, expo_id). Email and phone no longer exposed.
 
-2. **Manual registration auth yok** — `visitors.js:239`
-   - `router.post('/manual', async ...)` — middleware YOK
-   - Frontend token gönderiyor ama backend doğrulamıyor
-   - Herkes POST atarak visitor oluşturabilir
-
-3. **localStorage key uyumsuzluğu** — `qrscanner.html:437`
-   - Login `organizerId` (camelCase) kaydediyor, scanner `organizer_id` (snake_case) okuyor
-   - Hiçbir zaman eşleşmez → manual registration her zaman `organizer_id='1'` gönderiyor
-
-4. **Hardcoded webhook secret** — `webhook.js:8`
-   - Zoho webhook token source code'da hardcoded
-   - Repo'yu gören herkes webhook taklit edebilir, env variable'a taşınmalı
+### KRİTİK
+(All Sprint 1 items fixed — see above)
 
 ### YÜKSEK
-
-5. **Badge endpoint PII leak** — `visitors.js:99`
-   - `GET /api/visitors/badge/:qr_code` → SELECT * ile tüm PII (email, phone) public dönüyor
 
 6. **email_worker FOR UPDATE transaction'sız** — `email_worker.js:26-33`
    - Kilit auto-commit'te anında serbest kalıyor, çift worker aynı task'ı alabilir
@@ -714,6 +702,13 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 - Sidebar standardization: all 15 admin pages unified link list (13 links, 5 sections)
 - CLAUDE.md English-only language rule added
 - Reports page enhanced for Ghana fair: backend added visitor_type_breakdown, job_title_breakdown, daily_checkin_trend, checkin_by_hall, checkin_by_terminal queries to /summary; frontend added 6 stat cards, overlay line chart (reg+checkin), visitor type doughnut, country horizontal bar, job title horizontal bar, hall bar chart
+
+**Security Hotfix (24 Feb — Sprint 1):**
+- POST /api/visitors/manual: authMiddleware added (was open to unauthenticated requests)
+- Import route organizer_id: fixed `req.user?.id` → `req.organizer_id` (authMiddleware pattern)
+- Zoho webhook token: moved from hardcoded to `process.env.ZOHO_WEBHOOK_TOKEN` with fallback
+- QR Scanner localStorage: fixed key mismatch (`organizer_id` → `organizerId` to match login.html)
+- Badge endpoint PII: replaced `SELECT *` with explicit column list (email/phone no longer exposed publicly)
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate } = require('../utils/email');
 
-const ZOHO_TOKEN = '98uy237fbiweuhr8h23g9rg239';
+const ZOHO_TOKEN = process.env.ZOHO_WEBHOOK_TOKEN || '98uy237fbiweuhr8h23g9rg239';
 
 // ✅ POST /api/webhook/zoho/:organizer_id/:expo_id/:form_id
 // With duplicate email handling (upsert logic) + resend email for existing visitors

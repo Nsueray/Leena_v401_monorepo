@@ -29,11 +29,11 @@
 
 Bunlar teknik borç değil, açık kapı. Tek organizer olduğu sürece tetiklenmiyor ama düzeltilmeli.
 
-- [ ] `visitors.js:239` — POST /api/visitors/manual'a authMiddleware ekle
-- [ ] `visitors.js:328` — Import route'da `req.organizer_id` kullan (`req.user?.id` yerine)
-- [ ] `webhook.js:8` — Hardcoded Zoho secret'ı env variable'a taşı (ZOHO_WEBHOOK_TOKEN)
-- [ ] `qrscanner.html:437` — localStorage key uyumsuzluğu düzelt (organizerId → organizer_id)
-- [ ] `visitors.js:99` — Badge endpoint SELECT * yerine sadece gerekli alanları dön (PII kısıtla)
+- [x] `visitors.js:244` — POST /api/visitors/manual'a authMiddleware eklendi ✅ 24 Şubat 2026
+- [x] `visitors.js:333` — Import route'da `req.organizer_id` kullanıldı (`req.user?.id` yerine) ✅ 24 Şubat 2026
+- [x] `webhook.js:8` — Zoho secret `process.env.ZOHO_WEBHOOK_TOKEN` ile env variable'a taşındı ✅ 24 Şubat 2026
+- [x] `qrscanner.html:437` — localStorage key düzeltildi (`organizer_id` → `organizerId`) ✅ 24 Şubat 2026
+- [x] `visitors.js:99` — Badge endpoint SELECT * → explicit columns (email/phone kaldırıldı) ✅ 24 Şubat 2026
 
 ## 🟠 Sprint 1.5 — Operasyonel İyileştirmeler (Ghana fuarı sırası/sonrası, 2-3 gün)
 
