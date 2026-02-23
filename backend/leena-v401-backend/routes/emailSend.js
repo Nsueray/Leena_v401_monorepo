@@ -37,7 +37,7 @@ router.post('/single', authMiddleware, async (req, res) => {
             qrCode = generate_qr ? uuidv4() : null;
 
             if (qrCode) {
-                badgeUrl = `${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/badge-print.html?qr=${qrCode}`;
+                badgeUrl = `${process.env.BASE_BADGE_URL || 'https://leena.app'}/badge-print.html?qr=${qrCode}`;
             }
 
             const visitorType = record_type || 'visitor';
@@ -60,12 +60,25 @@ router.post('/single', authMiddleware, async (req, res) => {
             visitorId = result.rows[0].id;
         }
 
+        // If no QR was generated, try to find existing visitor's QR
+        if (!qrCode) {
+            const existingVisitor = await pool.query(
+                `SELECT qr_code, badge_url FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
+                [recipient.email, expo_id]
+            );
+            if (existingVisitor.rows.length > 0 && existingVisitor.rows[0].qr_code) {
+                qrCode = existingVisitor.rows[0].qr_code;
+                badgeUrl = existingVisitor.rows[0].badge_url || badgeUrl;
+            }
+        }
+
+        const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
         const emailData = {
             name: recipient.name || 'Guest',
             email: recipient.email,
             company: recipient.company || '',
             expo_name: expo.name,
-            qr_code: qrCode ? `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qrCode}" alt="QR Code" style="max-width: 200px;">` : '',
+            qr_code: qrCode ? `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width: 200px;">` : '',
             badge_url: badgeUrl || '',
             date: new Date().toLocaleDateString()
         };
@@ -137,10 +150,10 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                     qrCode = generate_qr ? uuidv4() : null;
 
                     if (qrCode) {
-                        badgeUrl = `${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/badge-print.html?qr=${qrCode}`;
+                        badgeUrl = `${process.env.BASE_BADGE_URL || 'https://leena.app'}/badge-print.html?qr=${qrCode}`;
                     }
 
-                    const existing = await pool.query(`SELECT id FROM visitors WHERE email = $1 AND expo_id = $2`, [recipient.email, expo_id]);
+                    const existing = await pool.query(`SELECT id, qr_code, badge_url FROM visitors WHERE email = $1 AND expo_id = $2`, [recipient.email, expo_id]);
                     if (existing.rows.length === 0) {
                         const result = await pool.query(`
                             INSERT INTO visitors (name, email, company, expo_id, organizer_id, badge_id, qr_code, visitor_type, source, origin, badge_url, created_at)
@@ -159,15 +172,35 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                         ]);
                         visitorId = result.rows[0].id;
                         saved++;
+                    } else {
+                        // Existing visitor — use their QR code
+                        visitorId = existing.rows[0].id;
+                        if (!qrCode && existing.rows[0].qr_code) {
+                            qrCode = existing.rows[0].qr_code;
+                            badgeUrl = existing.rows[0].badge_url || badgeUrl;
+                        }
                     }
                 }
 
+                // If no QR was generated and not saved, try to find existing visitor's QR
+                if (!qrCode) {
+                    const existingVisitor = await pool.query(
+                        `SELECT qr_code, badge_url FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
+                        [recipient.email, expo_id]
+                    );
+                    if (existingVisitor.rows.length > 0 && existingVisitor.rows[0].qr_code) {
+                        qrCode = existingVisitor.rows[0].qr_code;
+                        badgeUrl = existingVisitor.rows[0].badge_url || badgeUrl;
+                    }
+                }
+
+                const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
                 const emailData = {
                     name: recipient.name || 'Guest',
                     email: recipient.email,
                     company: recipient.company || '',
                     expo_name: expo.name,
-                    qr_code: qrCode ? `<img src="${process.env.BASE_BADGE_URL}/api/qr-image/${qrCode}" alt="QR Code" style="max-width: 200px;">` : '',
+                    qr_code: qrCode ? `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width: 200px;">` : '',
                     badge_url: badgeUrl || '',
                     date: new Date().toLocaleDateString()
                 };
