@@ -588,6 +588,12 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 6. Font: Inter (Google Fonts), İkonlar: Bootstrap Icons (bi-*)
 7. Renkler: Her sayfada CSS variables tanımlı (--primary, --sidebar-bg, vb.)
 
+### Language Rule
+- Leena EMS is a global SaaS platform. **Only English** must be used in UI text, log messages, error messages, placeholders, and all user-facing strings.
+- Turkish or any other non-English text must never be written in the codebase.
+- If existing Turkish text is found in the code, it must be translated to English.
+- Code comments and commit messages should also be in English.
+
 ### Test Ederken
 1. Email testlerinde `email+tag@gmail.com` formatını kullan
 2. Terminal endpoint'leri camelCase response döner (qrCode, lastName vs)

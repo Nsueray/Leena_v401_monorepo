@@ -249,13 +249,25 @@
             if (currentExpoTemplates.length > 0) {
                 html += `<div class="templates-grid" style="margin-bottom:32px;">${currentExpoTemplates.map(t => renderTemplateCard(t, false)).join('')}</div>`;
             } else {
-                html += `<div style="background:var(--primary-light);border:1px solid #c7d9f1;border-radius:var(--radius-md);padding:20px;text-align:center;margin-bottom:32px;"><i class="bi bi-info-circle" style="color:var(--primary);margin-right:8px;"></i>Bu fuar için henüz template yok. Aşağıdan klonlayabilir veya <a href="#" onclick="showCreateModal();return false;">yeni oluşturabilirsiniz</a>.</div>`;
+                html += `<div style="background:var(--primary-light);border:1px solid #c7d9f1;border-radius:var(--radius-md);padding:20px;text-align:center;margin-bottom:32px;"><i class="bi bi-info-circle" style="color:var(--primary);margin-right:8px;"></i>No templates for this expo yet. You can clone from templates below or <a href="#" onclick="showCreateModal();return false;">create a new one</a>.</div>`;
             }
 
-            // Other templates section
+            // Other templates section — compact list
             if (otherTemplates.length > 0) {
-                html += `<div style="margin-bottom:8px;"><h5 style="margin:0;color:var(--text-secondary);"><i class="bi bi-collection"></i> Diğer Template'ler</h5></div>`;
-                html += `<div class="templates-grid">${otherTemplates.map(t => renderTemplateCard(t, true)).join('')}</div>`;
+                html += `<div style="margin-bottom:8px;"><h5 style="margin:0;color:var(--text-secondary);"><i class="bi bi-collection"></i> Other Templates</h5></div>`;
+                html += `<div style="border:1px solid var(--border-color);border-radius:8px;padding:8px;background:rgba(0,0,0,0.02);">`;
+                html += otherTemplates.map((t, i) => {
+                    const expoPill = t.expo_name ? `<span style="background:#e0f2fe;color:#0369a1;font-size:0.7rem;padding:2px 8px;border-radius:10px;white-space:nowrap;">${escapeHtml(t.expo_name)}</span>` : `<span style="background:#f1f5f9;color:#64748b;font-size:0.7rem;padding:2px 8px;border-radius:10px;">Global</span>`;
+                    const borderBottom = i < otherTemplates.length - 1 ? 'border-bottom:1px solid rgba(0,0,0,0.06);' : '';
+                    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;${borderBottom}opacity:0.75;font-size:0.85rem;">
+                        <div style="display:flex;align-items:center;gap:8px;min-width:0;overflow:hidden;"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(t.name)}</span>${expoPill}</div>
+                        <div style="display:flex;gap:4px;flex-shrink:0;">
+                            <button class="btn btn-sm btn-secondary" onclick="cloneTemplate(${t.id})" title="Clone to this expo" style="padding:4px 8px;font-size:0.75rem;"><i class="bi bi-files"></i></button>
+                            <button class="btn btn-sm btn-secondary" onclick="editTemplate(${t.id})" title="Edit" style="padding:4px 8px;font-size:0.75rem;"><i class="bi bi-pencil"></i></button>
+                        </div>
+                    </div>`;
+                }).join('');
+                html += `</div>`;
             }
 
             container.innerHTML = html;
