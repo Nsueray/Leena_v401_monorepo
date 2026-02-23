@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 23 Şubat 2026 | Versiyon: v4.0.2+
+> Son güncelleme: 24 Şubat 2026 | Versiyon: v4.0.2+
 
 ---
 
@@ -497,6 +497,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 |-----|----------|----------|------|
 | token | Login | Tüm admin sayfalar | Yoksa auth fail |
 | selectedExpoId | Dashboard | Main Panel, Forms, Checkins, Reports | Yoksa redirect |
+| selectedExpoName | Dashboard (expo select) | All 14 admin sidebar expo indicators | Display only |
 | organizer | Login | Webhook URL generator | Profil |
 | terminalKey | URL param | QR Scanner | Yoksa terminal auth fail |
 | leadScannerAuth | lead-scan.html | lead-scan.html | Exhibitor session |
@@ -553,7 +554,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 9. Hata yanıt formatı tutarsız (5 farklı format: `{error}`, `{success,message}`, `{success,error}`, `{success,error,code}`, `{error,details}`)
 10. ~~Sidebar inconsistent~~ ✅ FIXED 23 Feb — All 15 admin pages standardized with unified 13-link sidebar
 11. Frontend auth kontrol boşlukları: form-builder, checkin-import, expo-create'te auth check eksik/hatalı
-12. Login redirect tutarsız: eski sayfalar login.html'e, yeniler login_new.html'e yönlendiriyor
+12. ~~Login redirect tutarsız~~ ✅ FIXED 24 Feb (Sprint 2) — All 14 admin pages now redirect to login.html (login_new.html removed) and main-panel-v2.html (dashboard_new.html removed)
 13. Template placeholder uyumsuz: `{{date}}` ve `{{expo_name}}` bazı akışlarda boş kalıyor
 14. Leads endpoint'te server-side session yok — exhibitor_company bilen herkes lead yazabilir/okuyabilir
 
@@ -578,18 +579,22 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 | Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder |
 | Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | main-panel-v2, dashboard_new, login_new |
 
-### Sidebar Status (Updated 23 Feb 2026)
+### Sidebar Status (Updated 24 Feb 2026)
 - ✅ All 15 admin pages sidebar links standardized
 - Standard order: Overview → Management → Communication → Settings → Tools
 - 13 links: Dashboard, Visitors, Forms, Check-ins, Terminals, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
 - ✅ CSS `::before` accent bar added to all 15 pages (Gen 2 pages updated 23 Feb 2026)
+- ✅ Active expo indicator added to all 14 admin sidebars (24 Feb 2026) — reads `selectedExpoName` from localStorage, hidden if no expo selected
 - Mobile sidebar only works on main-panel-v2, other pages sidebar disappears below 768px
 
-### Navigasyon Kuralları (Yeni Geliştirme İçin)
+### Navigasyon Kuralları (Updated 24 Feb 2026)
 - Login sayfası: login.html (aktif, main-panel-v2'ye yönlendirir)
 - Ana dashboard: main-panel-v2.html
 - Forms listesi: form-list.html (form-builder.html DEĞİL)
 - Public sayfalar (auth yok): lead-scan.html, reactivate.html, form-public.html, badge.html
+- **All admin pages redirect to login.html (not login_new.html) when no token**
+- **All admin pages redirect to main-panel-v2.html (not dashboard_new.html) when no expo selected**
+- Legacy pages (login_new.html, dashboard_new.html) still exist but are NOT referenced by any active page
 
 ---
 
@@ -709,6 +714,11 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 - Zoho webhook token: moved from hardcoded to `process.env.ZOHO_WEBHOOK_TOKEN` with fallback
 - QR Scanner localStorage: fixed key mismatch (`organizer_id` → `organizerId` to match login.html)
 - Badge endpoint PII: replaced `SELECT *` with explicit column list (email/phone no longer exposed publicly)
+
+**Sprint 2 — UX Consistency (24 Feb):**
+- Login redirect unified: all 14 admin pages now redirect to `login.html` (removed 16 `login_new.html` refs across 13 files)
+- Dashboard redirect unified: all admin pages now redirect to `main-panel-v2.html` (removed 6 `dashboard_new.html` refs across 6 files)
+- Active expo indicator: sidebar shows selected expo name (via `selectedExpoName` localStorage) on all 14 admin pages with sidebars. Hidden gracefully when no expo selected. Inserted between sidebar-header and sidebar-nav with inline style + IIFE script.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

@@ -127,6 +127,8 @@
             <div class="sidebar-header">
                 <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
             </div>
+            <div id="sidebarExpo" style="padding:8px 20px;font-size:11px;color:#9ca3af;border-bottom:1px solid #252542;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;"><i class="bi bi-geo-alt" style="margin-right:4px;color:#4a6fa5;"></i><span id="expoNameDisplay"></span></div>
+            <script>(function(){var n=localStorage.getItem('selectedExpoName'),el=document.getElementById('sidebarExpo');if(n&&el){document.getElementById('expoNameDisplay').textContent=n;el.style.display='block';}})();</script>
             <div class="sidebar-nav">
                 <div class="nav-section">
                     <div class="nav-section-title">Overview</div>
@@ -487,7 +489,7 @@
         let bulkData = [];
 
         document.addEventListener('DOMContentLoaded', () => {
-            if (!token) { window.location.href = 'login_new.html'; return; }
+            if (!token) { window.location.href = 'login.html'; return; }
             loadTemplates();
             initStyleToggles();
         });
