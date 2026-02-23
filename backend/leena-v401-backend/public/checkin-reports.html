@@ -704,13 +704,15 @@
         // ============ CSV Export ============
         function exportCSV() {
             if (allCheckins.length === 0) { alert('No data to export'); return; }
-            const headers = ['Checkin ID','Visitor ID','Name','Email','Company','Country','Source','Terminal','Hall','Check-in Time'];
+            const headers = ['Checkin ID','Visitor ID','Name','Email','Company','Country','Visitor Type','Job Title','Source','Terminal','Hall','Check-in Time'];
             const rows = allCheckins.map(c => [
                 c.id, c.visitor_id,
                 (c.visitor_full_name || c.visitor_name || c.name || '').replace(/,/g, ' '),
                 (c.visitor_email || c.email || ''),
                 (c.visitor_company || c.company || '').replace(/,/g, ' '),
                 (c.visitor_country || c.country || ''),
+                (c.visitor_type || 'visitor'),
+                (c.visitor_job_title || c.job_title || '').replace(/,/g, ' '),
                 (c.source || ''),
                 (c.terminal || ''),
                 (c.hall || ''),

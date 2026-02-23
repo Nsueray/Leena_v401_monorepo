@@ -355,6 +355,8 @@ router.get('/', authenticateToken, async (req, res) => {
           v.job_title,
           ''
         ) as visitor_job_title,
+        -- Get visitor type
+        COALESCE(v.visitor_type, 'visitor') as visitor_type,
         -- Add direct fields as backup
         v.name as name,
         v.last_name as last_name,
