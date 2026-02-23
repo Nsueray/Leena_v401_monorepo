@@ -138,8 +138,9 @@ backend/leena-v401-backend/
 │   ├── email.js                # processEmailTemplate helper
 │   └── qrcode.js               # QR generation helpers
 ├── public/                     # TÜM frontend dosyaları burada
-│   ├── login.html
-│   ├── main-panel-v2.html          # Ana dashboard
+│   ├── login.html                  # Login sayfası (Gen 4 modern UI, login+register tabs)
+│   ├── dashboard_new.html              # Expo seçim sayfası (login sonrası ilk durak)
+│   ├── main-panel-v2.html          # Ana dashboard (expo seçildikten sonra)
 │   ├── visitorlog-paginated.html   # Visitor listesi + visitor_type filtre
 │   ├── qrscanner.html              # Terminal QR tarayıcı + email arama + popup badge
 │   ├── badge.html                  # Badge görüntüleme (word-wrap, auto-size)
@@ -163,9 +164,9 @@ backend/leena-v401-backend/
 │   ├── badge-print.html            # Badge print sayfası
 │   ├── checkin-import.html         # Checkin import sayfası
 │   └── assets/                     # Logo vb.
-# ⚠️ public/ altında *.backup.html ve eski dashboard varyantları (dashboard.html,
-#    dashboard_new.html, admin-dashboard.html, main-panel.html, login_new.html) mevcut,
-#    aktif olarak kullanılmıyor.
+# ⚠️ public/ altında *.backup.html ve eski varyantlar (dashboard.html,
+#    admin-dashboard.html, main-panel.html) mevcut, aktif olarak kullanılmıyor.
+#    login_new.html sadece login.html'e redirect yapar (eski bookmark uyumu).
 └── uploads/                    # Kullanıcı yüklemeleri
 ```
 
@@ -495,10 +496,11 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 
 | Key | Set Eden | Kullanan | Risk |
 |-----|----------|----------|------|
-| token | Login | Tüm admin sayfalar | Yoksa auth fail |
-| selectedExpoId | Dashboard | Main Panel, Forms, Checkins, Reports | Yoksa redirect |
-| selectedExpoName | Dashboard (expo select) | All 14 admin sidebar expo indicators | Display only |
-| organizer | Login | Webhook URL generator | Profil |
+| token | login.html | Tüm admin sayfalar | Yoksa → login.html |
+| selectedExpoId | dashboard_new.html (expo select) | main-panel-v2 + tüm admin sayfalar | Yoksa → dashboard_new.html |
+| selectedExpoName | dashboard_new.html (expo select) | All 14 admin sidebar expo indicators | Display only |
+| organizerId | login.html | Zoho webhook URL generation | Yoksa webhook URL bozulur |
+| organizer | login.html | Profil display | JSON object |
 | terminalKey | URL param | QR Scanner | Yoksa terminal auth fail |
 | leadScannerAuth | lead-scan.html | lead-scan.html | Exhibitor session |
 
@@ -554,7 +556,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 9. Hata yanıt formatı tutarsız (5 farklı format: `{error}`, `{success,message}`, `{success,error}`, `{success,error,code}`, `{error,details}`)
 10. ~~Sidebar inconsistent~~ ✅ FIXED 23 Feb — All 15 admin pages standardized with unified 13-link sidebar
 11. Frontend auth kontrol boşlukları: form-builder, checkin-import, expo-create'te auth check eksik/hatalı
-12. ~~Login redirect tutarsız~~ ✅ FIXED 24 Feb (Sprint 2) — All 14 admin pages now redirect to login.html (login_new.html removed) and main-panel-v2.html (dashboard_new.html removed)
+12. ~~Login redirect tutarsız~~ ✅ FIXED 24 Feb — All admin pages redirect to login.html (no token) and dashboard_new.html (no expo). Login → dashboard_new.html → main-panel-v2.html flow restored.
 13. Template placeholder uyumsuz: `{{date}}` ve `{{expo_name}}` bazı akışlarda boş kalıyor
 14. Leads endpoint'te server-side session yok — exhibitor_company bilen herkes lead yazabilir/okuyabilir
 
@@ -573,11 +575,11 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 
 | Nesil | Primary | Sidebar | Sidebar Width | Sayfalar |
 |-------|---------|---------|---------------|----------|
-| Gen 0 | #e53935 | Yok | - | login.html |
+| Gen 0 | #e53935 | Yok | - | ~~login.html~~ (replaced with Gen 4) |
 | Gen 1 | #0066ff | leena.css (harici) | 240px | dashboard.html, checkin-import.html |
 | Gen 2 | #4a6fa5 | Inline CSS + ::before | 256px | terminals, checkins, form-list, email-templates, email-segments, email-send, import, visitorlog-paginated |
 | Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder |
-| Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | main-panel-v2, dashboard_new, login_new |
+| Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | login.html, main-panel-v2, dashboard_new |
 
 ### Sidebar Status (Updated 24 Feb 2026)
 - ✅ All 15 admin pages sidebar links standardized
@@ -587,14 +589,27 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 - ✅ Active expo indicator added to all 14 admin sidebars (24 Feb 2026) — reads `selectedExpoName` from localStorage, hidden if no expo selected
 - Mobile sidebar only works on main-panel-v2, other pages sidebar disappears below 768px
 
-### Navigasyon Kuralları (Updated 24 Feb 2026)
-- Login sayfası: login.html (aktif, main-panel-v2'ye yönlendirir)
-- Ana dashboard: main-panel-v2.html
+### Navigasyon Akışı (Updated 24 Feb 2026)
+
+**Ana akış:**
+```
+login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashboard)
+```
+
+**Sayfa rolleri:**
+- `login.html` — Login + Register (Gen 4 modern UI). Token varsa → dashboard_new.html'e auto-redirect
+- `dashboard_new.html` — Expo seçim sayfası. selectedExpoId'yi temizler, expo listesi gösterir, seçince main-panel-v2'ye gider
+- `main-panel-v2.html` — Ana expo dashboard. selectedExpoId zorunlu, yoksa → dashboard_new.html
+- `login_new.html` — Sadece login.html'e redirect (eski bookmark uyumu)
+
+**Redirect kuralları:**
+- Token yoksa → `login.html` (tüm admin sayfalar)
+- Expo seçili değilse → `dashboard_new.html` (tüm admin sayfalar)
+- Logout → `login.html` (localStorage.clear)
+
+**Diğer sayfalar:**
 - Forms listesi: form-list.html (form-builder.html DEĞİL)
 - Public sayfalar (auth yok): lead-scan.html, reactivate.html, form-public.html, badge.html
-- **All admin pages redirect to login.html (not login_new.html) when no token**
-- **All admin pages redirect to main-panel-v2.html (not dashboard_new.html) when no expo selected**
-- Legacy pages (login_new.html, dashboard_new.html) still exist but are NOT referenced by any active page
 
 ---
 
@@ -717,8 +732,16 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 
 **Sprint 2 — UX Consistency (24 Feb):**
 - Login redirect unified: all 14 admin pages now redirect to `login.html` (removed 16 `login_new.html` refs across 13 files)
-- Dashboard redirect unified: all admin pages now redirect to `main-panel-v2.html` (removed 6 `dashboard_new.html` refs across 6 files)
 - Active expo indicator: sidebar shows selected expo name (via `selectedExpoName` localStorage) on all 14 admin pages with sidebars. Hidden gracefully when no expo selected. Inserted between sidebar-header and sidebar-nav with inline style + IIFE script.
+- Favicon added: `<link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">` added to all 29 HTML files (admin + public pages). File: `public/assets/favicon-96x96.png`
+
+**Sprint 3 — Login Flow Hotfix (24 Feb):**
+- login.html replaced with login_new.html's Gen 4 modern UI (split-panel, Inter font, login+register tabs)
+- Added missing `organizerId` to localStorage on login (required by Zoho webhook URL generation)
+- Fixed post-login redirect: `main-panel-v2.html` → `dashboard_new.html` (expo selection step was skipped, causing infinite redirect loop)
+- Fixed "no expo selected" redirect on 9 admin pages: `main-panel-v2.html` → `dashboard_new.html` (self-redirect loop → proper expo picker)
+- login_new.html converted to simple redirect to login.html (old bookmark compatibility)
+- dashboard_new.html confirmed as active expo selection page (NOT legacy — Sprint 2 incorrectly labeled it)
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
