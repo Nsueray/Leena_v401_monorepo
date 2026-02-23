@@ -519,7 +519,7 @@
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('token');
             if (token) {
-                window.location.href = 'main-panel-v2.html';
+                window.location.href = 'dashboard_new.html';
             }
         });
 
@@ -613,7 +613,7 @@
                     localStorage.setItem('organizer', JSON.stringify(data.organizer));
                     // Critical: used by Zoho webhook URL generation
                     localStorage.setItem('organizerId', data.organizer.id);
-                    window.location.href = 'main-panel-v2.html';
+                    window.location.href = 'dashboard_new.html';
                 } else {
                     showError(data.error || 'Login failed. Please check your credentials.');
                 }

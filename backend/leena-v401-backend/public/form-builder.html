@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
     <title>Form Builder - Leena EMS</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
@@ -505,8 +506,7 @@
         async function loadCurrentExpo() {
             currentExpoId = localStorage.getItem('selectedExpoId');
             if (!currentExpoId) {
-                alert('No expo selected. Please select an expo first.');
-                window.location.href = 'main-panel-v2.html';
+                window.location.href = 'dashboard_new.html';
                 return;
             }
             try {
