@@ -18,6 +18,10 @@
 - [x] Form 23 (Nigeria webhook) expo_id NULL → expo 3 düzeltildi — 23 Şubat 2026
 - [x] Terminals expo gruplama + cross-expo clone — 23 Şubat 2026
 - [x] Forms istatistik kartları sadece mevcut expo'dan hesaplanıyor — 23 Şubat 2026
+- [x] Send Email QR bug fix (emailSend.js: existing visitor QR lookup + fallback) — 23 Şubat 2026
+- [x] Check-in export'a visitor_type + job_title eklendi (10 → 12 kolon) — 23 Şubat 2026
+- [x] Sidebar standardizasyonu (15 admin sayfa, 13 link, 5 section) — 23 Şubat 2026
+- [x] CLAUDE.md English-only language rule eklendi — 23 Şubat 2026
 
 ---
 
@@ -35,22 +39,22 @@ Bunlar teknik borç değil, açık kapı. Tek organizer olduğu sürece tetiklen
 
 Yaprak Hanım'ın talep listesinden gelen işler.
 
-- [ ] Check-in export'a visitor_type + job_title kolonu ekle
+- [x] Check-in export'a visitor_type + job_title kolonu ekle ✅
 - [x] Email templates expo bazlı gruplama (üstte mevcut expo card, altta diğerleri liste) + clone butonu ✅
-- [ ] Send Email sayfasından gönderilen maillerde QR görünmüyor (BASE_BADGE_URL fix)
+- [x] Send Email sayfasından gönderilen maillerde QR görünmüyor (BASE_BADGE_URL fix) ✅
 - [ ] Reports detaylandırma (ülke × job title × sektör kırılımı, post-show analiz)
-- [ ] email-send.html sidebar'dan kaybolmuş — sidebar'a geri ekle
+- [x] email-send.html sidebar'dan kaybolmuş — sidebar'a geri ekle ✅
 
 ## 🟠 Sprint 2 — Sidebar Stabilizasyon (Fuar öncesi, 2-3 gün)
 
 Operasyonel etki: hostesler/admin sayfalar arası geçiş yapamıyor.
 CSS'e dokunma, layout'a dokunma — sadece sidebar link listesini düzelt.
 
-- [ ] 8 sayfadaki Forms link hedefini `form-builder.html` → `form-list.html` olarak düzelt
-- [ ] Tüm admin sayfalara `checkin-reports.html` sidebar linki ekle (11 sayfada eksik)
-- [ ] Tüm admin sayfalara `email-send.html` sidebar linki ekle (13 sayfada eksik)
-- [ ] Tüm admin sayfalara `reactivation-campaign.html` sidebar linki ekle (9 sayfada eksik)
-- [ ] `email-send.html` active state bug'ını düzelt (Email Templates yerine Email Send aktif olmalı)
+- [x] 8 sayfadaki Forms link hedefini `form-builder.html` → `form-list.html` olarak düzelt ✅
+- [x] Tüm admin sayfalara `checkin-reports.html` sidebar linki ekle (11 sayfada eksik) ✅
+- [x] Tüm admin sayfalara `email-send.html` sidebar linki ekle (13 sayfada eksik) ✅
+- [x] Tüm admin sayfalara `reactivation-campaign.html` sidebar linki ekle (9 sayfada eksik) ✅
+- [x] `email-send.html` active state bug'ını düzelt (Email Templates yerine Email Send aktif olmalı) ✅
 - [ ] Login redirect tekleştir: tüm sayfalar login.html'e yönlensin, login.html → main-panel-v2.html
 - [ ] Aktif expo göstergesi: sidebar veya header'da hangi expo seçili olduğu her sayfada görünsün
 
@@ -64,7 +68,7 @@ Fuar sırasındaki "email gitmiyor" sorununun kök nedeni: 5 yerde direkt SendGr
 - [ ] emailSend.js bulk/single → email_queue üzerinden gönder
 - [ ] emailSegments.js → email_queue üzerinden gönder
 - [ ] `email_worker.js:26-33` — FOR UPDATE'i transaction içine al
-- [ ] `emailSend.js:68,170` — BASE_BADGE_URL fallback ekle
+- [x] `emailSend.js:68,170` — BASE_BADGE_URL fallback ekle ✅
 
 ## 🟢 Sprint 4 — Race Condition & Error Handling (Fuar sonrası, 3-5 gün)
 
@@ -84,6 +88,7 @@ Bu büyük refactor. Fuar yokken yapılacak.
 - [ ] Dashboard tekleştir (dashboard.html, dashboard_new.html kaldır)
 - [ ] Mobil sidebar: hamburger menü + overlay (tüm sayfalar)
 - [ ] Bootstrap Icons versiyonunu tekleştir (v1.11.0)
+- [x] Sidebar CSS standardization: add ::before accent bar to all pages ✅
 
 ## 🗑️ Sprint 6 — Temizlik
 

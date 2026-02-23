@@ -443,7 +443,8 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - `POST /api/email-templates` — Yeni template oluştur
 - `PUT /api/email-templates/:id` — Template güncelle
 - `DELETE /api/email-templates/:id` — Template sil
-- `POST /api/email-templates/defaults` — Varsayılan template'ler oluştur
+- `POST /api/email-templates/clone/:id` — Clone template (cross-expo clone)
+- `POST /api/email-templates/defaults` — Create default templates
 
 ### Email Send
 - `POST /api/email-send/single` — Tekli email gönderimi
@@ -504,11 +505,27 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 
 ## Bilinen Buglar ve Güvenlik Sorunları
 
-### ✅ DÜZELTİLDİ (23 Şubat 2026)
+### ✅ FIXED (23 Feb 2026)
 
-- **Public form visitor_type ve form_id kayıp** — `visitors.js` POST /public
-  - visitor_type ve form_id INSERT sorgusunda eksikti, tüm public form kayıtları NULL oluyordu
-  - Fix: form_id üzerinden forms tablosundan visitor_type çekiliyor (authoritative source), her iki kolon INSERT'e eklendi
+- **Public form visitor_type and form_id missing** — `visitors.js` POST /public
+  - visitor_type and form_id were missing from INSERT query, all public form records had NULL
+  - Fix: visitor_type fetched from forms table via form_id (authoritative source), both columns added to INSERT
+
+- **Send Email QR not showing** — `emailSend.js` single + bulk send
+  - emailSend.js never looked up existing visitor's qr_code from DB when save_to_database=false or generate_qr=false
+  - Fix: added DB lookup for existing visitor QR when qrCode is null (both single and bulk routes)
+
+- **BASE_BADGE_URL fallback** — `emailSend.js:40,153`
+  - Fallback was `http://localhost:3000`, now `https://leena.app`. Uses `baseUrl` const consistently.
+
+- **Check-in report CSV missing columns** — `checkins.js` GET /api/checkins + `checkin-reports.html`
+  - visitor_type was missing from backend SELECT (Type pie chart defaulted all to 'visitor')
+  - CSV export had 10 columns, now 12 (added Visitor Type + Job Title)
+  - Fix: added `COALESCE(v.visitor_type, 'visitor') as visitor_type` to backend query
+
+- **Sidebar inconsistency** — All 15 admin pages
+  - 9 pages had wrong Forms link (form-builder.html → form-list.html), 13 missing Send Emails, 8 missing Re-activation, 5 missing Check-in Reports
+  - Fix: all 15 admin pages standardized with unified 13-link sidebar
 
 ### KRİTİK (Tek organizer olduğu için şu an tetiklenmiyor ama düzeltilmeli)
 
@@ -538,8 +555,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 6. **email_worker FOR UPDATE transaction'sız** — `email_worker.js:26-33`
    - Kilit auto-commit'te anında serbest kalıyor, çift worker aynı task'ı alabilir
 
-7. **BASE_BADGE_URL fallback yok** — `emailSend.js:68,170`
-   - Env variable undefined ise QR resmi `src="undefined/api/qr-image/..."` olur
+7. ~~**BASE_BADGE_URL fallback yok**~~ ✅ FIXED 23 Feb — `emailSend.js` now uses `const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app'`
 
 8. **Race condition** — `leads.js:99-128`, `visitors.js:248,389`
    - Check-then-insert pattern, ON CONFLICT kullanılmıyor, eşzamanlı request'te duplicate oluşabilir
@@ -547,7 +563,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 ### ORTA
 
 9. Hata yanıt formatı tutarsız (5 farklı format: `{error}`, `{success,message}`, `{success,error}`, `{success,error,code}`, `{error,details}`)
-10. Sidebar tutarsız — 9 sayfa eski form-builder.html'e link veriyor, Re-activation 13/18 sayfada yok
+10. ~~Sidebar inconsistent~~ ✅ FIXED 23 Feb — All 15 admin pages standardized with unified 13-link sidebar
 11. Frontend auth kontrol boşlukları: form-builder, checkin-import, expo-create'te auth check eksik/hatalı
 12. Login redirect tutarsız: eski sayfalar login.html'e, yeniler login_new.html'e yönlendiriyor
 13. Template placeholder uyumsuz: `{{date}}` ve `{{expo_name}}` bazı akışlarda boş kalıyor
@@ -559,7 +575,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 
 1. **CORS:** `https://leena.app` ve `https://www.leena.app` ile sınırlı
 2. **initial.sql senkron değil:** Production DB'de olan bazı tablolar initial.sql'de yok
-3. **Sidebar tutarsızlığı:** Sadece bazı sayfalarda güncel (main-panel-v2, reports, reactivation-campaign). Diğerleri: terminals, checkins, email-templates, email-segments, form-list, import — eksik linkler olabilir
+3. **Sidebar links:** ✅ All 15 admin pages standardized (23 Feb 2026). CSS `::before` accent bar also added to all pages.
 4. **leena.css merkezi stil dosyası:** CLAUDE.md'de referans verilmiş ama **aslında her sayfa kendi inline CSS'ini taşıyor.** Ortak stil dosyası kullanımı henüz tam uygulanmadı. Yeni sayfa yaparken mevcut sayfaların CSS pattern'ini takip et.
 5. **QR kod içeriği:** Badge QR'ların içinde sadece UUID var (URL değil). Telefonla okutunca düz text görünür. lead-scan.html'de kamera scanner ile okunan QR'lar URL formatında gelebilir — parse logic mevcut.
 
@@ -570,15 +586,16 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 |-------|---------|---------|---------------|----------|
 | Gen 0 | #e53935 | Yok | - | login.html |
 | Gen 1 | #0066ff | leena.css (harici) | 240px | dashboard.html, checkin-import.html |
-| Gen 2 | #4a6fa5 | Inline CSS | 256px | terminals, checkins, form-list, email-templates, email-segments, email-send, import, visitorlog-paginated |
+| Gen 2 | #4a6fa5 | Inline CSS + ::before | 256px | terminals, checkins, form-list, email-templates, email-segments, email-send, import, visitorlog-paginated |
 | Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder |
 | Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | main-panel-v2, dashboard_new, login_new |
 
-### Sidebar Tutarsızlıkları
-- 8 sayfa Forms linkini yanlış hedefe (form-builder.html) yönlendiriyor, doğrusu form-list.html
-- checkin-reports 11/15 sayfada eksik, email-send 13/15'te eksik, reactivation 9/15'te eksik
-- Mobil sidebar sadece main-panel-v2'de çalışıyor, diğer 12 sayfada 768px altında sidebar kaybolur
-- Login redirect tutarsız: 13 sayfa → login.html, 2 sayfa → login_new.html
+### Sidebar Status (Updated 23 Feb 2026)
+- ✅ All 15 admin pages sidebar links standardized
+- Standard order: Overview → Management → Communication → Settings → Tools
+- 13 links: Dashboard, Visitors, Forms, Check-ins, Terminals, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
+- ✅ CSS `::before` accent bar added to all 15 pages (Gen 2 pages updated 23 Feb 2026)
+- Mobile sidebar only works on main-panel-v2, other pages sidebar disappears below 768px
 
 ### Navigasyon Kuralları (Yeni Geliştirme İçin)
 - Login sayfası: login.html (aktif, main-panel-v2'ye yönlendirir)
@@ -686,6 +703,16 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 - QR URL parse (kamera URL formatında QR okursa qr parametresini çıkarır)
 - Manual registration loading fix (isProcessing/showLoading reset)
 - Badge popup boyutu: 450x300 → 600x400
+
+**Post-Fair (23 Feb):**
+- Send Email QR fix (emailSend.js: existing visitor QR lookup + BASE_BADGE_URL fallback)
+- Check-in report CSV: visitor_type + job_title columns added (10 → 12)
+- Check-in backend: visitor_type added to GET /api/checkins SELECT (fixes Type pie chart)
+- Email templates expo-based grouping + cross-expo clone
+- Forms expo-based grouping + cross-expo clone
+- Terminals expo-based grouping + cross-expo clone
+- Sidebar standardization: all 15 admin pages unified link list (13 links, 5 sections)
+- CLAUDE.md English-only language rule added
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

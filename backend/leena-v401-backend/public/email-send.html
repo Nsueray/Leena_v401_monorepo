@@ -25,9 +25,10 @@
         .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
         .nav-section { margin-bottom: 24px; }
         .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; position: relative; }
         .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
         .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 24px; background: var(--primary); border-radius: 0 3px 3px 0; }
         .nav-item i { font-size: 18px; width: 20px; }
         .nav-item span { font-size: 13px; font-weight: 500; }
         .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
