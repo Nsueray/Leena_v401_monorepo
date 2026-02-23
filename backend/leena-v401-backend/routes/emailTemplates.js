@@ -3,21 +3,41 @@ const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 
-// GET /api/email-templates - Get all templates for organizer
+// GET /api/email-templates - Get all templates for organizer (optional expo_id filter)
 router.get('/', authMiddleware, async (req, res) => {
     try {
         const organizerId = req.organizer_id;
-        
-        const query = `
-            SELECT id, name, subject, html_content, is_active, 
-                   is_registration_default, created_at, updated_at
-            FROM email_templates
-            WHERE organizer_id = $1
-            ORDER BY created_at DESC
-        `;
-        
-        const result = await pool.query(query, [organizerId]);
-        
+        const { expo_id } = req.query;
+
+        let query, values;
+        if (expo_id) {
+            query = `
+                SELECT et.id, et.name, et.subject, et.html_content, et.is_active,
+                       et.is_registration_default, et.expo_id, et.created_at, et.updated_at,
+                       e.name as expo_name
+                FROM email_templates et
+                LEFT JOIN expos e ON e.id = et.expo_id
+                WHERE et.organizer_id = $1
+                ORDER BY
+                    CASE WHEN et.expo_id = $2 THEN 0 WHEN et.expo_id IS NULL THEN 1 ELSE 2 END,
+                    et.created_at DESC
+            `;
+            values = [organizerId, expo_id];
+        } else {
+            query = `
+                SELECT et.id, et.name, et.subject, et.html_content, et.is_active,
+                       et.is_registration_default, et.expo_id, et.created_at, et.updated_at,
+                       e.name as expo_name
+                FROM email_templates et
+                LEFT JOIN expos e ON e.id = et.expo_id
+                WHERE et.organizer_id = $1
+                ORDER BY et.created_at DESC
+            `;
+            values = [organizerId];
+        }
+
+        const result = await pool.query(query, values);
+
         res.json({
             success: true,
             templates: result.rows
@@ -95,31 +115,31 @@ router.get('/:id', authMiddleware, async (req, res) => {
 router.post('/', authMiddleware, async (req, res) => {
     try {
         const organizerId = req.organizer_id;
-        const { name, subject, html_content, is_active, is_registration_default } = req.body;
-        
+        const { name, subject, html_content, is_active, is_registration_default, expo_id } = req.body;
+
         if (!name || !subject || !html_content) {
             return res.status(400).json({
                 success: false,
                 message: 'Name, subject, and content are required'
             });
         }
-        
+
         if (is_registration_default) {
             await pool.query(
-                `UPDATE email_templates 
-                 SET is_registration_default = false 
+                `UPDATE email_templates
+                 SET is_registration_default = false
                  WHERE organizer_id = $1`,
                 [organizerId]
             );
         }
-        
+
         const query = `
-            INSERT INTO email_templates 
-            (organizer_id, name, subject, body, html_content, is_active, is_registration_default, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+            INSERT INTO email_templates
+            (organizer_id, name, subject, body, html_content, is_active, is_registration_default, expo_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW())
             RETURNING *
         `;
-        
+
         const values = [
             organizerId,
             name,
@@ -127,7 +147,8 @@ router.post('/', authMiddleware, async (req, res) => {
             html_content,
             html_content,
             is_active !== false,
-            is_registration_default || false
+            is_registration_default || false,
+            expo_id || null
         ];
         
         const result = await pool.query(query, values);
@@ -237,6 +258,61 @@ router.delete('/:id', authMiddleware, async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to delete template'
+        });
+    }
+});
+
+// POST /api/email-templates/clone/:id - Clone template (optionally to a different expo)
+router.post('/clone/:id', authMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const organizerId = req.organizer_id;
+        const { expo_id } = req.body;
+
+        // Fetch source template
+        const sourceResult = await pool.query(
+            `SELECT * FROM email_templates WHERE id = $1 AND organizer_id = $2`,
+            [id, organizerId]
+        );
+
+        if (sourceResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Template not found'
+            });
+        }
+
+        const source = sourceResult.rows[0];
+
+        const query = `
+            INSERT INTO email_templates
+            (organizer_id, name, subject, body, html_content, is_active, is_registration_default, expo_id, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, false, $7, NOW(), NOW())
+            RETURNING *
+        `;
+
+        const values = [
+            organizerId,
+            source.name + ' (Copy)',
+            source.subject,
+            source.body || source.html_content,
+            source.html_content,
+            source.is_active,
+            expo_id || source.expo_id || null
+        ];
+
+        const result = await pool.query(query, values);
+
+        res.status(201).json({
+            success: true,
+            message: 'Template cloned successfully',
+            template: result.rows[0]
+        });
+    } catch (error) {
+        console.error('Error cloning template:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to clone template'
         });
     }
 });

@@ -183,6 +183,8 @@
     <script>
         const API_URL = '/api';
         let templates = [], editingTemplateId = null;
+        const selectedExpoId = localStorage.getItem('selectedExpoId');
+        const selectedExpoName = localStorage.getItem('selectedExpoName') || 'Current Expo';
 
         document.addEventListener('DOMContentLoaded', () => {
             if (!localStorage.getItem('token')) { window.location.href = 'login_new.html'; return; }
@@ -191,7 +193,9 @@
 
         async function loadTemplates() {
             try {
-                const response = await fetch(`${API_URL}/email-templates`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                let url = `${API_URL}/email-templates`;
+                if (selectedExpoId) url += `?expo_id=${selectedExpoId}`;
+                const response = await fetch(url, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
                 if (!response.ok) throw new Error('Failed');
                 const data = await response.json();
                 templates = data.templates || [];
@@ -199,21 +203,18 @@
             } catch (e) { showError('Failed to load templates'); }
         }
 
-        function displayTemplates() {
-            const container = document.getElementById('templatesContainer');
-            if (templates.length === 0) {
-                container.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-envelope"></i></div><h3>No Templates Yet</h3><p>Create your first template or load defaults</p><div style="display:flex;gap:12px;justify-content:center;"><button class="btn btn-secondary" onclick="loadDefaultTemplates()"><i class="bi bi-download"></i> Load Defaults</button><button class="btn btn-primary" onclick="showCreateModal()"><i class="bi bi-plus-circle"></i> Create</button></div></div>`;
-                return;
-            }
-            container.innerHTML = `<div class="templates-grid">${templates.map(t => `
+        function renderTemplateCard(t, showClone) {
+            const expoBadge = t.expo_name ? `<span class="badge" style="background:#e0f2fe;color:#0369a1;">${escapeHtml(t.expo_name)}</span>` : '<span class="badge badge-inactive">Global</span>';
+            return `
                 <div class="template-card">
                     <div class="template-header">
                         <div>
-                            <div class="template-title">${escapeHtml(t.name)} ${t.is_registration_default ? '<span class="badge badge-default">Registration</span>' : ''} ${!t.is_active ? '<span class="badge badge-inactive">Inactive</span>' : ''}</div>
+                            <div class="template-title">${escapeHtml(t.name)} ${t.is_registration_default ? '<span class="badge badge-default">Registration</span>' : ''} ${!t.is_active ? '<span class="badge badge-inactive">Inactive</span>' : ''} ${expoBadge}</div>
                             <div class="template-id">ID: #${t.id}</div>
                             <div class="template-subject"><i class="bi bi-envelope"></i> ${escapeHtml(t.subject)}</div>
                         </div>
                         <div class="template-actions">
+                            ${showClone ? `<button class="btn btn-sm btn-secondary" onclick="cloneTemplate(${t.id})" title="Clone to this expo"><i class="bi bi-files"></i></button>` : ''}
                             <button class="btn btn-sm btn-secondary" onclick="previewTemplate(${t.id})" title="Preview"><i class="bi bi-eye"></i></button>
                             <button class="btn btn-sm btn-secondary" onclick="editTemplate(${t.id})" title="Edit"><i class="bi bi-pencil"></i></button>
                             <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${t.id})" title="Delete"><i class="bi bi-trash"></i></button>
@@ -222,8 +223,42 @@
                     <div class="template-body">
                         <div class="template-preview">${stripHtml(t.html_content).substring(0, 150)}...</div>
                     </div>
-                </div>
-            `).join('')}</div>`;
+                </div>`;
+        }
+
+        function displayTemplates() {
+            const container = document.getElementById('templatesContainer');
+            if (templates.length === 0) {
+                container.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="bi bi-envelope"></i></div><h3>No Templates Yet</h3><p>Create your first template or load defaults</p><div style="display:flex;gap:12px;justify-content:center;"><button class="btn btn-secondary" onclick="loadDefaultTemplates()"><i class="bi bi-download"></i> Load Defaults</button><button class="btn btn-primary" onclick="showCreateModal()"><i class="bi bi-plus-circle"></i> Create</button></div></div>`;
+                return;
+            }
+
+            if (!selectedExpoId) {
+                // No expo selected — flat list
+                container.innerHTML = `<div class="templates-grid">${templates.map(t => renderTemplateCard(t, false)).join('')}</div>`;
+                return;
+            }
+
+            const currentExpoTemplates = templates.filter(t => t.expo_id && t.expo_id == selectedExpoId);
+            const otherTemplates = templates.filter(t => !t.expo_id || t.expo_id != selectedExpoId);
+
+            let html = '';
+
+            // Current expo section
+            html += `<div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;"><h5 style="margin:0;"><i class="bi bi-calendar-event" style="color:var(--primary);"></i> ${escapeHtml(selectedExpoName)}</h5><span class="badge badge-default">${currentExpoTemplates.length} template</span></div>`;
+            if (currentExpoTemplates.length > 0) {
+                html += `<div class="templates-grid" style="margin-bottom:32px;">${currentExpoTemplates.map(t => renderTemplateCard(t, false)).join('')}</div>`;
+            } else {
+                html += `<div style="background:var(--primary-light);border:1px solid #c7d9f1;border-radius:var(--radius-md);padding:20px;text-align:center;margin-bottom:32px;"><i class="bi bi-info-circle" style="color:var(--primary);margin-right:8px;"></i>Bu fuar için henüz template yok. Aşağıdan klonlayabilir veya <a href="#" onclick="showCreateModal();return false;">yeni oluşturabilirsiniz</a>.</div>`;
+            }
+
+            // Other templates section
+            if (otherTemplates.length > 0) {
+                html += `<div style="margin-bottom:8px;"><h5 style="margin:0;color:var(--text-secondary);"><i class="bi bi-collection"></i> Diğer Template'ler</h5></div>`;
+                html += `<div class="templates-grid">${otherTemplates.map(t => renderTemplateCard(t, true)).join('')}</div>`;
+            }
+
+            container.innerHTML = html;
         }
 
         function showCreateModal() {
@@ -260,6 +295,10 @@
                 is_active: document.getElementById('isActive').checked,
                 is_registration_default: document.getElementById('isRegistrationDefault').checked
             };
+            // Auto-assign expo_id on create (not on edit — keep existing)
+            if (!editingTemplateId && selectedExpoId) {
+                data.expo_id = parseInt(selectedExpoId);
+            }
             try {
                 const url = editingTemplateId ? `${API_URL}/email-templates/${editingTemplateId}` : `${API_URL}/email-templates`;
                 const response = await fetch(url, {
@@ -271,6 +310,19 @@
                 hideModal();
                 loadTemplates();
             } catch (e) { showError('Failed to save'); }
+        }
+
+        async function cloneTemplate(id) {
+            if (!confirm('Clone this template to current expo?')) return;
+            try {
+                const response = await fetch(`${API_URL}/email-templates/clone/${id}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expo_id: selectedExpoId ? parseInt(selectedExpoId) : null })
+                });
+                if (!response.ok) throw new Error('Failed');
+                loadTemplates();
+            } catch (e) { showError('Failed to clone template'); }
         }
 
         async function deleteTemplate(id) {

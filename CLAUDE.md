@@ -323,6 +323,15 @@ Exhibitor: leena.app/lead-scan.html açar
   → QR URL formatı parse edilir (kamera URL döndürürse qr parametresi çıkarılır)
 ```
 
+### K. Public Form → Visitor Kayıt (Düzeltildi 23 Şubat 2026)
+```
+form-public.html → POST /api/visitors/public
+  → Backend form_id üzerinden forms tablosundan visitor_type çekiyor (authoritative source)
+  → visitor_type ve form_id INSERT'e dahil ediliyor
+  → Frontend'den gelen visitor_type'a GÜVENİLMEZ
+  → Exhibitor formu ile gelen kişi artık visitor_type='exhibitor' olarak kaydediliyor
+```
+
 ### J. Email Gönderim Mimarisi
 
 **Queue Kullanan (Doğru):**
@@ -476,6 +485,12 @@ Exhibitor: leena.app/lead-scan.html açar
 ---
 
 ## Bilinen Buglar ve Güvenlik Sorunları
+
+### ✅ DÜZELTİLDİ (23 Şubat 2026)
+
+- **Public form visitor_type ve form_id kayıp** — `visitors.js` POST /public
+  - visitor_type ve form_id INSERT sorgusunda eksikti, tüm public form kayıtları NULL oluyordu
+  - Fix: form_id üzerinden forms tablosundan visitor_type çekiliyor (authoritative source), her iki kolon INSERT'e eklendi
 
 ### KRİTİK (Tek organizer olduğu için şu an tetiklenmiyor ama düzeltilmeli)
 

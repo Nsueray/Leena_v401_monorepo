@@ -6,6 +6,14 @@
 
 ---
 
+## ✅ Tamamlanan İşler
+
+- [x] Exhibitor form → visitor_type fix (backend: visitors.js POST /public) — 23 Şubat 2026
+- [x] Mevcut exhibitor kayıtları DB'de düzeltildi (36 kayıt expo 5+6) — 23 Şubat 2026
+- [x] Participant ID Badge Registration kayıtları düzeltildi (3 kayıt) — 23 Şubat 2026
+
+---
+
 ## 🔴 Sprint 1 — Güvenlik Hotfix (Fuar dışı saatlerde, 1 gün)
 
 Bunlar teknik borç değil, açık kapı. Tek organizer olduğu sürece tetiklenmiyor ama düzeltilmeli.
@@ -15,6 +23,16 @@ Bunlar teknik borç değil, açık kapı. Tek organizer olduğu sürece tetiklen
 - [ ] `webhook.js:8` — Hardcoded Zoho secret'ı env variable'a taşı (ZOHO_WEBHOOK_TOKEN)
 - [ ] `qrscanner.html:437` — localStorage key uyumsuzluğu düzelt (organizerId → organizer_id)
 - [ ] `visitors.js:99` — Badge endpoint SELECT * yerine sadece gerekli alanları dön (PII kısıtla)
+
+## 🟠 Sprint 1.5 — Operasyonel İyileştirmeler (Ghana fuarı sırası/sonrası, 2-3 gün)
+
+Yaprak Hanım'ın talep listesinden gelen işler.
+
+- [ ] Check-in export'a visitor_type + job_title kolonu ekle
+- [ ] Email templates expo bazlı gruplama (üstte mevcut expo card, altta diğerleri liste) + clone butonu
+- [ ] Send Email sayfasından gönderilen maillerde QR görünmüyor (BASE_BADGE_URL fix)
+- [ ] Reports detaylandırma (ülke × job title × sektör kırılımı, post-show analiz)
+- [ ] email-send.html sidebar'dan kaybolmuş — sidebar'a geri ekle
 
 ## 🟠 Sprint 2 — Sidebar Stabilizasyon (Fuar öncesi, 2-3 gün)
 
