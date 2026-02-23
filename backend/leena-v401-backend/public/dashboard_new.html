@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
     <title>My Expos - Leena EMS</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -589,7 +590,7 @@
         
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('token');
-            if (!token) { window.location.href = 'login_new.html'; return; }
+            if (!token) { window.location.href = 'login.html'; return; }
             localStorage.removeItem('selectedExpoId');
             localStorage.removeItem('selectedExpoName');
             loadUserInfo();
@@ -697,7 +698,7 @@
         
         function formatDate(d) { return new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
         function formatNumber(n) { return n.toLocaleString(); }
-        function logout() { localStorage.clear(); window.location.href = 'login_new.html'; }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
     </script>
 </body>
 </html>
