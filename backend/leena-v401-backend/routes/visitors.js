@@ -156,44 +156,96 @@ router.post('/public', async (req, res) => {
       }
     }
 
-    const qrCode = uuidv4();
-    const badgeId = qrCode.substring(0, 8).toUpperCase();
-    const badgeUrl = generateBadgeUrl(qrCode);
+    // Check for existing visitor with same email in this expo
+    const existingResult = await pool.query(
+      `SELECT id, qr_code, badge_id, badge_url FROM visitors
+       WHERE lower(email) = lower($1) AND expo_id = $2
+       LIMIT 1`,
+      [visitorData.email.trim(), expo_id]
+    );
 
-    const insertQuery = `
-      INSERT INTO visitors (
-        name, last_name, email, company, country, job_title, phone,
-        source, origin, expo_id, organizer_id,
-        qr_code, badge_id, badge_url, custom_fields,
-        visitor_type, form_id, created_at
-      ) VALUES (
-        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()
-      ) RETURNING *
-    `;
+    let visitor;
+    let qrCode, badgeId, badgeUrl;
+    let isExisting = false;
 
-    const values = [
-      visitorData.name,
-      visitorData.last_name,
-      visitorData.email,
-      visitorData.company,
-      visitorData.country,
-      visitorData.job_title,
-      visitorData.phone,
-      visitorData.source,
-      visitorData.origin,
-      expo_id,
-      organizerId || 1,
-      qrCode,
-      badgeId,
-      badgeUrl,
-      visitorData.custom_fields,
-      formVisitorType,
-      form_id || null
-    ];
+    if (existingResult.rows.length > 0) {
+      // Existing visitor — update info, keep QR code
+      isExisting = true;
+      const ex = existingResult.rows[0];
+      qrCode = ex.qr_code;
+      badgeId = ex.badge_id;
+      badgeUrl = ex.badge_url;
 
-    const result = await pool.query(insertQuery, values);
-    const visitor = result.rows[0];
+      const updateResult = await pool.query(
+        `UPDATE visitors SET
+          name = COALESCE(NULLIF($1, ''), name),
+          last_name = COALESCE(NULLIF($2, ''), last_name),
+          company = COALESCE(NULLIF($3, ''), company),
+          country = COALESCE(NULLIF($4, ''), country),
+          job_title = COALESCE(NULLIF($5, ''), job_title),
+          phone = COALESCE(NULLIF($6, ''), phone),
+          custom_fields = COALESCE($7::jsonb, custom_fields),
+          visitor_type = COALESCE(NULLIF($8, ''), visitor_type),
+          updated_at = NOW()
+        WHERE id = $9
+        RETURNING *`,
+        [
+          visitorData.name,
+          visitorData.last_name,
+          visitorData.company,
+          visitorData.country,
+          visitorData.job_title,
+          visitorData.phone,
+          visitorData.custom_fields,
+          formVisitorType,
+          ex.id
+        ]
+      );
+      visitor = updateResult.rows[0];
+      console.log(`🔄 [PUBLIC FORM] Updated existing visitor: ${visitorData.email} (ID: ${ex.id})`);
 
+    } else {
+      // New visitor — create with new QR
+      qrCode = uuidv4();
+      badgeId = qrCode.substring(0, 8).toUpperCase();
+      badgeUrl = generateBadgeUrl(qrCode);
+
+      const insertQuery = `
+        INSERT INTO visitors (
+          name, last_name, email, company, country, job_title, phone,
+          source, origin, expo_id, organizer_id,
+          qr_code, badge_id, badge_url, custom_fields,
+          visitor_type, form_id, created_at
+        ) VALUES (
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,NOW()
+        ) RETURNING *
+      `;
+
+      const values = [
+        visitorData.name,
+        visitorData.last_name,
+        visitorData.email,
+        visitorData.company,
+        visitorData.country,
+        visitorData.job_title,
+        visitorData.phone,
+        visitorData.source,
+        visitorData.origin,
+        expo_id,
+        organizerId || 1,
+        qrCode,
+        badgeId,
+        badgeUrl,
+        visitorData.custom_fields,
+        formVisitorType,
+        form_id || null
+      ];
+
+      const result = await pool.query(insertQuery, values);
+      visitor = result.rows[0];
+    }
+
+    // Send email for both new and existing visitors
     if (emailTemplateId) {
       const templateResult = await pool.query(
         `SELECT * FROM email_templates WHERE id = $1`,
@@ -202,11 +254,11 @@ router.post('/public', async (req, res) => {
 
       if (templateResult.rows.length) {
         const template = templateResult.rows[0];
-        
-        // Generate QR code image tag for email
+
+        // Generate QR code image tag for email (uses existing QR for returning visitors)
         const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
         const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
-        
+
         // Build email data with QR image
         const emailData = {
           ...visitorData,
@@ -214,9 +266,12 @@ router.post('/public', async (req, res) => {
           badge_id: badgeId,
           badge_url: badgeUrl
         };
-        
+
         const emailHtml = processEmailTemplate(template.html_content || template.content, emailData);
-        const emailSubject = processEmailTemplate(template.subject || 'Registration Confirmation', emailData);
+        let emailSubject = processEmailTemplate(template.subject || 'Registration Confirmation', emailData);
+        if (isExisting) {
+          emailSubject = `${emailSubject} (Resent)`;
+        }
 
         await sendEmailWithReplyTo(
           visitorData.email,
@@ -229,7 +284,9 @@ router.post('/public', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Registration successful',
+      message: isExisting
+        ? 'You are already registered. Your information has been updated and a confirmation email has been resent.'
+        : 'Registration successful',
       visitor,
       qr_code: qrCode,
       badge_id: badgeId,

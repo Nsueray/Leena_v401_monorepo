@@ -324,12 +324,15 @@ Exhibitor: leena.app/lead-scan.html açar
   → QR URL formatı parse edilir (kamera URL döndürürse qr parametresi çıkarılır)
 ```
 
-### K. Public Form → Visitor Kayıt (Düzeltildi 23 Şubat 2026)
+### K. Public Form → Visitor Kayıt (Upsert eklendi 24 Şubat 2026)
 ```
 form-public.html → POST /api/visitors/public
   → Backend form_id üzerinden forms tablosundan visitor_type çekiyor (authoritative source)
   → visitor_type ve form_id INSERT'e dahil ediliyor
   → Frontend'den gelen visitor_type'a GÜVENİLMEZ
+  → UPSERT: email+expo_id ile mevcut visitor kontrolü (lower(email) + expo_id)
+    → Varsa: COALESCE UPDATE (boş alanlar korunur, QR korunur) + email resend "(Resent)"
+    → Yoksa: INSERT yeni QR + email gönder
   → Exhibitor formu ile gelen kişi artık visitor_type='exhibitor' olarak kaydediliyor
 ```
 
@@ -538,6 +541,10 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - ~~**Hardcoded webhook secret**~~ — `webhook.js:8` → Changed to `process.env.ZOHO_WEBHOOK_TOKEN || 'fallback'`. Env var must be set on Render.
 - ~~**Badge endpoint PII leak**~~ — `visitors.js:99` → Replaced `SELECT *` with explicit columns (id, name, last_name, company, country, job_title, visitor_type, badge_id, qr_code, booth_number, badge_url, expo_id). Email and phone no longer exposed.
 
+### ✅ FIXED (24 Feb 2026 — Sprint 3)
+
+- ~~**Public form duplicate registration**~~ — `visitors.js` POST /public had no duplicate check. Same email+expo could create multiple records with different QR codes, invalidating the original. Fix: added upsert pattern (SELECT by lower(email)+expo_id → existing: COALESCE UPDATE + QR preserved + email resent with "(Resent)" suffix; new: INSERT as before).
+
 ### KRİTİK
 (All Sprint 1 items fixed — see above)
 
@@ -548,7 +555,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 
 7. ~~**BASE_BADGE_URL fallback yok**~~ ✅ FIXED 23 Feb — `emailSend.js` now uses `const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app'`
 
-8. **Race condition** — `leads.js:99-128`, `visitors.js:248,389`
+8. **Race condition** — `leads.js:99-128`, ~~`visitors.js:248,389`~~ (visitors.js public route fixed 24 Feb, manual+import already had upsert)
    - Check-then-insert pattern, ON CONFLICT kullanılmıyor, eşzamanlı request'te duplicate oluşabilir
 
 ### ORTA
@@ -742,6 +749,7 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - Fixed "no expo selected" redirect on 9 admin pages: `main-panel-v2.html` → `dashboard_new.html` (self-redirect loop → proper expo picker)
 - login_new.html converted to simple redirect to login.html (old bookmark compatibility)
 - dashboard_new.html confirmed as active expo selection page (NOT legacy — Sprint 2 incorrectly labeled it)
+- Public form upsert: POST /api/visitors/public now checks email+expo_id before INSERT. Existing visitor → COALESCE UPDATE (QR preserved) + email resend with "(Resent)" subject. New visitor → INSERT as before. Fixes duplicate registration + QR invalidation bug.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
