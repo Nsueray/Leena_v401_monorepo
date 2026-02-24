@@ -100,11 +100,8 @@
         .flex-grow-1 { flex-grow: 1; }
         
         /* Visitor Type Selector */
-        .visitor-type-selector { display: flex; gap: 16px; }
-        .visitor-type-selector .form-check { flex: 1; padding: 12px 16px; border: 1px solid var(--border-color); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; }
-        .visitor-type-selector .form-check:hover { border-color: var(--primary); background: var(--primary-light); }
-        .visitor-type-selector .form-check-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 500; }
-        .visitor-type-selector .form-check-label i { font-size: 18px; color: var(--primary); }
+        .visitor-type-selector select { width: 100%; padding: 10px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 14px; transition: border-color 0.15s; }
+        .visitor-type-selector select:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 3px rgba(74,111,165,0.1); }
         
         /* Fields */
         .field-item { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; transition: all 0.15s; }
@@ -265,18 +262,15 @@
                                 <div class="mb-3">
                                     <label class="form-label">Registration Type *</label>
                                     <div class="visitor-type-selector">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="visitorType" id="visitorTypeVisitor" value="visitor" checked>
-                                            <label class="form-check-label" for="visitorTypeVisitor">
-                                                <i class="bi bi-person"></i> Visitor Registration
-                                            </label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="visitorType" id="visitorTypeExhibitor" value="exhibitor">
-                                            <label class="form-check-label" for="visitorTypeExhibitor">
-                                                <i class="bi bi-shop"></i> Exhibitor Registration
-                                            </label>
-                                        </div>
+                                        <select id="visitorTypeSelect">
+                                            <option value="visitor" selected>Visitor</option>
+                                            <option value="exhibitor">Exhibitor</option>
+                                            <option value="conference">Conference</option>
+                                            <option value="vip">VIP</option>
+                                            <option value="press">Press</option>
+                                            <option value="staff">Staff</option>
+                                            <option value="speaker">Speaker</option>
+                                        </select>
                                     </div>
                                 </div>
 
@@ -483,23 +477,20 @@
         }
 
         function setupVisitorTypeToggle() {
-            const visitorRadio = document.getElementById('visitorTypeVisitor');
-            const exhibitorRadio = document.getElementById('visitorTypeExhibitor');
-            [visitorRadio, exhibitorRadio].forEach(radio => {
-                radio.addEventListener('change', function() {
-                    updatePreview();
-                    if (this.value === 'exhibitor' && !formFields.find(f => f.name === 'booth_number')) {
-                        if (confirm('Would you like to add a Booth Number field for exhibitors?')) {
-                            formFields.push({
-                                name: 'booth_number', label: 'Booth Number', type: 'text',
-                                required: false, placeholder: 'Enter your booth number',
-                                helpText: 'Your assigned booth location', options: []
-                            });
-                            renderFields();
-                            updatePreview();
-                        }
+            const visitorTypeSelect = document.getElementById('visitorTypeSelect');
+            visitorTypeSelect.addEventListener('change', function() {
+                updatePreview();
+                if (this.value === 'exhibitor' && !formFields.find(f => f.name === 'booth_number')) {
+                    if (confirm('Would you like to add a Booth Number field for exhibitors?')) {
+                        formFields.push({
+                            name: 'booth_number', label: 'Booth Number', type: 'text',
+                            required: false, placeholder: 'Enter your booth number',
+                            helpText: 'Your assigned booth location', options: []
+                        });
+                        renderFields();
+                        updatePreview();
                     }
-                });
+                }
             });
         }
 
@@ -573,11 +564,7 @@
                 document.getElementById('formDescription').value = data.description || '';
                 document.getElementById('formActive').checked = data.is_active;
                 
-                if (data.visitor_type === 'exhibitor') {
-                    document.getElementById('visitorTypeExhibitor').checked = true;
-                } else {
-                    document.getElementById('visitorTypeVisitor').checked = true;
-                }
+                document.getElementById('visitorTypeSelect').value = data.visitor_type || 'visitor';
                 
                 if (data.email_template_id) {
                     document.getElementById('emailTemplateSelect').value = data.email_template_id;
@@ -612,7 +599,7 @@
             const isActive = document.getElementById('formActive').checked;
             const allExpos = document.getElementById('formAllExpos').checked;
             const emailTemplateId = document.getElementById('emailTemplateSelect').value;
-            const visitorType = document.querySelector('input[name="visitorType"]:checked').value;
+            const visitorType = document.getElementById('visitorTypeSelect').value;
             const source = document.getElementById('formSource').value.trim();
             const origin = document.getElementById('formOrigin').value;
             
@@ -810,19 +797,20 @@
             const preview = document.getElementById('formPreview');
             const formName = document.getElementById('formName').value || 'Untitled Form';
             const formDescription = document.getElementById('formDescription').value;
-            const visitorType = document.querySelector('input[name="visitorType"]:checked').value;
-            
+            const visitorType = document.getElementById('visitorTypeSelect').value;
+            const typeIcons = { visitor: 'person', exhibitor: 'shop', conference: 'mortarboard', vip: 'star', press: 'newspaper', staff: 'wrench', speaker: 'mic' };
+
             if (formFields.length === 0) {
                 preview.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px 20px;"><i class="bi bi-ui-checks" style="font-size: 48px;"></i><p style="margin-top: 16px;">Add fields to see preview</p></div>`;
                 return;
             }
-            
+
             preview.innerHTML = `
                 <h5 style="margin-bottom: 8px;">${formName}</h5>
                 ${formDescription ? `<p style="color: var(--text-muted); font-size: 13px;">${formDescription}</p>` : ''}
                 <span class="badge bg-info text-dark" style="margin-bottom: 16px;">
-                    <i class="bi bi-${visitorType === 'exhibitor' ? 'shop' : 'person'}"></i>
-                    ${visitorType === 'exhibitor' ? 'Exhibitor' : 'Visitor'} Registration
+                    <i class="bi bi-${typeIcons[visitorType] || 'person'}"></i>
+                    ${visitorType.charAt(0).toUpperCase() + visitorType.slice(1)} Registration
                 </span>
                 <hr style="margin: 16px 0;">
                 <form onsubmit="event.preventDefault();">

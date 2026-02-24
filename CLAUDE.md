@@ -47,7 +47,7 @@ Yapılan **her değişiklik** bu CLAUDE.md dosyasına güncellenmelidir.
 
 1. **Tek Sistem, Değişen Fuarlar:** Yeni fuar açmak = yeni sistem kurmak DEĞİL. Fuarlar (expo) sistem içinde değişen varlıklardır.
 
-2. **Tek Kişi Kaynağı (Single Source of Truth):** Sistemde tek bir kişi tablosu vardır (`visitors`). Visitor, Exhibitor, Staff, VIP, Speaker — hepsi aynı tabloda, farkı `visitor_type` alanı belirler.
+2. **Tek Kişi Kaynağı (Single Source of Truth):** Sistemde tek bir kişi tablosu vardır (`visitors`). Visitor, Exhibitor, Conference, VIP, Press, Staff, Speaker — hepsi aynı tabloda, farkı `visitor_type` alanı belirler.
 
 3. **Exhibitor = visitor_type, ayrı tablo DEĞİL:** Exhibitor visitors tablosunda `visitor_type='exhibitor'` olarak tutulur. Tek QR, tek badge, tek check-in sistemi.
 
@@ -195,7 +195,7 @@ backend/leena-v401-backend/
 ### visitors Tablosu Önemli Kolonlar
 - `id`, `name`, `last_name`, `email` (unique per expo), `phone`
 - `company`, `country`, `job_title`
-- `visitor_type` — visitor, exhibitor, vip, press, staff, speaker (DEFAULT: visitor)
+- `visitor_type` — visitor, exhibitor, conference, vip, press, staff, speaker (DEFAULT: visitor) — DB: free TEXT, no constraint
 - `booth_number` — exhibitor'lar için stand numarası
 - `qr_code` — unique UUID (upsert'te korunur, DEĞİŞMEZ)
 - `badge_id` — qr_code'un ilk 8 karakteri
@@ -752,6 +752,7 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - Public form upsert: POST /api/visitors/public now checks email+expo_id before INSERT. Existing visitor → COALESCE UPDATE (QR preserved) + email resend with "(Resent)" subject. New visitor → INSERT as before. Fixes duplicate registration + QR invalidation bug.
 - Template placeholder fix: `{{expo_name}}` added to 4 flows missing it (public form, import, reactivation activate badge email); `{{date}}` added to 10 flows missing it (webhook, import, email_worker mode2/3, reactivation create-from-excel/create-from-expo/activate/resend-pending, public form). All 13 email flows now have both placeholders.
 - emailSegments.js BASE_BADGE_URL: fixed `http://localhost:3000` fallback → `https://leena.app`
+- visitor_type standardized across all frontend: added "conference" type to all 4 pages (form-builder, visitorlog-paginated, badge-templates, import). Standard order: visitor, exhibitor, conference, vip, press, staff, speaker. form-builder.html radio buttons replaced with 7-option select dropdown. visitorlog-paginated.html: new filter pill + CSS badge color (.badge-type-conference orange) + JS color map.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

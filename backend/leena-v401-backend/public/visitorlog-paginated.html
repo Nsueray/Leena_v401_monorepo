@@ -79,6 +79,7 @@
         .badge-type-press { background: #d1fae5; color: #065f46; }
         .badge-type-staff { background: #e0e7ff; color: #3730a3; }
         .badge-type-speaker { background: #ede9fe; color: #5b21b6; }
+        .badge-type-conference { background: #fff3e0; color: #e65100; }
         .empty-state { text-align: center; padding: 60px 24px; display: none; }
         .empty-state-icon { width: 64px; height: 64px; background: var(--bg-main); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; color: var(--text-muted); }
         .empty-state h3 { font-size: 16px; margin-bottom: 8px; }
@@ -212,6 +213,7 @@
                             <div class="filter-pills" id="typeFilters">
                                 <label class="filter-pill"><input type="checkbox" value="visitor"> 👤 Visitor</label>
                                 <label class="filter-pill"><input type="checkbox" value="exhibitor"> 🏢 Exhibitor</label>
+                                <label class="filter-pill"><input type="checkbox" value="conference"> 🎓 Conference</label>
                                 <label class="filter-pill"><input type="checkbox" value="vip"> ⭐ VIP</label>
                                 <label class="filter-pill"><input type="checkbox" value="press"> 📰 Press</label>
                                 <label class="filter-pill"><input type="checkbox" value="staff"> 🔧 Staff</label>
@@ -321,7 +323,7 @@
 
         function getTypeBadgeClass(type) {
             const t = (type || 'visitor').toLowerCase();
-            const map = { visitor: 'badge-type-visitor', exhibitor: 'badge-type-exhibitor', vip: 'badge-type-vip', press: 'badge-type-press', staff: 'badge-type-staff', speaker: 'badge-type-speaker' };
+            const map = { visitor: 'badge-type-visitor', exhibitor: 'badge-type-exhibitor', conference: 'badge-type-conference', vip: 'badge-type-vip', press: 'badge-type-press', staff: 'badge-type-staff', speaker: 'badge-type-speaker' };
             return map[t] || 'badge-type-visitor';
         }
 
