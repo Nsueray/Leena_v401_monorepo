@@ -216,7 +216,8 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
             country: country,
             job_title: job_title,
             activation_url: activationUrl,
-            expo_name: targetExpo.name
+            expo_name: targetExpo.name,
+            date: new Date().toLocaleDateString()
           };
 
           const htmlContent = processEmailTemplate(
@@ -378,7 +379,8 @@ router.post('/create-from-expo', authMiddleware, async (req, res) => {
             country: visitor.country || '',
             job_title: visitor.job_title || '',
             activation_url: activationUrl,
-            expo_name: targetExpo.name
+            expo_name: targetExpo.name,
+            date: new Date().toLocaleDateString()
           };
 
           const htmlContent = processEmailTemplate(
@@ -595,6 +597,11 @@ router.post('/activate', async (req, res) => {
       const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
       const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
 
+      // Fetch expo name for template
+      let expoName = '';
+      const expoResult = await pool.query(`SELECT name FROM expos WHERE id = $1`, [tokenData.target_expo_id]);
+      if (expoResult.rows.length) expoName = expoResult.rows[0].name;
+
       const templateData = {
         name: newVisitor.name || 'Guest',
         last_name: newVisitor.last_name || '',
@@ -604,7 +611,9 @@ router.post('/activate', async (req, res) => {
         job_title: newVisitor.job_title || '',
         qr_code: qrImageTag,
         badge_id: badgeId,
-        badge_url: badgeUrl
+        badge_url: badgeUrl,
+        expo_name: expoName,
+        date: new Date().toLocaleDateString()
       };
 
       const htmlContent = processEmailTemplate(template.html_content, templateData);
@@ -744,7 +753,8 @@ router.post('/resend-pending', authMiddleware, async (req, res) => {
           country: row.country || '',
           job_title: row.job_title || '',
           activation_url: activationUrl,
-          expo_name: expoName
+          expo_name: expoName,
+          date: new Date().toLocaleDateString()
         };
 
         const htmlContent = processEmailTemplate(

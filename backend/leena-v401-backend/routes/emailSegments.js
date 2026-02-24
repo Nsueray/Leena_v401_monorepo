@@ -146,7 +146,7 @@ router.post('/send', async (req, res) => {
                     country: visitor.country || '',
                     job_title: visitor.job_title || '',
                     expo_name: expo.name,
-                    qr_code: visitor.qr_code ? `<img src="${process.env.BASE_BADGE_URL || 'http://localhost:3000'}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width: 200px;">` : '',
+                    qr_code: visitor.qr_code ? `<img src="${process.env.BASE_BADGE_URL || 'https://leena.app'}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width: 200px;">` : '',
                     badge_url: visitor.badge_url || '',
                     date: new Date().toLocaleDateString()
                 };

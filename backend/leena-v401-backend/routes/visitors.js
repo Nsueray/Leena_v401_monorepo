@@ -143,6 +143,7 @@ router.post('/public', async (req, res) => {
     let emailTemplateId = null;
     let organizerId = null;
     let formVisitorType = 'visitor';
+    let expoName = '';
 
     if (form_id) {
       const formResult = await pool.query(
@@ -154,6 +155,11 @@ router.post('/public', async (req, res) => {
         organizerId = formResult.rows[0].organizer_id;
         formVisitorType = formResult.rows[0].visitor_type || 'visitor';
       }
+    }
+
+    if (expo_id) {
+      const expoResult = await pool.query(`SELECT name FROM expos WHERE id = $1`, [expo_id]);
+      if (expoResult.rows.length) expoName = expoResult.rows[0].name;
     }
 
     // Check for existing visitor with same email in this expo
@@ -264,7 +270,9 @@ router.post('/public', async (req, res) => {
           ...visitorData,
           qr_code: qrImageTag,
           badge_id: badgeId,
-          badge_url: badgeUrl
+          badge_url: badgeUrl,
+          expo_name: expoName,
+          date: new Date().toLocaleDateString()
         };
 
         const emailHtml = processEmailTemplate(template.html_content || template.content, emailData);
@@ -401,6 +409,13 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
     if (rows.length === 0) {
       return res.status(400).json({ success: false, message: 'Excel file is empty' });
+    }
+
+    // Fetch expo name once (used in email templates)
+    let expoName = '';
+    if (expo_id) {
+      const expoResult = await pool.query(`SELECT name FROM expos WHERE id = $1`, [expo_id]);
+      if (expoResult.rows.length) expoName = expoResult.rows[0].name;
     }
 
     // Get email template if needed
@@ -554,7 +569,9 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
               phone: phone,
               qr_code: qrImageTag,  // Now sends img tag instead of UUID
               badge_id: badgeId,
-              badge_url: badgeUrl
+              badge_url: badgeUrl,
+              expo_name: expoName,
+              date: new Date().toLocaleDateString()
             };
 
             const emailHtml = processEmailTemplate(

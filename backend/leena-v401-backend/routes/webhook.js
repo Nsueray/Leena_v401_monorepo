@@ -212,7 +212,8 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
           badge_id: visitor.badge_id,
           expo_name,
           qr_code: qrImageTag,
-          badge_url: visitor.badge_url
+          badge_url: visitor.badge_url,
+          date: new Date().toLocaleDateString()
         };
 
         // Customize subject for existing visitors

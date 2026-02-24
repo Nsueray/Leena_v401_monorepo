@@ -553,7 +553,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 6. **email_worker FOR UPDATE transaction'sız** — `email_worker.js:26-33`
    - Kilit auto-commit'te anında serbest kalıyor, çift worker aynı task'ı alabilir
 
-7. ~~**BASE_BADGE_URL fallback yok**~~ ✅ FIXED 23 Feb — `emailSend.js` now uses `const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app'`
+7. ~~**BASE_BADGE_URL fallback yok**~~ ✅ FIXED 23-24 Feb — `emailSend.js` + `emailSegments.js` now use `process.env.BASE_BADGE_URL || 'https://leena.app'` (emailSegments had `http://localhost:3000` fallback, fixed 24 Feb)
 
 8. **Race condition** — `leads.js:99-128`, ~~`visitors.js:248,389`~~ (visitors.js public route fixed 24 Feb, manual+import already had upsert)
    - Check-then-insert pattern, ON CONFLICT kullanılmıyor, eşzamanlı request'te duplicate oluşabilir
@@ -564,7 +564,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 10. ~~Sidebar inconsistent~~ ✅ FIXED 23 Feb — All 15 admin pages standardized with unified 13-link sidebar
 11. Frontend auth kontrol boşlukları: form-builder, checkin-import, expo-create'te auth check eksik/hatalı
 12. ~~Login redirect tutarsız~~ ✅ FIXED 24 Feb — All admin pages redirect to login.html (no token) and dashboard_new.html (no expo). Login → dashboard_new.html → main-panel-v2.html flow restored.
-13. Template placeholder uyumsuz: `{{date}}` ve `{{expo_name}}` bazı akışlarda boş kalıyor
+13. ~~Template placeholder uyumsuz~~ ✅ FIXED 24 Feb — `{{date}}` and `{{expo_name}}` added to all 13 email flows (visitors.js import/public, webhook.js, email_worker.js mode2/3, reactivation.js 4 flows)
 14. Leads endpoint'te server-side session yok — exhibitor_company bilen herkes lead yazabilir/okuyabilir
 
 ---
@@ -750,6 +750,8 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - login_new.html converted to simple redirect to login.html (old bookmark compatibility)
 - dashboard_new.html confirmed as active expo selection page (NOT legacy — Sprint 2 incorrectly labeled it)
 - Public form upsert: POST /api/visitors/public now checks email+expo_id before INSERT. Existing visitor → COALESCE UPDATE (QR preserved) + email resend with "(Resent)" subject. New visitor → INSERT as before. Fixes duplicate registration + QR invalidation bug.
+- Template placeholder fix: `{{expo_name}}` added to 4 flows missing it (public form, import, reactivation activate badge email); `{{date}}` added to 10 flows missing it (webhook, import, email_worker mode2/3, reactivation create-from-excel/create-from-expo/activate/resend-pending, public form). All 13 email flows now have both placeholders.
+- emailSegments.js BASE_BADGE_URL: fixed `http://localhost:3000` fallback → `https://leena.app`
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

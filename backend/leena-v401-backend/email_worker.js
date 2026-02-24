@@ -133,6 +133,7 @@ async function processTask(task) {
         badge_url: task.badge_url || '',
         expo_name: task.expo_name || '',
         qr_code: qrImageTag,
+        date: new Date().toLocaleDateString(),
         ...custom_fields
       };
 
@@ -149,7 +150,8 @@ async function processTask(task) {
       const data = {
         name: 'Guest',
         email: task.recipient_email,
-        expo_name: task.expo_name || ''
+        expo_name: task.expo_name || '',
+        date: new Date().toLocaleDateString()
       };
 
       emailSubject = processEmailTemplate(task.template_subject || 'Notification', data);
