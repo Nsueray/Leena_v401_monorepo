@@ -550,8 +550,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 
 ### YÜKSEK
 
-6. **email_worker FOR UPDATE transaction'sız** — `email_worker.js:26-33`
-   - Kilit auto-commit'te anında serbest kalıyor, çift worker aynı task'ı alabilir
+6. ~~**email_worker FOR UPDATE transaction'sız**~~ ✅ FIXED 24 Feb — `fetchNextTask()` now uses `pool.connect()` + `BEGIN`/`COMMIT`/`ROLLBACK` transaction. Atomically updates `status = 'processing'` via `UPDATE ... WHERE id = (SELECT ... FOR UPDATE SKIP LOCKED)`. Prevents duplicate email on concurrent workers.
 
 7. ~~**BASE_BADGE_URL fallback yok**~~ ✅ FIXED 23-24 Feb — `emailSend.js` + `emailSegments.js` now use `process.env.BASE_BADGE_URL || 'https://leena.app'` (emailSegments had `http://localhost:3000` fallback, fixed 24 Feb)
 
@@ -753,6 +752,7 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - Template placeholder fix: `{{expo_name}}` added to 4 flows missing it (public form, import, reactivation activate badge email); `{{date}}` added to 10 flows missing it (webhook, import, email_worker mode2/3, reactivation create-from-excel/create-from-expo/activate/resend-pending, public form). All 13 email flows now have both placeholders.
 - emailSegments.js BASE_BADGE_URL: fixed `http://localhost:3000` fallback → `https://leena.app`
 - visitor_type standardized across all frontend: added "conference" type to all 4 pages (form-builder, visitorlog-paginated, badge-templates, import). Standard order: visitor, exhibitor, conference, vip, press, staff, speaker. form-builder.html radio buttons replaced with 7-option select dropdown. visitorlog-paginated.html: new filter pill + CSS badge color (.badge-type-conference orange) + JS color map.
+- email_worker transaction fix: `fetchNextTask()` now uses `pool.connect()` + `BEGIN`/`COMMIT`/`ROLLBACK`. Atomic `UPDATE status='processing' WHERE id=(SELECT ... FOR UPDATE SKIP LOCKED)` prevents duplicate email when multiple workers run concurrently.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

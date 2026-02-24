@@ -21,26 +21,33 @@ const MAX_RETRIES = 5;
 let isProcessing = false;
 
 async function fetchNextTask() {
+  const client = await pool.connect();
   try {
-    // First, get and lock the queue item
-    const lockQuery = `
-      SELECT id FROM email_queue
-      WHERE status = 'pending' AND try_count < $1
-      ORDER BY created_at ASC
-      LIMIT 1
-      FOR UPDATE SKIP LOCKED
-    `;
-    const lockRes = await pool.query(lockQuery, [MAX_RETRIES]);
-    
+    await client.query('BEGIN');
+
+    // Atomically lock + mark as processing in one statement
+    const lockRes = await client.query(`
+      UPDATE email_queue SET status = 'processing'
+      WHERE id = (
+        SELECT id FROM email_queue
+        WHERE status = 'pending' AND try_count < $1
+        ORDER BY created_at ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING id
+    `, [MAX_RETRIES]);
+
     if (lockRes.rows.length === 0) {
+      await client.query('COMMIT');
       return null;
     }
-    
+
     const taskId = lockRes.rows[0].id;
-    
-    // Now fetch full details with JOINs (no FOR UPDATE needed)
-    const query = `
-      SELECT 
+
+    // Fetch full details with JOINs (same transaction, row is locked)
+    const res = await client.query(`
+      SELECT
         eq.*,
         v.name as visitor_name,
         v.last_name as visitor_last_name,
@@ -60,12 +67,16 @@ async function fetchNextTask() {
       LEFT JOIN email_templates et ON et.id = eq.template_id
       LEFT JOIN expos e ON e.id = eq.expo_id
       WHERE eq.id = $1
-    `;
-    const res = await pool.query(query, [taskId]);
+    `, [taskId]);
+
+    await client.query('COMMIT');
     return res.rows[0] || null;
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[EMAIL_WORKER] fetchNextTask error:', err.message);
     return null;
+  } finally {
+    client.release();
   }
 }
 
