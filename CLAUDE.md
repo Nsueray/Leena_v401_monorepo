@@ -589,12 +589,13 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 | Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder |
 | Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | login.html, main-panel-v2, dashboard_new |
 
-### Sidebar Status (Updated 24 Feb 2026)
+### Sidebar Status (Updated 25 Feb 2026)
 - ✅ All 15 admin pages sidebar links standardized
 - Standard order: Overview → Management → Communication → Settings → Tools
 - 13 links: Dashboard, Visitors, Forms, Check-ins, Terminals, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
 - ✅ CSS `::before` accent bar added to all 15 pages (Gen 2 pages updated 23 Feb 2026)
 - ✅ Active expo indicator added to all 14 admin sidebars (24 Feb 2026) — reads `selectedExpoName` from localStorage, hidden if no expo selected
+- ✅ Expo indicator is now a clickable `<a>` link to `dashboard_new.html` (25 Feb 2026) — allows switching expo from any page. Small `⇄` icon on the right as visual hint.
 - Mobile sidebar only works on main-panel-v2, other pages sidebar disappears below 768px
 
 ### Navigasyon Akışı (Updated 24 Feb 2026)
@@ -758,6 +759,10 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 
 **Custom Field Email Placeholder Fix (25 Feb):**
 - Public form email template: custom_fields (e.g. `conference_topic`) were not available as template placeholders. `{{conference_topic}}` was never replaced because custom_fields was stored as a JSON string in emailData, not spread as top-level keys. Fix: `...(custom_fields || {})` added to emailData spread in `visitors.js` POST /public. Now any form-defined custom field works as `{{field_name}}` in email templates.
+
+**Sprint 4 — Navigation Fix (25 Feb):**
+- "All Expos" button fix: `goToDashboard()` in main-panel-v2.html was pointing to `main-panel-v2.html` (self-loop), fixed to `dashboard_new.html`
+- Sidebar expo indicator: changed from `<div>` to `<a href="dashboard_new.html">` across all 14 admin pages — expo name is now clickable to switch expo, with `⇄` icon hint
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
