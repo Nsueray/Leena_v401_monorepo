@@ -334,6 +334,8 @@ form-public.html → POST /api/visitors/public
     → Varsa: COALESCE UPDATE (boş alanlar korunur, QR korunur) + email resend "(Resent)"
     → Yoksa: INSERT yeni QR + email gönder
   → Exhibitor formu ile gelen kişi artık visitor_type='exhibitor' olarak kaydediliyor
+  → Email template placeholders: custom_fields (e.g. conference_topic) spread into emailData
+    → {{conference_topic}}, {{any_custom_field}} etc. work in email templates
 ```
 
 ### J. Email Gönderim Mimarisi
@@ -753,6 +755,9 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - emailSegments.js BASE_BADGE_URL: fixed `http://localhost:3000` fallback → `https://leena.app`
 - visitor_type standardized across all frontend: added "conference" type to all 4 pages (form-builder, visitorlog-paginated, badge-templates, import). Standard order: visitor, exhibitor, conference, vip, press, staff, speaker. form-builder.html radio buttons replaced with 7-option select dropdown. visitorlog-paginated.html: new filter pill + CSS badge color (.badge-type-conference orange) + JS color map.
 - email_worker transaction fix: `fetchNextTask()` now uses `pool.connect()` + `BEGIN`/`COMMIT`/`ROLLBACK`. Atomic `UPDATE status='processing' WHERE id=(SELECT ... FOR UPDATE SKIP LOCKED)` prevents duplicate email when multiple workers run concurrently.
+
+**Custom Field Email Placeholder Fix (25 Feb):**
+- Public form email template: custom_fields (e.g. `conference_topic`) were not available as template placeholders. `{{conference_topic}}` was never replaced because custom_fields was stored as a JSON string in emailData, not spread as top-level keys. Fix: `...(custom_fields || {})` added to emailData spread in `visitors.js` POST /public. Now any form-defined custom field works as `{{field_name}}` in email templates.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
