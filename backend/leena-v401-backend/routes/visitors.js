@@ -266,8 +266,10 @@ router.post('/public', async (req, res) => {
         const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
 
         // Build email data with QR image
+        // Spread custom_fields as top-level keys so {{conference_topic}} etc. work in templates
         const emailData = {
           ...visitorData,
+          ...(custom_fields || {}),
           qr_code: qrImageTag,
           badge_id: badgeId,
           badge_url: badgeUrl,
