@@ -82,6 +82,19 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     const expo_name = expoResult.rows[0].name;
     console.log(`✓ [WEBHOOK] Expo found: "${expo_name}"`);
 
+    // Get visitor_type from form (authoritative source) if not provided by Zoho
+    let resolvedVisitorType = visitorType;
+    if (!resolvedVisitorType && form_id) {
+      const formResult = await pool.query(
+        `SELECT visitor_type FROM forms WHERE id = $1`,
+        [form_id]
+      );
+      if (formResult.rows.length > 0 && formResult.rows[0].visitor_type) {
+        resolvedVisitorType = formResult.rows[0].visitor_type;
+        console.log(`✓ [WEBHOOK] visitor_type from form: "${resolvedVisitorType}"`);
+      }
+    }
+
     // 🔍 Check for existing visitor with same email in this expo
     const existingResult = await pool.query(
       `SELECT id, qr_code, badge_id, badge_url, name, last_name, email, company
@@ -139,7 +152,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
           website,
           visitorCategory,
           visitorStatus,
-          visitorType || 'visitor',
+          resolvedVisitorType || 'visitor',
           badgeNumber,
           JSON.stringify(customFields),
           existingVisitor.id
@@ -189,7 +202,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
         sector,
         visitorCategory,
         visitorStatus,
-        visitorType || 'visitor',
+        resolvedVisitorType || 'visitor',
         jobTitle,
         country,
         phone,
