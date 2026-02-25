@@ -35,6 +35,21 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     const website = req.body.website ?? '';
     const origin = req.body.origin ?? '';
 
+    // Extract custom fields: everything in req.body that is NOT a known field
+    const knownFields = new Set([
+      'name', 'lastName', 'last_name', 'email', 'company',
+      'badgeNumber', 'badge_id', 'sector', 'visitorCategory', 'visitor_category',
+      'visitorStatus', 'visitor_status', 'visitorType', 'visitor_type',
+      'visitorSource', 'source', 'jobTitle', 'job_title',
+      'country', 'phone', 'website', 'origin'
+    ]);
+    const customFields = {};
+    for (const [key, value] of Object.entries(req.body)) {
+      if (!knownFields.has(key) && value !== null && value !== undefined && value !== '') {
+        customFields[key] = value;
+      }
+    }
+
     console.log('═══════════════════════════════════════════════════════════');
     console.log('📥 [WEBHOOK] Incoming Zoho Form Submission');
     console.log(`   📧 Email: ${email}`);
@@ -44,6 +59,9 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     console.log(`   💼 Job Title: ${jobTitle}`);
     console.log(`   📱 Phone: ${phone}`);
     console.log(`   🎯 Expo ID: ${expo_id} | Form ID: ${form_id}`);
+    if (Object.keys(customFields).length > 0) {
+      console.log(`   📋 Custom Fields: ${JSON.stringify(customFields)}`);
+    }
     console.log('═══════════════════════════════════════════════════════════');
 
     // Validate email
@@ -106,8 +124,9 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
            visitor_status = $10,
            visitor_type = $11,
            badge_id = CASE WHEN $12 != '' THEN $12 ELSE badge_id END,
+           custom_fields = COALESCE(custom_fields, '{}'::jsonb) || $13::jsonb,
            updated_at = NOW()
-         WHERE id = $13
+         WHERE id = $14
          RETURNING *`,
         [
           name || existingVisitor.name || 'No Name',
@@ -122,6 +141,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
           visitorStatus,
           visitorType || 'visitor',
           badgeNumber,
+          JSON.stringify(customFields),
           existingVisitor.id
         ]
       );
@@ -148,13 +168,13 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
           sector, visitor_category, visitor_status, visitor_type,
           job_title, country, phone, website,
           source, origin, form_id,
-          qr_code, badge_url, expo_id, organizer_id, created_at
+          qr_code, badge_url, expo_id, organizer_id, custom_fields, created_at
         ) VALUES (
           $1,$2,$3,$4,$5,$6,
           $7,$8,$9,$10,
           $11,$12,$13,$14,
           $15,$16,$17,
-          $18,$19,$20,$21,NOW()
+          $18,$19,$20,$21,$22,NOW()
         )
         RETURNING *
       `;
@@ -180,7 +200,8 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
         qr_code,
         badge_url,
         expo_id,
-        organizer_id
+        organizer_id,
+        JSON.stringify(customFields)
       ];
 
       const result = await pool.query(insertQuery, values);
@@ -204,7 +225,9 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
         const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
         const qrImageTag = `<img src="${baseUrl}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width:200px;">`;
 
+        // Spread customFields so {{conference_topic}} etc. work in email templates
         const emailData = {
+          ...customFields,
           name: visitor.name || name,
           last_name: visitor.last_name || lastName,
           company: visitor.company || company,

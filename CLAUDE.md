@@ -763,6 +763,7 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 **Sprint 4 — Navigation Fix (25 Feb):**
 - "All Expos" button fix: `goToDashboard()` in main-panel-v2.html was pointing to `main-panel-v2.html` (self-loop), fixed to `dashboard_new.html`
 - Sidebar expo indicator: changed from `<div>` to `<a href="dashboard_new.html">` across all 14 admin pages — expo name is now clickable to switch expo, with `⇄` icon hint
+- Webhook custom_fields fix: Zoho webhook now captures all non-standard fields (e.g. `conference_topic`) into `custom_fields` JSONB column. Custom fields are spread into emailData so `{{conference_topic}}` etc. work in email templates. Both INSERT and UPDATE queries updated.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
