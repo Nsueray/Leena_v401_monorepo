@@ -191,6 +191,7 @@ backend/leena-v401-backend/
 | email_logs | Email gönderim logları (emailSend + emailSegments tarafından yazılır) |
 | reactivation_tokens | Kampanya tokenları (source_expo_id → target_expo_id) |
 | exhibitor_leads | Exhibitor lead kayıtları (exhibitor_company bazlı) |
+| import_logs | Import operation logs (per-import stats, errors, options) |
 
 ### visitors Tablosu Önemli Kolonlar
 - `id`, `name`, `last_name`, `email` (unique per expo), `phone`
@@ -274,12 +275,16 @@ Terminal QR tarar → POST /api/terminal/checkin (x-terminal-key)
   → checkins INSERT + visitor_event_status UPSERT
 ```
 
-### C. Import (Upsert Mantığı)
+### C. Import (Upsert + Email/QR Options + Custom Fields)
 ```
 Excel upload → POST /api/visitors/import
-  → Her satır: email+expo_id ile kontrol
-  → Varsa: UPDATE (COALESCE ile boş alanları koru, QR KORU)
-  → Yoksa: INSERT (yeni UUID qr_code)
+  → Custom fields extraction: columns NOT in knownColumns → customFields JSONB
+  → Per row: email+expo_id check
+  → Existing: UPDATE (COALESCE, custom_fields merge) + optional email (resent/first_time) + optional QR regen
+  → New: INSERT (new UUID qr_code) + optional email
+  → Custom field placeholders (e.g. {{conference_topic}}) work in email templates via ...customFields spread
+  → New params: existing_email_option (none|resent|first_time), existing_qr_option (keep|regenerate), existing_template_id
+  → Defaults: email=none, qr=keep (backward compatible — no params = old behavior)
 ```
 
 ### D. Manual Registration (Upsert)
@@ -397,6 +402,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - `POST /api/visitors/public` — Public form submit (auth yok)
 - `POST /api/visitors/manual` — Manuel kayıt (upsert)
 - `POST /api/visitors/import` — Excel import (upsert: varsa güncelle+QR koru, yoksa oluştur)
+- `GET /api/visitors/import-logs` — Import history logs (paginated, ?page=1&limit=20&expo_id=)
 
 ### Forms
 - `GET /api/forms` — Form listesi
@@ -765,6 +771,17 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - Sidebar expo indicator: changed from `<div>` to `<a href="dashboard_new.html">` across all 14 admin pages — expo name is now clickable to switch expo, with `⇄` icon hint
 - Webhook custom_fields fix: Zoho webhook now captures all non-standard fields (e.g. `conference_topic`) into `custom_fields` JSONB column. Custom fields are spread into emailData so `{{conference_topic}}` etc. work in email templates. Both INSERT and UPDATE queries updated.
 - Webhook visitor_type fix: Zoho webhook now fetches `visitor_type` from forms table when Zoho payload doesn't include it. Priority: Zoho payload → form DB → 'visitor' fallback. Fixes conference form (form_id=31) registrations being saved as 'visitor' instead of 'conference'.
+
+**Sprint 5 — Import Enhancement (26 Feb):**
+- Import custom_fields extraction: Excel columns not in `knownColumns` Set are stored as `custom_fields` JSONB (e.g. `conference_topic`). Both UPDATE (merge) and INSERT paths updated.
+- Import existing visitor email options: new `existing_email_option` param — `none` (default), `resent` (subject + "(Resent)"), `first_time` (original subject). Each requires explicit template selection via `existing_template_id`.
+- Import existing visitor QR options: new `existing_qr_option` param — `keep` (default, preserves QR), `regenerate` (new UUID + badge_id). Warning shown in UI.
+- Import email template placeholders: `...customFields` spread into templateData for both UPDATE and INSERT paths. `{{conference_topic}}` and any custom Excel column now works in email templates.
+- Import INSERT path fix: `JSON.stringify(row)` → `JSON.stringify(customFields)` — previously stored entire row object including known fields.
+- Frontend import.html: new "Existing Visitor Options" card with email/QR dropdowns + conditional template selector. Template required when email option is active.
+- Backward compatible: no params sent = old behavior (no email for existing, QR kept).
+- Import history log: new `import_logs` table stores per-import stats (new/updated/failed/emails/qr_regen/custom_fields_updated counts, errors array, options used). `GET /api/visitors/import-logs` endpoint with pagination. Frontend "Import History" section with paginated table (20 per page), color-coded stats, expandable error details. Auto-refreshes after each import.
+- New counter: `custom_fields_updated_count` tracks how many rows had custom fields (non-standard Excel columns) stored.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

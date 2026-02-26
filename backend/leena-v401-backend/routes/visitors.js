@@ -391,8 +391,11 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const { expo_id, visitor_type, source_override, send_email, template_id } = req.body;
+    const { expo_id, visitor_type, source_override, send_email, template_id,
+            existing_email_option, existing_qr_option, existing_template_id } = req.body;
     const origin = 'massimport';
+    const effectiveExistingEmailOption = existing_email_option || 'none';
+    const effectiveExistingQrOption = existing_qr_option || 'keep';
 
     if (!expo_id) {
       return res.status(400).json({ success: false, message: 'expo_id is required' });
@@ -432,10 +435,42 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
       }
     }
 
+    // Get email template for existing visitors if needed
+    let existingEmailTemplate = null;
+    if (effectiveExistingEmailOption !== 'none') {
+      const eid = existing_template_id;
+      if (eid) {
+        const tRes = await pool.query(`SELECT * FROM email_templates WHERE id = $1`, [eid]);
+        if (tRes.rows.length) existingEmailTemplate = tRes.rows[0];
+      }
+    }
+
+    // Known Excel columns — anything NOT in this set becomes a custom field
+    const knownColumns = new Set([
+      'name', 'Name', 'first_name', 'First Name', 'full_name', 'Full Name',
+      'last_name', 'Last Name', 'surname', 'Surname', 'lastname',
+      'email', 'Email', 'EMAIL', 'e_mail',
+      'company', 'Company', 'COMPANY', 'organization', 'Organisation',
+      'country', 'Country', 'COUNTRY',
+      'phone', 'Phone', 'PHONE', 'mobile', 'Mobile', 'tel',
+      'job_title', 'Job Title', 'title', 'Title', 'position', 'Position',
+      'website', 'Website', 'web', 'url',
+      'visitor_type', 'Visitor Type', 'type',
+      'visitor_category', 'Visitor Category', 'category',
+      'sector', 'Sector', 'industry', 'Industry',
+      'source', 'Source',
+      'booth_number', 'Booth Number', 'booth', 'Booth'
+    ]);
+
     // Process each row
     const results = {
       success_count: 0,
+      new_count: 0,
+      updated_count: 0,
       failed_count: 0,
+      email_sent_count: 0,
+      qr_regenerated_count: 0,
+      custom_fields_updated_count: 0,
       imported: [],
       errors: []
     };
@@ -459,6 +494,14 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
         const sector = row.sector || row.Sector || row.industry || row.Industry || '';
         const source = source_override || row.source || row.Source || 'import';
 
+        // Extract custom fields: columns NOT in the known set
+        const customFields = {};
+        for (const [key, value] of Object.entries(row)) {
+          if (!knownColumns.has(key) && value !== null && value !== undefined && value !== '') {
+            customFields[key] = String(value).trim();
+          }
+        }
+
         // Validate email
         if (!email || !email.includes('@')) {
           results.errors.push({ row: rowNum, message: `Invalid or missing email: "${email}"` });
@@ -474,7 +517,23 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
         if (duplicateCheck.rows.length > 0) {
           const existing = duplicateCheck.rows[0];
-          // Update existing visitor info but keep QR code
+          let currentQrCode = existing.qr_code;
+          let currentBadgeId = existing.badge_id;
+
+          // QR regeneration if requested
+          if (effectiveExistingQrOption === 'regenerate') {
+            currentQrCode = uuidv4();
+            currentBadgeId = currentQrCode.substring(0, 8).toUpperCase();
+            results.qr_regenerated_count++;
+          }
+
+          // Build custom_fields merge value
+          const hasCustomFields = Object.keys(customFields).length > 0;
+          const mergedCustomFields = hasCustomFields
+            ? JSON.stringify(customFields) : null;
+          if (hasCustomFields) results.custom_fields_updated_count++;
+
+          // Update existing visitor — COALESCE keeps old values when new is empty
           await pool.query(
             `UPDATE visitors SET
               name = COALESCE(NULLIF($1, ''), name),
@@ -486,22 +545,74 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
               visitor_type = COALESCE(NULLIF($7, ''), visitor_type),
               sector = COALESCE(NULLIF($8, ''), sector),
               booth_number = COALESCE(NULLIF($9, ''), booth_number),
+              custom_fields = CASE
+                WHEN $10::jsonb IS NOT NULL
+                THEN COALESCE(custom_fields, '{}'::jsonb) || $10::jsonb
+                ELSE custom_fields
+              END,
+              qr_code = $11,
+              badge_id = $12,
               updated_at = NOW()
-            WHERE id = $10`,
+            WHERE id = $13`,
             [name.trim(), last_name.trim(), company.trim(), country.trim(),
              job_title.trim(), phone.trim(), visitor_type_val, sector.trim(),
              (row.booth_number || row['Booth Number'] || row.booth || row.Booth || '').toString().trim(),
+             mergedCustomFields,
+             currentQrCode,
+             currentBadgeId,
              existing.id]
           );
+
           results.imported.push({
             id: existing.id,
             name: name || last_name || email,
             email: email,
-            qr_code: existing.qr_code,
-            badge_id: existing.badge_id
+            qr_code: currentQrCode,
+            badge_id: currentBadgeId
           });
           results.success_count++;
-          console.log(`🔄 Updated existing visitor: ${email} (ID: ${existing.id})`);
+          results.updated_count++;
+          console.log(`🔄 Updated existing visitor: ${email} (ID: ${existing.id})${effectiveExistingQrOption === 'regenerate' ? ' [NEW QR]' : ''}`);
+
+          // Email for existing visitors (if option selected)
+          if (effectiveExistingEmailOption !== 'none' && existingEmailTemplate) {
+            try {
+              const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+              const qrImageTag = `<img src="${baseUrl}/api/qr-image/${currentQrCode}" alt="QR Code" style="max-width:200px;">`;
+              const currentBadgeUrl = generateBadgeUrl(currentQrCode);
+
+              const templateData = {
+                ...customFields,
+                name: name || 'Guest',
+                last_name, email, company, country, job_title, phone,
+                qr_code: qrImageTag,
+                badge_id: currentBadgeId,
+                badge_url: currentBadgeUrl,
+                expo_name: expoName,
+                date: new Date().toLocaleDateString()
+              };
+
+              const emailHtml = processEmailTemplate(
+                existingEmailTemplate.html_content || existingEmailTemplate.body || '',
+                templateData
+              );
+              let emailSubject = processEmailTemplate(
+                existingEmailTemplate.subject || 'Registration Confirmation',
+                templateData
+              );
+              if (effectiveExistingEmailOption === 'resent') {
+                emailSubject = `${emailSubject} (Resent)`;
+              }
+
+              await sendEmailWithReplyTo(email, emailSubject, emailHtml, 'reply@replies.leena.app');
+              results.email_sent_count++;
+              console.log(`📧 Email sent to existing visitor: ${email}`);
+              await delay(100);
+            } catch (emailErr) {
+              console.error(`❌ Email failed for existing ${email}:`, emailErr.message);
+            }
+          }
+
           continue;
         }
 
@@ -539,7 +650,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           sector.trim(),
           qrCode,
           badgeId,
-          JSON.stringify(row) // Store original row as custom_fields
+          JSON.stringify(customFields) // Store only custom fields (non-standard columns)
         ];
 
         const insertResult = await pool.query(insertQuery, values);
@@ -553,6 +664,8 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           badge_id: badgeId
         });
         results.success_count++;
+        results.new_count++;
+        if (Object.keys(customFields).length > 0) results.custom_fields_updated_count++;
 
         // Send email if enabled
         if (emailTemplate) {
@@ -562,6 +675,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
             const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
             
             const templateData = {
+              ...customFields,
               name: name || 'Guest',
               last_name: last_name,
               email: email,
@@ -569,7 +683,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
               country: country,
               job_title: job_title,
               phone: phone,
-              qr_code: qrImageTag,  // Now sends img tag instead of UUID
+              qr_code: qrImageTag,
               badge_id: badgeId,
               badge_url: badgeUrl,
               expo_name: expoName,
@@ -592,6 +706,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
               'reply@replies.leena.app'
             );
 
+            results.email_sent_count++;
             console.log(`📧 Email sent to: ${email}`);
 
             // Small delay to avoid rate limits
@@ -611,9 +726,29 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
     console.log(`✅ Import complete: ${results.success_count} success, ${results.failed_count} failed`);
 
+    // Save import log
+    try {
+      await pool.query(
+        `INSERT INTO import_logs (organizer_id, expo_id, expo_name, filename,
+          total_rows, new_count, updated_count, failed_count,
+          email_sent_count, qr_regenerated_count, custom_fields_updated,
+          visitor_type, options, errors)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [organizerId, expo_id, expoName, req.file.originalname || 'unknown.xlsx',
+         rows.length, results.new_count, results.updated_count, results.failed_count,
+         results.email_sent_count, results.qr_regenerated_count, results.custom_fields_updated_count,
+         visitor_type || 'visitor',
+         JSON.stringify({ existing_email_option: effectiveExistingEmailOption, existing_qr_option: effectiveExistingQrOption, send_email: send_email || 'false' }),
+         JSON.stringify(results.errors.slice(0, 50))]
+      );
+      console.log('📋 Import log saved');
+    } catch (logErr) {
+      console.error('⚠️ Failed to save import log:', logErr.message);
+    }
+
     res.json({
       success: true,
-      message: `Import completed: ${results.success_count} visitors imported`,
+      message: `Import completed: ${results.new_count} new, ${results.updated_count} updated, ${results.failed_count} failed${results.email_sent_count ? ', ' + results.email_sent_count + ' emails sent' : ''}${results.custom_fields_updated_count ? ', ' + results.custom_fields_updated_count + ' custom fields updated' : ''}`,
       ...results
     });
 
@@ -623,6 +758,53 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
       success: false, 
       message: 'Import failed: ' + err.message 
     });
+  }
+});
+
+// ✅ GET IMPORT HISTORY LOGS (paginated)
+router.get('/import-logs', authMiddleware, async (req, res) => {
+  try {
+    const organizerId = req.organizer_id;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+    const expoId = req.query.expo_id;
+
+    let whereClause = 'WHERE organizer_id = $1';
+    const params = [organizerId];
+
+    if (expoId) {
+      whereClause += ` AND expo_id = $${params.length + 1}`;
+      params.push(expoId);
+    }
+
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM import_logs ${whereClause}`, params
+    );
+    const total = parseInt(countResult.rows[0].count);
+    const totalPages = Math.ceil(total / limit);
+
+    const logsResult = await pool.query(
+      `SELECT id, expo_id, expo_name, filename, total_rows,
+              new_count, updated_count, failed_count,
+              email_sent_count, qr_regenerated_count, custom_fields_updated,
+              visitor_type, options, errors, created_at
+       FROM import_logs ${whereClause}
+       ORDER BY created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
+    );
+
+    res.json({
+      success: true,
+      logs: logsResult.rows,
+      total,
+      page,
+      totalPages
+    });
+  } catch (err) {
+    console.error('❌ Import logs error:', err);
+    res.status(500).json({ success: false, message: 'Failed to load import logs' });
   }
 });
 

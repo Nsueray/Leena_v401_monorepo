@@ -72,7 +72,32 @@
         .spinner-overlay.active { display: flex; }
         .spinner { width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .form-row { grid-template-columns: 1fr; } }
+        .history-section { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); margin-top: 24px; overflow: hidden; }
+        .history-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; }
+        .history-header i { color: var(--primary); }
+        .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .history-table th { background: var(--primary-light); padding: 8px 12px; text-align: left; font-weight: 600; font-size: 11px; text-transform: uppercase; color: var(--text-secondary); white-space: nowrap; }
+        .history-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); vertical-align: middle; }
+        .history-table tr:last-child td { border-bottom: none; }
+        .history-table tr:hover td { background: #f8fafc; }
+        .history-table .num { text-align: center; font-weight: 600; }
+        .history-table .num.green { color: #059669; }
+        .history-table .num.blue { color: #2563eb; }
+        .history-table .num.orange { color: #d97706; }
+        .history-table .num.red { color: #dc2626; }
+        .history-table .truncate { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .history-empty { padding: 40px 20px; text-align: center; color: var(--text-muted); font-size: 13px; }
+        .history-empty i { font-size: 32px; display: block; margin-bottom: 8px; opacity: 0.5; }
+        .pagination-bar { display: flex; justify-content: space-between; align-items: center; padding: 12px 20px; border-top: 1px solid var(--border-color); }
+        .page-info { font-size: 12px; color: var(--text-muted); }
+        .pagination { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+        .page-item .page-link { padding: 5px 10px; border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary); text-decoration: none; font-size: 12px; cursor: pointer; background: white; }
+        .page-item .page-link:hover { background: var(--primary-light); }
+        .page-item.active .page-link { background: var(--primary); color: white; border-color: var(--primary); }
+        .page-item.disabled .page-link { color: var(--text-muted); cursor: not-allowed; opacity: 0.5; }
+        .error-toggle { cursor: pointer; color: var(--danger); text-decoration: underline; font-size: 11px; }
+        .error-details { display: none; padding: 8px; background: #fef2f2; border-radius: 4px; margin-top: 4px; font-size: 11px; max-height: 120px; overflow-y: auto; }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .form-row { grid-template-columns: 1fr; } .history-table { font-size: 11px; } .history-table th, .history-table td { padding: 6px 8px; } }
     </style>
 </head>
 <body>
@@ -132,6 +157,8 @@
                         <li><strong>Name:</strong> name (or first_name), last_name</li>
                         <li><strong>Contact:</strong> phone, company, country, website</li>
                         <li><strong>Professional:</strong> job_title, sector, visitor_category</li>
+                        <li><strong>Optional:</strong> booth_number, source, visitor_type</li>
+                        <li><strong>Custom:</strong> Any extra columns (e.g. conference_topic) are saved as custom fields and work as email template placeholders</li>
                     </ul>
                 </div>
 
@@ -197,10 +224,57 @@
                         <button class="btn btn-primary" onclick="startImport()"><i class="bi bi-upload"></i> Start Import</button>
                     </div>
                 </div>
+
+                <div class="card">
+                    <h5 style="font-size:14px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px;">
+                        <i class="bi bi-arrow-repeat" style="color:var(--primary);"></i> Existing Visitor Options
+                    </h5>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">These settings apply when an imported email already exists in the selected expo.</p>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label"><i class="bi bi-envelope"></i> Email for Updated Visitors</label>
+                            <select class="form-select" id="existingEmailOption" onchange="toggleExistingEmailTemplate()">
+                                <option value="none">Don't send email</option>
+                                <option value="resent">Send as Resent (subject + "(Resent)")</option>
+                                <option value="first_time">Send as First Time (original subject)</option>
+                            </select>
+                            <div class="form-hint">Controls email sending when a visitor already exists</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label"><i class="bi bi-qr-code"></i> QR Code for Updated Visitors</label>
+                            <select class="form-select" id="existingQrOption">
+                                <option value="keep">Keep existing QR code</option>
+                                <option value="regenerate">Generate new QR code</option>
+                            </select>
+                            <div class="form-hint" style="color:var(--danger);"><i class="bi bi-exclamation-triangle"></i> Regenerating QR invalidates previously sent badges</div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="existingTemplateSection" style="display:none;">
+                        <label class="form-label"><i class="bi bi-file-text"></i> Email Template for Updated Visitors</label>
+                        <select class="form-select" id="existingTemplateSelect">
+                            <option value="">Use same template as new visitors</option>
+                        </select>
+                        <div class="form-hint">Leave as default to use the template selected above</div>
+                    </div>
+                </div>
                 
                 <div class="results-section" id="resultsSection">
                     <h5 style="margin-bottom:16px;"><i class="bi bi-list-check"></i> Import Results</h5>
                     <div id="resultsList"></div>
+                </div>
+
+                <!-- Import History -->
+                <div class="history-section" id="historySection">
+                    <div class="history-header"><i class="bi bi-clock-history"></i> Import History</div>
+                    <div id="historyContent">
+                        <div class="history-empty"><i class="bi bi-inbox"></i>No import history yet</div>
+                    </div>
+                    <div class="pagination-bar" id="historyPaginationBar" style="display:none;">
+                        <span class="page-info" id="historyPageInfo"></span>
+                        <ul class="pagination" id="historyPagination"></ul>
+                    </div>
                 </div>
             </main>
         </div>
@@ -210,11 +284,14 @@
         const API_URL = '/api';
         let selectedFile = null, expos = [], templates = [];
 
+        let historyPage = 1;
+
         document.addEventListener('DOMContentLoaded', () => {
             if (!localStorage.getItem('token')) { window.location.href = 'login.html'; return; }
             loadExpos();
             loadTemplates();
             setupDragDrop();
+            loadImportHistory(1);
         });
 
         function setupDragDrop() {
@@ -268,12 +345,22 @@
                 templates = data.templates || [];
                 const select = document.getElementById('templateSelect');
                 select.innerHTML = '<option value="">Select a template...</option>';
-                templates.filter(t => t.is_active).forEach(t => { const opt = document.createElement('option'); opt.value = t.id; opt.textContent = t.name; select.appendChild(opt); });
+                const existingSelect = document.getElementById('existingTemplateSelect');
+                existingSelect.innerHTML = '<option value="">Select a template...</option>';
+                templates.filter(t => t.is_active).forEach(t => {
+                    const opt = document.createElement('option'); opt.value = t.id; opt.textContent = t.name; select.appendChild(opt);
+                    const opt2 = document.createElement('option'); opt2.value = t.id; opt2.textContent = t.name; existingSelect.appendChild(opt2);
+                });
             } catch (e) { console.error('Error loading templates'); }
         }
 
         function toggleEmailTemplate() {
             document.getElementById('templateSection').style.display = document.getElementById('sendEmailCheck').checked ? 'block' : 'none';
+        }
+
+        function toggleExistingEmailTemplate() {
+            const val = document.getElementById('existingEmailOption').value;
+            document.getElementById('existingTemplateSection').style.display = (val !== 'none') ? 'block' : 'none';
         }
 
         async function startImport() {
@@ -296,6 +383,16 @@
                 if (sourceInput) formData.append('source_override', sourceInput);
                 if (sendEmail) { formData.append('send_email', 'true'); formData.append('template_id', templateId); }
 
+                // Existing visitor options
+                const existingEmailOption = document.getElementById('existingEmailOption').value;
+                formData.append('existing_email_option', existingEmailOption);
+                formData.append('existing_qr_option', document.getElementById('existingQrOption').value);
+                if (existingEmailOption !== 'none') {
+                    const existingTplId = document.getElementById('existingTemplateSelect').value;
+                    if (!existingTplId) { alert('Please select an email template for existing visitors'); return; }
+                    formData.append('existing_template_id', existingTplId);
+                }
+
                 const response = await fetch(`${API_URL}/visitors/import`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
@@ -312,7 +409,13 @@
             const section = document.getElementById('resultsSection');
             const list = document.getElementById('resultsList');
             section.style.display = 'block';
+            const newCount = result.new_count || 0;
+            const updatedCount = result.updated_count || 0;
+            const emailCount = result.email_sent_count || 0;
+            const qrCount = result.qr_regenerated_count || 0;
+            const fieldsCount = result.custom_fields_updated_count || 0;
             let html = `<div class="result-item success"><i class="bi bi-check-circle"></i> Import completed: ${result.success_count || 0} successful, ${result.failed_count || 0} failed</div>`;
+            html += `<div class="result-item" style="background:#f0f4ff;border-left:3px solid #4a6fa5;"><i class="bi bi-bar-chart"></i> <strong>${newCount}</strong> new · <strong>${updatedCount}</strong> updated · <strong>${fieldsCount}</strong> custom fields · <strong>${emailCount}</strong> emails · <strong>${qrCount}</strong> QR regen</div>`;
             if (result.errors?.length) {
                 result.errors.forEach(e => { html += `<div class="result-item error">Row ${e.row}: ${e.message}</div>`; });
             }
@@ -321,6 +424,92 @@
                 if (result.imported.length > 10) html += `<div class="result-item">...and ${result.imported.length - 10} more</div>`;
             }
             list.innerHTML = html;
+            loadImportHistory(1);
+        }
+
+        async function loadImportHistory(page) {
+            historyPage = page;
+            try {
+                const response = await fetch(`${API_URL}/visitors/import-logs?page=${page}&limit=20`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) throw new Error();
+                const data = await response.json();
+                renderImportHistory(data);
+            } catch (e) {
+                console.error('Error loading import history');
+            }
+        }
+
+        function renderImportHistory(data) {
+            const content = document.getElementById('historyContent');
+            const paginationBar = document.getElementById('historyPaginationBar');
+
+            if (!data.logs || data.logs.length === 0) {
+                content.innerHTML = '<div class="history-empty"><i class="bi bi-inbox"></i>No import history yet</div>';
+                paginationBar.style.display = 'none';
+                return;
+            }
+
+            let html = '<table class="history-table"><thead><tr>';
+            html += '<th>Date</th><th>Expo</th><th>File</th><th>Rows</th>';
+            html += '<th>New</th><th>Updated</th><th>Fields</th><th>Emails</th><th>QR</th><th>Errors</th>';
+            html += '</tr></thead><tbody>';
+
+            data.logs.forEach(log => {
+                const date = new Date(log.created_at);
+                const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+                const errors = log.errors || [];
+                const errorCount = typeof log.failed_count === 'number' ? log.failed_count : errors.length;
+                const logId = log.id;
+
+                html += '<tr>';
+                html += `<td style="white-space:nowrap;font-size:11px;">${dateStr}</td>`;
+                html += `<td class="truncate" title="${log.expo_name || ''}">${log.expo_name || '-'}</td>`;
+                html += `<td class="truncate" title="${log.filename || ''}">${log.filename || '-'}</td>`;
+                html += `<td class="num">${log.total_rows || 0}</td>`;
+                html += `<td class="num green">${log.new_count || 0}</td>`;
+                html += `<td class="num blue">${log.updated_count || 0}</td>`;
+                html += `<td class="num orange">${log.custom_fields_updated || 0}</td>`;
+                html += `<td class="num">${log.email_sent_count || 0}</td>`;
+                html += `<td class="num">${log.qr_regenerated_count || 0}</td>`;
+
+                if (errorCount > 0) {
+                    html += `<td><span class="error-toggle" onclick="toggleErrors(${logId})">${errorCount} errors</span>`;
+                    html += `<div class="error-details" id="errors-${logId}">`;
+                    errors.slice(0, 20).forEach(e => { html += `<div>Row ${e.row}: ${e.message}</div>`; });
+                    if (errors.length > 20) html += `<div>...and ${errors.length - 20} more</div>`;
+                    html += `</div></td>`;
+                } else {
+                    html += '<td class="num green">0</td>';
+                }
+
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            content.innerHTML = html;
+
+            // Pagination
+            if (data.totalPages > 1) {
+                paginationBar.style.display = 'flex';
+                document.getElementById('historyPageInfo').textContent = `Page ${data.page} of ${data.totalPages} (${data.total} total)`;
+
+                let pagHtml = '';
+                pagHtml += `<li class="page-item ${data.page <= 1 ? 'disabled' : ''}"><a class="page-link" onclick="loadImportHistory(${data.page - 1})"><i class="bi bi-chevron-left"></i></a></li>`;
+                for (let i = 1; i <= data.totalPages; i++) {
+                    pagHtml += `<li class="page-item ${i === data.page ? 'active' : ''}"><a class="page-link" onclick="loadImportHistory(${i})">${i}</a></li>`;
+                }
+                pagHtml += `<li class="page-item ${data.page >= data.totalPages ? 'disabled' : ''}"><a class="page-link" onclick="loadImportHistory(${data.page + 1})"><i class="bi bi-chevron-right"></i></a></li>`;
+                document.getElementById('historyPagination').innerHTML = pagHtml;
+            } else {
+                paginationBar.style.display = 'none';
+            }
+        }
+
+        function toggleErrors(logId) {
+            const el = document.getElementById('errors-' + logId);
+            if (el) el.style.display = el.style.display === 'block' ? 'none' : 'block';
         }
 
         function downloadSampleExcel() {
