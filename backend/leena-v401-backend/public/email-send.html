@@ -133,6 +133,20 @@
             </header>
             
             <main class="main-content">
+                <!-- Conference Topic Banner (shown when ?conference_topic=X) -->
+                <div id="conferenceBanner" style="display:none; background: linear-gradient(135deg, #f0f9ff, #e0f2fe); border: 1px solid #7dd3fc; border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 20px; display: none;">
+                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <i class="bi bi-mortarboard" style="font-size:20px; color:#0284c7;"></i>
+                            <div>
+                                <div style="font-weight:600; color:#0c4a6e;">Sending to Conference Topic</div>
+                                <div style="font-size:15px; color:#0369a1; font-weight:500;" id="conferenceTopicName"></div>
+                            </div>
+                        </div>
+                        <span style="background:#0284c7; color:white; padding:4px 12px; border-radius:20px; font-size:13px; font-weight:600;" id="conferenceRecipientCount"></span>
+                    </div>
+                </div>
+
                 <!-- Step 1: Choose Type -->
                 <div id="step1">
                     <div class="send-options">
@@ -269,13 +283,59 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             if (!localStorage.getItem('token')) { window.location.href = 'login.html'; return; }
+            if (!localStorage.getItem('selectedExpoId')) { window.location.href = 'dashboard_new.html'; return; }
             loadTemplates();
             loadExpos();
             setupDragDrop();
             document.getElementById('saveToDatabase').addEventListener('change', function() {
                 document.getElementById('databaseOptions').style.display = this.checked ? 'block' : 'none';
             });
+            // Auto-populate from conference topic URL param
+            const urlParams = new URLSearchParams(window.location.search);
+            const conferenceTopic = urlParams.get('conference_topic');
+            if (conferenceTopic) {
+                loadConferenceRecipients(conferenceTopic);
+            }
         });
+
+        async function loadConferenceRecipients(topic) {
+            try {
+                const expoId = localStorage.getItem('selectedExpoId');
+                const token = localStorage.getItem('token');
+                // Fetch all visitors with this conference topic (large limit to get all)
+                const res = await fetch(`${API_URL}/visitors/paginated?expo_id=${expoId}&conference_topic=${encodeURIComponent(topic)}&limit=5000&page=1`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Failed to fetch');
+                const data = await res.json();
+                const visitors = data.visitors || [];
+                if (visitors.length === 0) {
+                    alert('No visitors found for conference topic: ' + topic);
+                    return;
+                }
+                // Pre-populate recipients
+                recipients = visitors.map(v => ({
+                    name: [v.name, v.last_name].filter(Boolean).join(' ') || 'Guest',
+                    email: v.email,
+                    company: v.company || ''
+                }));
+                // Show conference banner
+                document.getElementById('conferenceBanner').style.display = 'block';
+                document.getElementById('conferenceTopicName').textContent = topic;
+                document.getElementById('conferenceRecipientCount').textContent = recipients.length + ' recipients';
+                // Auto-switch to bulk mode
+                selectSendType('bulk');
+                // Hide upload zone, show recipients list
+                document.getElementById('uploadZone').style.display = 'none';
+                displayRecipients();
+                // Disable save-to-database since these are already in DB
+                document.getElementById('saveToDatabase').checked = false;
+                document.getElementById('databaseOptions').style.display = 'none';
+            } catch (e) {
+                console.error('Error loading conference recipients:', e);
+                alert('Failed to load conference recipients');
+            }
+        }
 
         async function loadTemplates() {
             try {
