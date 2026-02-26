@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Email History - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5; --danger: #ef4444; --danger-bg: #fee2e2;
+            --info: #3b82f6; --info-bg: #dbeafe;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; position: relative; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 24px; background: var(--primary); border-radius: 0 3px 3px 0; }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .header-actions { display: flex; gap: 10px; }
+        .main-content { flex: 1; padding: 24px; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
+        .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
+        .stat-value.success { color: var(--success); }
+        .stat-value.danger { color: var(--danger); }
+        .stat-value.info { color: var(--info); }
+        .stat-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        .filters-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: flex-end; }
+        .filter-group { display: flex; flex-direction: column; gap: 4px; }
+        .filter-group label { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
+        .filter-group select, .filter-group input { padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; font-family: 'Inter', sans-serif; min-width: 160px; }
+        .filter-group select:focus, .filter-group input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(74,111,165,0.1); }
+
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); overflow: hidden; }
+        .card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); }
+        .card-header h3 { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .card-header h3 i { color: var(--primary); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: var(--bg-main); padding: 10px 16px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color); }
+        td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        tr:hover td { background: #f8fafc; }
+
+        .badge-status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .badge-sent { background: var(--success-bg); color: #065f46; }
+        .badge-failed { background: var(--danger-bg); color: #991b1b; }
+        .recipient-email { font-weight: 500; color: var(--text-primary); }
+        .recipient-name { font-size: 12px; color: var(--text-muted); }
+        .template-name { font-size: 12px; color: var(--primary); font-weight: 500; }
+        .message-detail { font-size: 12px; color: var(--text-muted); max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .date-cell { white-space: nowrap; font-size: 12px; color: var(--text-secondary); }
+
+        .pagination { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 16px 20px; border-top: 1px solid var(--border-color); }
+        .pagination button { padding: 6px 12px; border: 1px solid var(--border-color); background: var(--bg-card); border-radius: var(--radius-md); cursor: pointer; font-size: 13px; }
+        .pagination button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+        .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+        .pagination button.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .pagination span { font-size: 13px; color: var(--text-muted); }
+
+        .empty-state { text-align: center; padding: 60px 24px; color: var(--text-muted); }
+        .empty-state i { font-size: 48px; display: block; margin-bottom: 12px; opacity: 0.4; }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .loading-overlay.active { display: flex; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: 1fr; } .filters-row { flex-direction: column; } }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <a id="sidebarExpo" href="dashboard_new.html" title="Switch Expo" style="padding:8px 20px;font-size:11px;color:#9ca3af;border-bottom:1px solid #252542;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;text-decoration:none;cursor:pointer;"><i class="bi bi-geo-alt" style="margin-right:4px;color:#4a6fa5;"></i><span id="expoNameDisplay"></span> <i class="bi bi-arrow-left-right" style="float:right;font-size:9px;opacity:0.5;margin-top:2px;"></i></a>
+            <script>(function(){var n=localStorage.getItem('selectedExpoName'),el=document.getElementById('sidebarExpo');if(n&&el){document.getElementById('expoNameDisplay').textContent=n;el.style.display='block';}})();</script>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                    <a class="nav-item" href="conference-sessions.html"><i class="bi bi-mortarboard"></i><span>Conferences</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-send.html"><i class="bi bi-send"></i><span>Send Emails</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                    <a class="nav-item" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="checkin-reports.html"><i class="bi bi-clipboard-data"></i><span>Check-in Reports</span></a>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+
+            <header class="main-header">
+                <h1><i class="bi bi-clock-history"></i> Email History</h1>
+                <div class="header-actions">
+                    <button class="btn btn-primary" onclick="window.location.href='email-send.html'"><i class="bi bi-send"></i> Send Emails</button>
+                    <button class="btn btn-secondary" onclick="window.location.href='main-panel-v2.html'"><i class="bi bi-arrow-left"></i> Back</button>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotal">-</div>
+                        <div class="stat-label">Total Emails</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value success" id="statSent">-</div>
+                        <div class="stat-label">Successful</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value danger" id="statFailed">-</div>
+                        <div class="stat-label">Failed</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value info" id="statRate">-</div>
+                        <div class="stat-label">Delivery Rate</div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters-row">
+                    <div class="filter-group">
+                        <label>Template</label>
+                        <select id="filterTemplate">
+                            <option value="">All Templates</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Status</label>
+                        <select id="filterStatus">
+                            <option value="">All</option>
+                            <option value="sent">Sent</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Search Email</label>
+                        <input type="text" id="filterSearch" placeholder="john@example.com">
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="applyFilters()" style="height:36px;margin-top:auto;"><i class="bi bi-funnel"></i> Apply</button>
+                    <button class="btn btn-secondary btn-sm" onclick="clearFilters()" style="height:36px;margin-top:auto;"><i class="bi bi-x-circle"></i> Clear</button>
+                </div>
+
+                <!-- Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="bi bi-envelope-check"></i> Email Logs</h3>
+                        <span id="totalCount" style="font-size:13px;color:var(--text-muted);"></span>
+                    </div>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date & Time</th>
+                                    <th>Recipient</th>
+                                    <th>Template</th>
+                                    <th>Status</th>
+                                    <th>Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="logsBody">
+                                <tr><td colspan="5" class="empty-state"><i class="bi bi-hourglass"></i> Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination" id="pagination"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api';
+        let currentPage = 1;
+        const perPage = 20;
+        let currentFilters = {};
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!localStorage.getItem('token')) { window.location.href = 'login.html'; return; }
+            if (!localStorage.getItem('selectedExpoId')) { window.location.href = 'dashboard_new.html'; return; }
+            loadTemplateOptions();
+            loadHistory(1);
+            // Enter key on search
+            document.getElementById('filterSearch').addEventListener('keydown', e => {
+                if (e.key === 'Enter') applyFilters();
+            });
+        });
+
+        async function loadTemplateOptions() {
+            try {
+                const res = await fetch(`${API_URL}/email-templates`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await res.json();
+                const select = document.getElementById('filterTemplate');
+                (data.templates || []).forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.id;
+                    opt.textContent = t.name;
+                    select.appendChild(opt);
+                });
+            } catch (e) { console.error('Error loading templates'); }
+        }
+
+        function applyFilters() {
+            currentFilters = {};
+            const template = document.getElementById('filterTemplate').value;
+            const status = document.getElementById('filterStatus').value;
+            const search = document.getElementById('filterSearch').value.trim();
+            if (template) currentFilters.template_id = template;
+            if (status) currentFilters.status = status;
+            if (search) currentFilters.search = search;
+            loadHistory(1);
+        }
+
+        function clearFilters() {
+            document.getElementById('filterTemplate').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('filterSearch').value = '';
+            currentFilters = {};
+            loadHistory(1);
+        }
+
+        async function loadHistory(page) {
+            currentPage = page;
+            const expoId = localStorage.getItem('selectedExpoId');
+            const token = localStorage.getItem('token');
+
+            let url = `${API_URL}/email-send/history?expo_id=${expoId}&page=${page}&limit=${perPage}`;
+            if (currentFilters.template_id) url += `&template_id=${currentFilters.template_id}`;
+            if (currentFilters.status) url += `&status=${currentFilters.status}`;
+            if (currentFilters.search) url += `&search=${encodeURIComponent(currentFilters.search)}`;
+
+            document.getElementById('loadingOverlay').classList.add('active');
+
+            try {
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Failed');
+                const data = await res.json();
+
+                // Update stats
+                const stats = data.stats || {};
+                document.getElementById('statTotal').textContent = (stats.total_emails || 0).toLocaleString();
+                document.getElementById('statSent').textContent = (stats.total_sent || 0).toLocaleString();
+                document.getElementById('statFailed').textContent = (stats.total_failed || 0).toLocaleString();
+                const rate = stats.total_emails > 0 ? ((stats.total_sent / stats.total_emails) * 100).toFixed(1) : '0';
+                document.getElementById('statRate').textContent = rate + '%';
+
+                // Update count
+                document.getElementById('totalCount').textContent = `${data.total} records`;
+
+                // Render table
+                renderLogs(data.logs || []);
+                renderPagination(data.page, data.totalPages, data.total);
+            } catch (e) {
+                console.error('Error loading email history:', e);
+                document.getElementById('logsBody').innerHTML = '<tr><td colspan="5" class="empty-state"><i class="bi bi-exclamation-circle"></i> Failed to load email history</td></tr>';
+            } finally {
+                document.getElementById('loadingOverlay').classList.remove('active');
+            }
+        }
+
+        function renderLogs(logs) {
+            const tbody = document.getElementById('logsBody');
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state"><i class="bi bi-envelope-x"></i> No email records found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = logs.map(log => {
+                const date = log.sent_at ? new Date(log.sent_at) : null;
+                const dateStr = date ? date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+                const timeStr = date ? date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+                const visitorName = [log.visitor_name, log.visitor_last_name].filter(Boolean).join(' ');
+                const statusClass = log.status === 'sent' ? 'badge-sent' : 'badge-failed';
+                const statusIcon = log.status === 'sent' ? 'bi-check-circle' : 'bi-x-circle';
+                const statusText = log.status === 'sent' ? 'Sent' : 'Failed';
+
+                return `<tr>
+                    <td class="date-cell">${dateStr}<br><span style="color:var(--text-muted)">${timeStr}</span></td>
+                    <td>
+                        <div class="recipient-email">${escapeHtml(log.email || '-')}</div>
+                        ${visitorName ? `<div class="recipient-name">${escapeHtml(visitorName)}</div>` : ''}
+                    </td>
+                    <td><span class="template-name">${escapeHtml(log.template_name || '-')}</span></td>
+                    <td><span class="badge-status ${statusClass}"><i class="bi ${statusIcon}"></i> ${statusText}</span></td>
+                    <td><div class="message-detail" title="${escapeHtml(log.message || '')}">${escapeHtml(log.message || '-')}</div></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function renderPagination(page, totalPages, total) {
+            const container = document.getElementById('pagination');
+            if (totalPages <= 1) { container.innerHTML = ''; return; }
+
+            let html = `<button ${page <= 1 ? 'disabled' : ''} onclick="loadHistory(${page - 1})"><i class="bi bi-chevron-left"></i></button>`;
+
+            const startPage = Math.max(1, page - 2);
+            const endPage = Math.min(totalPages, page + 2);
+
+            if (startPage > 1) {
+                html += `<button onclick="loadHistory(1)">1</button>`;
+                if (startPage > 2) html += `<span>...</span>`;
+            }
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="${i === page ? 'active' : ''}" onclick="loadHistory(${i})">${i}</button>`;
+            }
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += `<span>...</span>`;
+                html += `<button onclick="loadHistory(${totalPages})">${totalPages}</button>`;
+            }
+
+            html += `<button ${page >= totalPages ? 'disabled' : ''} onclick="loadHistory(${page + 1})"><i class="bi bi-chevron-right"></i></button>`;
+            container.innerHTML = html;
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>

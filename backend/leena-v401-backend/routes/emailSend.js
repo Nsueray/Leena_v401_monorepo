@@ -246,4 +246,92 @@ router.post('/bulk', authMiddleware, async (req, res) => {
     }
 });
 
+// Email send history (paginated, filtered)
+router.get('/history', authMiddleware, async (req, res) => {
+    try {
+        const organizerId = req.organizer_id;
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+        const offset = (page - 1) * limit;
+        const expoId = req.query.expo_id;
+
+        if (!expoId) {
+            return res.status(400).json({ success: false, message: 'expo_id required' });
+        }
+
+        // Build WHERE clause
+        let whereClause = 'WHERE el.organizer_id = $1 AND el.expo_id = $2';
+        const params = [organizerId, expoId];
+        let idx = 3;
+
+        if (req.query.status && ['sent', 'failed'].includes(req.query.status)) {
+            whereClause += ` AND el.status = $${idx}`;
+            params.push(req.query.status);
+            idx++;
+        }
+
+        if (req.query.template_id) {
+            whereClause += ` AND el.template_id = $${idx}`;
+            params.push(parseInt(req.query.template_id));
+            idx++;
+        }
+
+        if (req.query.search) {
+            whereClause += ` AND el.email ILIKE $${idx}`;
+            params.push(`%${req.query.search}%`);
+            idx++;
+        }
+
+        // Count total
+        const countResult = await pool.query(
+            `SELECT COUNT(*) FROM email_logs el ${whereClause}`, params
+        );
+        const total = parseInt(countResult.rows[0].count);
+        const totalPages = Math.ceil(total / limit);
+
+        // Fetch logs with template name and visitor name
+        const logsResult = await pool.query(
+            `SELECT el.id, el.email, el.status, el.message, el.sent_at, el.template_id, el.visitor_id,
+                    et.name as template_name,
+                    v.name as visitor_name, v.last_name as visitor_last_name
+             FROM email_logs el
+             LEFT JOIN email_templates et ON el.template_id = et.id
+             LEFT JOIN visitors v ON el.visitor_id = v.id
+             ${whereClause}
+             ORDER BY el.sent_at DESC
+             LIMIT $${idx} OFFSET $${idx + 1}`,
+            [...params, limit, offset]
+        );
+
+        // Quick stats for this expo
+        const statsResult = await pool.query(
+            `SELECT
+                COUNT(*) as total_emails,
+                COUNT(CASE WHEN status = 'sent' THEN 1 END) as total_sent,
+                COUNT(CASE WHEN status = 'failed' THEN 1 END) as total_failed
+             FROM email_logs
+             WHERE organizer_id = $1 AND expo_id = $2`,
+            [organizerId, expoId]
+        );
+        const stats = statsResult.rows[0];
+
+        res.json({
+            success: true,
+            logs: logsResult.rows,
+            total,
+            page,
+            totalPages,
+            stats: {
+                total_emails: parseInt(stats.total_emails),
+                total_sent: parseInt(stats.total_sent),
+                total_failed: parseInt(stats.total_failed)
+            }
+        });
+
+    } catch (err) {
+        console.error('Error fetching email history:', err);
+        res.status(500).json({ success: false, message: 'Failed to fetch email history' });
+    }
+});
+
 module.exports = router;

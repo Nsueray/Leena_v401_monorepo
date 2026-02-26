@@ -164,6 +164,7 @@ backend/leena-v401-backend/
 │   ├── badge-print.html            # Badge print sayfası
 │   ├── checkin-import.html         # Checkin import sayfası
 │   ├── conference-sessions.html    # Conference topic tracking + targeted email
+│   ├── email-history.html          # Email send history log (paginated, filtered)
 │   └── assets/                     # Logo vb.
 # ⚠️ public/ altında *.backup.html ve eski varyantlar (dashboard.html,
 #    admin-dashboard.html, main-panel.html) mevcut, aktif olarak kullanılmıyor.
@@ -464,6 +465,7 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 ### Email Send
 - `POST /api/email-send/single` — Tekli email gönderimi
 - `POST /api/email-send/bulk` — Toplu email gönderimi
+- `GET /api/email-send/history` — Email send history (paginated, filtered by expo_id, template_id, status, email search)
 
 ### Email Segments
 - `POST /api/email-segments/send` — Segment bazlı email gönderimi
@@ -794,6 +796,10 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - `/paginated` endpoint enhanced: new optional `conference_topic` query param filters by `custom_fields->>'conference_topic'`. New computed column `custom_fields->>'conference_topic' as conference_topic` added to SELECT (single string, NOT whole JSONB blob). Existing consumers unaffected.
 - New page: `conference-sessions.html` — Gen 3 design, conference topic tracking dashboard. Stats cards (Total Topics, Total Registrations, Total Checked In), table with Topic/Registered/Checked In/Conversion%/Actions, summary bar. Actions: View Attendees (→ visitorlog with filter), Send Email (→ email-send), Export Topic (→ xlsx download).
 - Sidebar updated: "Conferences" link (bi-mortarboard icon) added to all 14 admin page sidebars after "Terminals". Total sidebar links now 14 (was 13).
+- email-send.html conference_topic URL param: when navigating from conference-sessions.html "Email" button with `?conference_topic=X`, auto-fetches all matching visitors, switches to bulk mode, pre-fills recipient list, shows conference banner. Save-to-database auto-disabled (already in DB).
+- New page: `email-history.html` — Gen 3 design, paginated email send history. Stats cards (Total Emails, Successful, Failed, Delivery Rate %). Filters: Template dropdown, Status (Sent/Failed), Email search. Table: Date & Time, Recipient (email + visitor name), Template, Status (color-coded badge), Details. Pagination with page numbers.
+- New endpoint: `GET /api/email-send/history` — paginated email_logs with LEFT JOIN to email_templates and visitors for names. Filters: expo_id (required), template_id, status, search (ILIKE). Includes stats (total_sent, total_failed). Response: `{success, logs[], total, page, totalPages, stats}`.
+- email-send.html: "History" button added to header (navigates to email-history.html).
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
