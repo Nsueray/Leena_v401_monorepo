@@ -80,6 +80,7 @@
         .badge-type-staff { background: #e0e7ff; color: #3730a3; }
         .badge-type-speaker { background: #ede9fe; color: #5b21b6; }
         .badge-type-conference { background: #fff3e0; color: #e65100; }
+        .badge-topic { padding: 3px 8px; border-radius: 4px; font-size: 11px; background: #f0fdf4; color: #166534; border: 1px solid #bbf7d0; white-space: nowrap; max-width: 140px; overflow: hidden; text-overflow: ellipsis; display: inline-block; }
         .empty-state { text-align: center; padding: 60px 24px; display: none; }
         .empty-state-icon { width: 64px; height: 64px; background: var(--bg-main); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; font-size: 28px; color: var(--text-muted); }
         .empty-state h3 { font-size: 16px; margin-bottom: 8px; }
@@ -128,6 +129,7 @@
                     <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
                     <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
                     <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                    <a class="nav-item" href="conference-sessions.html"><i class="bi bi-mortarboard"></i><span>Conferences</span></a>
                 </div>
                 <div class="nav-section">
                     <div class="nav-section-title">Communication</div>
@@ -220,6 +222,12 @@
                                 <label class="filter-pill"><input type="checkbox" value="speaker"> 🎤 Speaker</label>
                             </div>
                         </div>
+                        <div class="filter-group">
+                            <label>Conference Topic</label>
+                            <select class="form-control" id="conferenceTopicFilter" style="max-width:300px;">
+                                <option value="">All Topics</option>
+                            </select>
+                        </div>
                     </div>
                     <div style="display:flex;gap:10px;margin-top:16px;">
                         <button class="btn btn-primary" onclick="applyFilters()"><i class="bi bi-funnel"></i> Apply</button>
@@ -239,10 +247,12 @@
                                     <th>ID</th>
                                     <th>Name</th>
                                     <th>Last Name</th>
+                                    <th>Email</th>
                                     <th>Company</th>
                                     <th>Country</th>
-                                    <th>Email</th>
+                                    <th>Job Title</th>
                                     <th>Type</th>
+                                    <th>Topic</th>
                                     <th>Source</th>
                                     <th>Registered</th>
                                     <th>QR</th>
@@ -297,6 +307,20 @@
             if (!localStorage.getItem('token')) { window.location.href = 'login.html'; return; }
             if (!currentExpoId) { window.location.href = 'dashboard_new.html'; return; }
             initEventListeners();
+            loadConferenceTopics();
+            // Check URL params for pre-applied filters (e.g. from conference-sessions page)
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('conference_topic')) {
+                currentFilters.conference_topic = urlParams.get('conference_topic');
+                document.getElementById('conferenceTopicFilter').value = urlParams.get('conference_topic');
+                updateFilterBadge();
+            }
+            if (urlParams.get('visitor_type')) {
+                currentFilters.visitor_type = urlParams.get('visitor_type');
+                const pills = document.querySelectorAll('#typeFilters input');
+                pills.forEach(p => { if (urlParams.get('visitor_type').split(',').includes(p.value)) p.checked = true; });
+                updateFilterBadge();
+            }
             loadVisitors();
         });
 
@@ -346,14 +370,17 @@
             tbody.innerHTML = visitors.map(v => {
                 const date = new Date(v.created_at);
                 const vType = v.visitor_type || 'visitor';
+                const topic = v.conference_topic || '';
                 return `<tr>
                     <td>${v.id}</td>
                     <td><strong>${escapeHtml(v.name || '-')}</strong></td>
                     <td>${escapeHtml(v.last_name || '-')}</td>
+                    <td>${escapeHtml(v.email || '-')}</td>
                     <td>${escapeHtml(v.company || '-')}</td>
                     <td>${escapeHtml(v.country || '-')}</td>
-                    <td>${escapeHtml(v.email || '-')}</td>
+                    <td>${escapeHtml(v.job_title || '-')}</td>
                     <td><span class="badge-type ${getTypeBadgeClass(vType)}">${vType}</span></td>
+                    <td>${topic ? `<span class="badge-topic">${escapeHtml(topic)}</span>` : '-'}</td>
                     <td><span class="badge-pill badge-source">${v.source || '-'}</span></td>
                     <td><small>${date.toLocaleDateString()}<br>${date.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</small></td>
                     <td>${v.qr_code ? `<a href="badge.html?qr=${encodeURIComponent(v.qr_code)}" target="_blank" class="qr-btn" title="View Badge"><i class="bi bi-qr-code"></i></a>` : '-'}</td>
@@ -407,7 +434,10 @@
             if (origins.length) currentFilters.origin = origins.join(',');
             const types = [...document.querySelectorAll('#typeFilters input:checked')].map(c => c.value);
             if (types.length) currentFilters.visitor_type = types.join(',');
+            const topic = document.getElementById('conferenceTopicFilter').value;
+            if (topic) currentFilters.conference_topic = topic;
             currentPage = 1;
+            updateFilterBadge();
             loadVisitors();
         }
 
@@ -415,9 +445,11 @@
             document.getElementById('searchInput').value = '';
             document.getElementById('startDate').value = '';
             document.getElementById('endDate').value = '';
+            document.getElementById('conferenceTopicFilter').value = '';
             document.querySelectorAll('.filter-pill input').forEach(c => c.checked = false);
             currentFilters = {};
             currentPage = 1;
+            updateFilterBadge();
             loadVisitors();
         }
 
@@ -429,10 +461,53 @@
             document.getElementById('totalVisitors').textContent = totalRecords.toLocaleString();
         }
 
-        function exportData() {
-            if (!confirm('Export all filtered results?')) return;
-            const params = new URLSearchParams({ expo_id: currentExpoId, format: 'excel', ...currentFilters });
-            window.location.href = `${API_BASE_URL}/visitors/export?${params}`;
+        async function exportData() {
+            if (!confirm(`Export all ${totalRecords.toLocaleString()} filtered visitors to Excel?`)) return;
+            showLoading(true);
+            try {
+                const params = new URLSearchParams({ expo_id: currentExpoId, ...currentFilters });
+                const response = await fetch(`${API_BASE_URL}/visitors/export?${params}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) throw new Error('Export failed');
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `visitors_export_${new Date().toISOString().split('T')[0]}.xlsx`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast(`Exported ${totalRecords} visitors`);
+            } catch (e) { alert('Export failed. Please try again.'); }
+            finally { showLoading(false); }
+        }
+
+        async function loadConferenceTopics() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/visitors/conference-topics?expo_id=${currentExpoId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                const select = document.getElementById('conferenceTopicFilter');
+                select.innerHTML = '<option value="">All Topics</option>';
+                (data.topics || []).forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.topic;
+                    opt.textContent = `${t.topic} (${t.registered_count})`;
+                    select.appendChild(opt);
+                });
+            } catch (e) { console.error('Error loading topics'); }
+        }
+
+        function updateFilterBadge() {
+            const count = Object.keys(currentFilters).length;
+            const btn = document.querySelector('.btn-primary[onclick="applyFilters()"]');
+            if (btn) btn.innerHTML = count > 0
+                ? `<i class="bi bi-funnel-fill"></i> Filters (${count})`
+                : `<i class="bi bi-funnel"></i> Apply`;
+            const card = document.getElementById('filteredCount').parentElement;
+            if (card) card.style.borderLeft = count > 0 ? '3px solid var(--primary)' : 'none';
         }
 
         function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }

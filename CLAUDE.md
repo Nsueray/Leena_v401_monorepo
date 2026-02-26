@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 24 Şubat 2026 | Versiyon: v4.0.2+
+> Son güncelleme: 26 Şubat 2026 | Versiyon: v4.0.2+
 
 ---
 
@@ -163,6 +163,7 @@ backend/leena-v401-backend/
 │   ├── form-public.html            # Public form submit sayfası
 │   ├── badge-print.html            # Badge print sayfası
 │   ├── checkin-import.html         # Checkin import sayfası
+│   ├── conference-sessions.html    # Conference topic tracking + targeted email
 │   └── assets/                     # Logo vb.
 # ⚠️ public/ altında *.backup.html ve eski varyantlar (dashboard.html,
 #    admin-dashboard.html, main-panel.html) mevcut, aktif olarak kullanılmıyor.
@@ -397,7 +398,9 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - `GET /api/expos/:id/stats` — Expo istatistikleri
 
 ### Visitors
-- `GET /api/visitors/paginated` — Sayfalı listeleme (search, source, origin, visitor_type, date filtreleri)
+- `GET /api/visitors/paginated` — Sayfalı listeleme (search, source, origin, visitor_type, conference_topic, date filtreleri + conference_topic computed column)
+- `GET /api/visitors/export` — Excel export of ALL filtered visitors (.xlsx download, same filters as /paginated but no pagination)
+- `GET /api/visitors/conference-topics` — Conference topic counts with check-in data ({topic, registered_count, checked_in_count})
 - `GET /api/visitors/badge/:qr_code` — Badge görüntüleme
 - `POST /api/visitors/public` — Public form submit (auth yok)
 - `POST /api/visitors/manual` — Manuel kayıt (upsert)
@@ -592,13 +595,13 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 | Gen 0 | #e53935 | Yok | - | ~~login.html~~ (replaced with Gen 4) |
 | Gen 1 | #0066ff | leena.css (harici) | 240px | dashboard.html, checkin-import.html |
 | Gen 2 | #4a6fa5 | Inline CSS + ::before | 256px | terminals, checkins, form-list, email-templates, email-segments, email-send, import, visitorlog-paginated |
-| Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder |
+| Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder, conference-sessions |
 | Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | login.html, main-panel-v2, dashboard_new |
 
-### Sidebar Status (Updated 25 Feb 2026)
+### Sidebar Status (Updated 26 Feb 2026)
 - ✅ All 15 admin pages sidebar links standardized
 - Standard order: Overview → Management → Communication → Settings → Tools
-- 13 links: Dashboard, Visitors, Forms, Check-ins, Terminals, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
+- 14 links: Dashboard, Visitors, Forms, Check-ins, Terminals, **Conferences**, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
 - ✅ CSS `::before` accent bar added to all 15 pages (Gen 2 pages updated 23 Feb 2026)
 - ✅ Active expo indicator added to all 14 admin sidebars (24 Feb 2026) — reads `selectedExpoName` from localStorage, hidden if no expo selected
 - ✅ Expo indicator is now a clickable `<a>` link to `dashboard_new.html` (25 Feb 2026) — allows switching expo from any page. Small `⇄` icon on the right as visual hint.
@@ -782,6 +785,15 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 - Backward compatible: no params sent = old behavior (no email for existing, QR kept).
 - Import history log: new `import_logs` table stores per-import stats (new/updated/failed/emails/qr_regen/custom_fields_updated counts, errors array, options used). `GET /api/visitors/import-logs` endpoint with pagination. Frontend "Import History" section with paginated table (20 per page), color-coded stats, expandable error details. Auto-refreshes after each import.
 - New counter: `custom_fields_updated_count` tracks how many rows had custom fields (non-standard Excel columns) stored.
+
+**Sprint 6 — Visitors Page Enhancement + Conference Sessions (26 Feb):**
+- Visitors page (visitorlog-paginated.html) enhanced with Conference Topic dropdown filter, Job Title and Conference Topic columns in table, active filter count badge on Apply button, and URL param support (?conference_topic=X, ?visitor_type=X pre-apply filters on page load).
+- Export fix: `exportData()` changed from `window.location.href` to `fetch()` + blob download pattern — supports auth header for authenticated downloads.
+- New backend endpoint: `GET /api/visitors/export` — exports ALL filtered visitors as .xlsx (same filters as /paginated but no pagination limit). Uses XLSX library. Columns: Name, Last Name, Email, Company, Country, Phone, Job Title, Visitor Type, Source, Booth Number, Conference Topic, Registered Date, QR Code.
+- New backend endpoint: `GET /api/visitors/conference-topics` — returns conference topics with registered_count and checked_in_count. Groups by `custom_fields->>'conference_topic'`, LEFT JOINs with checkins for check-in data.
+- `/paginated` endpoint enhanced: new optional `conference_topic` query param filters by `custom_fields->>'conference_topic'`. New computed column `custom_fields->>'conference_topic' as conference_topic` added to SELECT (single string, NOT whole JSONB blob). Existing consumers unaffected.
+- New page: `conference-sessions.html` — Gen 3 design, conference topic tracking dashboard. Stats cards (Total Topics, Total Registrations, Total Checked In), table with Topic/Registered/Checked In/Conversion%/Actions, summary bar. Actions: View Attendees (→ visitorlog with filter), Send Email (→ email-send), Export Topic (→ xlsx download).
+- Sidebar updated: "Conferences" link (bi-mortarboard icon) added to all 14 admin page sidebars after "Terminals". Total sidebar links now 14 (was 13).
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

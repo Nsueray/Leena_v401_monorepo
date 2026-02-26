@@ -66,6 +66,12 @@ router.get('/paginated', authMiddleware, async (req, res) => {
       idx++;
     }
 
+    if (req.query.conference_topic) {
+      filters.push(`custom_fields->>'conference_topic' = $${idx}`);
+      values.push(req.query.conference_topic);
+      idx++;
+    }
+
     const whereClause = `WHERE ${filters.join(' AND ')}`;
 
     const totalResult = await pool.query(`SELECT COUNT(*) FROM visitors ${whereClause}`, values);
@@ -73,7 +79,9 @@ router.get('/paginated', authMiddleware, async (req, res) => {
 
     const dataResult = await pool.query(
       `
-      SELECT id, name, last_name, company, country, email, source, origin, visitor_type, booth_number, phone, job_title, created_at, qr_code
+      SELECT id, name, last_name, company, country, email, source, origin, visitor_type,
+             booth_number, phone, job_title, created_at, qr_code,
+             custom_fields->>'conference_topic' as conference_topic
       FROM visitors
       ${whereClause}
       ORDER BY created_at DESC
@@ -805,6 +813,111 @@ router.get('/import-logs', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('❌ Import logs error:', err);
     res.status(500).json({ success: false, message: 'Failed to load import logs' });
+  }
+});
+
+// ✅ EXPORT FILTERED VISITORS AS EXCEL
+router.get('/export', authMiddleware, async (req, res) => {
+  try {
+    const expo_id = parseInt(req.query.expo_id);
+    if (!expo_id) return res.status(400).json({ success: false, message: 'expo_id is required' });
+
+    const filters = ['expo_id = $1'];
+    const values = [expo_id];
+    let idx = 2;
+
+    if (req.query.search) {
+      filters.push(`(LOWER(name) LIKE $${idx} OR LOWER(email) LIKE $${idx} OR LOWER(company) LIKE $${idx})`);
+      values.push(`%${req.query.search.toLowerCase()}%`);
+      idx++;
+    }
+    if (req.query.startDate) { filters.push(`created_at >= $${idx}`); values.push(req.query.startDate); idx++; }
+    if (req.query.endDate) { filters.push(`created_at <= $${idx}`); values.push(req.query.endDate + ' 23:59:59'); idx++; }
+    if (req.query.source) { filters.push(`source = ANY($${idx})`); values.push(req.query.source.split(',')); idx++; }
+    if (req.query.origin) { filters.push(`origin = ANY($${idx})`); values.push(req.query.origin.split(',')); idx++; }
+    if (req.query.visitor_type) { filters.push(`visitor_type = ANY($${idx})`); values.push(req.query.visitor_type.split(',')); idx++; }
+    if (req.query.conference_topic) { filters.push(`custom_fields->>'conference_topic' = $${idx}`); values.push(req.query.conference_topic); idx++; }
+
+    const whereClause = `WHERE ${filters.join(' AND ')}`;
+    const result = await pool.query(
+      `SELECT name, last_name, email, company, country, phone, job_title, visitor_type,
+              source, origin, booth_number, custom_fields->>'conference_topic' as conference_topic,
+              badge_id, qr_code, created_at
+       FROM visitors ${whereClause} ORDER BY created_at DESC`,
+      values
+    );
+
+    const rows = result.rows.map(r => ({
+      'Name': r.name || '',
+      'Last Name': r.last_name || '',
+      'Email': r.email || '',
+      'Company': r.company || '',
+      'Country': r.country || '',
+      'Phone': r.phone || '',
+      'Job Title': r.job_title || '',
+      'Visitor Type': r.visitor_type || 'visitor',
+      'Source': r.source || '',
+      'Origin': r.origin || '',
+      'Booth Number': r.booth_number || '',
+      'Conference Topic': r.conference_topic || '',
+      'Badge ID': r.badge_id || '',
+      'QR Code': r.qr_code || '',
+      'Registered': r.created_at ? new Date(r.created_at).toISOString().split('T')[0] : ''
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Visitors');
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="visitors_export_${Date.now()}.xlsx"`);
+    res.send(buf);
+
+    console.log(`📊 Exported ${rows.length} visitors for expo ${expo_id}`);
+  } catch (err) {
+    console.error('❌ Export error:', err);
+    res.status(500).json({ success: false, message: 'Export failed' });
+  }
+});
+
+// ✅ GET CONFERENCE TOPICS WITH COUNTS
+router.get('/conference-topics', authMiddleware, async (req, res) => {
+  try {
+    const expo_id = parseInt(req.query.expo_id);
+    if (!expo_id) return res.status(400).json({ success: false, message: 'expo_id is required' });
+
+    const result = await pool.query(`
+      SELECT
+        v.topic,
+        v.registered_count,
+        COALESCE(c.checked_in_count, 0) as checked_in_count
+      FROM (
+        SELECT custom_fields->>'conference_topic' as topic,
+               COUNT(*) as registered_count
+        FROM visitors
+        WHERE expo_id = $1 AND custom_fields->>'conference_topic' IS NOT NULL
+          AND custom_fields->>'conference_topic' != ''
+        GROUP BY topic
+      ) v
+      LEFT JOIN (
+        SELECT v2.custom_fields->>'conference_topic' as topic,
+               COUNT(DISTINCT ch.visitor_id) as checked_in_count
+        FROM checkins ch
+        JOIN visitors v2 ON ch.visitor_id = v2.id
+        WHERE ch.expo_id = $1 AND v2.custom_fields->>'conference_topic' IS NOT NULL
+        GROUP BY topic
+      ) c ON v.topic = c.topic
+      ORDER BY v.registered_count DESC
+    `, [expo_id]);
+
+    res.json({
+      success: true,
+      topics: result.rows
+    });
+  } catch (err) {
+    console.error('❌ Conference topics error:', err);
+    res.status(500).json({ success: false, message: 'Failed to load conference topics' });
   }
 });
 
