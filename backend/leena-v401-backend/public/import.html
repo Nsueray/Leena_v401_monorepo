@@ -416,7 +416,7 @@
             const qrCount = result.qr_regenerated_count || 0;
             const fieldsCount = result.custom_fields_updated_count || 0;
             let html = `<div class="result-item success"><i class="bi bi-check-circle"></i> Import completed: ${result.success_count || 0} successful, ${result.failed_count || 0} failed</div>`;
-            html += `<div class="result-item" style="background:#f0f4ff;border-left:3px solid #4a6fa5;"><i class="bi bi-bar-chart"></i> <strong>${newCount}</strong> new · <strong>${updatedCount}</strong> updated · <strong>${fieldsCount}</strong> custom fields · <strong>${emailCount}</strong> emails · <strong>${qrCount}</strong> QR regen</div>`;
+            html += `<div class="result-item" style="background:#f0f4ff;border-left:3px solid #4a6fa5;"><i class="bi bi-bar-chart"></i> <strong>${newCount}</strong> new · <strong>${updatedCount}</strong> updated · <strong>${fieldsCount}</strong> custom fields · <strong>${emailCount}</strong> emails queued · <strong>${qrCount}</strong> QR regen</div>`;
             if (result.errors?.length) {
                 result.errors.forEach(e => { html += `<div class="result-item error">Row ${e.row}: ${e.message}</div>`; });
             }
@@ -454,7 +454,7 @@
 
             let html = '<table class="history-table"><thead><tr>';
             html += '<th>Date</th><th>Expo</th><th>File</th><th>Rows</th>';
-            html += '<th>New</th><th>Updated</th><th>Fields</th><th>Emails</th><th>QR</th><th>Errors</th>';
+            html += '<th>New</th><th>Updated</th><th>Fields</th><th>Queued</th><th>QR</th><th>Errors</th>';
             html += '</tr></thead><tbody>';
 
             data.logs.forEach(log => {

@@ -608,6 +608,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
           results.updated_count++;
           console.log(`🔄 Updated existing visitor: ${email} (ID: ${existing.id})${effectiveExistingQrOption === 'regenerate' ? ' [NEW QR]' : ''}`);
 
+          // ========== EMAIL QUEUE MIGRATION (was: direct SendGrid) ==========
           // Email for existing visitors (if option selected)
           if (effectiveExistingEmailOption !== 'none' && existingEmailTemplate) {
             try {
@@ -638,25 +639,33 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
                 emailSubject = `${emailSubject} (Resent)`;
               }
 
-              await sendEmailWithReplyTo(email, emailSubject, emailHtml, 'reply@replies.leena.app');
+              // OLD CODE (kept for rollback):
+              // await sendEmailWithReplyTo(email, emailSubject, emailHtml, 'reply@replies.leena.app');
+              // await delay(100);
+
+              // NEW CODE: email_queue Mode 1 (pre-processed HTML)
+              await pool.query(`
+                INSERT INTO email_queue (recipient_email, subject, html_content, status, created_at)
+                VALUES ($1, $2, $3, 'pending', NOW())
+              `, [email, emailSubject, emailHtml]);
+
               results.email_sent_count++;
-              console.log(`📧 Email sent to existing visitor: ${email}`);
+              console.log(`📧 Email queued for existing visitor: ${email}`);
 
               // Log to email_logs for history tracking
               try {
                 await pool.query(`
                   INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
                   VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-                `, [organizerId, expo_id, existing.id, existing_template_id, email, 'sent', `Subject: ${emailSubject} | To: ${email}`]);
+                `, [organizerId, expo_id, existing.id, existing_template_id, email, 'queued', `Subject: ${emailSubject} | To: ${email}`]);
               } catch (logErr) {
                 console.error('email_logs INSERT failed:', logErr.message);
               }
-
-              await delay(100);
             } catch (emailErr) {
-              console.error(`❌ Email failed for existing ${email}:`, emailErr.message);
+              console.error(`❌ Email queue failed for existing ${email}:`, emailErr.message);
             }
           }
+          // ========== END EMAIL QUEUE MIGRATION ==========
 
           continue;
         }
@@ -712,13 +721,14 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
         results.new_count++;
         if (Object.keys(customFields).length > 0) results.custom_fields_updated_count++;
 
+        // ========== EMAIL QUEUE MIGRATION (was: direct SendGrid) ==========
         // Send email if enabled
         if (emailTemplate) {
           try {
             // Generate QR code image tag (same as webhook.js)
             const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
             const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
-            
+
             const templateData = {
               ...customFields,
               name: name || 'Guest',
@@ -744,32 +754,33 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
               templateData
             );
 
-            await sendEmailWithReplyTo(
-              email,
-              emailSubject,
-              emailHtml,
-              'reply@replies.leena.app'
-            );
+            // OLD CODE (kept for rollback):
+            // await sendEmailWithReplyTo(email, emailSubject, emailHtml, 'reply@replies.leena.app');
+            // await delay(100);
+
+            // NEW CODE: email_queue Mode 1 (pre-processed HTML)
+            await pool.query(`
+              INSERT INTO email_queue (recipient_email, subject, html_content, status, created_at)
+              VALUES ($1, $2, $3, 'pending', NOW())
+            `, [email, emailSubject, emailHtml]);
 
             results.email_sent_count++;
-            console.log(`📧 Email sent to: ${email}`);
+            console.log(`📧 Email queued for: ${email}`);
 
             // Log to email_logs for history tracking
             try {
               await pool.query(`
                 INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-              `, [organizerId, expo_id, visitor.id, template_id, email, 'sent', `Subject: ${emailSubject} | To: ${email}`]);
+              `, [organizerId, expo_id, visitor.id, template_id, email, 'queued', `Subject: ${emailSubject} | To: ${email}`]);
             } catch (logErr) {
               console.error('email_logs INSERT failed:', logErr.message);
             }
-
-            // Small delay to avoid rate limits
-            await delay(100);
           } catch (emailErr) {
-            console.error(`❌ Email failed for ${email}:`, emailErr.message);
-            // Don't fail the import, just log the email error
+            console.error(`❌ Email queue failed for ${email}:`, emailErr.message);
+            // Don't fail the import, just log the queue error
           }
+        // ========== END EMAIL QUEUE MIGRATION ==========
         }
 
       } catch (rowErr) {
