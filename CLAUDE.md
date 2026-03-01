@@ -663,6 +663,27 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 3. Paginated endpoint snake_case response döner (qr_code, last_name vs)
 4. QR kodun resim olarak göründüğünü kontrol et
 
+### Skills Maintenance Rule
+
+Leena uses 3 custom Claude Skills in `.claude/skills/`:
+- `leena-backend` — Route patterns, auth, DB queries, email queue
+- `leena-frontend` — Admin page template, sidebar, CSS, API call patterns
+- `leena-db-schema` — All tables, FK map, naming conventions, known gaps
+
+**When to update skills:**
+- New route added or modified → update `leena-backend` route mount table in `references/route-patterns.md`
+- New admin page added → update `leena-frontend` sidebar in `references/sidebar.md`
+- New sidebar link added → update sidebar in `references/sidebar.md` AND `templates/admin-page-template.html`
+- Schema changed (new table, column, index) → update `leena-db-schema/SKILL.md`
+- New environment variable added → update env vars table in `leena-db-schema/SKILL.md`
+- Always update "Last verified: vXXX" label in all affected skill files when deploying a new version
+
+**Skills are NOT application code:**
+- Files in `.claude/skills/` are documentation/pattern files for Claude, not runtime code
+- They do not affect the running application
+- They must reflect the CURRENT state of production code
+- If a skill contradicts actual code, the actual code is the source of truth — fix the skill
+
 ---
 
 ## Deploy
