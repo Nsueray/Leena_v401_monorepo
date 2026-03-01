@@ -4,6 +4,7 @@
  *
  * Hostess scans visitor QR at conference sessions.
  * System records check-in + sends certificate email.
+ * Session registration validation with force override.
  *
  * Endpoints:
  *   POST /api/conference-certificates/checkin-and-certify  (terminalAuth)
@@ -50,22 +51,149 @@ const CERT_EMAIL_TEMPLATE = `
 `;
 
 /**
+ * Helper: Check if visitor is registered for the given conference topic.
+ * custom_fields.conference_topic is a plain string (from Excel import).
+ * It may contain comma-separated topics like "HVAC Basics, Green Building".
+ * Returns true if the selected topic matches any of the visitor's topics.
+ */
+function isVisitorRegisteredForTopic(customFields, selectedTopic) {
+  if (!customFields || !customFields.conference_topic) return false;
+  const visitorTopics = String(customFields.conference_topic);
+  // Exact match first
+  if (visitorTopics === selectedTopic) return true;
+  // Comma-separated check
+  const topicList = visitorTopics.split(',').map(t => t.trim()).filter(Boolean);
+  return topicList.includes(selectedTopic);
+}
+
+/**
+ * Helper: Add a topic to visitor's custom_fields.conference_topic.
+ * Preserves existing topics, adds new one comma-separated.
+ */
+async function addTopicToVisitor(client, visitorId, customFields, newTopic) {
+  const existing = customFields && customFields.conference_topic
+    ? String(customFields.conference_topic).trim()
+    : '';
+
+  const updatedTopic = existing ? `${existing}, ${newTopic}` : newTopic;
+
+  await client.query(
+    `UPDATE visitors
+     SET custom_fields = COALESCE(custom_fields, '{}'::jsonb) || jsonb_build_object('conference_topic', $1::text)
+     WHERE id = $2`,
+    [updatedTopic, visitorId]
+  );
+}
+
+/**
+ * Core logic: issue certificate, create check-in, queue email.
+ * Extracted to reuse for both normal and force flows.
+ */
+async function issueCertificate(client, visitor, expoId, organizerId, hall, terminalNo, conference_topic, expoName) {
+  const certToken = crypto.randomBytes(32).toString('hex');
+
+  const certRes = await client.query(
+    `INSERT INTO conference_certificates
+       (visitor_id, expo_id, organizer_id, conference_topic, certificate_token, email_sent, created_at)
+     VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
+     ON CONFLICT (visitor_id, expo_id, conference_topic) DO NOTHING
+     RETURNING id, certificate_token`,
+    [visitor.id, expoId, organizerId, conference_topic, certToken]
+  );
+
+  // Duplicate check
+  if (certRes.rows.length === 0) {
+    return { duplicate: true };
+  }
+
+  const certificate = certRes.rows[0];
+
+  // Create check-in record
+  await client.query(
+    `INSERT INTO checkins (visitor_id, expo_id, terminal, hall, notes, checkin_type, staff_id, source, checkin_time)
+     VALUES ($1, $2, $3, $4, $5, 'entry', $6, 'conference-cert', NOW())`,
+    [visitor.id, expoId, terminalNo || 'conf', hall || 'conference', `Conference: ${conference_topic}`, organizerId]
+  );
+
+  // Upsert visitor_event_status
+  await client.query(
+    `INSERT INTO visitor_event_status (visitor_id, expo_id, status, created_at, updated_at)
+     VALUES ($1, $2, 'checked_in', NOW(), NOW())
+     ON CONFLICT (visitor_id, expo_id)
+     DO UPDATE SET status = 'checked_in', updated_at = NOW()`,
+    [visitor.id, expoId]
+  );
+
+  // Build certificate email
+  const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+  const certificateUrl = `${baseUrl}/certificate.html?token=${certificate.certificate_token}`;
+
+  const emailData = {
+    name: visitor.name || '',
+    last_name: visitor.last_name || '',
+    conference_topic: conference_topic,
+    expo_name: expoName,
+    certificate_url: certificateUrl,
+    date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+  };
+
+  const emailSubject = `Your Conference Certificate — ${conference_topic}`;
+  const emailHtml = processEmailTemplate(CERT_EMAIL_TEMPLATE, emailData);
+
+  // Queue email (Mode 1: pre-processed HTML)
+  await client.query(
+    `INSERT INTO email_queue (recipient_email, subject, html_content, expo_id, visitor_id, status, created_at)
+     VALUES ($1, $2, $3, $4, $5, 'pending', NOW())`,
+    [visitor.email, emailSubject, emailHtml, expoId, visitor.id]
+  );
+
+  // Log to email_logs
+  try {
+    await client.query(
+      `INSERT INTO email_logs (organizer_id, expo_id, visitor_id, email, status, message, sent_at)
+       VALUES ($1, $2, $3, $4, 'queued', $5, NOW())`,
+      [organizerId, expoId, visitor.id, visitor.email, `Certificate: ${conference_topic} | To: ${visitor.email}`]
+    );
+  } catch (logErr) {
+    console.warn('[CONF_CERT] email_logs insert failed (non-fatal):', logErr.message);
+  }
+
+  return {
+    duplicate: false,
+    certificate: {
+      id: certificate.id,
+      token: certificate.certificate_token,
+      url: certificateUrl,
+      visitor_name: [visitor.name, visitor.last_name].filter(Boolean).join(' '),
+      visitor_email: visitor.email,
+      topic: conference_topic
+    }
+  };
+}
+
+/**
  * POST /api/conference-certificates/checkin-and-certify
  *
  * Core endpoint: hostess scanner calls this after QR scan.
- * Creates check-in + certificate record + queues certificate email.
+ * Validates session registration, creates check-in + certificate + email.
  *
  * Auth: terminalAuth (x-terminal-key)
- * Body: { visitor_id, conference_topic }
+ * Body: { visitor_id, conference_topic, force?: boolean }
+ *
+ * Response includes `registered` flag:
+ *   registered: true  → normal flow (check-in + certificate)
+ *   registered: false → visitor not registered for this topic (no action taken)
+ *   force: true       → override: add topic + issue certificate regardless
  */
 router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
   const client = await pool.connect();
 
   try {
-    const { visitor_id, conference_topic } = req.body;
+    const { visitor_id, conference_topic, force } = req.body;
     const { expoId, organizerId, hall, terminalNo } = req.terminal;
 
     if (!visitor_id || !conference_topic) {
+      client.release();
       return res.status(400).json({
         success: false,
         error: 'visitor_id and conference_topic are required'
@@ -98,6 +226,12 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
       });
     }
 
+    // Parse custom_fields (may be string or object)
+    let customFields = visitor.custom_fields || {};
+    if (typeof customFields === 'string') {
+      try { customFields = JSON.parse(customFields); } catch (e) { customFields = {}; }
+    }
+
     // Get expo name for certificate
     const expoRes = await client.query(
       `SELECT name FROM expos WHERE id = $1`,
@@ -105,22 +239,34 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
     );
     const expoName = expoRes.rows.length > 0 ? expoRes.rows[0].name : '';
 
-    // 2. Try to insert certificate (ON CONFLICT = duplicate)
-    const certToken = crypto.randomBytes(32).toString('hex');
+    // 2. Check session registration
+    const isRegistered = isVisitorRegisteredForTopic(customFields, conference_topic);
 
+    // If NOT registered and NOT force → return warning, don't issue certificate
+    if (!isRegistered && !force) {
+      client.release();
+      return res.json({
+        success: true,
+        registered: false,
+        duplicate: false,
+        visitor_name: [visitor.name, visitor.last_name].filter(Boolean).join(' '),
+        visitor_company: visitor.company || '',
+        message: 'Visitor is not registered for this session'
+      });
+    }
+
+    // 3. If force and not registered → add topic to visitor's custom_fields
     await client.query('BEGIN');
 
-    const certRes = await client.query(
-      `INSERT INTO conference_certificates
-         (visitor_id, expo_id, organizer_id, conference_topic, certificate_token, email_sent, created_at)
-       VALUES ($1, $2, $3, $4, $5, TRUE, NOW())
-       ON CONFLICT (visitor_id, expo_id, conference_topic) DO NOTHING
-       RETURNING id, certificate_token`,
-      [visitor_id, expoId, organizerId, conference_topic, certToken]
-    );
+    if (!isRegistered && force) {
+      await addTopicToVisitor(client, visitor.id, customFields, conference_topic);
+      console.log(`[CONF_CERT] Force: added topic "${conference_topic}" to visitor ${visitor.id}`);
+    }
 
-    // Duplicate check
-    if (certRes.rows.length === 0) {
+    // 4. Issue certificate (check-in + cert + email)
+    const result = await issueCertificate(client, visitor, expoId, organizerId, hall, terminalNo, conference_topic, expoName);
+
+    if (result.duplicate) {
       await client.query('ROLLBACK');
       client.release();
 
@@ -135,6 +281,7 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
 
       return res.json({
         success: true,
+        registered: true,
         duplicate: true,
         message: 'Certificate already issued for this session',
         certificate: {
@@ -145,73 +292,15 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
       });
     }
 
-    const certificate = certRes.rows[0];
-
-    // 3. Create check-in record
-    await client.query(
-      `INSERT INTO checkins (visitor_id, expo_id, terminal, hall, notes, checkin_type, staff_id, source, checkin_time)
-       VALUES ($1, $2, $3, $4, $5, 'entry', $6, 'conference-cert', NOW())`,
-      [visitor_id, expoId, terminalNo || 'conf', hall || 'conference', `Conference: ${conference_topic}`, organizerId]
-    );
-
-    // 4. Upsert visitor_event_status
-    await client.query(
-      `INSERT INTO visitor_event_status (visitor_id, expo_id, status, created_at, updated_at)
-       VALUES ($1, $2, 'checked_in', NOW(), NOW())
-       ON CONFLICT (visitor_id, expo_id)
-       DO UPDATE SET status = 'checked_in', updated_at = NOW()`,
-      [visitor_id, expoId]
-    );
-
-    // 5. Build certificate email
-    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
-    const certificateUrl = `${baseUrl}/certificate.html?token=${certificate.certificate_token}`;
-
-    const emailData = {
-      name: visitor.name || '',
-      last_name: visitor.last_name || '',
-      conference_topic: conference_topic,
-      expo_name: expoName,
-      certificate_url: certificateUrl,
-      date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
-    };
-
-    const emailSubject = `Your Conference Certificate — ${conference_topic}`;
-    const emailHtml = processEmailTemplate(CERT_EMAIL_TEMPLATE, emailData);
-
-    // 6. Queue email (Mode 1: pre-processed HTML)
-    await client.query(
-      `INSERT INTO email_queue (recipient_email, subject, html_content, expo_id, visitor_id, status, created_at)
-       VALUES ($1, $2, $3, $4, $5, 'pending', NOW())`,
-      [visitor.email, emailSubject, emailHtml, expoId, visitor_id]
-    );
-
-    // 7. Log to email_logs
-    try {
-      await client.query(
-        `INSERT INTO email_logs (organizer_id, expo_id, visitor_id, email, status, message, sent_at)
-         VALUES ($1, $2, $3, $4, 'queued', $5, NOW())`,
-        [organizerId, expoId, visitor_id, visitor.email, `Certificate: ${conference_topic} | To: ${visitor.email}`]
-      );
-    } catch (logErr) {
-      console.warn('[CONF_CERT] email_logs insert failed (non-fatal):', logErr.message);
-    }
-
     await client.query('COMMIT');
-
-    console.log(`[CONF_CERT] Certificate issued: ${visitor.email} — ${conference_topic}`);
+    console.log(`[CONF_CERT] Certificate issued: ${visitor.email} — ${conference_topic}${force ? ' (FORCED)' : ''}`);
 
     return res.json({
       success: true,
+      registered: isRegistered,
+      forced: !isRegistered && !!force,
       duplicate: false,
-      certificate: {
-        id: certificate.id,
-        token: certificate.certificate_token,
-        url: certificateUrl,
-        visitor_name: [visitor.name, visitor.last_name].filter(Boolean).join(' '),
-        visitor_email: visitor.email,
-        topic: conference_topic
-      }
+      certificate: result.certificate
     });
 
   } catch (err) {
