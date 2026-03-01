@@ -264,14 +264,23 @@ CREATE TABLE badge_templates (
 ```sql
 CREATE TABLE reactivation_tokens (
     id SERIAL PRIMARY KEY,
-    organizer_id INTEGER REFERENCES organizers(id),
-    source_expo_id INTEGER REFERENCES expos(id),
-    target_expo_id INTEGER REFERENCES expos(id),
-    visitor_id INTEGER REFERENCES visitors(id),
-    token VARCHAR(255) UNIQUE NOT NULL,
-    status VARCHAR(20) DEFAULT 'pending',  -- pending|activated|expired
+    token VARCHAR(255) UNIQUE NOT NULL,       -- crypto.randomBytes(32).toString('hex')
+    source_visitor_id INTEGER REFERENCES visitors(id),  -- NULL for excel import
+    source_expo_id INTEGER REFERENCES expos(id),        -- NULL for excel import
+    target_expo_id INTEGER NOT NULL REFERENCES expos(id),
+    organizer_id INTEGER NOT NULL REFERENCES organizers(id),
+    email VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    last_name VARCHAR(255),
+    company VARCHAR(255),
+    country VARCHAR(255),
+    job_title VARCHAR(255),
+    phone VARCHAR(255),
+    status VARCHAR(20) DEFAULT 'pending',     -- pending|activated|expired
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    activated_at TIMESTAMPTZ
+    activated_at TIMESTAMPTZ,
+    expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '30 days'),
+    new_visitor_id INTEGER REFERENCES visitors(id)  -- set on activation
 );
 ```
 
