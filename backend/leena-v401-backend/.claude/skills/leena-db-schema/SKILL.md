@@ -7,6 +7,9 @@ description: >
   TRIGGER: any task involving pool.query(), SQL, database changes, or column references.
 ---
 
+> **Last verified:** v402 (March 2026)
+> Update this skill whenever routes, schema, or frontend patterns change.
+
 # Leena Database Schema
 
 > ⚠️ Production DB has more columns/tables than initial.sql. This document reflects the REAL production schema.

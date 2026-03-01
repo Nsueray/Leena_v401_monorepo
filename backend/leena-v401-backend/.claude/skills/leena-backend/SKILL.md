@@ -7,6 +7,9 @@ description: >
   TRIGGER: any task involving routes/, middleware/, utils/, email_worker.js, or index.js.
 ---
 
+> **Last verified:** v402 (March 2026)
+> Update this skill whenever routes, schema, or frontend patterns change.
+
 # Leena Backend Patterns
 
 ## Route File Structure

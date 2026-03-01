@@ -7,6 +7,9 @@ description: >
   TRIGGER: any task involving public/*.html files, new admin pages, or frontend UI changes.
 ---
 
+> **Last verified:** v402 (March 2026)
+> Update this skill whenever routes, schema, or frontend patterns change.
+
 # Leena Frontend Patterns
 
 ## Page Skeleton (Gen 3 — use for ALL new pages)
