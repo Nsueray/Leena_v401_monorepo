@@ -43,10 +43,8 @@
         .topic-card select { width: 100%; padding: 14px 12px; border: 2px solid var(--border); border-radius: var(--radius); font-size: 15px; font-weight: 500; background: white; color: var(--text); appearance: auto; }
         .topic-card select:focus { border-color: var(--primary); outline: none; }
 
-        /* Scanner — constrained height for mobile UX */
-        #scannerContainer { width: 100%; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; background: #000; max-height: 200px; transition: max-height 0.3s ease, margin-bottom 0.3s ease; }
-        #scannerContainer.shrunk { max-height: 0; margin-bottom: 0; }
-        #scannerContainer video { width: 100% !important; border-radius: var(--radius); max-height: 200px; }
+        /* Scanner — let html5-qrcode control video sizing */
+        #scannerContainer { width: 100%; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; background: #000; }
 
         /* Manual Input */
         .manual-input { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -292,15 +290,15 @@
         function startScanner() {
             try {
                 scanner = new Html5Qrcode('scannerContainer');
-                // Dynamic qrbox: 60% of the smaller dimension, fits inside 200px container
+                // Dynamic qrbox: 60% of the smaller viewfinder dimension
                 const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
                     const minDim = Math.min(viewfinderWidth, viewfinderHeight);
                     const size = Math.floor(minDim * 0.6);
-                    return { width: Math.max(size, 100), height: Math.max(size, 100) };
+                    return { width: Math.max(size, 120), height: Math.max(size, 120) };
                 };
                 scanner.start(
                     { facingMode: 'environment' },
-                    { fps: 10, qrbox: qrboxFunction, aspectRatio: 1.5 },
+                    { fps: 10, qrbox: qrboxFunction },
                     (decodedText) => {
                         scanner.pause();
                         processQR(decodedText);
@@ -314,13 +312,6 @@
                         '<p style="color:var(--text-muted);font-size:13px;padding:16px;text-align:center;">Camera not available. Enter QR code manually below.</p>';
                 });
             } catch(e) { console.log('Scanner init error:', e); }
-        }
-
-        // --- Camera: shrink on scan, restore after ---
-        function shrinkCamera() {
-            const el = document.getElementById('scannerContainer');
-            el.classList.add('shrunk');
-            setTimeout(() => { el.classList.remove('shrunk'); }, 3000);
         }
 
         // --- Handle Scan ---
@@ -353,7 +344,6 @@
             isProcessing = true;
             hideUnregCard();
             initAudio();
-            shrinkCamera();
 
             const qrCode = parseQR(rawQR);
             const topic = document.getElementById('topicSelect').value;
