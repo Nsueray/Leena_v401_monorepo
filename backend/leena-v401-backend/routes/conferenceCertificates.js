@@ -201,7 +201,6 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
     const { expoId, organizerId, hall, terminalNo } = req.terminal;
 
     if (!visitor_id || !conference_topic) {
-      client.release();
       return res.status(400).json({
         success: false,
         error: 'visitor_id and conference_topic are required'
@@ -219,7 +218,6 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
     );
 
     if (visitorRes.rows.length === 0) {
-      client.release();
       return res.status(404).json({
         success: false,
         error: 'Visitor not found'
@@ -229,7 +227,6 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
     const visitor = visitorRes.rows[0];
 
     if (!visitor.email) {
-      client.release();
       return res.status(400).json({
         success: false,
         error: 'Visitor has no email address'
@@ -256,7 +253,6 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
 
     // If NOT registered and NOT force → return warning, don't issue certificate
     if (!isRegistered && !force) {
-      client.release();
       return res.json({
         success: true,
         registered: false,
@@ -280,7 +276,6 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
 
     if (result.duplicate) {
       await client.query('ROLLBACK');
-      client.release();
 
       // Fetch existing certificate token for the URL
       const existingRes = await pool.query(
