@@ -120,6 +120,12 @@
         <div class="overlay-name" id="dupName">-</div>
         <div class="overlay-company" id="dupCompany"></div>
         <div class="overlay-msg">Certificate already sent for this session</div>
+        <button id="resendBtn" onclick="resendCertificate()" style="margin-top:16px;padding:14px 32px;background:#fff;color:#d97706;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:0.5px;">
+            Resend Certificate
+        </button>
+        <button onclick="dismissDuplicateOverlay()" style="margin-top:8px;padding:10px 24px;background:transparent;color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.4);border-radius:8px;font-size:14px;cursor:pointer;">
+            Dismiss
+        </button>
     </div>
     <div class="scan-overlay error-overlay" id="errorOverlay">
         <div class="overlay-icon">&#10060;</div>
@@ -406,8 +412,9 @@
                         document.getElementById('unregCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     }, 100);
                 } else if (certRes.duplicate) {
-                    // Already certified
-                    showOverlay('duplicate', fullName, 'Certificate already sent for this session', company);
+                    // Already certified — pass token for resend
+                    const certToken = certRes.certificate ? certRes.certificate.token : null;
+                    showOverlay('duplicate', fullName, 'Certificate already sent for this session', company, certToken);
                     vibrate(100);
                     playBeep(600, 100);
                     setTimeout(() => playBeep(600, 100), 200);
@@ -458,7 +465,8 @@
                     : 'Visitor';
 
                 if (certRes.duplicate) {
-                    showOverlay('duplicate', fullName, 'Already Certified');
+                    const certToken = certRes.certificate ? certRes.certificate.token : null;
+                    showOverlay('duplicate', fullName, 'Already Certified', '', certToken);
                     addToLog(fullName, topic, 'duplicate');
                 } else {
                     certCounter++;
@@ -479,7 +487,9 @@
         }
 
         // --- UI: Overlays (full-screen, 2 seconds, with company) ---
-        function showOverlay(type, name, msg, company) {
+        let lastDuplicateToken = null; // Store token for resend
+
+        function showOverlay(type, name, msg, company, certToken) {
             const overlayMap = {
                 success: 'successOverlay',
                 duplicate: 'duplicateOverlay',
@@ -497,6 +507,12 @@
             } else if (type === 'duplicate') {
                 document.getElementById('dupName').textContent = name;
                 document.getElementById('dupCompany').textContent = company || '';
+                lastDuplicateToken = certToken || null;
+                // Reset resend button state
+                const btn = document.getElementById('resendBtn');
+                btn.textContent = 'Resend Certificate';
+                btn.disabled = false;
+                btn.style.opacity = '1';
             } else if (type === 'error') {
                 document.getElementById('errorOverlayMsg').textContent = name;
                 document.getElementById('errorOverlayDetail').textContent = msg || 'Please try again';
@@ -506,14 +522,59 @@
             el.classList.remove('hiding');
             el.classList.add('show');
 
-            // Auto-dismiss after 2 seconds
-            setTimeout(() => {
-                el.classList.add('hiding');
+            // Auto-dismiss after 2 seconds (but NOT for duplicate — user needs to click resend or dismiss)
+            if (type !== 'duplicate') {
                 setTimeout(() => {
-                    el.classList.remove('show', 'hiding');
-                }, 300);
-                document.getElementById('qrInput').focus();
-            }, 2000);
+                    el.classList.add('hiding');
+                    setTimeout(() => {
+                        el.classList.remove('show', 'hiding');
+                    }, 300);
+                    document.getElementById('qrInput').focus();
+                }, 2000);
+            }
+        }
+
+        function dismissDuplicateOverlay() {
+            const el = document.getElementById('duplicateOverlay');
+            el.classList.add('hiding');
+            setTimeout(() => {
+                el.classList.remove('show', 'hiding');
+            }, 300);
+            document.getElementById('qrInput').focus();
+        }
+
+        async function resendCertificate() {
+            if (!lastDuplicateToken) return;
+            const btn = document.getElementById('resendBtn');
+            btn.textContent = 'Sending...';
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+
+            try {
+                const res = await apiFetch('/api/conference-certificates/resend', {
+                    method: 'POST',
+                    body: JSON.stringify({ certificate_token: lastDuplicateToken })
+                });
+
+                if (res.success) {
+                    // Dismiss duplicate overlay and show success
+                    dismissDuplicateOverlay();
+                    setTimeout(() => {
+                        showOverlay('success', document.getElementById('dupName').textContent, 'Certificate Resent!', document.getElementById('dupCompany').textContent);
+                        vibrate(200);
+                        playBeep(1000, 150);
+                    }, 350);
+                } else {
+                    btn.textContent = 'Failed — Tap to retry';
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                }
+            } catch (err) {
+                console.error('Resend error:', err);
+                btn.textContent = 'Failed — Tap to retry';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
         }
 
         // --- UI: Unregistered Card ---

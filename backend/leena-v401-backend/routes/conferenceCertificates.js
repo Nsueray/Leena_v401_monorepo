@@ -309,7 +309,9 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
         duplicate: true,
         message: 'Certificate already issued for this session',
         certificate: {
+          token: existingToken,
           visitor_name: [visitor.name, visitor.last_name].filter(Boolean).join(' '),
+          visitor_company: visitor.company || '',
           topic: conference_topic,
           url: `${baseUrl}/certificate.html?token=${existingToken}`
         }
@@ -388,6 +390,93 @@ router.get('/verify/:token', async (req, res) => {
   } catch (err) {
     console.error('[CONF_CERT] verify error:', err.message);
     return res.status(500).json({ success: false, error: 'Failed to verify certificate' });
+  }
+});
+
+/**
+ * POST /api/conference-certificates/resend
+ *
+ * Resend certificate email for an existing certificate.
+ * Uses existing certificate_token — does NOT create a new certificate.
+ *
+ * Auth: terminalAuth (x-terminal-key)
+ * Body: { certificate_token }
+ */
+router.post('/resend', terminalAuth, async (req, res) => {
+  try {
+    const { certificate_token } = req.body;
+
+    if (!certificate_token) {
+      return res.status(400).json({ success: false, error: 'certificate_token is required' });
+    }
+
+    // Fetch certificate + visitor + expo data
+    const result = await pool.query(
+      `SELECT cc.id, cc.certificate_token, cc.conference_topic, cc.expo_id, cc.organizer_id,
+              v.id as visitor_id, v.name, v.last_name, v.email,
+              e.name as expo_name
+       FROM conference_certificates cc
+       JOIN visitors v ON cc.visitor_id = v.id
+       JOIN expos e ON cc.expo_id = e.id
+       WHERE cc.certificate_token = $1`,
+      [certificate_token]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Certificate not found' });
+    }
+
+    const cert = result.rows[0];
+
+    if (!cert.email) {
+      return res.status(400).json({ success: false, error: 'Visitor has no email address' });
+    }
+
+    // Build and queue the same certificate email
+    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+    const certificateUrl = `${baseUrl}/certificate.html?token=${cert.certificate_token}`;
+
+    const emailData = {
+      name: cert.name || '',
+      last_name: cert.last_name || '',
+      conference_topic: cert.conference_topic,
+      expo_name: cert.expo_name || '',
+      certificate_url: certificateUrl,
+      date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+    };
+
+    const emailSubject = `Your Conference Certificate — ${cert.conference_topic} (Resent)`;
+    const emailHtml = processEmailTemplate(CERT_EMAIL_TEMPLATE, emailData);
+
+    // Queue email (Mode 1)
+    await pool.query(
+      `INSERT INTO email_queue (recipient_email, subject, html_content, expo_id, visitor_id, status, created_at)
+       VALUES ($1, $2, $3, $4, $5, 'pending', NOW())`,
+      [cert.email, emailSubject, emailHtml, cert.expo_id, cert.visitor_id]
+    );
+
+    // Log
+    try {
+      await pool.query(
+        `INSERT INTO email_logs (organizer_id, expo_id, visitor_id, email, status, message, sent_at)
+         VALUES ($1, $2, $3, $4, 'queued', $5, NOW())`,
+        [cert.organizer_id, cert.expo_id, cert.visitor_id, cert.email, `Certificate Resent: ${cert.conference_topic} | To: ${cert.email}`]
+      );
+    } catch (logErr) {
+      console.warn('[CONF_CERT] email_logs insert failed (non-fatal):', logErr.message);
+    }
+
+    console.log(`[CONF_CERT] Certificate resent: ${cert.email} — ${cert.conference_topic}`);
+
+    return res.json({
+      success: true,
+      message: 'Certificate email resent',
+      email: cert.email
+    });
+
+  } catch (err) {
+    console.error('[CONF_CERT] resend error:', err.message);
+    return res.status(500).json({ success: false, error: 'Failed to resend certificate' });
   }
 });
 
