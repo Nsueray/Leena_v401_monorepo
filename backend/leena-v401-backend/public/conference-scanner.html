@@ -46,7 +46,7 @@
         /* Scanner — constrained height for mobile UX */
         #scannerContainer { width: 100%; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; background: #000; max-height: 200px; transition: max-height 0.3s ease, margin-bottom 0.3s ease; }
         #scannerContainer.shrunk { max-height: 0; margin-bottom: 0; }
-        #scannerContainer video { width: 100% !important; border-radius: var(--radius); object-fit: cover; max-height: 200px; }
+        #scannerContainer video { width: 100% !important; border-radius: var(--radius); max-height: 200px; }
 
         /* Manual Input */
         .manual-input { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -292,9 +292,15 @@
         function startScanner() {
             try {
                 scanner = new Html5Qrcode('scannerContainer');
+                // Dynamic qrbox: 60% of the smaller dimension, fits inside 200px container
+                const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+                    const minDim = Math.min(viewfinderWidth, viewfinderHeight);
+                    const size = Math.floor(minDim * 0.6);
+                    return { width: Math.max(size, 100), height: Math.max(size, 100) };
+                };
                 scanner.start(
                     { facingMode: 'environment' },
-                    { fps: 10, qrbox: { width: 200, height: 200 } },
+                    { fps: 10, qrbox: qrboxFunction, aspectRatio: 1.5 },
                     (decodedText) => {
                         scanner.pause();
                         processQR(decodedText);
