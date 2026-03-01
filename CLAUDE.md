@@ -128,7 +128,8 @@ backend/leena-v401-backend/
 │   ├── reports.js              # Raporlama (summary, export, comparison)
 │   ├── badgeTemplates.js       # Badge template CRUD + terminal endpoint
 │   ├── reactivation.js         # Reactivation campaign API + resend-pending
-│   └── leads.js                # Exhibitor lead scanner API (public, QR auth)
+│   ├── leads.js                # Exhibitor lead scanner API (public, QR auth)
+│   └── conferenceCertificates.js # Conference certificate system (scan, certify, email)
 ├── middleware/
 │   ├── authMiddleware.js       # JWT doğrulama (req.organizer_id atar)
 │   ├── auth.js                 # Alternatif JWT middleware (req.user objesi atar — aşağıya bak)
@@ -165,6 +166,8 @@ backend/leena-v401-backend/
 │   ├── checkin-import.html         # Checkin import sayfası
 │   ├── conference-sessions.html    # Conference topic tracking + targeted email
 │   ├── email-history.html          # Email send history log (paginated, filtered)
+│   ├── conference-scanner.html    # Hostess conference check-in scanner (mobile, terminal auth)
+│   ├── certificate.html           # Public certificate view (print-to-PDF)
 │   └── assets/                     # Logo vb.
 # ⚠️ public/ altında *.backup.html ve eski varyantlar (dashboard.html,
 #    admin-dashboard.html, main-panel.html) mevcut, aktif olarak kullanılmıyor.
@@ -194,6 +197,7 @@ backend/leena-v401-backend/
 | reactivation_tokens | Kampanya tokenları (source_expo_id → target_expo_id) |
 | exhibitor_leads | Exhibitor lead kayıtları (exhibitor_company bazlı) |
 | import_logs | Import operation logs (per-import stats, errors, options) |
+| conference_certificates | Conference attendance certificates (visitor_id, expo_id, topic, token) |
 
 ### visitors Tablosu Önemli Kolonlar
 - `id`, `name`, `last_name`, `email` (unique per expo), `phone`
@@ -232,6 +236,24 @@ Email gönderim sonuçlarının loglandığı tablo. `emailSend.js` ve `emailSeg
 ### email_queue Ek Kolonlar (v402)
 - `recipient_email`, `subject`, `html_content` — Direct HTML modu için
 - `sent_at`, `error_message` — Takip için
+
+### conference_certificates Tablosu (v402+)
+```sql
+CREATE TABLE conference_certificates (
+  id SERIAL PRIMARY KEY,
+  visitor_id INTEGER NOT NULL REFERENCES visitors(id),
+  expo_id INTEGER NOT NULL REFERENCES expos(id),
+  organizer_id INTEGER NOT NULL,
+  conference_topic TEXT NOT NULL,
+  certificate_token VARCHAR(64) NOT NULL UNIQUE,
+  email_sent BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(visitor_id, expo_id, conference_topic)
+);
+```
+- One certificate per visitor per topic (UNIQUE constraint)
+- `certificate_token` used for public certificate URL
+- Written by `conferenceCertificates.js` on conference check-in
 
 > **⚠️ Gerçek şemayı görmek için her zaman production DB'yi kontrol et, initial.sql'e güvenme.**
 
@@ -377,6 +399,25 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - Frontend pattern: current expo resources shown as full cards/table, other expo resources as compact single-row list with clone + edit buttons
 - Statistics (form-list.html) calculated from current expo forms only
 
+### M. Conference Certificate System (1 Mart 2026)
+
+```
+Hostess opens conference-scanner.html?terminal_key=X
+  → Selects conference topic from dropdown
+  → Scans visitor QR code
+  → POST /api/conference-certificates/checkin-and-certify
+    → Creates checkin record (source='conference-cert')
+    → Creates conference_certificates record (UNIQUE per visitor+expo+topic)
+    → Queues certificate email via email_queue Mode 1 (pre-processed HTML)
+  → Visitor receives email with link to certificate.html?token=X
+  → Visitor views/prints certificate (Save as PDF via browser)
+```
+
+- Terminal auth (x-terminal-key) — no JWT needed for hostess
+- Duplicate prevention: ON CONFLICT (visitor_id, expo_id, conference_topic) DO NOTHING
+- Certificate token: crypto.randomBytes(32) hex — used for public URL
+- Check-ins appear in existing reports (standard checkins table)
+
 ---
 
 ## API Endpoint Özeti
@@ -500,6 +541,12 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - `PUT /api/badge-templates/:id` — Template güncelle
 - `DELETE /api/badge-templates/:id` — Template sil
 - `GET /api/badge-templates/for-terminal/:terminalKey` — Terminal'e atanmış template
+
+### Conference Certificates
+- `POST /api/conference-certificates/checkin-and-certify` — Conference check-in + certificate email (terminalAuth)
+- `GET /api/conference-certificates/verify/:token` — Public certificate data (no auth, token-based)
+- `GET /api/conference-certificates/topics` — Conference topics for hostess dropdown (terminalAuth)
+- `GET /api/conference-certificates/stats` — Certificate stats per topic (JWT auth)
 
 ### Inline Endpoint'ler (index.js)
 - `GET /api/templates` — Form-builder dropdown için email template listesi
@@ -718,6 +765,7 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 17. leadRoutes            → app.use('/api/leads', leadRoutes)
 18. reactivationRoutes    → app.use('/api/reactivation', reactivationRoutes)
 19. badgeTemplateRoutes   → app.use('/api/badge-templates', badgeTemplateRoutes)
+20. conferenceCertRoutes  → app.use('/api/conference-certificates', conferenceCertRoutes)
 
 // Inline route'lar (index.js satır 107-142):
 // GET /api/templates       — form-builder dropdown (authMiddleware)
@@ -821,6 +869,15 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - New page: `email-history.html` — Gen 3 design, paginated email send history. Stats cards (Total Emails, Successful, Failed, Delivery Rate %). Filters: Template dropdown, Status (Sent/Failed), Email search. Table: Date & Time, Recipient (email + visitor name), Template, Status (color-coded badge), Details. Pagination with page numbers.
 - New endpoint: `GET /api/email-send/history` — paginated email_logs with LEFT JOIN to email_templates and visitors for names. Filters: expo_id (required), template_id, status, search (ILIKE). Includes stats (total_sent, total_failed). Response: `{success, logs[], total, page, totalPages, stats}`.
 - email-send.html: "History" button added to header (navigates to email-history.html).
+
+**Conference Certificate System (1 Mar 2026 — Mega Clima Ghana):**
+- New table: `conference_certificates` (visitor_id, expo_id, conference_topic, certificate_token UNIQUE, email_sent). UNIQUE constraint on (visitor_id, expo_id, conference_topic) prevents duplicates.
+- New route file: `routes/conferenceCertificates.js` — 4 endpoints: POST /checkin-and-certify (terminalAuth), GET /verify/:token (public), GET /topics (terminalAuth), GET /stats (JWT).
+- New page: `conference-scanner.html` — mobile-first hostess QR scanner with topic selector, camera QR (html5-qrcode), result cards, scan log. Terminal auth via URL param.
+- New page: `certificate.html` — public certificate view with elegant design (Playfair Display font, gold border, A4 landscape print CSS). "Save as PDF" via window.print().
+- Certificate email: inline HTML template with "View Certificate" button linking to certificate.html?token=X. Queued via email_queue Mode 1.
+- Conference check-ins stored in standard `checkins` table (source='conference-cert', notes='Conference: TOPIC') — appear in existing reports.
+- index.js: route mount added (line 86 load, line 108 mount).
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

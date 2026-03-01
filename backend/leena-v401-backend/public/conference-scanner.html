@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Conference Check-in - Leena EMS</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --bg: #f8fafc; --card: #fff; --border: #e2e8f0;
+            --text: #0f172a; --text-sec: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5;
+            --warning: #f59e0b; --warning-bg: #fef3c7;
+            --danger: #ef4444; --danger-bg: #fee2e2;
+            --radius: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* Top Bar */
+        .top-bar { background: #1a1a2e; color: white; padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+        .top-bar .logo { height: 32px; }
+        .top-bar .title { font-size: 14px; font-weight: 600; }
+        .top-bar .cert-count { background: var(--success); padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+
+        /* Container */
+        .container { max-width: 480px; margin: 0 auto; padding: 16px; }
+
+        /* Error Screen */
+        .error-screen { text-align: center; padding: 60px 20px; }
+        .error-screen .icon { width: 80px; height: 80px; background: var(--danger-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 36px; }
+        .error-screen h2 { font-size: 20px; margin-bottom: 8px; }
+        .error-screen p { color: var(--text-sec); font-size: 14px; }
+
+        /* Loading */
+        .loading { text-align: center; padding: 60px 20px; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Topic Selector */
+        .topic-card { background: var(--card); border: 2px solid var(--primary); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
+        .topic-card label { display: block; font-size: 13px; font-weight: 600; color: var(--primary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .topic-card select { width: 100%; padding: 14px 12px; border: 2px solid var(--border); border-radius: var(--radius); font-size: 15px; font-weight: 500; background: white; color: var(--text); appearance: auto; }
+        .topic-card select:focus { border-color: var(--primary); outline: none; }
+
+        /* Scanner */
+        #scannerContainer { width: 100%; border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; background: #000; min-height: 250px; }
+        #scannerContainer video { width: 100% !important; border-radius: var(--radius); }
+
+        /* Manual Input */
+        .manual-input { display: flex; gap: 8px; margin-bottom: 16px; }
+        .manual-input input { flex: 1; padding: 14px 12px; border: 2px solid var(--border); border-radius: var(--radius); font-size: 15px; }
+        .manual-input input:focus { border-color: var(--primary); outline: none; }
+        .manual-input button { padding: 14px 20px; background: var(--primary); color: white; border: none; border-radius: var(--radius); font-weight: 600; cursor: pointer; white-space: nowrap; font-size: 15px; }
+
+        /* Alert */
+        .alert { padding: 14px 16px; border-radius: var(--radius); margin-bottom: 16px; font-size: 14px; font-weight: 500; display: none; animation: slideUp 0.3s ease; }
+        .alert.show { display: block; }
+        .alert-success { background: var(--success-bg); color: #065f46; }
+        .alert-warning { background: var(--warning-bg); color: #92400e; }
+        .alert-danger { background: var(--danger-bg); color: #991b1b; }
+
+        /* Result Card */
+        .result-card { background: var(--card); border: 2px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; animation: slideUp 0.3s ease; }
+        .result-card.success { border-color: var(--success); box-shadow: 0 0 0 3px var(--success-bg); }
+        .result-card.duplicate { border-color: var(--warning); box-shadow: 0 0 0 3px var(--warning-bg); }
+        .result-card.error { border-color: var(--danger); box-shadow: 0 0 0 3px var(--danger-bg); }
+        .result-card .result-status { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .result-card .result-status.sent { color: var(--success); }
+        .result-card .result-status.already { color: var(--warning); }
+        .result-card .result-name { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .result-card .result-company { font-size: 14px; color: var(--primary); font-weight: 500; margin-bottom: 8px; }
+        .result-card .result-topic { font-size: 14px; color: var(--text-sec); margin-bottom: 12px; }
+        .result-card .result-link { display: inline-block; padding: 8px 16px; background: var(--primary-light); color: var(--primary); border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; }
+
+        /* Scan Log */
+        .scan-log { margin-top: 16px; }
+        .scan-log h3 { font-size: 14px; color: var(--text-sec); margin-bottom: 12px; font-weight: 600; }
+        .scan-log-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+        .scan-log-item .log-name { font-weight: 600; }
+        .scan-log-item .log-status { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .scan-log-item .log-status.sent { background: var(--success-bg); color: #065f46; }
+        .scan-log-item .log-status.dup { background: var(--warning-bg); color: #92400e; }
+
+        /* Hidden */
+        .hidden { display: none !important; }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Terminal Info */
+        .terminal-info { font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 16px; padding: 8px; background: var(--primary-light); border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <!-- TOP BAR -->
+    <div class="top-bar">
+        <div style="display:flex;align-items:center;gap:10px;">
+            <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="logo">
+            <span class="title">Conference Check-in</span>
+        </div>
+        <span class="cert-count" id="certCount">0</span>
+    </div>
+
+    <!-- LOADING -->
+    <div id="loadingScreen" class="container">
+        <div class="loading">
+            <div class="spinner"></div>
+            <p style="color:var(--text-sec);">Connecting to terminal...</p>
+        </div>
+    </div>
+
+    <!-- ERROR SCREEN -->
+    <div id="errorScreen" class="container hidden">
+        <div class="error-screen">
+            <div class="icon">!</div>
+            <h2 id="errorTitle">Connection Failed</h2>
+            <p id="errorMessage">Could not connect to terminal.</p>
+        </div>
+    </div>
+
+    <!-- MAIN SCREEN -->
+    <div id="mainScreen" class="container hidden">
+        <!-- Terminal Info -->
+        <div class="terminal-info" id="terminalInfo"></div>
+
+        <!-- Topic Selector -->
+        <div class="topic-card">
+            <label>Conference Session</label>
+            <select id="topicSelect">
+                <option value="">-- Select session topic --</option>
+            </select>
+        </div>
+
+        <!-- Scanner -->
+        <div id="scannerContainer"></div>
+
+        <!-- Manual Input -->
+        <div class="manual-input">
+            <input type="text" id="qrInput" placeholder="Scan or enter QR code..." autofocus>
+            <button onclick="handleScan()">Check-in</button>
+        </div>
+
+        <!-- Alert -->
+        <div class="alert" id="scanAlert"></div>
+
+        <!-- Last Result -->
+        <div id="resultArea"></div>
+
+        <!-- Scan Log -->
+        <div class="scan-log" id="scanLog" style="display:none;">
+            <h3>Recent Scans</h3>
+            <div id="scanLogList"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- Config ---
+        let terminalKey = '';
+        let scanner = null;
+        let isProcessing = false;
+        let certCounter = 0;
+        let scanHistory = [];
+
+        // --- Init ---
+        document.addEventListener('DOMContentLoaded', init);
+
+        async function init() {
+            // Get terminal_key from URL
+            const params = new URLSearchParams(window.location.search);
+            terminalKey = params.get('terminal_key') || '';
+
+            if (!terminalKey) {
+                showError('Missing Terminal Key', 'Please open this page with a valid terminal_key parameter.');
+                return;
+            }
+
+            // Validate terminal
+            try {
+                const res = await apiFetch('/api/terminal/status');
+                if (!res.success) {
+                    showError('Invalid Terminal', res.error || 'Terminal not recognized.');
+                    return;
+                }
+
+                document.getElementById('terminalInfo').textContent =
+                    `Terminal: ${res.terminal.terminalNo || '-'} | Hall: ${res.terminal.hall || '-'}`;
+
+                // Load topics
+                await loadTopics();
+
+                // Show main screen
+                document.getElementById('loadingScreen').classList.add('hidden');
+                document.getElementById('mainScreen').classList.remove('hidden');
+
+                // Start camera scanner
+                startScanner();
+
+                // Focus input
+                document.getElementById('qrInput').focus();
+
+                // Enter key handler
+                document.getElementById('qrInput').addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleScan();
+                    }
+                });
+
+            } catch (err) {
+                showError('Connection Error', 'Could not connect to the server. Check your internet connection.');
+            }
+        }
+
+        // --- API Helper ---
+        async function apiFetch(url, options = {}) {
+            const headers = { 'x-terminal-key': terminalKey, ...(options.headers || {}) };
+            if (options.body) headers['Content-Type'] = 'application/json';
+
+            const res = await fetch(url, { ...options, headers });
+            return await res.json();
+        }
+
+        // --- Topics ---
+        async function loadTopics() {
+            try {
+                const data = await apiFetch('/api/conference-certificates/topics');
+                if (!data.success) return;
+
+                const select = document.getElementById('topicSelect');
+                data.topics.forEach(t => {
+                    const opt = document.createElement('option');
+                    opt.value = t.topic;
+                    opt.textContent = `${t.topic} (${t.registered_count} registered, ${t.certificates_issued} certified)`;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                console.error('Failed to load topics:', err);
+            }
+        }
+
+        // --- Scanner ---
+        function startScanner() {
+            try {
+                scanner = new Html5Qrcode('scannerContainer');
+                scanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => {
+                        scanner.pause();
+                        processQR(decodedText);
+                        setTimeout(() => {
+                            try { scanner.resume(); } catch(e) {}
+                        }, 2500);
+                    },
+                    () => {}
+                ).catch(err => {
+                    console.log('Camera not available:', err);
+                    document.getElementById('scannerContainer').innerHTML =
+                        '<p style="color:var(--text-muted);font-size:13px;padding:16px;text-align:center;">Camera not available. Enter QR code manually below.</p>';
+                });
+            } catch(e) {
+                console.log('Scanner init error:', e);
+            }
+        }
+
+        // --- Handle Scan ---
+        function handleScan() {
+            const input = document.getElementById('qrInput');
+            const val = input.value.trim();
+            if (!val) return;
+            input.value = '';
+            processQR(val);
+        }
+
+        async function processQR(rawQR) {
+            if (isProcessing) return;
+            isProcessing = true;
+
+            // Parse QR (extract UUID from URL if needed)
+            let qrCode = rawQR.trim();
+            if (qrCode.includes('qr=')) {
+                try { qrCode = new URL(qrCode).searchParams.get('qr') || qrCode; } catch(e) {
+                    const match = qrCode.match(/qr=([^&]+)/);
+                    if (match) qrCode = decodeURIComponent(match[1]);
+                }
+            }
+            if (qrCode.includes('/')) {
+                const parts = qrCode.split('/');
+                qrCode = parts[parts.length - 1];
+            }
+
+            // Check topic selected
+            const topic = document.getElementById('topicSelect').value;
+            if (!topic) {
+                showAlert('Please select a conference session first!', 'warning');
+                isProcessing = false;
+                document.getElementById('qrInput').focus();
+                return;
+            }
+
+            showAlert('Looking up visitor...', 'warning');
+
+            try {
+                // 1. Look up visitor
+                const lookupRes = await apiFetch(`/api/terminal/visitor-by-qr?qr=${encodeURIComponent(qrCode)}`);
+
+                if (!lookupRes.success) {
+                    showAlert('Visitor not found. Please try again.', 'danger');
+                    showResultCard('error', null, null, 'Visitor not found for this QR code.');
+                    isProcessing = false;
+                    document.getElementById('qrInput').focus();
+                    return;
+                }
+
+                const visitor = lookupRes.visitor;
+
+                // 2. Check-in + certify
+                const certRes = await apiFetch('/api/conference-certificates/checkin-and-certify', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        visitor_id: visitor.id,
+                        conference_topic: topic
+                    })
+                });
+
+                if (!certRes.success) {
+                    showAlert(certRes.error || 'Check-in failed', 'danger');
+                    isProcessing = false;
+                    document.getElementById('qrInput').focus();
+                    return;
+                }
+
+                const cert = certRes.certificate;
+                const fullName = cert.visitor_name || [visitor.name, visitor.lastName].filter(Boolean).join(' ');
+
+                if (certRes.duplicate) {
+                    showAlert(`Already certified: ${fullName}`, 'warning');
+                    showResultCard('duplicate', fullName, visitor.company, topic, cert.url);
+                    addToLog(fullName, true);
+                } else {
+                    certCounter++;
+                    document.getElementById('certCount').textContent = certCounter;
+                    showAlert(`Certificate sent to ${fullName}!`, 'success');
+                    showResultCard('success', fullName, visitor.company, topic, cert.url);
+                    addToLog(fullName, false);
+                }
+
+            } catch (err) {
+                showAlert('Connection error. Please try again.', 'danger');
+                console.error('processQR error:', err);
+            }
+
+            isProcessing = false;
+            document.getElementById('qrInput').focus();
+        }
+
+        // --- UI Helpers ---
+        function showError(title, message) {
+            document.getElementById('loadingScreen').classList.add('hidden');
+            document.getElementById('errorScreen').classList.remove('hidden');
+            document.getElementById('errorTitle').textContent = title;
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        function showAlert(msg, type) {
+            const el = document.getElementById('scanAlert');
+            el.className = `alert alert-${type} show`;
+            el.textContent = msg;
+            if (type !== 'warning' || msg.includes('select')) {
+                setTimeout(() => el.classList.remove('show'), 4000);
+            }
+        }
+
+        function showResultCard(type, name, company, topic, url) {
+            const area = document.getElementById('resultArea');
+
+            if (type === 'error') {
+                area.innerHTML = `
+                    <div class="result-card error">
+                        <div class="result-status" style="color:var(--danger);">Error</div>
+                        <div class="result-name">${topic || 'Unknown error'}</div>
+                    </div>`;
+                return;
+            }
+
+            const statusClass = type === 'success' ? 'sent' : 'already';
+            const statusText = type === 'success' ? 'Certificate Sent!' : 'Already Certified';
+            const cardClass = type === 'success' ? 'success' : 'duplicate';
+
+            area.innerHTML = `
+                <div class="result-card ${cardClass}">
+                    <div class="result-status ${statusClass}">${statusText}</div>
+                    <div class="result-name">${esc(name)}</div>
+                    ${company ? `<div class="result-company">${esc(company)}</div>` : ''}
+                    <div class="result-topic">Session: ${esc(topic)}</div>
+                    ${url ? `<a href="${esc(url)}" target="_blank" class="result-link">View Certificate</a>` : ''}
+                </div>`;
+        }
+
+        function addToLog(name, isDuplicate) {
+            scanHistory.unshift({ name, isDuplicate, time: new Date() });
+            if (scanHistory.length > 10) scanHistory.pop();
+
+            const logEl = document.getElementById('scanLog');
+            const listEl = document.getElementById('scanLogList');
+            logEl.style.display = 'block';
+
+            listEl.innerHTML = scanHistory.map(s => {
+                const time = s.time.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                const statusClass = s.isDuplicate ? 'dup' : 'sent';
+                const statusText = s.isDuplicate ? 'Already' : 'Sent';
+                return `
+                    <div class="scan-log-item">
+                        <span><span class="log-name">${esc(s.name)}</span> <span style="color:var(--text-muted);font-size:11px;">${time}</span></span>
+                        <span class="log-status ${statusClass}">${statusText}</span>
+                    </div>`;
+            }).join('');
+        }
+
+        function esc(t) {
+            if (!t) return '';
+            const d = document.createElement('div');
+            d.textContent = t;
+            return d.innerHTML;
+        }
+    </script>
+</body>
+</html>
