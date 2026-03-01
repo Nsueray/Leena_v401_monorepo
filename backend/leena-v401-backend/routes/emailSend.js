@@ -31,6 +31,7 @@ router.post('/single', authMiddleware, async (req, res) => {
         let qrCode = null;
         let badgeUrl = null;
         let visitorId = null;
+        let visitorCustomFields = {};
 
         if (save_to_database) {
             const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
@@ -60,20 +61,24 @@ router.post('/single', authMiddleware, async (req, res) => {
             visitorId = result.rows[0].id;
         }
 
-        // If no QR was generated, try to find existing visitor's QR
+        // If no QR was generated, try to find existing visitor's QR and custom_fields
         if (!qrCode) {
             const existingVisitor = await pool.query(
-                `SELECT qr_code, badge_url FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
+                `SELECT qr_code, badge_url, custom_fields FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
                 [recipient.email, expo_id]
             );
-            if (existingVisitor.rows.length > 0 && existingVisitor.rows[0].qr_code) {
-                qrCode = existingVisitor.rows[0].qr_code;
-                badgeUrl = existingVisitor.rows[0].badge_url || badgeUrl;
+            if (existingVisitor.rows.length > 0) {
+                if (existingVisitor.rows[0].qr_code) {
+                    qrCode = existingVisitor.rows[0].qr_code;
+                    badgeUrl = existingVisitor.rows[0].badge_url || badgeUrl;
+                }
+                visitorCustomFields = existingVisitor.rows[0].custom_fields || {};
             }
         }
 
         const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
         const emailData = {
+            ...(visitorCustomFields || {}),
             name: recipient.name || 'Guest',
             email: recipient.email,
             company: recipient.company || '',
@@ -138,7 +143,7 @@ router.post('/bulk', authMiddleware, async (req, res) => {
 
         for (const recipient of recipients) {
             try {
-                let qrCode = null, badgeUrl = null, visitorId = null;
+                let qrCode = null, badgeUrl = null, visitorId = null, visitorCustomFields = {};
 
                 if (!recipient.email) {
                     errors.push({ recipient: recipient.name || 'Unknown', error: 'Missing email' });
@@ -153,7 +158,7 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                         badgeUrl = `${process.env.BASE_BADGE_URL || 'https://leena.app'}/badge-print.html?qr=${qrCode}`;
                     }
 
-                    const existing = await pool.query(`SELECT id, qr_code, badge_url FROM visitors WHERE email = $1 AND expo_id = $2`, [recipient.email, expo_id]);
+                    const existing = await pool.query(`SELECT id, qr_code, badge_url, custom_fields FROM visitors WHERE email = $1 AND expo_id = $2`, [recipient.email, expo_id]);
                     if (existing.rows.length === 0) {
                         const result = await pool.query(`
                             INSERT INTO visitors (name, email, company, expo_id, organizer_id, badge_id, qr_code, visitor_type, source, origin, badge_url, created_at)
@@ -173,8 +178,9 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                         visitorId = result.rows[0].id;
                         saved++;
                     } else {
-                        // Existing visitor — use their QR code
+                        // Existing visitor — use their QR code and custom_fields
                         visitorId = existing.rows[0].id;
+                        visitorCustomFields = existing.rows[0].custom_fields || {};
                         if (!qrCode && existing.rows[0].qr_code) {
                             qrCode = existing.rows[0].qr_code;
                             badgeUrl = existing.rows[0].badge_url || badgeUrl;
@@ -182,20 +188,26 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                     }
                 }
 
-                // If no QR was generated and not saved, try to find existing visitor's QR
+                // If no QR was generated and not saved, try to find existing visitor's QR and custom_fields
                 if (!qrCode) {
                     const existingVisitor = await pool.query(
-                        `SELECT qr_code, badge_url FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
+                        `SELECT qr_code, badge_url, custom_fields FROM visitors WHERE email = $1 AND expo_id = $2 LIMIT 1`,
                         [recipient.email, expo_id]
                     );
-                    if (existingVisitor.rows.length > 0 && existingVisitor.rows[0].qr_code) {
-                        qrCode = existingVisitor.rows[0].qr_code;
-                        badgeUrl = existingVisitor.rows[0].badge_url || badgeUrl;
+                    if (existingVisitor.rows.length > 0) {
+                        if (existingVisitor.rows[0].qr_code) {
+                            qrCode = existingVisitor.rows[0].qr_code;
+                            badgeUrl = existingVisitor.rows[0].badge_url || badgeUrl;
+                        }
+                        if (!Object.keys(visitorCustomFields).length) {
+                            visitorCustomFields = existingVisitor.rows[0].custom_fields || {};
+                        }
                     }
                 }
 
                 const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
                 const emailData = {
+                    ...(visitorCustomFields || {}),
                     name: recipient.name || 'Guest',
                     email: recipient.email,
                     company: recipient.company || '',

@@ -260,43 +260,59 @@ router.post('/public', async (req, res) => {
     }
 
     // Send email for both new and existing visitors
+    let emailSent = false;
     if (emailTemplateId) {
-      const templateResult = await pool.query(
-        `SELECT * FROM email_templates WHERE id = $1`,
-        [emailTemplateId]
-      );
-
-      if (templateResult.rows.length) {
-        const template = templateResult.rows[0];
-
-        // Generate QR code image tag for email (uses existing QR for returning visitors)
-        const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
-        const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
-
-        // Build email data with QR image
-        // Spread custom_fields as top-level keys so {{conference_topic}} etc. work in templates
-        const emailData = {
-          ...visitorData,
-          ...(custom_fields || {}),
-          qr_code: qrImageTag,
-          badge_id: badgeId,
-          badge_url: badgeUrl,
-          expo_name: expoName,
-          date: new Date().toLocaleDateString()
-        };
-
-        const emailHtml = processEmailTemplate(template.html_content || template.content, emailData);
-        let emailSubject = processEmailTemplate(template.subject || 'Registration Confirmation', emailData);
-        if (isExisting) {
-          emailSubject = `${emailSubject} (Resent)`;
-        }
-
-        await sendEmailWithReplyTo(
-          visitorData.email,
-          emailSubject,
-          emailHtml,
-          'reply@replies.leena.app'
+      try {
+        const templateResult = await pool.query(
+          `SELECT * FROM email_templates WHERE id = $1`,
+          [emailTemplateId]
         );
+
+        if (templateResult.rows.length) {
+          const template = templateResult.rows[0];
+
+          // Generate QR code image tag for email (uses existing QR for returning visitors)
+          const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+          const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
+
+          // Build email data with QR image
+          // Spread custom_fields as top-level keys so {{conference_topic}} etc. work in templates
+          const emailData = {
+            ...visitorData,
+            ...(custom_fields || {}),
+            qr_code: qrImageTag,
+            badge_id: badgeId,
+            badge_url: badgeUrl,
+            expo_name: expoName,
+            date: new Date().toLocaleDateString()
+          };
+
+          const emailHtml = processEmailTemplate(template.html_content || template.content, emailData);
+          let emailSubject = processEmailTemplate(template.subject || 'Registration Confirmation', emailData);
+          if (isExisting) {
+            emailSubject = `${emailSubject} (Resent)`;
+          }
+
+          await sendEmailWithReplyTo(
+            visitorData.email,
+            emailSubject,
+            emailHtml,
+            'reply@replies.leena.app'
+          );
+          emailSent = true;
+
+          // Log to email_logs for history tracking
+          try {
+            await pool.query(`
+              INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            `, [organizerId, expo_id, visitor.id, emailTemplateId, visitorData.email, 'sent', `Subject: ${emailSubject} | To: ${visitorData.email}`]);
+          } catch (logErr) {
+            console.error('email_logs INSERT failed:', logErr.message);
+          }
+        }
+      } catch (emailErr) {
+        console.error('⚠️ [PUBLIC FORM] Email send failed but visitor saved:', emailErr.message);
       }
     }
 
@@ -304,7 +320,7 @@ router.post('/public', async (req, res) => {
       success: true,
       message: isExisting
         ? 'You are already registered. Your information has been updated and a confirmation email has been resent.'
-        : 'Registration successful',
+        : (emailSent ? 'Registration successful' : 'Registration successful (email will be sent shortly)'),
       visitor,
       qr_code: qrCode,
       badge_id: badgeId,
@@ -615,6 +631,17 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
               await sendEmailWithReplyTo(email, emailSubject, emailHtml, 'reply@replies.leena.app');
               results.email_sent_count++;
               console.log(`📧 Email sent to existing visitor: ${email}`);
+
+              // Log to email_logs for history tracking
+              try {
+                await pool.query(`
+                  INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
+                  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+                `, [organizerId, expo_id, existing.id, existing_template_id, email, 'sent', `Subject: ${emailSubject} | To: ${email}`]);
+              } catch (logErr) {
+                console.error('email_logs INSERT failed:', logErr.message);
+              }
+
               await delay(100);
             } catch (emailErr) {
               console.error(`❌ Email failed for existing ${email}:`, emailErr.message);
@@ -716,6 +743,16 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
             results.email_sent_count++;
             console.log(`📧 Email sent to: ${email}`);
+
+            // Log to email_logs for history tracking
+            try {
+              await pool.query(`
+                INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+              `, [organizerId, expo_id, visitor.id, template_id, email, 'sent', `Subject: ${emailSubject} | To: ${email}`]);
+            } catch (logErr) {
+              console.error('email_logs INSERT failed:', logErr.message);
+            }
 
             // Small delay to avoid rate limits
             await delay(100);

@@ -225,14 +225,14 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     // ✉️ Send email for BOTH new and existing visitors
     if (form_id && email) {
       const templateResult = await pool.query(`
-        SELECT et.subject, et.html_content
+        SELECT et.id as template_id, et.subject, et.html_content
         FROM forms f
         JOIN email_templates et ON et.id = f.email_template_id
         WHERE f.id = $1 AND f.organizer_id = $2
       `, [form_id, organizer_id]);
 
       if (templateResult.rows.length > 0) {
-        const { subject, html_content } = templateResult.rows[0];
+        const { template_id: emailTplId, subject, html_content } = templateResult.rows[0];
 
         // Build QR code image tag
         const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
@@ -267,7 +267,17 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
         const subjectLine = processEmailTemplate(emailSubject, emailData);
 
         await sendEmailWithReplyTo(email, subjectLine, html, 'reply@replies.leena.app');
-        
+
+        // Log to email_logs for history tracking
+        try {
+          await pool.query(`
+            INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+          `, [organizer_id, expo_id, visitor.id, emailTplId, email, 'sent', `Subject: ${subjectLine} | To: ${email}`]);
+        } catch (logErr) {
+          console.error('email_logs INSERT failed:', logErr.message);
+        }
+
         console.log('');
         console.log('📧 [WEBHOOK] EMAIL SENT SUCCESSFULLY');
         console.log(`   📬 To: ${email}`);

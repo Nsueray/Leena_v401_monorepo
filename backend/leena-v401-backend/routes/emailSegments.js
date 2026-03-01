@@ -12,7 +12,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
-const { processEmailTemplate, sendEmail } = require('../utils/email');
+const { processEmailTemplate, sendEmailWithReplyTo } = require('../utils/email');
 
 // Apply JWT authentication to all routes
 router.use(authMiddleware);
@@ -156,7 +156,8 @@ router.post('/send', async (req, res) => {
                 const subject = processEmailTemplate(template.subject, emailData);
 
                 // Send email
-                const success = await sendEmail(visitor.email, subject, html);
+                // ALIGNED: sendEmail → sendEmailWithReplyTo (consistent with all other email flows)
+                const success = await sendEmailWithReplyTo(visitor.email, subject, html, 'reply@replies.leena.app');
 
                 if (success) {
                     totalSent++;
