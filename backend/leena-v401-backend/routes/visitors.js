@@ -195,7 +195,13 @@ router.post('/public', async (req, res) => {
 
       // Merge conference_topic: append new topic if not already present (separator: " || ")
       if (custom_fields?.conference_topic && ex.existing_conference_topic) {
-        const existingTopics = ex.existing_conference_topic.split(' || ').map(t => t.trim().toLowerCase()).filter(Boolean);
+        // Parse existing topics — handle mixed separators (" || " and ",")
+        const existingParts = ex.existing_conference_topic.split(' || ');
+        const existingTopics = [];
+        existingParts.forEach(p => {
+          if (p.includes(',')) { p.split(',').forEach(t => { const tr = t.trim(); if (tr) existingTopics.push(tr.toLowerCase()); }); }
+          else { const tr = p.trim(); if (tr) existingTopics.push(tr.toLowerCase()); }
+        });
         const newTopic = String(custom_fields.conference_topic).trim();
         if (newTopic && !existingTopics.includes(newTopic.toLowerCase())) {
           custom_fields.conference_topic = `${ex.existing_conference_topic} || ${newTopic}`;
@@ -991,9 +997,13 @@ router.get('/conference-topics', authMiddleware, async (req, res) => {
     result.rows.forEach(r => {
       const raw = String(r.topic || '').trim();
       if (!raw) return;
-      const parts = raw.includes(' || ') ? raw.split(' || ').map(t => t.trim()).filter(Boolean)
-                  : raw.includes(',') ? raw.split(',').map(t => t.trim()).filter(Boolean)
-                  : [raw];
+      // Split by " || " first, then each chunk by "," to handle mixed formats
+      const chunks = raw.split(' || ');
+      const parts = [];
+      chunks.forEach(ch => {
+        if (ch.includes(',')) { ch.split(',').forEach(t => { const tr = t.trim(); if (tr) parts.push(tr); }); }
+        else { const tr = ch.trim(); if (tr) parts.push(tr); }
+      });
       parts.forEach(t => {
         topicMap[t] = (topicMap[t] || 0) + parseInt(r.registered_count, 10);
         checkinMap[t] = (checkinMap[t] || 0) + parseInt(r.checked_in_count, 10);

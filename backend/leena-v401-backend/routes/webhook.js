@@ -125,7 +125,13 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       
       // Merge conference_topic: append new topic if not already present (separator: " || ")
       if (customFields.conference_topic && existingVisitor.existing_conference_topic) {
-        const existingTopics = existingVisitor.existing_conference_topic.split(' || ').map(t => t.trim().toLowerCase()).filter(Boolean);
+        // Parse existing topics — handle mixed separators (" || " and ",")
+        const existingParts = existingVisitor.existing_conference_topic.split(' || ');
+        const existingTopics = [];
+        existingParts.forEach(p => {
+          if (p.includes(',')) { p.split(',').forEach(t => { const tr = t.trim(); if (tr) existingTopics.push(tr.toLowerCase()); }); }
+          else { const tr = p.trim(); if (tr) existingTopics.push(tr.toLowerCase()); }
+        });
         const newTopic = String(customFields.conference_topic).trim();
         if (newTopic && !existingTopics.includes(newTopic.toLowerCase())) {
           customFields.conference_topic = `${existingVisitor.existing_conference_topic} || ${newTopic}`;

@@ -51,19 +51,27 @@ const CERT_EMAIL_TEMPLATE = `
 `;
 
 /**
- * Helper: Split conference_topic string by " || " separator.
- * Handles both new format ("Topic A || Topic B") and legacy comma format ("Topic A, Topic B").
+ * Helper: Split conference_topic string into individual topics.
+ * Handles mixed separators: " || " (new) AND "," (legacy import).
+ * First splits by " || ", then each part by "," — covers "A, B || C" mixed format.
  * Returns array of trimmed, non-empty topic strings.
  */
 function splitTopics(raw) {
   if (!raw) return [];
   const str = String(raw).trim();
   if (!str) return [];
-  // Primary separator: " || " (double pipe with spaces)
-  if (str.includes(' || ')) return str.split(' || ').map(t => t.trim()).filter(Boolean);
-  // Legacy: comma-separated (from old imports) — but only split if no pipe found
-  if (str.includes(',')) return str.split(',').map(t => t.trim()).filter(Boolean);
-  return [str];
+  // Split by " || " first, then each chunk by "," to handle mixed formats
+  const parts = str.split(' || ');
+  const all = [];
+  for (const part of parts) {
+    if (part.includes(',')) {
+      part.split(',').forEach(t => { const trimmed = t.trim(); if (trimmed) all.push(trimmed); });
+    } else {
+      const trimmed = part.trim();
+      if (trimmed) all.push(trimmed);
+    }
+  }
+  return all;
 }
 
 /**
