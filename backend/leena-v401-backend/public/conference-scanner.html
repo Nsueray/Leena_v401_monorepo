@@ -43,9 +43,10 @@
         .topic-card select { width: 100%; padding: 14px 12px; border: 2px solid var(--border); border-radius: var(--radius); font-size: 15px; font-weight: 500; background: white; color: var(--text); appearance: auto; }
         .topic-card select:focus { border-color: var(--primary); outline: none; }
 
-        /* Scanner */
-        #scannerContainer { width: 100%; border-radius: var(--radius); overflow: hidden; margin-bottom: 16px; background: #000; min-height: 250px; }
-        #scannerContainer video { width: 100% !important; border-radius: var(--radius); }
+        /* Scanner — constrained height for mobile UX */
+        #scannerContainer { width: 100%; border-radius: var(--radius); overflow: hidden; margin-bottom: 12px; background: #000; max-height: 200px; transition: max-height 0.3s ease, margin-bottom 0.3s ease; }
+        #scannerContainer.shrunk { max-height: 0; margin-bottom: 0; }
+        #scannerContainer video { width: 100% !important; border-radius: var(--radius); object-fit: cover; max-height: 200px; }
 
         /* Manual Input */
         .manual-input { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -53,12 +54,16 @@
         .manual-input input:focus { border-color: var(--primary); outline: none; }
         .manual-input button { padding: 14px 20px; background: var(--primary); color: white; border: none; border-radius: var(--radius); font-weight: 600; cursor: pointer; white-space: nowrap; font-size: 15px; }
 
-        /* Full-screen overlay feedback */
-        .scan-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
-        .scan-overlay.show { opacity: 1; pointer-events: auto; }
-        .scan-overlay .overlay-icon { font-size: 72px; margin-bottom: 16px; }
-        .scan-overlay .overlay-name { font-size: 24px; font-weight: 700; color: white; margin-bottom: 8px; text-align: center; padding: 0 20px; }
-        .scan-overlay .overlay-msg { font-size: 16px; color: rgba(255,255,255,0.9); text-align: center; }
+        /* Full-screen overlay feedback — bold, impossible to miss */
+        .scan-overlay { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; align-items: center; justify-content: center; opacity: 0; pointer-events: none; }
+        .scan-overlay.show { opacity: 1; pointer-events: auto; animation: overlayIn 0.2s ease; }
+        .scan-overlay.hiding { animation: overlayOut 0.3s ease forwards; }
+        @keyframes overlayIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        @keyframes overlayOut { from { opacity: 1; } to { opacity: 0; } }
+        .scan-overlay .overlay-icon { font-size: 88px; margin-bottom: 16px; }
+        .scan-overlay .overlay-name { font-size: 28px; font-weight: 700; color: white; margin-bottom: 4px; text-align: center; padding: 0 20px; }
+        .scan-overlay .overlay-company { font-size: 16px; color: rgba(255,255,255,0.8); margin-bottom: 14px; text-align: center; }
+        .scan-overlay .overlay-msg { font-size: 20px; color: rgba(255,255,255,0.95); text-align: center; font-weight: 600; }
         .scan-overlay.success-overlay { background: rgba(16, 185, 129, 0.95); }
         .scan-overlay.duplicate-overlay { background: rgba(245, 158, 11, 0.95); }
         .scan-overlay.error-overlay { background: rgba(239, 68, 68, 0.95); }
@@ -103,21 +108,26 @@
         </div>
     </div>
 
-    <!-- SCAN OVERLAY (full-screen feedback) -->
+    <!-- SCAN OVERLAY (full-screen feedback — bold, impossible to miss) -->
     <div class="scan-overlay success-overlay" id="successOverlay">
-        <div class="overlay-icon">&#10003;</div>
+        <div class="overlay-icon">&#10004;</div>
+        <div style="font-size:15px;color:rgba(255,255,255,0.8);font-weight:600;margin-bottom:8px;letter-spacing:1px;">SUCCESS</div>
         <div class="overlay-name" id="successName">-</div>
+        <div class="overlay-company" id="successCompany"></div>
         <div class="overlay-msg">Certificate Sent!</div>
     </div>
     <div class="scan-overlay duplicate-overlay" id="duplicateOverlay">
-        <div class="overlay-icon">&#9888;</div>
+        <div class="overlay-icon">&#9888;&#65039;</div>
+        <div style="font-size:15px;color:rgba(255,255,255,0.8);font-weight:600;margin-bottom:8px;letter-spacing:1px;">ALREADY CERTIFIED</div>
         <div class="overlay-name" id="dupName">-</div>
-        <div class="overlay-msg">Already Certified</div>
+        <div class="overlay-company" id="dupCompany"></div>
+        <div class="overlay-msg">Certificate already sent for this session</div>
     </div>
     <div class="scan-overlay error-overlay" id="errorOverlay">
-        <div class="overlay-icon">&#10007;</div>
+        <div class="overlay-icon">&#10060;</div>
+        <div style="font-size:15px;color:rgba(255,255,255,0.8);font-weight:600;margin-bottom:8px;letter-spacing:1px;">ERROR</div>
         <div class="overlay-name" id="errorOverlayMsg">-</div>
-        <div class="overlay-msg">Please try again</div>
+        <div class="overlay-msg" id="errorOverlayDetail">Please try again</div>
     </div>
 
     <!-- LOADING -->
@@ -207,6 +217,10 @@
                 startScanner();
                 document.getElementById('qrInput').focus();
 
+                // Init audio on first user interaction (topic select or input focus)
+                document.getElementById('topicSelect').addEventListener('change', initAudio);
+                document.getElementById('qrInput').addEventListener('focus', initAudio, { once: true });
+
                 document.getElementById('qrInput').addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') { e.preventDefault(); handleScan(); }
                 });
@@ -215,24 +229,37 @@
             }
         }
 
-        // --- Audio feedback ---
-        function playBeep(freq, duration) {
+        // --- Audio: init AudioContext on user gesture (required by browsers) ---
+        function initAudio() {
+            if (audioCtx) return;
             try {
-                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // Resume if suspended (Chrome policy)
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+            } catch(e) { console.log('AudioContext init failed:', e); }
+        }
+
+        // --- Audio: beep with oscillator ---
+        function playBeep(freq = 800, duration = 200, type = 'sine') {
+            initAudio();
+            if (!audioCtx) return;
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
                 const osc = audioCtx.createOscillator();
                 const gain = audioCtx.createGain();
                 osc.connect(gain);
                 gain.connect(audioCtx.destination);
                 osc.frequency.value = freq;
+                osc.type = type;
                 gain.gain.value = 0.3;
                 osc.start();
                 osc.stop(audioCtx.currentTime + duration / 1000);
-            } catch (e) {}
+            } catch(e) { console.log('Audio beep failed:', e); }
         }
 
-        // --- Vibration ---
+        // --- Vibration (Android only — iOS does not support navigator.vibrate) ---
         function vibrate(pattern) {
-            try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) {}
+            try { if (navigator.vibrate) navigator.vibrate(pattern); } catch(e) {}
         }
 
         // --- API Helper ---
@@ -267,23 +294,32 @@
                 scanner = new Html5Qrcode('scannerContainer');
                 scanner.start(
                     { facingMode: 'environment' },
-                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    { fps: 10, qrbox: { width: 200, height: 200 } },
                     (decodedText) => {
                         scanner.pause();
                         processQR(decodedText);
-                        setTimeout(() => { try { scanner.resume(); } catch(e) {} }, 2500);
+                        setTimeout(() => { try { scanner.resume(); } catch(e) {} }, 3000);
                     },
                     () => {}
                 ).catch(err => {
                     console.log('Camera not available:', err);
+                    document.getElementById('scannerContainer').style.maxHeight = '60px';
                     document.getElementById('scannerContainer').innerHTML =
                         '<p style="color:var(--text-muted);font-size:13px;padding:16px;text-align:center;">Camera not available. Enter QR code manually below.</p>';
                 });
             } catch(e) { console.log('Scanner init error:', e); }
         }
 
+        // --- Camera: shrink on scan, restore after ---
+        function shrinkCamera() {
+            const el = document.getElementById('scannerContainer');
+            el.classList.add('shrunk');
+            setTimeout(() => { el.classList.remove('shrunk'); }, 3000);
+        }
+
         // --- Handle Scan ---
         function handleScan() {
+            initAudio();
             const input = document.getElementById('qrInput');
             const val = input.value.trim();
             if (!val) return;
@@ -310,6 +346,8 @@
             if (isProcessing) return;
             isProcessing = true;
             hideUnregCard();
+            initAudio();
+            shrinkCamera();
 
             const qrCode = parseQR(rawQR);
             const topic = document.getElementById('topicSelect').value;
@@ -317,6 +355,7 @@
             if (!topic) {
                 showOverlay('error', 'Select Topic', 'Please select a conference session first');
                 vibrate([100, 50, 100]);
+                playBeep(300, 400);
                 isProcessing = false;
                 document.getElementById('qrInput').focus();
                 return;
@@ -329,7 +368,7 @@
                 if (!lookupRes.success) {
                     showOverlay('error', 'Not Found', 'Visitor not found for this QR code');
                     vibrate([200, 100, 200]);
-                    playBeep(200, 300);
+                    playBeep(300, 400);
                     addToLog('Unknown', topic, 'error');
                     isProcessing = false;
                     document.getElementById('qrInput').focus();
@@ -337,6 +376,7 @@
                 }
 
                 const visitor = lookupRes.visitor;
+                const visitorCompany = visitor.company || '';
 
                 // 2. Check-in + certify
                 const certRes = await apiFetch('/api/conference-certificates/checkin-and-certify', {
@@ -347,6 +387,7 @@
                 if (!certRes.success) {
                     showOverlay('error', certRes.error || 'Check-in failed', '');
                     vibrate([200, 100, 200]);
+                    playBeep(300, 400);
                     isProcessing = false;
                     document.getElementById('qrInput').focus();
                     return;
@@ -355,31 +396,41 @@
                 const fullName = certRes.certificate
                     ? certRes.certificate.visitor_name
                     : certRes.visitor_name || [visitor.name, visitor.lastName].filter(Boolean).join(' ');
+                const company = certRes.visitor_company || visitorCompany;
 
                 // 3. Handle response
                 if (certRes.registered === false) {
                     // Not registered — show warning card with force option
-                    showUnregCard(fullName, certRes.visitor_company || visitor.company, topic, visitor.id);
+                    showUnregCard(fullName, company, topic, visitor.id);
                     vibrate(100);
+                    playBeep(600, 100);
+                    setTimeout(() => playBeep(600, 100), 200);
+                    // Scroll to warning card
+                    setTimeout(() => {
+                        document.getElementById('unregCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }, 100);
                 } else if (certRes.duplicate) {
                     // Already certified
-                    showOverlay('duplicate', fullName, 'Already Certified');
+                    showOverlay('duplicate', fullName, 'Certificate already sent for this session', company);
                     vibrate(100);
+                    playBeep(600, 100);
+                    setTimeout(() => playBeep(600, 100), 200);
                     addToLog(fullName, topic, 'duplicate');
                 } else {
-                    // Success
+                    // Success!
                     certCounter++;
                     document.getElementById('certCount').textContent = certCounter;
                     document.getElementById('todayLabel').textContent = `Today: ${certCounter}`;
-                    showOverlay('success', fullName, 'Certificate Sent!');
+                    showOverlay('success', fullName, 'Certificate Sent!', company);
                     vibrate(200);
-                    playBeep(880, 150);
+                    playBeep(1000, 150);
                     addToLog(fullName, topic, certRes.forced ? 'forced' : 'sent');
                 }
 
             } catch (err) {
                 showOverlay('error', 'Connection Error', 'Please try again');
                 vibrate([200, 100, 200]);
+                playBeep(300, 400);
                 console.error('processQR error:', err);
             }
 
@@ -391,6 +442,7 @@
         async function forceCertify(visitorId, topic) {
             hideUnregCard();
             isProcessing = true;
+            initAudio();
 
             try {
                 const certRes = await apiFetch('/api/conference-certificates/checkin-and-certify', {
@@ -400,6 +452,7 @@
 
                 if (!certRes.success) {
                     showOverlay('error', certRes.error || 'Force certify failed', '');
+                    playBeep(300, 400);
                     isProcessing = false;
                     return;
                 }
@@ -417,19 +470,20 @@
                     document.getElementById('todayLabel').textContent = `Today: ${certCounter}`;
                     showOverlay('success', fullName, 'Certificate Sent! (Added to session)');
                     vibrate(200);
-                    playBeep(880, 150);
+                    playBeep(1000, 150);
                     addToLog(fullName, topic, 'forced');
                 }
             } catch (err) {
                 showOverlay('error', 'Connection Error', 'Please try again');
+                playBeep(300, 400);
             }
 
             isProcessing = false;
             document.getElementById('qrInput').focus();
         }
 
-        // --- UI: Overlays ---
-        function showOverlay(type, name, msg) {
+        // --- UI: Overlays (full-screen, 2 seconds, with company) ---
+        function showOverlay(type, name, msg, company) {
             const overlayMap = {
                 success: 'successOverlay',
                 duplicate: 'duplicateOverlay',
@@ -440,18 +494,30 @@
             if (!id) return;
 
             const el = document.getElementById(id);
-            if (type === 'success') document.getElementById('successName').textContent = name;
-            else if (type === 'duplicate') document.getElementById('dupName').textContent = name;
-            else if (type === 'error') {
+
+            if (type === 'success') {
+                document.getElementById('successName').textContent = name;
+                document.getElementById('successCompany').textContent = company || '';
+            } else if (type === 'duplicate') {
+                document.getElementById('dupName').textContent = name;
+                document.getElementById('dupCompany').textContent = company || '';
+            } else if (type === 'error') {
                 document.getElementById('errorOverlayMsg').textContent = name;
-                el.querySelector('.overlay-msg').textContent = msg || 'Please try again';
+                document.getElementById('errorOverlayDetail').textContent = msg || 'Please try again';
             }
 
+            // Show with animation
+            el.classList.remove('hiding');
             el.classList.add('show');
+
+            // Auto-dismiss after 2 seconds
             setTimeout(() => {
-                el.classList.remove('show');
+                el.classList.add('hiding');
+                setTimeout(() => {
+                    el.classList.remove('show', 'hiding');
+                }, 300);
                 document.getElementById('qrInput').focus();
-            }, 1500);
+            }, 2000);
         }
 
         // --- UI: Unregistered Card ---
@@ -459,7 +525,7 @@
             const card = document.getElementById('unregCard');
             card.className = 'unreg-card';
             card.innerHTML = `
-                <div class="unreg-icon">&#9888;</div>
+                <div class="unreg-icon">&#9888;&#65039;</div>
                 <div class="unreg-name">${esc(name)}</div>
                 ${company ? `<div style="text-align:center;font-size:13px;color:var(--primary);margin-bottom:4px;">${esc(company)}</div>` : ''}
                 <div class="unreg-msg">Not registered for this session!</div>
@@ -502,6 +568,11 @@
                         <span class="log-time">${time}</span>
                     </div>`;
             }).join('');
+
+            // Scroll scan log into view
+            setTimeout(() => {
+                logEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 100);
         }
 
         // --- UI: Helpers ---

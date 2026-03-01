@@ -54,16 +54,24 @@ const CERT_EMAIL_TEMPLATE = `
  * Helper: Check if visitor is registered for the given conference topic.
  * custom_fields.conference_topic is a plain string (from Excel import).
  * It may contain comma-separated topics like "HVAC Basics, Green Building".
+ * Comparison is case-insensitive with trim to handle data inconsistencies.
  * Returns true if the selected topic matches any of the visitor's topics.
  */
 function isVisitorRegisteredForTopic(customFields, selectedTopic) {
   if (!customFields || !customFields.conference_topic) return false;
-  const visitorTopics = String(customFields.conference_topic);
-  // Exact match first
-  if (visitorTopics === selectedTopic) return true;
-  // Comma-separated check
-  const topicList = visitorTopics.split(',').map(t => t.trim()).filter(Boolean);
-  return topicList.includes(selectedTopic);
+
+  const visitorRaw = String(customFields.conference_topic).trim();
+  const selectedRaw = String(selectedTopic).trim();
+
+  // Exact match (case-insensitive)
+  if (visitorRaw.toLowerCase() === selectedRaw.toLowerCase()) return true;
+
+  // Split both by comma — handles "Topic A, Topic B" in either direction
+  const visitorTopics = visitorRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+  const selectedTopics = selectedRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+
+  // Check if ANY visitor topic matches ANY selected topic
+  return visitorTopics.some(vt => selectedTopics.some(st => vt === st));
 }
 
 /**
@@ -399,14 +407,29 @@ router.get('/topics', terminalAuth, async (req, res) => {
       [expoId]
     );
 
-    const certMap = {};
-    certResult.rows.forEach(r => { certMap[r.topic] = parseInt(r.cert_count, 10); });
+    // Unnest comma-separated topics into individual entries
+    // e.g. "HVAC, Green Building" → counts for both "HVAC" and "Green Building"
+    const topicMap = {};
+    result.rows.forEach(r => {
+      const raw = String(r.topic).trim();
+      const parts = raw.includes(',') ? raw.split(',').map(t => t.trim()).filter(Boolean) : [raw];
+      parts.forEach(t => { topicMap[t] = (topicMap[t] || 0) + parseInt(r.registered_count, 10); });
+    });
 
-    const topics = result.rows.map(r => ({
-      topic: r.topic,
-      registered_count: parseInt(r.registered_count, 10),
-      certificates_issued: certMap[r.topic] || 0
-    }));
+    const certMapNorm = {};
+    certResult.rows.forEach(r => {
+      const raw = String(r.topic).trim();
+      const parts = raw.includes(',') ? raw.split(',').map(t => t.trim()).filter(Boolean) : [raw];
+      parts.forEach(t => { certMapNorm[t] = (certMapNorm[t] || 0) + parseInt(r.cert_count, 10); });
+    });
+
+    const topics = Object.entries(topicMap)
+      .map(([topic, registered_count]) => ({
+        topic,
+        registered_count,
+        certificates_issued: certMapNorm[topic] || 0
+      }))
+      .sort((a, b) => b.registered_count - a.registered_count);
 
     return res.json({ success: true, topics });
   } catch (err) {
