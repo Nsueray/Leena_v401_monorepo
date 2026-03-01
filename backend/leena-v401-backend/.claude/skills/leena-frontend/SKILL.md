@@ -77,31 +77,21 @@ Every admin page follows this structure. See `templates/admin-page-template.html
 
 ## CSS Variables (copy exactly for new pages)
 
+> **CSS variable names differ between old and new pages.**
+> OLD pages use: `--bg`, `--card-bg`, `--text`, `--border`, `--radius`
+> NEW pages (Gen 3) use: `--bg-main`, `--bg-card`, `--text-primary`, `--border-color`, `--radius-lg`
+> **For ALL new pages, use the Gen 3 names from `templates/admin-page-template.html`.**
+> Do NOT rename variables in existing pages — this will break them.
+
 ```css
 :root {
-    --primary: #4a6fa5;
-    --primary-light: #e8eef5;
-    --primary-dark: #3a5a8a;
-    --success: #27ae60;
-    --success-light: #e8f5e9;
-    --danger: #e74c3c;
-    --danger-light: #fde8e8;
-    --warning: #f39c12;
-    --warning-light: #fef9e7;
-    --info: #3498db;
-    --info-light: #e8f4fd;
-    --sidebar-bg: #1a1a2e;
-    --sidebar-text: #a0a0b0;
-    --sidebar-active: #ffffff;
-    --sidebar-hover: rgba(255,255,255,0.08);
-    --sidebar-accent: #4a6fa5;
-    --bg: #f0f2f5;
-    --card-bg: #ffffff;
-    --text: #1a1a2e;
-    --text-secondary: #6b7280;
-    --border: #e5e7eb;
-    --radius: 12px;
-    --shadow: 0 1px 3px rgba(0,0,0,0.1);
+    --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+    --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+    --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+    --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+    --success: #10b981; --success-bg: #d1fae5; --danger: #ef4444; --danger-bg: #fee2e2;
+    --info: #3b82f6; --info-bg: #dbeafe; --warning: #f59e0b; --warning-bg: #fef3c7;
+    --radius-md: 8px; --radius-lg: 12px;
 }
 ```
 
@@ -126,6 +116,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load initial data
     loadData();
+});
+```
+
+---
+
+## Sidebar
+
+Copy the EXACT sidebar HTML from `references/sidebar.md`.
+- Set `.active` class on the current page's `nav-item`
+- Include the sidebar CSS from the same reference file
+- Do NOT modify sidebar links without updating references/sidebar.md
+
+For auto-highlighting, add this script after the sidebar HTML:
+
+```javascript
+// Auto-highlight current page in sidebar
+document.querySelectorAll('.nav-item').forEach(a => {
+    if (a.getAttribute('href') === location.pathname.split('/').pop()) {
+        a.classList.add('active');
+    }
 });
 ```
 
@@ -220,13 +230,14 @@ CSS for stats grid:
     margin-bottom: 24px;
 }
 .stat-card {
-    background: var(--card-bg);
-    border-radius: var(--radius);
+    background: var(--bg-card);
+    border-radius: var(--radius-lg);
     padding: 24px;
     display: flex;
     align-items: center;
     gap: 16px;
-    box-shadow: var(--shadow);
+    border: 1px solid var(--border-color);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 .stat-icon {
     width: 48px;
@@ -237,7 +248,7 @@ CSS for stats grid:
     justify-content: center;
     font-size: 22px;
 }
-.stat-value { font-size: 28px; font-weight: 700; color: var(--text); }
+.stat-value { font-size: 28px; font-weight: 700; color: var(--text-primary); }
 .stat-label { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
 ```
 
@@ -310,11 +321,11 @@ CSS for stats grid:
     text-align: left; padding: 12px 16px;
     font-size: 12px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.5px; color: var(--text-secondary);
-    border-bottom: 2px solid var(--border); background: #fafbfc;
+    border-bottom: 2px solid var(--border-color); background: #fafbfc;
 }
 .data-table td {
-    padding: 12px 16px; border-bottom: 1px solid var(--border);
-    font-size: 14px; color: var(--text);
+    padding: 12px 16px; border-bottom: 1px solid var(--border-color);
+    font-size: 14px; color: var(--text-primary);
 }
 .data-table tr:hover { background: #f8f9fa; }
 ```
@@ -391,10 +402,10 @@ function goToPage(page) {
 ```css
 .pagination {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 16px 20px; border-top: 1px solid var(--border);
+    padding: 16px 20px; border-top: 1px solid var(--border-color);
 }
 .page-btn {
-    width: 36px; height: 36px; border: 1px solid var(--border);
+    width: 36px; height: 36px; border: 1px solid var(--border-color);
     background: white; border-radius: 8px; cursor: pointer;
     font-size: 14px; display: flex; align-items: center; justify-content: center;
 }
@@ -481,7 +492,7 @@ function escapeHtml(text) {
     align-items: center; justify-content: center; z-index: 9999;
 }
 .loading-spinner {
-    width: 40px; height: 40px; border: 3px solid var(--border);
+    width: 40px; height: 40px; border: 3px solid var(--border-color);
     border-top-color: var(--primary); border-radius: 50%;
     animation: spin 0.8s linear infinite;
 }

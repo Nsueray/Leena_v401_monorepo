@@ -147,6 +147,14 @@
                 </div>
             </div>
         </nav>
+        <script>
+        // Auto-highlight current page in sidebar
+        document.querySelectorAll('.nav-item').forEach(a => {
+            if (a.getAttribute('href') === location.pathname.split('/').pop()) {
+                a.classList.add('active');
+            }
+        });
+        </script>
 
         <div class="main-wrapper">
             <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
