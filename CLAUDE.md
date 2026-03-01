@@ -399,16 +399,21 @@ Email templates, forms, and terminals now support expo-based grouping with cross
 - Frontend pattern: current expo resources shown as full cards/table, other expo resources as compact single-row list with clone + edit buttons
 - Statistics (form-list.html) calculated from current expo forms only
 
-### M. Conference Certificate System (1 Mart 2026)
+### M. Conference Certificate System (1 Mart 2026, refined 1-3 Mart 2026)
 
 ```
 Hostess opens conference-scanner.html?terminal_key=X
   → Selects conference topic from dropdown
   → Scans visitor QR code
   → POST /api/conference-certificates/checkin-and-certify
+    → Validates registration via isVisitorRegisteredForTopic()
+    → If NOT registered and NOT force → returns warning (no action)
+    → If force → adds topic to visitor via addTopicToVisitor()
     → Creates checkin record (source='conference-cert')
     → Creates conference_certificates record (UNIQUE per visitor+expo+topic)
     → Queues certificate email via email_queue Mode 1 (pre-processed HTML)
+  → Duplicate scan → persistent overlay with "Resend Certificate" button
+    → POST /api/conference-certificates/resend (uses existing token, no new cert)
   → Visitor receives email with link to certificate.html?token=X
   → Visitor views/prints certificate (Save as PDF via browser)
 ```
@@ -417,6 +422,36 @@ Hostess opens conference-scanner.html?terminal_key=X
 - Duplicate prevention: ON CONFLICT (visitor_id, expo_id, conference_topic) DO NOTHING
 - Certificate token: crypto.randomBytes(32) hex — used for public URL
 - Check-ins appear in existing reports (standard checkins table)
+
+#### conference_topic Separator & Multi-Topic Logic
+
+**Separator: `" || "` (double pipe with spaces).** Commas are NOT separators — topic names themselves contain commas (e.g. "Engineering for a Healthy Buildings, Designing for Life").
+
+**`splitTopics(raw)`** — Helper in conferenceCertificates.js. Splits ONLY by `" || "`. Returns array of trimmed topic strings. Used by isVisitorRegisteredForTopic(), /topics endpoint, addTopicToVisitor().
+
+**`isVisitorRegisteredForTopic(customFields, selectedTopic)`** — Case-insensitive check. Splits both visitor's topics and selected topic by `" || "`, returns true if ANY match found.
+
+**`addTopicToVisitor(client, visitorId, customFields, newTopic)`** — Appends topic with `" || "` separator. Duplicate-safe (case-insensitive check before append). Uses `jsonb_build_object` to update custom_fields.
+
+**Multi-topic append on re-registration:**
+- Webhook (webhook.js): reads existing `conference_topic` from DB, appends new with `" || "` if not duplicate
+- Public form (visitors.js /public): same merge logic
+- Import (visitors.js /import): uses `COALESCE || jsonb` merge (preserves existing custom_fields)
+- All three: if topic already exists → keeps existing value unchanged
+
+**Topic unnesting in endpoints:**
+- `GET /api/visitors/conference-topics` — splits `" || "` to count individual topics
+- `GET /api/conference-certificates/topics` — same unnesting with certificate counts
+- `GET /api/visitors/paginated` — `ILIKE %topic%` filter (supports multi-topic values)
+- `GET /api/visitors/export` — same ILIKE filter
+
+**Example flow:**
+```
+1. Visitor registers for "Session A" → DB: "Session A"
+2. Same visitor registers for "Session B" → DB: "Session A || Session B"
+3. Same visitor registers for "Session A" again → DB unchanged (duplicate prevention)
+4. Scanner checks "Session A" → isRegistered = true ✅
+```
 
 ---
 
@@ -543,9 +578,10 @@ Hostess opens conference-scanner.html?terminal_key=X
 - `GET /api/badge-templates/for-terminal/:terminalKey` — Terminal'e atanmış template
 
 ### Conference Certificates
-- `POST /api/conference-certificates/checkin-and-certify` — Conference check-in + certificate email (terminalAuth)
+- `POST /api/conference-certificates/checkin-and-certify` — Conference check-in + certificate email (terminalAuth). Validates registration via `isVisitorRegisteredForTopic()`. Supports `force: true` to add topic + issue cert for unregistered visitors.
+- `POST /api/conference-certificates/resend` — Resend existing certificate email (terminalAuth). Uses existing `certificate_token`, no new cert created. Subject gets "(Resent)" suffix.
 - `GET /api/conference-certificates/verify/:token` — Public certificate data (no auth, token-based)
-- `GET /api/conference-certificates/topics` — Conference topics for hostess dropdown (terminalAuth)
+- `GET /api/conference-certificates/topics` — Conference topics for hostess dropdown (terminalAuth). Unnests `" || "`-separated multi-topic values.
 - `GET /api/conference-certificates/stats` — Certificate stats per topic (JWT auth)
 
 ### Inline Endpoint'ler (index.js)
@@ -604,6 +640,12 @@ Hostess opens conference-scanner.html?terminal_key=X
 ### ✅ FIXED (24 Feb 2026 — Sprint 3)
 
 - ~~**Public form duplicate registration**~~ — `visitors.js` POST /public had no duplicate check. Same email+expo could create multiple records with different QR codes, invalidating the original. Fix: added upsert pattern (SELECT by lower(email)+expo_id → existing: COALESCE UPDATE + QR preserved + email resent with "(Resent)" suffix; new: INSERT as before).
+
+### ✅ FIXED (1 Mar 2026 — Conference Certificate Fixes)
+
+- ~~**Double client.release() in conferenceCertificates.js**~~ — Early `client.release()` calls before return statements + `finally { client.release() }` caused ERR_HTTP_HEADERS_SENT and "Release called on client already released" on production. Fix: removed all early `client.release()` calls, only `finally` block handles release.
+- ~~**Conference topic registration check always failing**~~ — `splitTopics()` was splitting by comma, but topic names contain commas (e.g. "Engineering for a Healthy Buildings, Designing for Life"). Created phantom topics like "Designing for Life". Fix: `splitTopics()` now ONLY splits by `" || "` (double pipe). Comma is never a separator.
+- ~~**Conference topic overwritten on re-registration**~~ — Webhook and public form upsert replaced entire `conference_topic` value. Visitor registering for Session B lost Session A. Fix: append logic with `" || "` separator + duplicate prevention in webhook.js, visitors.js /public, and conferenceCertificates.js addTopicToVisitor().
 
 ### KRİTİK
 (All Sprint 1 items fixed — see above)
@@ -872,12 +914,22 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 
 **Conference Certificate System (1 Mar 2026 — Mega Clima Ghana):**
 - New table: `conference_certificates` (visitor_id, expo_id, conference_topic, certificate_token UNIQUE, email_sent). UNIQUE constraint on (visitor_id, expo_id, conference_topic) prevents duplicates.
-- New route file: `routes/conferenceCertificates.js` — 4 endpoints: POST /checkin-and-certify (terminalAuth), GET /verify/:token (public), GET /topics (terminalAuth), GET /stats (JWT).
+- New route file: `routes/conferenceCertificates.js` — 5 endpoints: POST /checkin-and-certify (terminalAuth), POST /resend (terminalAuth), GET /verify/:token (public), GET /topics (terminalAuth), GET /stats (JWT).
 - New page: `conference-scanner.html` — mobile-first hostess QR scanner with topic selector, camera QR (html5-qrcode), result cards, scan log. Terminal auth via URL param.
 - New page: `certificate.html` — public certificate view with elegant design (Playfair Display font, gold border, A4 landscape print CSS). "Save as PDF" via window.print().
 - Certificate email: inline HTML template with "View Certificate" button linking to certificate.html?token=X. Queued via email_queue Mode 1.
 - Conference check-ins stored in standard `checkins` table (source='conference-cert', notes='Conference: TOPIC') — appear in existing reports.
 - index.js: route mount added (line 86 load, line 108 mount).
+
+**Conference Certificate Refinements (1-3 Mar 2026):**
+- Registration check fix: `isVisitorRegisteredForTopic()` — case-insensitive, splits by `" || "` only (commas are in topic names, not separators)
+- Topic append logic: webhook.js + visitors.js /public merge conference_topic with `" || "` separator on re-registration (prevents overwrite, duplicate-safe)
+- `splitTopics()` helper: ONLY splits by `" || "` — topic names contain commas (e.g. "Engineering for a Healthy Buildings, Designing for Life")
+- Double `client.release()` fix: removed early release calls, only `finally` block releases (fixed ERR_HTTP_HEADERS_SENT on production)
+- New endpoint: `POST /api/conference-certificates/resend` — resends existing certificate email using stored token, no new cert created
+- Duplicate scan UX: overlay persists with "Resend Certificate" + "Dismiss" buttons (no auto-dismiss)
+- Conference topic filters: `/paginated` and `/export` changed from `=` to `ILIKE` for multi-topic support
+- `/conference-topics` and `/topics` endpoints unnest `" || "`-separated values into individual topic counts
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
