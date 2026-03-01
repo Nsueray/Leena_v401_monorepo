@@ -259,6 +259,7 @@ router.post('/public', async (req, res) => {
       visitor = result.rows[0];
     }
 
+    // ========== EMAIL QUEUE MIGRATION (was: direct SendGrid) ==========
     // Send email for both new and existing visitors
     let emailSent = false;
     if (emailTemplateId) {
@@ -293,12 +294,20 @@ router.post('/public', async (req, res) => {
             emailSubject = `${emailSubject} (Resent)`;
           }
 
-          await sendEmailWithReplyTo(
-            visitorData.email,
-            emailSubject,
-            emailHtml,
-            'reply@replies.leena.app'
-          );
+          // OLD CODE (kept for rollback):
+          // await sendEmailWithReplyTo(
+          //   visitorData.email,
+          //   emailSubject,
+          //   emailHtml,
+          //   'reply@replies.leena.app'
+          // );
+
+          // NEW CODE: email_queue Mode 1 (pre-processed HTML, preserves Resent logic + custom_fields)
+          await pool.query(`
+            INSERT INTO email_queue (recipient_email, subject, html_content, status, created_at)
+            VALUES ($1, $2, $3, 'pending', NOW())
+          `, [visitorData.email, emailSubject, emailHtml]);
+
           emailSent = true;
 
           // Log to email_logs for history tracking
@@ -306,15 +315,16 @@ router.post('/public', async (req, res) => {
             await pool.query(`
               INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
               VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            `, [organizerId, expo_id, visitor.id, emailTemplateId, visitorData.email, 'sent', `Subject: ${emailSubject} | To: ${visitorData.email}`]);
+            `, [organizerId, expo_id, visitor.id, emailTemplateId, visitorData.email, 'queued', `Subject: ${emailSubject} | To: ${visitorData.email}`]);
           } catch (logErr) {
             console.error('email_logs INSERT failed:', logErr.message);
           }
         }
       } catch (emailErr) {
-        console.error('⚠️ [PUBLIC FORM] Email send failed but visitor saved:', emailErr.message);
+        console.error('⚠️ [PUBLIC FORM] Email queue failed but visitor saved:', emailErr.message);
       }
     }
+    // ========== END EMAIL QUEUE MIGRATION ==========
 
     res.json({
       success: true,

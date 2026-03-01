@@ -234,58 +234,58 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       if (templateResult.rows.length > 0) {
         const { template_id: emailTplId, subject, html_content } = templateResult.rows[0];
 
-        // Build QR code image tag
-        const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
-        const qrImageTag = `<img src="${baseUrl}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width:200px;">`;
+        // ========== EMAIL QUEUE MIGRATION (was: direct SendGrid) ==========
+        // OLD CODE (kept for rollback):
+        // const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+        // const qrImageTag = `<img src="${baseUrl}/api/qr-image/${visitor.qr_code}" alt="QR Code" style="max-width:200px;">`;
+        // const emailData = {
+        //   ...customFields,
+        //   name: visitor.name || name, last_name: visitor.last_name || lastName,
+        //   company: visitor.company || company, email: visitor.email,
+        //   badge_id: visitor.badge_id, expo_name,
+        //   qr_code: qrImageTag, badge_url: visitor.badge_url,
+        //   date: new Date().toLocaleDateString()
+        // };
+        // let emailSubject = subject || 'Your Badge';
+        // if (!isNewVisitor) {
+        //   if (!emailSubject.toLowerCase().includes('reminder') &&
+        //       !emailSubject.toLowerCase().includes('again') &&
+        //       !emailSubject.toLowerCase().includes('resend')) {
+        //     emailSubject = `${emailSubject} (Resent)`;
+        //   }
+        // }
+        // const html = processEmailTemplate(html_content, emailData);
+        // const subjectLine = processEmailTemplate(emailSubject, emailData);
+        // await sendEmailWithReplyTo(email, subjectLine, html, 'reply@replies.leena.app');
 
-        // Spread customFields so {{conference_topic}} etc. work in email templates
-        const emailData = {
-          ...customFields,
-          name: visitor.name || name,
-          last_name: visitor.last_name || lastName,
-          company: visitor.company || company,
-          email: visitor.email,
-          badge_id: visitor.badge_id,
-          expo_name,
-          qr_code: qrImageTag,
-          badge_url: visitor.badge_url,
-          date: new Date().toLocaleDateString()
-        };
-
-        // Customize subject for existing visitors
-        let emailSubject = subject || 'Your Badge';
-        if (!isNewVisitor) {
-          // Check if subject already mentions "reminder" or similar
-          if (!emailSubject.toLowerCase().includes('reminder') && 
-              !emailSubject.toLowerCase().includes('again') &&
-              !emailSubject.toLowerCase().includes('resend')) {
-            emailSubject = `${emailSubject} (Resent)`;
-          }
-        }
-
-        const html = processEmailTemplate(html_content, emailData);
-        const subjectLine = processEmailTemplate(emailSubject, emailData);
-
-        await sendEmailWithReplyTo(email, subjectLine, html, 'reply@replies.leena.app');
-
-        // Log to email_logs for history tracking
+        // NEW CODE: email_queue Mode 2 (email_worker processes template + custom_fields)
         try {
           await pool.query(`
-            INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-          `, [organizer_id, expo_id, visitor.id, emailTplId, email, 'sent', `Subject: ${subjectLine} | To: ${email}`]);
-        } catch (logErr) {
-          console.error('email_logs INSERT failed:', logErr.message);
-        }
+            INSERT INTO email_queue (visitor_id, template_id, status, created_at)
+            VALUES ($1, $2, 'pending', NOW())
+          `, [visitor.id, emailTplId]);
 
-        console.log('');
-        console.log('📧 [WEBHOOK] EMAIL SENT SUCCESSFULLY');
-        console.log(`   📬 To: ${email}`);
-        console.log(`   📝 Subject: ${subjectLine}`);
-        console.log(`   🔑 QR Code in email: ${visitor.qr_code}`);
-        console.log(`   📨 Type: ${isNewVisitor ? 'NEW REGISTRATION' : 'RESEND (existing visitor)'}`);
-        console.log(`   ↩️  Reply-To: reply@replies.leena.app`);
-        
+          // email_logs with 'queued' status
+          try {
+            await pool.query(`
+              INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+            `, [organizer_id, expo_id, visitor.id, emailTplId, email, 'queued', `Subject: ${subject || 'Your Badge'} | To: ${email}`]);
+          } catch (logErr) {
+            console.error('email_logs INSERT failed:', logErr.message);
+          }
+
+          console.log('');
+          console.log('📧 [WEBHOOK] Email queued successfully');
+          console.log(`   📬 To: ${email}`);
+          console.log(`   📝 Template: ${emailTplId}`);
+          console.log(`   🔑 QR Code: ${visitor.qr_code}`);
+          console.log(`   📨 Type: ${isNewVisitor ? 'NEW REGISTRATION' : 'RESEND (existing visitor)'}`);
+        } catch (queueErr) {
+          console.error('📧 [WEBHOOK] Email queue failed:', queueErr.message);
+        }
+        // ========== END EMAIL QUEUE MIGRATION ==========
+
       } else {
         console.log(`⚠️ [WEBHOOK] No email template found for form ${form_id} - skipping email`);
       }
