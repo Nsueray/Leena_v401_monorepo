@@ -51,24 +51,32 @@ const CERT_EMAIL_TEMPLATE = `
 `;
 
 /**
+ * Helper: Split conference_topic string by " || " separator.
+ * Handles both new format ("Topic A || Topic B") and legacy comma format ("Topic A, Topic B").
+ * Returns array of trimmed, non-empty topic strings.
+ */
+function splitTopics(raw) {
+  if (!raw) return [];
+  const str = String(raw).trim();
+  if (!str) return [];
+  // Primary separator: " || " (double pipe with spaces)
+  if (str.includes(' || ')) return str.split(' || ').map(t => t.trim()).filter(Boolean);
+  // Legacy: comma-separated (from old imports) — but only split if no pipe found
+  if (str.includes(',')) return str.split(',').map(t => t.trim()).filter(Boolean);
+  return [str];
+}
+
+/**
  * Helper: Check if visitor is registered for the given conference topic.
- * custom_fields.conference_topic is a plain string (from Excel import).
- * It may contain comma-separated topics like "HVAC Basics, Green Building".
+ * custom_fields.conference_topic may contain " || "-separated topics.
  * Comparison is case-insensitive with trim to handle data inconsistencies.
  * Returns true if the selected topic matches any of the visitor's topics.
  */
 function isVisitorRegisteredForTopic(customFields, selectedTopic) {
   if (!customFields || !customFields.conference_topic) return false;
 
-  const visitorRaw = String(customFields.conference_topic).trim();
-  const selectedRaw = String(selectedTopic).trim();
-
-  // Exact match (case-insensitive)
-  if (visitorRaw.toLowerCase() === selectedRaw.toLowerCase()) return true;
-
-  // Split both by comma — handles "Topic A, Topic B" in either direction
-  const visitorTopics = visitorRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-  const selectedTopics = selectedRaw.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+  const visitorTopics = splitTopics(customFields.conference_topic).map(t => t.toLowerCase());
+  const selectedTopics = splitTopics(selectedTopic).map(t => t.toLowerCase());
 
   // Check if ANY visitor topic matches ANY selected topic
   return visitorTopics.some(vt => selectedTopics.some(st => vt === st));
@@ -76,14 +84,23 @@ function isVisitorRegisteredForTopic(customFields, selectedTopic) {
 
 /**
  * Helper: Add a topic to visitor's custom_fields.conference_topic.
- * Preserves existing topics, adds new one comma-separated.
+ * Preserves existing topics, appends new one with " || " separator.
+ * Duplicate-safe: won't add if topic already present (case-insensitive).
  */
 async function addTopicToVisitor(client, visitorId, customFields, newTopic) {
   const existing = customFields && customFields.conference_topic
     ? String(customFields.conference_topic).trim()
     : '';
 
-  const updatedTopic = existing ? `${existing}, ${newTopic}` : newTopic;
+  // Check duplicate before appending
+  const existingTopics = splitTopics(existing).map(t => t.toLowerCase());
+  const newTopicTrimmed = String(newTopic).trim();
+
+  if (existingTopics.includes(newTopicTrimmed.toLowerCase())) {
+    return; // Already present, skip
+  }
+
+  const updatedTopic = existing ? `${existing} || ${newTopicTrimmed}` : newTopicTrimmed;
 
   await client.query(
     `UPDATE visitors
@@ -406,19 +423,17 @@ router.get('/topics', terminalAuth, async (req, res) => {
       [expoId]
     );
 
-    // Unnest comma-separated topics into individual entries
-    // e.g. "HVAC, Green Building" → counts for both "HVAC" and "Green Building"
+    // Unnest " || "-separated topics into individual entries
+    // e.g. "HVAC || Green Building" → counts for both "HVAC" and "Green Building"
     const topicMap = {};
     result.rows.forEach(r => {
-      const raw = String(r.topic).trim();
-      const parts = raw.includes(',') ? raw.split(',').map(t => t.trim()).filter(Boolean) : [raw];
+      const parts = splitTopics(r.topic);
       parts.forEach(t => { topicMap[t] = (topicMap[t] || 0) + parseInt(r.registered_count, 10); });
     });
 
     const certMapNorm = {};
     certResult.rows.forEach(r => {
-      const raw = String(r.topic).trim();
-      const parts = raw.includes(',') ? raw.split(',').map(t => t.trim()).filter(Boolean) : [raw];
+      const parts = splitTopics(r.topic);
       parts.forEach(t => { certMapNorm[t] = (certMapNorm[t] || 0) + parseInt(r.cert_count, 10); });
     });
 

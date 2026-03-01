@@ -97,10 +97,11 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
 
     // 🔍 Check for existing visitor with same email in this expo
     const existingResult = await pool.query(
-      `SELECT id, qr_code, badge_id, badge_url, name, last_name, email, company
-       FROM visitors 
-       WHERE lower(email) = lower($1) 
-         AND expo_id = $2 
+      `SELECT id, qr_code, badge_id, badge_url, name, last_name, email, company,
+              custom_fields->>'conference_topic' as existing_conference_topic
+       FROM visitors
+       WHERE lower(email) = lower($1)
+         AND expo_id = $2
          AND organizer_id = $3
        LIMIT 1`,
       [email.trim(), expo_id, organizer_id]
@@ -122,6 +123,20 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       console.log(`   🎫 Existing Badge ID: ${existingVisitor.badge_id}`);
       console.log('   ➡️  Updating info but KEEPING existing QR code...');
       
+      // Merge conference_topic: append new topic if not already present (separator: " || ")
+      if (customFields.conference_topic && existingVisitor.existing_conference_topic) {
+        const existingTopics = existingVisitor.existing_conference_topic.split(' || ').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const newTopic = String(customFields.conference_topic).trim();
+        if (newTopic && !existingTopics.includes(newTopic.toLowerCase())) {
+          customFields.conference_topic = `${existingVisitor.existing_conference_topic} || ${newTopic}`;
+          console.log(`✓ [WEBHOOK] conference_topic merged: "${customFields.conference_topic}"`);
+        } else {
+          // Keep existing value (new topic already present or empty)
+          customFields.conference_topic = existingVisitor.existing_conference_topic;
+          console.log(`✓ [WEBHOOK] conference_topic unchanged (already registered): "${customFields.conference_topic}"`);
+        }
+      }
+
       // Update existing record with new information (keep QR code!)
       const updateResult = await pool.query(
         `UPDATE visitors SET

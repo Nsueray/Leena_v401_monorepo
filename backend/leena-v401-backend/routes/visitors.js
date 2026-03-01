@@ -67,8 +67,9 @@ router.get('/paginated', authMiddleware, async (req, res) => {
     }
 
     if (req.query.conference_topic) {
-      filters.push(`custom_fields->>'conference_topic' = $${idx}`);
-      values.push(req.query.conference_topic);
+      // Support " || "-separated multi-topic values: use ILIKE to match substring
+      filters.push(`custom_fields->>'conference_topic' ILIKE $${idx}`);
+      values.push(`%${req.query.conference_topic}%`);
       idx++;
     }
 
@@ -172,7 +173,9 @@ router.post('/public', async (req, res) => {
 
     // Check for existing visitor with same email in this expo
     const existingResult = await pool.query(
-      `SELECT id, qr_code, badge_id, badge_url FROM visitors
+      `SELECT id, qr_code, badge_id, badge_url,
+              custom_fields->>'conference_topic' as existing_conference_topic
+       FROM visitors
        WHERE lower(email) = lower($1) AND expo_id = $2
        LIMIT 1`,
       [visitorData.email.trim(), expo_id]
@@ -189,6 +192,19 @@ router.post('/public', async (req, res) => {
       qrCode = ex.qr_code;
       badgeId = ex.badge_id;
       badgeUrl = ex.badge_url;
+
+      // Merge conference_topic: append new topic if not already present (separator: " || ")
+      if (custom_fields?.conference_topic && ex.existing_conference_topic) {
+        const existingTopics = ex.existing_conference_topic.split(' || ').map(t => t.trim().toLowerCase()).filter(Boolean);
+        const newTopic = String(custom_fields.conference_topic).trim();
+        if (newTopic && !existingTopics.includes(newTopic.toLowerCase())) {
+          custom_fields.conference_topic = `${ex.existing_conference_topic} || ${newTopic}`;
+        } else {
+          custom_fields.conference_topic = ex.existing_conference_topic;
+        }
+        visitorData.custom_fields = JSON.stringify(custom_fields);
+        console.log(`[PUBLIC FORM] conference_topic merged: "${custom_fields.conference_topic}"`);
+      }
 
       const updateResult = await pool.query(
         `UPDATE visitors SET
@@ -894,7 +910,7 @@ router.get('/export', authMiddleware, async (req, res) => {
     if (req.query.source) { filters.push(`source = ANY($${idx})`); values.push(req.query.source.split(',')); idx++; }
     if (req.query.origin) { filters.push(`origin = ANY($${idx})`); values.push(req.query.origin.split(',')); idx++; }
     if (req.query.visitor_type) { filters.push(`visitor_type = ANY($${idx})`); values.push(req.query.visitor_type.split(',')); idx++; }
-    if (req.query.conference_topic) { filters.push(`custom_fields->>'conference_topic' = $${idx}`); values.push(req.query.conference_topic); idx++; }
+    if (req.query.conference_topic) { filters.push(`custom_fields->>'conference_topic' ILIKE $${idx}`); values.push(`%${req.query.conference_topic}%`); idx++; }
 
     const whereClause = `WHERE ${filters.join(' AND ')}`;
     const result = await pool.query(
@@ -969,9 +985,32 @@ router.get('/conference-topics', authMiddleware, async (req, res) => {
       ORDER BY v.registered_count DESC
     `, [expo_id]);
 
+    // Unnest " || "-separated topics into individual entries
+    const topicMap = {};
+    const checkinMap = {};
+    result.rows.forEach(r => {
+      const raw = String(r.topic || '').trim();
+      if (!raw) return;
+      const parts = raw.includes(' || ') ? raw.split(' || ').map(t => t.trim()).filter(Boolean)
+                  : raw.includes(',') ? raw.split(',').map(t => t.trim()).filter(Boolean)
+                  : [raw];
+      parts.forEach(t => {
+        topicMap[t] = (topicMap[t] || 0) + parseInt(r.registered_count, 10);
+        checkinMap[t] = (checkinMap[t] || 0) + parseInt(r.checked_in_count, 10);
+      });
+    });
+
+    const topics = Object.entries(topicMap)
+      .map(([topic, registered_count]) => ({
+        topic,
+        registered_count,
+        checked_in_count: checkinMap[topic] || 0
+      }))
+      .sort((a, b) => b.registered_count - a.registered_count);
+
     res.json({
       success: true,
-      topics: result.rows
+      topics
     });
   } catch (err) {
     console.error('❌ Conference topics error:', err);
