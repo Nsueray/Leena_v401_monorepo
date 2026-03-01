@@ -52,26 +52,16 @@ const CERT_EMAIL_TEMPLATE = `
 
 /**
  * Helper: Split conference_topic string into individual topics.
- * Handles mixed separators: " || " (new) AND "," (legacy import).
- * First splits by " || ", then each part by "," — covers "A, B || C" mixed format.
+ * ONLY splits by " || " (double pipe with spaces).
+ * Comma is NOT a separator — topic names themselves contain commas
+ * (e.g. "Introduction | Opening Remarks: Engineering for a Healthy Buildings, Designing for Life").
  * Returns array of trimmed, non-empty topic strings.
  */
 function splitTopics(raw) {
   if (!raw) return [];
   const str = String(raw).trim();
   if (!str) return [];
-  // Split by " || " first, then each chunk by "," to handle mixed formats
-  const parts = str.split(' || ');
-  const all = [];
-  for (const part of parts) {
-    if (part.includes(',')) {
-      part.split(',').forEach(t => { const trimmed = t.trim(); if (trimmed) all.push(trimmed); });
-    } else {
-      const trimmed = part.trim();
-      if (trimmed) all.push(trimmed);
-    }
-  }
-  return all;
+  return str.split(' || ').map(t => t.trim()).filter(Boolean);
 }
 
 /**

@@ -124,20 +124,14 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       console.log('   ➡️  Updating info but KEEPING existing QR code...');
       
       // Merge conference_topic: append new topic if not already present (separator: " || ")
+      // NOTE: comma is NOT a separator — topic names contain commas (e.g. "Engineering for a Healthy Buildings, Designing for Life")
       if (customFields.conference_topic && existingVisitor.existing_conference_topic) {
-        // Parse existing topics — handle mixed separators (" || " and ",")
-        const existingParts = existingVisitor.existing_conference_topic.split(' || ');
-        const existingTopics = [];
-        existingParts.forEach(p => {
-          if (p.includes(',')) { p.split(',').forEach(t => { const tr = t.trim(); if (tr) existingTopics.push(tr.toLowerCase()); }); }
-          else { const tr = p.trim(); if (tr) existingTopics.push(tr.toLowerCase()); }
-        });
+        const existingTopics = existingVisitor.existing_conference_topic.split(' || ').map(t => t.trim().toLowerCase()).filter(Boolean);
         const newTopic = String(customFields.conference_topic).trim();
         if (newTopic && !existingTopics.includes(newTopic.toLowerCase())) {
           customFields.conference_topic = `${existingVisitor.existing_conference_topic} || ${newTopic}`;
           console.log(`✓ [WEBHOOK] conference_topic merged: "${customFields.conference_topic}"`);
         } else {
-          // Keep existing value (new topic already present or empty)
           customFields.conference_topic = existingVisitor.existing_conference_topic;
           console.log(`✓ [WEBHOOK] conference_topic unchanged (already registered): "${customFields.conference_topic}"`);
         }
