@@ -1,10 +1,13 @@
 ---
 name: leena-backend
 description: >
-  USE THIS SKILL whenever creating or modifying a backend route, endpoint, middleware,
-  or database query in Leena EMS. Covers route file structure, auth middleware usage,
-  DB query patterns, pagination, email sending, and error handling conventions.
-  TRIGGER: any task involving routes/, middleware/, utils/, email_worker.js, or index.js.
+  USE THIS SKILL whenever creating, modifying, or debugging a backend route,
+  endpoint, middleware, or database query in Leena EMS. Also use when adding
+  email functionality, understanding existing route behavior, or troubleshooting
+  backend errors. Covers route file structure, auth middleware usage, DB query
+  patterns, pagination, email sending, webhook handling, and error handling
+  conventions. TRIGGER: any task involving routes/, middleware/, utils/,
+  email_worker.js, index.js, or ANY backend JavaScript file.
 ---
 
 > **Last verified:** v402 (March 2026)
@@ -81,6 +84,22 @@ router.post('/checkin', terminalAuth, async (req, res) => {
 ### Public endpoints (no auth)
 
 No middleware needed. Examples: `/api/visitors/public`, `/api/leads/auth`, badge endpoints.
+
+---
+
+## Multi-Tenant Scoping (CRITICAL)
+
+EVERY admin query MUST be scoped by organizer:
+
+```javascript
+// ALWAYS include organizer_id in WHERE clause:
+WHERE organizer_id = $1
+
+// When expo context exists, ALSO scope by expo:
+WHERE organizer_id = $1 AND expo_id = $2
+```
+
+Failure to scope = data leak between organizers. No exceptions. This applies to: SELECT, UPDATE, DELETE — everything behind authMiddleware.
 
 ---
 

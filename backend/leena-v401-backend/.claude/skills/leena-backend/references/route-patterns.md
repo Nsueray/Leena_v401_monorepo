@@ -187,3 +187,38 @@ try {
 | leadRoutes | /api/leads | routes/leads.js |
 | reactivationRoutes | /api/reactivation | routes/reactivation.js |
 | badgeTemplateRoutes | /api/badge-templates | routes/badgeTemplates.js |
+
+---
+
+## Webhook Route Pattern
+
+Zoho webhooks follow a different pattern — no JWT auth, custom token validation:
+
+```javascript
+// Route: /api/webhook/zoho/:organizerId/:expoId/:formId
+router.post('/zoho/:organizerId/:expoId/:formId', async (req, res) => {
+    // 1. Validate webhook token
+    const webhookToken = req.headers['x-webhook-token'];
+    if (webhookToken !== process.env.ZOHO_WEBHOOK_TOKEN) {
+        return res.status(401).json({ error: 'Invalid webhook token' });
+    }
+
+    // 2. Extract and map fields from Zoho payload
+    const { organizerId, expoId, formId } = req.params;
+    const body = req.body;
+    // Field mapping: Zoho field names → Leena column names
+
+    // 3. Check existing visitor (by email + expo_id)
+    // If exists: UPDATE info + KEEP existing qr_code + RESEND email with "(Resent)" subject
+    // If new: INSERT + generate qr_code + send badge email
+
+    // 4. Return success
+    res.json({ success: true, message: 'Webhook processed' });
+});
+```
+
+Key differences from admin routes:
+- NO authMiddleware — uses `x-webhook-token` header instead
+- Params come from URL (`:organizerId/:expoId/:formId`), not from JWT
+- Must handle both new AND existing visitors in same endpoint
+- Existing visitor: NEVER overwrite qr_code, DO resend email
