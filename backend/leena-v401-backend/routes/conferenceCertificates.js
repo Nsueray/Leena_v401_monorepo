@@ -209,8 +209,10 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
     }
 
     // 1. Validate visitor exists for this expo
+    // Extract conference_topic directly in SQL to bypass JS JSON parsing issues
     const visitorRes = await client.query(
-      `SELECT id, name, last_name, email, company, job_title, qr_code, custom_fields
+      `SELECT id, name, last_name, email, company, job_title, qr_code, custom_fields,
+              custom_fields->>'conference_topic' as db_conference_topic
        FROM visitors
        WHERE id = $1 AND expo_id = $2 AND organizer_id = $3`,
       [visitor_id, expoId, organizerId]
@@ -234,7 +236,7 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
       });
     }
 
-    // Parse custom_fields (may be string or object)
+    // Parse custom_fields for addTopicToVisitor (force flow)
     let customFields = visitor.custom_fields || {};
     if (typeof customFields === 'string') {
       try { customFields = JSON.parse(customFields); } catch (e) { customFields = {}; }
@@ -247,8 +249,10 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
     );
     const expoName = expoRes.rows.length > 0 ? expoRes.rows[0].name : '';
 
-    // 2. Check session registration
-    const isRegistered = isVisitorRegisteredForTopic(customFields, conference_topic);
+    // 2. Check session registration using SQL-extracted value (reliable)
+    const dbTopic = visitor.db_conference_topic; // Direct from PostgreSQL ->>' extraction
+    console.log(`[CONF_CERT] Registration check: visitor=${visitor.id}, dbTopic="${dbTopic}", selectedTopic="${conference_topic}", cfType=${typeof visitor.custom_fields}`);
+    const isRegistered = dbTopic ? isVisitorRegisteredForTopic({ conference_topic: dbTopic }, conference_topic) : false;
 
     // If NOT registered and NOT force → return warning, don't issue certificate
     if (!isRegistered && !force) {
