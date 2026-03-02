@@ -385,9 +385,10 @@ router.post('/manual', authMiddleware, async (req, res) => {
           company = COALESCE(NULLIF($3, ''), company),
           job_title = COALESCE(NULLIF($4, ''), job_title),
           country = COALESCE(NULLIF($5, ''), country),
+          visitor_type = COALESCE(NULLIF($7, ''), visitor_type),
           updated_at = NOW()
         WHERE id = $6`,
-        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id]
+        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id, visitor_type || '']
       );
       console.log('🔄 [MANUAL] Updated existing visitor:', email, 'ID:', ex.id);
       return res.json({
