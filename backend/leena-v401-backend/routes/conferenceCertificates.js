@@ -26,25 +26,54 @@ const CERT_EMAIL_TEMPLATE = `
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;">
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
   <div style="max-width:600px;margin:0 auto;background:#ffffff;">
-    <div style="background:#4a6fa5;color:#ffffff;padding:40px 30px;text-align:center;">
-      <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;">Conference Certificate</h1>
-      <p style="margin:0;font-size:15px;opacity:0.9;">{{expo_name}}</p>
+
+    <!-- Header: Red banner with logo -->
+    <div style="background:#d6232a;padding:28px 30px;text-align:center;">
+      <img src="https://www.megaclimaexpo.com/ghana/newsletter/mc-ghana-logo.png" alt="Mega Clima Ghana" style="max-height:48px;margin-bottom:14px;display:inline-block;" />
+      <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Certificate of Participation</h1>
+      <p style="margin:6px 0 0;font-size:13px;color:#ffffff;opacity:0.9;">3&ndash;5 March 2026 &bull; The Palms Convention Centre, Accra, Ghana</p>
     </div>
-    <div style="padding:40px 30px;text-align:center;">
-      <p style="font-size:16px;color:#334155;margin:0 0 8px;">Dear <strong>{{name}} {{last_name}}</strong>,</p>
-      <p style="font-size:15px;color:#475569;margin:0 0 24px;">Thank you for attending the conference session:</p>
-      <div style="background:#eef2f7;border-radius:12px;padding:20px;margin:0 0 24px;">
-        <h2 style="margin:0;color:#4a6fa5;font-size:20px;font-weight:700;">{{conference_topic}}</h2>
+
+    <!-- Content -->
+    <div style="padding:36px 30px;text-align:center;">
+      <p style="font-size:16px;color:#1a1a1a;margin:0 0 6px;">Dear</p>
+      <p style="font-size:22px;color:#1a1a1a;margin:0 0 20px;font-weight:700;">{{name}} {{last_name}}</p>
+
+      <p style="font-size:15px;color:#444;line-height:1.6;margin:0 0 24px;">
+        Thank you for attending the <strong>{{expo_name}}</strong> &mdash; HVAC+R Technical Conference &amp; Exhibition.
+        Your certificate of participation is ready.
+      </p>
+
+      <div style="background:#fef2f2;border-left:4px solid #d6232a;border-radius:6px;padding:16px 20px;margin:0 0 8px;text-align:left;">
+        <p style="margin:0 0 4px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">Session attended</p>
+        <p style="margin:0;color:#d6232a;font-size:17px;font-weight:700;">{{conference_topic}}</p>
       </div>
-      <p style="font-size:15px;color:#475569;margin:0 0 28px;">Your certificate of attendance is ready. Click below to view and save it.</p>
-      <a href="{{certificate_url}}" style="display:inline-block;padding:16px 32px;background:#4a6fa5;color:#ffffff;text-decoration:none;border-radius:10px;font-size:16px;font-weight:600;">View Certificate</a>
-      <p style="margin:24px 0 0;color:#94a3b8;font-size:13px;">You can save your certificate as PDF using your browser's Print function.</p>
+
+      <p style="font-size:14px;color:#888;margin:0 0 28px;text-align:left;">Click the button below to view and download your certificate as PDF.</p>
+
+      <a href="{{certificate_url}}" style="display:inline-block;padding:14px 36px;background:#d6232a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:600;">View Certificate</a>
+
+      <p style="margin:20px 0 0;color:#aaa;font-size:12px;">Use &ldquo;Save as PDF&rdquo; in the print dialog to download.</p>
     </div>
-    <div style="padding:20px 30px;text-align:center;border-top:1px solid #e2e8f0;">
-      <p style="margin:0;color:#94a3b8;font-size:12px;">Powered by Leena EMS</p>
+
+    <!-- Footer: Organizer logos + contact -->
+    <div style="padding:20px 30px;text-align:center;border-top:1px solid #eee;background:#fafafa;">
+      <table style="margin:0 auto 10px;border:0;border-spacing:16px 0;" cellpadding="0" cellspacing="16">
+        <tr>
+          <td style="text-align:center;vertical-align:middle;">
+            <img src="https://www.megaclimaexpo.com/ghana/newsletter/organized.png" alt="Elan Expo" style="height:28px;display:inline-block;" />
+          </td>
+          <td style="text-align:center;vertical-align:middle;">
+            <img src="https://www.megaclimaexpo.com/ghana/newsletter/ashrae.png" alt="ASHRAE" style="height:28px;display:inline-block;" />
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 4px;color:#999;font-size:12px;">info@megaclimaexpo.com &bull; www.megaclimaexpo.com</p>
+      <p style="margin:0;color:#ccc;font-size:11px;">Powered by Leena EMS</p>
     </div>
+
   </div>
 </body>
 </html>

@@ -1,521 +1,548 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
-    <title>Conference Certificate - Leena EMS</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Crimson+Text:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: #d1d5db;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+  <title>Mega Clima Certificate</title>
 
-        /* Loading */
-        .loading { text-align: center; padding: 60px 20px; }
-        .spinner { width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #4a6fa5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
 
-        /* Error */
-        .error-state { text-align: center; padding: 60px 20px; max-width: 400px; background: white; border-radius: 12px; }
-        .error-state h2 { font-size: 20px; margin-bottom: 8px; color: #1e293b; }
-        .error-state p { color: #64748b; font-size: 14px; }
+  <style>
+    :root {
+      --red: #d6232a;
+      --green: #0a7a3b;
+      --text: #1a1a1a;
+      --muted: #6b6b6b;
+    }
 
-        /* Certificate Container */
-        .certificate-wrapper { width: 100%; max-width: 1050px; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #f2f2f2;
+      font-family: "Montserrat", Arial, Helvetica, sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
 
-        .certificate-container {
-            width: 297mm;
-            height: 210mm;
-            background: #ffffff;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.15);
-            transform-origin: top left;
-        }
+    /* Loading */
+    .loading { text-align: center; padding: 60px 20px; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: var(--red); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-        /* Outer decorative border - deep red */
-        .cert-border-outer {
-            position: absolute;
-            top: 8px; right: 8px; bottom: 8px; left: 8px;
-            border: 4px solid #8B1A1A;
-        }
+    /* Error */
+    .error-state { text-align: center; padding: 60px 20px; max-width: 400px; background: white; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .error-state h2 { font-size: 20px; margin-bottom: 8px; color: #1e293b; }
+    .error-state p { color: #64748b; font-size: 14px; }
 
-        /* Inner decorative border - gold */
-        .cert-border-inner {
-            position: absolute;
-            top: 16px; right: 16px; bottom: 16px; left: 16px;
-            border: 2px solid #C9A84C;
-        }
+    .hidden { display: none !important; }
 
-        /* Corner ornaments */
-        .corner { position: absolute; width: 40px; height: 40px; }
-        .corner::before, .corner::after { content: ''; position: absolute; background: #C9A84C; }
-        .corner-tl { top: 20px; left: 20px; }
-        .corner-tl::before { top: 0; left: 0; width: 20px; height: 2px; }
-        .corner-tl::after { top: 0; left: 0; width: 2px; height: 20px; }
-        .corner-tr { top: 20px; right: 20px; }
-        .corner-tr::before { top: 0; right: 0; width: 20px; height: 2px; }
-        .corner-tr::after { top: 0; right: 0; width: 2px; height: 20px; }
-        .corner-bl { bottom: 20px; left: 20px; }
-        .corner-bl::before { bottom: 0; left: 0; width: 20px; height: 2px; }
-        .corner-bl::after { bottom: 0; left: 0; width: 2px; height: 20px; }
-        .corner-br { bottom: 20px; right: 20px; }
-        .corner-br::before { bottom: 0; right: 0; width: 20px; height: 2px; }
-        .corner-br::after { bottom: 0; right: 0; width: 2px; height: 20px; }
+    /* ========== CERTIFICATE ========== */
+    @page { size: A4 landscape; margin: 10mm; }
 
-        /* Content area */
-        .cert-content {
-            position: absolute;
-            top: 30px; right: 30px; bottom: 30px; left: 30px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px 40px;
-        }
+    .certificate {
+      width: min(1100px, 98vw);
+      aspect-ratio: 1.35 / 1;
+      background: #fff;
+      position: relative;
+      padding: 42px 56px 40px 56px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.12);
+      overflow: hidden;
+    }
 
-        /* Top section: Logo + event info */
-        .cert-top { text-align: center; }
-        .cert-logo { height: 70px; margin-bottom: 8px; }
-        .cert-logo-placeholder {
-            height: 70px; display: flex; align-items: center; justify-content: center;
-            font-size: 28px; font-weight: 800; color: #8B1A1A;
-            font-family: 'Playfair Display', serif;
-            letter-spacing: 2px;
-        }
-        .cert-event-info {
-            font-family: 'Crimson Text', serif;
-            font-size: 13px;
-            color: #555;
-            letter-spacing: 1px;
-        }
+    /* Ring border effect */
+    .certificate::before {
+      content: "";
+      position: absolute;
+      inset: 14px;
+      pointer-events: none;
+      background:
+        radial-gradient(circle at 10px 10px, transparent 7px, var(--red) 7px 8px, transparent 8px 13px, var(--red) 13px 14px, transparent 14px) 0 0 / 22px 22px;
+      -webkit-mask:
+        linear-gradient(#000 0 0) content-box,
+        linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      padding: 10px;
+      border-radius: 2px;
+    }
 
-        /* Main section */
-        .cert-main { text-align: center; flex: 1; display: flex; flex-direction: column; justify-content: center; }
+    .inner {
+      position: relative;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
 
-        .cert-title {
-            font-family: 'Great Vibes', cursive;
-            font-size: 52px;
-            color: #8B1A1A;
-            margin-bottom: 4px;
-            line-height: 1.1;
-        }
+    /* Top area */
+    .top {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 12px;
+      margin-top: 6px;
+    }
 
-        .cert-of {
-            font-family: 'Crimson Text', serif;
-            font-size: 18px;
-            color: #666;
-            text-transform: uppercase;
-            letter-spacing: 6px;
-            margin-bottom: 20px;
-        }
+    .top .left,
+    .top .right {
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #222;
+      justify-content: flex-start;
+      white-space: nowrap;
+    }
+    .top .right { justify-content: flex-end; }
 
-        .cert-certify-text {
-            font-family: 'Crimson Text', serif;
-            font-size: 15px;
-            color: #555;
-            margin-bottom: 8px;
-        }
+    .icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,.15);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      flex: 0 0 26px;
+    }
+    .icon svg { width: 16px; height: 16px; fill: var(--red); }
 
-        .cert-name {
-            font-family: 'Playfair Display', serif;
-            font-size: 38px;
-            font-weight: 700;
-            color: #1a1a2e;
-            margin-bottom: 16px;
-            line-height: 1.2;
-        }
+    .event-logo {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+    .event-logo img {
+      max-height: 58px;
+      max-width: 260px;
+      display: block;
+      object-fit: contain;
+    }
 
-        .cert-body-text {
-            font-family: 'Crimson Text', serif;
-            font-size: 15px;
-            color: #444;
-            line-height: 1.7;
-            max-width: 680px;
-            margin: 0 auto 16px;
-        }
+    /* Title */
+    .title { text-align: center; margin-top: 6px; }
+    .title h1 {
+      margin: 0;
+      font-size: 44px;
+      color: var(--red);
+      font-weight: 500;
+      font-family: "Great Vibes", "Brush Script MT", "Segoe Script", cursive;
+      line-height: 1.05;
+    }
 
-        .cert-topic-label {
-            font-family: 'Crimson Text', serif;
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 6px;
-        }
+    /* Main box */
+    .main-box {
+      border: 2px dotted #2b2b2b;
+      padding: 22px 26px;
+      margin: 0 auto;
+      width: min(820px, 92%);
+      text-align: center;
+    }
 
-        .cert-topic {
-            font-family: 'Crimson Text', serif;
-            font-size: 22px;
-            font-weight: 600;
-            font-style: italic;
-            color: #8B1A1A;
-            margin-bottom: 16px;
-            padding: 8px 24px;
-            border-top: 1px solid #C9A84C;
-            border-bottom: 1px solid #C9A84C;
-            display: inline-block;
-        }
+    .main-box .small {
+      font-size: 16px;
+      color: #222;
+      margin-bottom: 12px;
+    }
 
-        /* Signatures */
-        .cert-signatures {
-            display: flex;
-            justify-content: center;
-            gap: 100px;
-            margin-bottom: 8px;
-        }
-        .cert-sig {
-            text-align: center;
-        }
-        .cert-sig-img {
-            height: 40px;
-            margin-bottom: 4px;
-            opacity: 0.8;
-        }
-        .cert-sig-placeholder {
-            height: 40px;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            font-family: 'Great Vibes', cursive;
-            font-size: 24px;
-            color: #333;
-            margin-bottom: 4px;
-        }
-        .cert-sig-line {
-            width: 160px;
-            height: 1px;
-            background: #999;
-            margin-bottom: 4px;
-        }
-        .cert-sig-label {
-            font-family: 'Crimson Text', serif;
-            font-size: 11px;
-            color: #777;
-            letter-spacing: 0.5px;
-        }
+    .field {
+      display: inline-block;
+      min-width: 340px;
+      padding: 8px 14px;
+      border: 1px solid rgba(0,0,0,.25);
+      border-radius: 4px;
+      font-size: 18px;
+      margin: 6px 0 14px;
+    }
 
-        /* Bottom section: Partners */
-        .cert-bottom {
-            text-align: center;
-            width: 100%;
-            border-top: 1px solid #e5e7eb;
-            padding-top: 12px;
-        }
-        .cert-partners {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 24px;
-            flex-wrap: wrap;
-            margin-bottom: 8px;
-        }
-        .cert-partner {
-            text-align: center;
-        }
-        .cert-partner-label {
-            font-family: 'Crimson Text', serif;
-            font-size: 9px;
-            color: #999;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-        }
-        .cert-partner-logo {
-            height: 32px;
-            opacity: 0.8;
-        }
-        .cert-partner-placeholder {
-            height: 32px;
-            padding: 4px 12px;
-            background: #f1f5f9;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            color: #64748b;
-            font-weight: 600;
-        }
-        .cert-contact {
-            font-family: 'Crimson Text', serif;
-            font-size: 11px;
-            color: #999;
-        }
+    .main-text {
+      font-size: 17px;
+      line-height: 1.55;
+      margin: 0 0 14px 0;
+    }
 
-        /* Actions (no-print) */
-        .actions { margin-top: 24px; text-align: center; }
-        .btn-action {
-            display: inline-flex; align-items: center; gap: 8px;
-            padding: 14px 28px; background: #4a6fa5; color: white;
-            border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
-            cursor: pointer; font-family: 'Inter', sans-serif; margin: 0 6px;
-        }
-        .btn-action:hover { background: #3d5d8a; }
-        .btn-action.secondary { background: #64748b; }
-        .save-hint { font-size: 12px; color: #64748b; margin-top: 8px; }
+    .topic {
+      display: inline-block;
+      min-width: 240px;
+      padding: 8px 12px;
+      border: 1px solid rgba(0,0,0,.25);
+      border-radius: 4px;
+      font-size: 17px;
+      margin-top: 6px;
+    }
 
-        .hidden { display: none !important; }
+    /* Double signature */
+    .signature-row {
+      width: min(820px, 92%);
+      margin: 18px auto 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 40px;
+    }
 
-        /* Responsive scaling */
-        @media (max-width: 1100px) {
-            .certificate-container {
-                width: 100%;
-                height: auto;
-                aspect-ratio: 297 / 210;
-            }
-            .cert-content { padding: 10px 20px; }
-            .cert-title { font-size: 36px; }
-            .cert-name { font-size: 28px; }
-            .cert-topic { font-size: 18px; }
-            .cert-body-text { font-size: 13px; }
-            .cert-logo, .cert-logo-placeholder { height: 50px; font-size: 20px; }
-            .cert-signatures { gap: 60px; }
-            .cert-sig-line { width: 120px; }
-        }
+    .signature-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
 
-        @media (max-width: 600px) {
-            body { padding: 10px; }
-            .cert-title { font-size: 28px; }
-            .cert-of { font-size: 14px; letter-spacing: 3px; }
-            .cert-name { font-size: 22px; }
-            .cert-topic { font-size: 16px; }
-            .cert-body-text { font-size: 12px; }
-            .cert-event-info { font-size: 11px; }
-            .cert-signatures { gap: 30px; }
-            .cert-sig-line { width: 90px; }
-            .cert-partners { gap: 12px; }
-        }
+    .sig-label {
+      font-size: 16px;
+      font-style: italic;
+      color: #333;
+      margin-bottom: 25px;
+      text-align: center;
+    }
 
-        /* Print */
-        @media print {
-            @page { size: A4 landscape; margin: 0; }
-            body { background: white; padding: 0; margin: 0; display: block; }
-            .no-print { display: none !important; }
-            .certificate-wrapper { max-width: none; width: 100%; }
-            .certificate-container {
-                width: 297mm;
-                height: 210mm;
-                box-shadow: none;
-                page-break-after: avoid;
-            }
-        }
-    </style>
+    .sig-box {
+      width: 260px;
+      border-top: 2px solid #444;
+      padding-top: 10px;
+      text-align: center;
+    }
+
+    .sig-box img {
+      width: 180px;
+      height: 50px;
+      object-fit: contain;
+      display: block;
+      margin: 0 auto 8px;
+    }
+
+    /* Bottom section */
+    .bottom {
+      margin-top: auto;
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 1fr 1fr 1.2fr;
+      gap: 14px;
+      align-items: end;
+      padding-top: 10px;
+    }
+
+    .brand-group { font-size: 11px; color: #222; }
+    .brand-group .label { margin-bottom: 6px; color: #333; }
+
+    .logos {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .logos img {
+      height: 40px;
+      max-width: 200px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .venue { display: flex; align-items: center; gap: 10px; }
+    .venue img {
+      height: 40px;
+      max-width: 200px;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Partners nowrap */
+    .logos--nowrap {
+      flex-wrap: nowrap;
+      gap: 12px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+    .logos--nowrap img {
+      height: 34px;
+      max-width: 160px;
+      flex: 0 0 auto;
+    }
+    .logos--nowrap::-webkit-scrollbar { height: 6px; }
+    .logos--nowrap::-webkit-scrollbar-thumb {
+      background: rgba(0,0,0,.15);
+      border-radius: 10px;
+    }
+
+    .contact {
+      font-size: 11px;
+      color: #222;
+      line-height: 1.6;
+      justify-self: end;
+      text-align: left;
+    }
+    .contact .row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+    .contact .dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 1px solid rgba(0,0,0,.15);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .contact .dot svg { width: 12px; height: 12px; fill: var(--red); }
+
+    /* Actions (no-print) */
+    .actions {
+      margin-top: 24px;
+      text-align: center;
+    }
+    .btn-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 28px;
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: "Montserrat", Arial, sans-serif;
+      margin: 0 6px;
+      transition: background 0.2s;
+    }
+    .btn-action:hover { background: #b51e24; }
+    .btn-action.secondary { background: #555; }
+    .btn-action.secondary:hover { background: #444; }
+    .save-hint { font-size: 12px; color: #6b6b6b; margin-top: 8px; }
+
+    /* Small screens */
+    @media (max-width: 820px) {
+      .certificate { padding: 34px 28px; }
+      .title h1 { font-size: 38px; }
+      .bottom { grid-template-columns: 1fr 1fr; row-gap: 12px; }
+      .contact { justify-self: start; }
+      .field { min-width: 260px; }
+    }
+
+    /* Print */
+    @media print {
+      @page { size: A4 landscape; margin: 10mm; }
+      body { background: #fff; padding: 0; margin: 0; display: block; }
+      .no-print { display: none !important; }
+      .certificate { box-shadow: none; margin: 0 auto; }
+    }
+  </style>
 </head>
 <body>
-    <!-- Loading -->
-    <div id="loadingState">
-        <div class="loading">
-            <div class="spinner"></div>
-            <p style="color:#64748b;">Loading certificate...</p>
-        </div>
+
+  <!-- Loading -->
+  <div id="loadingState">
+    <div class="loading">
+      <div class="spinner"></div>
+      <p style="color:#6b6b6b;">Loading certificate...</p>
     </div>
+  </div>
 
-    <!-- Error -->
-    <div id="errorState" class="hidden">
-        <div class="error-state">
-            <h2 id="errorTitle">Certificate Not Found</h2>
-            <p id="errorMsg">This certificate link may be invalid or expired.</p>
-        </div>
+  <!-- Error -->
+  <div id="errorState" class="hidden">
+    <div class="error-state">
+      <h2 id="errorTitle">Certificate Not Found</h2>
+      <p id="errorMsg">This certificate link may be invalid or expired.</p>
     </div>
+  </div>
 
-    <!-- Certificate -->
-    <div id="certificateState" class="hidden">
-        <div class="certificate-wrapper">
-            <div class="certificate-container">
-                <!-- Decorative borders -->
-                <div class="cert-border-outer"></div>
-                <div class="cert-border-inner"></div>
-                <div class="corner corner-tl"></div>
-                <div class="corner corner-tr"></div>
-                <div class="corner corner-bl"></div>
-                <div class="corner corner-br"></div>
+  <!-- Certificate -->
+  <div id="certificateState" class="hidden">
 
-                <div class="cert-content">
-                    <!-- Top: Logo + Event Info -->
-                    <div class="cert-top">
-                        <img src="/uploads/cert-assets/mega-clima-logo.png" alt="Mega Clima Ghana" class="cert-logo"
-                             onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                        <div class="cert-logo-placeholder" style="display:none;">MEGA CLIMA GHANA 2026</div>
-                        <div class="cert-event-info" id="certEventInfo">3-5 MARCH 2026 &nbsp;&bull;&nbsp; THE PALMS CONVENTION CENTRE, ACCRA, GHANA</div>
-                    </div>
+    <section class="certificate" role="document" aria-label="Certificate of Participation">
+      <div class="inner">
 
-                    <!-- Main: Certificate content -->
-                    <div class="cert-main">
-                        <div class="cert-title">Certificate</div>
-                        <div class="cert-of">OF PARTICIPATION</div>
+        <!-- TOP: date / logo / location -->
+        <div class="top">
+          <div class="left">
+            <span class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3V2zm15 8H2v11a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V10zM3 6a1 1 0 0 0-1 1v2h20V7a1 1 0 0 0-1-1H3z"/></svg>
+            </span>
+            <strong>3&ndash;5 MARCH 2026</strong>
+          </div>
 
-                        <div class="cert-certify-text">This is to certify that</div>
-                        <div class="cert-name" id="certName">-</div>
+          <div class="event-logo">
+            <img src="https://www.megaclimaexpo.com/ghana/newsletter/mc-ghana-logo.png" alt="Mega Clima Ghana Logo" />
+          </div>
 
-                        <div class="cert-body-text">
-                            has successfully participated in the<br>
-                            <strong id="certExpo">Mega Clima Ghana 2026</strong> &mdash; HVAC+R Technical Conference<br>
-                            &amp; Exhibition held on <span id="certDateRange">3-5 March 2026</span> at<br>
-                            The Palms Convention Centre, Accra, Ghana.
-                        </div>
+          <div class="right">
+            <span class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7zm0 9.5A2.5 2.5 0 1 0 12 6a2.5 2.5 0 0 0 0 5.5z"/></svg>
+            </span>
+            <span>THE PALMS CONVENTION CENTRE, ACCRA, GHANA</span>
+          </div>
+        </div>
 
-                        <div class="cert-topic-label">The participant attended technical sessions and panel discussions focused on:</div>
-                        <div class="cert-topic" id="certTopic">-</div>
+        <!-- Title -->
+        <div class="title">
+          <h1>Certificate of Participation</h1>
+        </div>
 
-                        <!-- Signatures -->
-                        <div class="cert-signatures">
-                            <div class="cert-sig">
-                                <img src="/uploads/cert-assets/signature-ashrae.png" alt="Signature" class="cert-sig-img"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <div class="cert-sig-placeholder" style="display:none;">ASHRAE</div>
-                                <div class="cert-sig-line"></div>
-                                <div class="cert-sig-label">Authorized by ASHRAE Ghana Chapter</div>
-                            </div>
-                            <div class="cert-sig">
-                                <img src="/uploads/cert-assets/signature-elan.png" alt="Signature" class="cert-sig-img"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <div class="cert-sig-placeholder" style="display:none;">Elan Expo</div>
-                                <div class="cert-sig-line"></div>
-                                <div class="cert-sig-label">Authorized by Elan Expo</div>
-                            </div>
-                        </div>
-                    </div>
+        <!-- Main box -->
+        <div class="main-box">
+          <div class="small">This is to certify that</div>
 
-                    <!-- Bottom: Partners -->
-                    <div class="cert-bottom">
-                        <div class="cert-partners">
-                            <div class="cert-partner">
-                                <div class="cert-partner-label">Organized by</div>
-                                <img src="/uploads/cert-assets/elan-expo-logo.png" alt="Elan Expo" class="cert-partner-logo"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <div class="cert-partner-placeholder" style="display:none;">ELAN EXPO</div>
-                            </div>
-                            <div class="cert-partner">
-                                <div class="cert-partner-label">Supported by</div>
-                                <img src="/uploads/cert-assets/ashrae-ghana-logo.png" alt="ASHRAE Ghana" class="cert-partner-logo"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <div class="cert-partner-placeholder" style="display:none;">ASHRAE GHANA</div>
-                            </div>
-                            <div class="cert-partner">
-                                <div class="cert-partner-label">Partners</div>
-                                <img src="/uploads/cert-assets/narwon-logo.png" alt="Narwon" class="cert-partner-logo"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <div class="cert-partner-placeholder" style="display:none;">NARWON</div>
-                            </div>
-                            <div class="cert-partner">
-                                <div class="cert-partner-label">&nbsp;</div>
-                                <img src="/uploads/cert-assets/epa-logo.png" alt="EPA" class="cert-partner-logo"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <div class="cert-partner-placeholder" style="display:none;">EPA</div>
-                            </div>
-                            <div class="cert-partner">
-                                <div class="cert-partner-label">Venue</div>
-                                <img src="/uploads/cert-assets/the-palms-logo.png" alt="The Palms" class="cert-partner-logo"
-                                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-                                <div class="cert-partner-placeholder" style="display:none;">THE PALMS</div>
-                            </div>
-                        </div>
-                        <div class="cert-contact">
-                            info@megaclimaexpo.com &nbsp;&bull;&nbsp; www.megaclimaexpo.com
-                        </div>
-                    </div>
-                </div>
+          <div class="field" id="certName">-</div>
+
+          <p class="main-text">
+            has successfully participated in the <span id="certExpo">Mega Clima Ghana 2026</span> &mdash; HVAC+R Technical Conference
+            &amp; Exhibition held on 3&ndash;5 March 2026 at The Palms Convention Centre, Accra, Ghana.
+          </p>
+
+          <div class="small">The participant attended technical sessions and panel discussions focused on:</div>
+
+          <div class="topic" id="certTopic">-</div>
+        </div>
+
+        <!-- Double signature -->
+        <div class="signature-row">
+
+          <div class="signature-col">
+            <div class="sig-label">Authorized by Ashrae Ghana Chapter</div>
+            <div class="sig-box">
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/ashrae-signature.png" alt="Ashrae Signature" />
+              <div class="name">&nbsp;</div>
             </div>
+          </div>
 
-            <!-- Actions -->
-            <div class="actions no-print">
-                <button class="btn-action" onclick="window.print()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    Save as PDF
-                </button>
-                <button class="btn-action secondary" onclick="window.print()">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-                    Print
-                </button>
-                <div class="save-hint">Use "Save as PDF" option in the print dialog to download</div>
+          <div class="signature-col">
+            <div class="sig-label">Authorized by Elan Expo</div>
+            <div class="sig-box">
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/elan-signature.png" alt="Elan Expo Signature" />
+              <div class="name">&nbsp;</div>
             </div>
+          </div>
+
         </div>
+
+        <!-- Bottom bar -->
+        <div class="bottom">
+
+          <div class="brand-group">
+            <div class="label">Organized by:</div>
+            <div class="logos">
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/organized.png" alt="Elan Expo Logo" />
+            </div>
+          </div>
+
+          <div class="brand-group">
+            <div class="label">Supported by:</div>
+            <div class="logos">
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/ashrae.png" alt="Supporter Logo" />
+            </div>
+          </div>
+
+          <div class="brand-group">
+            <div class="label">Partners:</div>
+            <div class="logos logos--nowrap">
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/narwoa.png" alt="Partner Logo 1" />
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/epa.png" alt="Partner Logo 2" />
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/wirac.png" alt="Partner Logo 3" />
+            </div>
+          </div>
+
+          <div class="brand-group">
+            <div class="label">Venue:</div>
+            <div class="venue">
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/thepalms.png" alt="Venue Logo" />
+            </div>
+          </div>
+
+          <div class="contact">
+            <div class="row">
+              <span class="dot" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+              </span>
+              <span>info@megaclimaexpo.com</span>
+            </div>
+            <div class="row">
+              <span class="dot" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm7.93 9h-3.2a15.6 15.6 0 0 0-1.24-5A8.03 8.03 0 0 1 19.93 11zM12 4c1.07 1.6 1.9 3.87 2.23 7H9.77C10.1 7.87 10.93 5.6 12 4zM4.07 13h3.2a15.6 15.6 0 0 0 1.24 5A8.03 8.03 0 0 1 4.07 13zm3.2-2H4.07a8.03 8.03 0 0 1 3.44-5 15.6 15.6 0 0 0-1.24 5zm2.5 2h4.46c-.33 3.13-1.16 5.4-2.23 7-1.07-1.6-1.9-3.87-2.23-7zm6.72 5a15.6 15.6 0 0 0 1.24-5h3.2a8.03 8.03 0 0 1-4.44 5z"/></svg>
+              </span>
+              <span>www.megaclimaexpo.com</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- Actions -->
+    <div class="actions no-print">
+      <button class="btn-action" onclick="window.print()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Save as PDF
+      </button>
+      <button class="btn-action secondary" onclick="window.print()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print
+      </button>
+      <div class="save-hint">Use "Save as PDF" option in the print dialog to download</div>
     </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', loadCertificate);
+  </div>
 
-        async function loadCertificate() {
-            const params = new URLSearchParams(window.location.search);
-            const token = params.get('token');
+  <script>
+    document.addEventListener('DOMContentLoaded', loadCertificate);
 
-            if (!token) {
-                showError('Missing Token', 'No certificate token provided in the URL.');
-                return;
-            }
+    async function loadCertificate() {
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get('token');
 
-            try {
-                const res = await fetch(`/api/conference-certificates/verify/${encodeURIComponent(token)}`);
-                const data = await res.json();
+      if (!token) {
+        showError('Missing Token', 'No certificate token provided in the URL.');
+        return;
+      }
 
-                if (!res.ok || !data.success) {
-                    showError('Certificate Not Found', data.error || 'This certificate link may be invalid or expired.');
-                    return;
-                }
+      try {
+        const res = await fetch(`/api/conference-certificates/verify/${encodeURIComponent(token)}`);
+        const data = await res.json();
 
-                const cert = data.certificate;
-
-                // Populate certificate fields
-                const fullName = [cert.name, cert.last_name].filter(Boolean).join(' ') || 'Guest';
-                document.getElementById('certName').textContent = fullName;
-                document.getElementById('certTopic').textContent = cert.conference_topic || '-';
-                document.getElementById('certExpo').textContent = cert.expo_name || 'Mega Clima Ghana 2026';
-
-                // Update page title
-                document.title = `Certificate — ${fullName} — ${cert.conference_topic}`;
-
-                // Responsive scale for certificate
-                scaleCertificate();
-                window.addEventListener('resize', scaleCertificate);
-
-                // Show certificate
-                document.getElementById('loadingState').classList.add('hidden');
-                document.getElementById('certificateState').classList.remove('hidden');
-
-            } catch (err) {
-                showError('Connection Error', 'Could not load the certificate. Please check your internet connection.');
-            }
+        if (!res.ok || !data.success) {
+          showError('Certificate Not Found', data.error || 'This certificate link may be invalid or expired.');
+          return;
         }
 
-        function scaleCertificate() {
-            const container = document.querySelector('.certificate-container');
-            if (!container) return;
-            const wrapper = container.parentElement;
-            const wrapperWidth = wrapper.offsetWidth;
-            const certWidth = 1123; // 297mm in px at 96dpi
+        const cert = data.certificate;
 
-            if (wrapperWidth < certWidth) {
-                const scale = wrapperWidth / certWidth;
-                container.style.transform = `scale(${scale})`;
-                container.style.transformOrigin = 'top left';
-                container.style.width = certWidth + 'px';
-                container.style.height = (794) + 'px'; // 210mm in px
-                wrapper.style.height = (794 * scale) + 'px';
-            } else {
-                container.style.transform = 'none';
-                container.style.width = '297mm';
-                container.style.height = '210mm';
-                wrapper.style.height = 'auto';
-            }
-        }
+        // Populate certificate fields
+        const fullName = [cert.name, cert.last_name].filter(Boolean).join(' ') || 'Guest';
+        document.getElementById('certName').textContent = fullName;
+        document.getElementById('certTopic').textContent = cert.conference_topic || '-';
+        document.getElementById('certExpo').textContent = cert.expo_name || 'Mega Clima Ghana 2026';
 
-        function showError(title, message) {
-            document.getElementById('loadingState').classList.add('hidden');
-            document.getElementById('errorState').classList.remove('hidden');
-            document.getElementById('errorTitle').textContent = title;
-            document.getElementById('errorMsg').textContent = message;
-        }
-    </script>
+        // Update page title
+        document.title = `Certificate — ${fullName} — ${cert.conference_topic}`;
+
+        // Show certificate
+        document.getElementById('loadingState').classList.add('hidden');
+        document.getElementById('certificateState').classList.remove('hidden');
+
+      } catch (err) {
+        showError('Connection Error', 'Could not load the certificate. Please check your internet connection.');
+      }
+    }
+
+    function showError(title, message) {
+      document.getElementById('loadingState').classList.add('hidden');
+      document.getElementById('errorState').classList.remove('hidden');
+      document.getElementById('errorTitle').textContent = title;
+      document.getElementById('errorMsg').textContent = message;
+    }
+  </script>
 </body>
 </html>
