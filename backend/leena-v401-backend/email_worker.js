@@ -61,7 +61,8 @@ async function fetchNextTask() {
         v.custom_fields,
         et.subject as template_subject,
         et.html_content as template_html,
-        e.name as expo_name
+        e.name as expo_name,
+        e.organizer_id as expo_organizer_id
       FROM email_queue eq
       LEFT JOIN visitors v ON v.id = eq.visitor_id
       LEFT JOIN email_templates et ON et.id = eq.template_id
@@ -92,6 +93,23 @@ async function markAsFailed(id, message) {
     WHERE id=$1
   `, [id, message]);
   console.error(`[EMAIL_WORKER] ❌ Failed task ${id}: ${message}`);
+}
+
+// Log send result to email_logs (non-fatal)
+async function logToEmailLogs(task, status, recipientEmail, emailSubject) {
+  try {
+    const organizerId = task.expo_organizer_id || null;
+    const email = recipientEmail || task.recipient_email || task.visitor_email || null;
+    const message = `Subject: ${emailSubject || 'N/A'} | To: ${email || 'N/A'}`;
+
+    await pool.query(
+      `INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())`,
+      [organizerId, task.expo_id || null, task.visitor_id || null, task.template_id || null, email, status, message]
+    );
+  } catch (err) {
+    console.warn(`[EMAIL_WORKER] email_logs insert failed (non-fatal): ${err.message}`);
+  }
 }
 
 async function processTask(task) {
@@ -184,11 +202,14 @@ async function processTask(task) {
 
     if (sent) {
       await markAsSent(task.id);
+      await logToEmailLogs(task, 'sent', recipientEmail, emailSubject);
     } else {
       await markAsFailed(task.id, 'sendEmail returned false');
+      await logToEmailLogs(task, 'failed', recipientEmail, emailSubject);
     }
   } catch (err) {
     await markAsFailed(task.id, err.message || 'Unknown error');
+    await logToEmailLogs(task, 'failed', recipientEmail, emailSubject);
   }
 }
 

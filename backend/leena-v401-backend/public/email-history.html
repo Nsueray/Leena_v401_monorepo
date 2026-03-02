@@ -46,7 +46,7 @@
         .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
         .btn-sm { padding: 5px 10px; font-size: 12px; }
 
-        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; margin-bottom: 24px; }
         .stat-card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 20px; }
         .stat-value { font-size: 28px; font-weight: 700; color: var(--primary); }
         .stat-value.success { color: var(--success); }
@@ -72,6 +72,8 @@
         .badge-status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
         .badge-sent { background: var(--success-bg); color: #065f46; }
         .badge-failed { background: var(--danger-bg); color: #991b1b; }
+        .badge-pending { background: #fef3c7; color: #92400e; }
+        .stat-value.warning { color: #f59e0b; }
         .recipient-email { font-weight: 500; color: var(--text-primary); }
         .recipient-name { font-size: 12px; color: var(--text-muted); }
         .template-name { font-size: 12px; color: var(--primary); font-weight: 500; }
@@ -91,7 +93,7 @@
         .loading-overlay.active { display: flex; }
         .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 1200px) { .stats-grid { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: 1fr; } .filters-row { flex-direction: column; } }
     </style>
 </head>
@@ -160,6 +162,10 @@
                         <div class="stat-label">Successful</div>
                     </div>
                     <div class="stat-card">
+                        <div class="stat-value warning" id="statPending">-</div>
+                        <div class="stat-label">Pending</div>
+                    </div>
+                    <div class="stat-card">
                         <div class="stat-value danger" id="statFailed">-</div>
                         <div class="stat-label">Failed</div>
                     </div>
@@ -182,6 +188,7 @@
                         <select id="filterStatus">
                             <option value="">All</option>
                             <option value="sent">Sent</option>
+                            <option value="pending">Pending</option>
                             <option value="failed">Failed</option>
                         </select>
                     </div>
@@ -294,6 +301,7 @@
                 const stats = data.stats || {};
                 document.getElementById('statTotal').textContent = (stats.total_emails || 0).toLocaleString();
                 document.getElementById('statSent').textContent = (stats.total_sent || 0).toLocaleString();
+                document.getElementById('statPending').textContent = (stats.total_pending || 0).toLocaleString();
                 document.getElementById('statFailed').textContent = (stats.total_failed || 0).toLocaleString();
                 const rate = stats.total_emails > 0 ? ((stats.total_sent / stats.total_emails) * 100).toFixed(1) : '0';
                 document.getElementById('statRate').textContent = rate + '%';
@@ -324,9 +332,9 @@
                 const dateStr = date ? date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
                 const timeStr = date ? date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
                 const visitorName = [log.visitor_name, log.visitor_last_name].filter(Boolean).join(' ');
-                const statusClass = log.status === 'sent' ? 'badge-sent' : 'badge-failed';
-                const statusIcon = log.status === 'sent' ? 'bi-check-circle' : 'bi-x-circle';
-                const statusText = log.status === 'sent' ? 'Sent' : 'Failed';
+                const statusClass = log.status === 'sent' ? 'badge-sent' : log.status === 'failed' ? 'badge-failed' : 'badge-pending';
+                const statusIcon = log.status === 'sent' ? 'bi-check-circle' : log.status === 'failed' ? 'bi-x-circle' : 'bi-clock-history';
+                const statusText = log.status === 'sent' ? 'Sent' : log.status === 'failed' ? 'Failed' : 'Pending';
 
                 return `<tr>
                     <td class="date-cell">${dateStr}<br><span style="color:var(--text-muted)">${timeStr}</span></td>

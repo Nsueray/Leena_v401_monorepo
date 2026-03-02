@@ -276,7 +276,7 @@ router.get('/history', authMiddleware, async (req, res) => {
         const params = [organizerId, expoId];
         let idx = 3;
 
-        if (req.query.status && ['sent', 'failed'].includes(req.query.status)) {
+        if (req.query.status && ['sent', 'failed', 'queued', 'pending'].includes(req.query.status)) {
             whereClause += ` AND el.status = $${idx}`;
             params.push(req.query.status);
             idx++;
@@ -320,7 +320,8 @@ router.get('/history', authMiddleware, async (req, res) => {
             `SELECT
                 COUNT(*) as total_emails,
                 COUNT(CASE WHEN status = 'sent' THEN 1 END) as total_sent,
-                COUNT(CASE WHEN status = 'failed' THEN 1 END) as total_failed
+                COUNT(CASE WHEN status = 'failed' THEN 1 END) as total_failed,
+                COUNT(CASE WHEN status NOT IN ('sent','failed') THEN 1 END) as total_pending
              FROM email_logs
              WHERE organizer_id = $1 AND expo_id = $2`,
             [organizerId, expoId]
@@ -336,7 +337,8 @@ router.get('/history', authMiddleware, async (req, res) => {
             stats: {
                 total_emails: parseInt(stats.total_emails),
                 total_sent: parseInt(stats.total_sent),
-                total_failed: parseInt(stats.total_failed)
+                total_failed: parseInt(stats.total_failed),
+                total_pending: parseInt(stats.total_pending)
             }
         });
 

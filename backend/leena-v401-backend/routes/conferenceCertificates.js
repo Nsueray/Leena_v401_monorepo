@@ -199,16 +199,7 @@ async function issueCertificate(client, visitor, expoId, organizerId, hall, term
     [visitor.email, emailSubject, emailHtml, expoId, visitor.id]
   );
 
-  // Log to email_logs
-  try {
-    await client.query(
-      `INSERT INTO email_logs (organizer_id, expo_id, visitor_id, email, status, message, sent_at)
-       VALUES ($1, $2, $3, $4, 'queued', $5, NOW())`,
-      [organizerId, expoId, visitor.id, visitor.email, `Certificate: ${conference_topic} | To: ${visitor.email}`]
-    );
-  } catch (logErr) {
-    console.warn('[CONF_CERT] email_logs insert failed (non-fatal):', logErr.message);
-  }
+  // email_logs is now handled by email_worker after actual send
 
   return {
     duplicate: false,
@@ -482,16 +473,7 @@ router.post('/resend', terminalAuth, async (req, res) => {
       [cert.email, emailSubject, emailHtml, cert.expo_id, cert.visitor_id]
     );
 
-    // Log
-    try {
-      await pool.query(
-        `INSERT INTO email_logs (organizer_id, expo_id, visitor_id, email, status, message, sent_at)
-         VALUES ($1, $2, $3, $4, 'queued', $5, NOW())`,
-        [cert.organizer_id, cert.expo_id, cert.visitor_id, cert.email, `Certificate Resent: ${cert.conference_topic} | To: ${cert.email}`]
-      );
-    } catch (logErr) {
-      console.warn('[CONF_CERT] email_logs insert failed (non-fatal):', logErr.message);
-    }
+    // email_logs is now handled by email_worker after actual send
 
     console.log(`[CONF_CERT] Certificate resent: ${cert.email} — ${cert.conference_topic}`);
 
