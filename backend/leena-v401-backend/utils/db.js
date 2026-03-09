@@ -1,6 +1,6 @@
 // utils/db.js
 const { Pool } = require('pg');
-require('dotenv').config(); // ✅ sadece bu satır yeterli
+require('dotenv').config();
 
 const pool = new Pool({
   user: process.env.PGUSER || 'postgres',
@@ -10,7 +10,15 @@ const pool = new Pool({
   port: process.env.PGPORT || 5432,
   ssl: {
     rejectUnauthorized: false
-  }
+  },
+  max: 20,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 30000,
+  statement_timeout: 30000
+});
+
+pool.on('error', (err) => {
+  console.error('Unexpected DB pool error:', err);
 });
 
 module.exports = pool;
