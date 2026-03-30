@@ -803,6 +803,124 @@ router.post('/stands/:id/split', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/floorplan/stands/merge — Merge multiple stands into one
+router.post('/stands/merge', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const organizer_id = req.organizer_id;
+    const { stand_ids, merged_stand_code } = req.body;
+
+    if (!stand_ids || !Array.isArray(stand_ids) || stand_ids.length < 2) {
+      client.release();
+      return res.status(400).json({ success: false, message: 'stand_ids must contain at least 2 stand IDs' });
+    }
+
+    // Fetch all stands with ownership + version check
+    const placeholders = stand_ids.map((_, i) => `$${i + 1}`).join(',');
+    const standsRes = await client.query(
+      `SELECT s.*, v.status AS version_status, v.id AS version_id, v.hall_id
+       FROM expo_stands s
+       JOIN expo_floorplan_versions v ON v.id = s.floorplan_version_id
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE s.id IN (${placeholders}) AND h.organizer_id = $${stand_ids.length + 1}`,
+      [...stand_ids, organizer_id]
+    );
+
+    if (standsRes.rows.length !== stand_ids.length) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'One or more stands not found' });
+    }
+
+    // All must be in same version and draft
+    const versionIds = new Set(standsRes.rows.map(s => s.version_id));
+    if (versionIds.size !== 1) {
+      client.release();
+      return res.status(400).json({ success: false, message: 'All stands must be in the same version' });
+    }
+    if (standsRes.rows[0].version_status !== 'draft') {
+      client.release();
+      return res.status(400).json({ success: false, message: 'Can only merge stands in draft versions' });
+    }
+
+    const versionId = standsRes.rows[0].version_id;
+    const first = standsRes.rows[0]; // inherit properties from first stand
+
+    // Collect all cells
+    const cellsRes = await client.query(
+      `SELECT cell_x, cell_y FROM expo_stand_cells WHERE stand_id IN (${placeholders})`,
+      stand_ids
+    );
+    const allCells = cellsRes.rows.map(c => ({ x: c.cell_x, y: c.cell_y }));
+
+    if (allCells.length === 0) {
+      client.release();
+      return res.status(400).json({ success: false, message: 'No cells found in selected stands' });
+    }
+
+    await client.query('BEGIN');
+
+    // Delete all source stands (cells cascade)
+    await client.query(`DELETE FROM expo_stands WHERE id IN (${placeholders})`, stand_ids);
+
+    // Create merged stand
+    const code = merged_stand_code || `__temp_${Date.now()}`;
+    const mergedRes = await client.query(
+      `INSERT INTO expo_stands (
+        floorplan_version_id, stand_code, zone, display_label, area_kind, special_area_type,
+        commercial_status, stand_type, assigned_company_name, notes, metadata, created_by
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [
+        versionId, code, first.zone, null,
+        first.area_kind, first.special_area_type,
+        first.commercial_status, first.stand_type,
+        first.assigned_company_name, null, first.metadata || '{}', organizer_id
+      ]
+    );
+
+    let merged = mergedRes.rows[0];
+
+    // Auto-generate code if not provided
+    if (!merged_stand_code) {
+      const autoCode = `S-${merged.id}`;
+      const upd = await client.query('UPDATE expo_stands SET stand_code = $1 WHERE id = $2 RETURNING *', [autoCode, merged.id]);
+      merged = upd.rows[0];
+    }
+
+    // Insert cells
+    const cellValues = [];
+    const cellParams = [];
+    let pi = 1;
+    for (const c of allCells) {
+      cellValues.push(`($${pi++}, $${pi++}, $${pi++}, $${pi++})`);
+      cellParams.push(merged.id, versionId, c.x, c.y);
+    }
+    await client.query(
+      `INSERT INTO expo_stand_cells (stand_id, floorplan_version_id, cell_x, cell_y) VALUES ${cellValues.join(', ')}`,
+      cellParams
+    );
+
+    await client.query('COMMIT');
+
+    // Re-read for trigger-updated size_m2
+    const finalRes = await pool.query('SELECT * FROM expo_stands WHERE id = $1', [merged.id]);
+
+    res.json({
+      success: true,
+      stand: { ...finalRes.rows[0], cells: allCells }
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[floorplan] Error merging stands:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ success: false, message: 'Stand code conflict during merge' });
+    }
+    res.status(500).json({ success: false, message: 'Failed to merge stands' });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /api/floorplan/stands/:id
 router.delete('/stands/:id', authMiddleware, async (req, res) => {
   try {

@@ -4,7 +4,7 @@
  */
 
 import { state } from './state.js';
-import { createStand, deleteStand, updateStand, updateStandStatus, splitStand } from './api.js';
+import { createStand, deleteStand, updateStand, updateStandStatus, splitStand, mergeStands } from './api.js';
 import { drawStands, drawSelection } from './grid.js';
 
 export function initStandActions() {
@@ -63,6 +63,28 @@ const COLOR_PALETTE = [
 function updateDetailPanel(stand) {
   const panel = document.getElementById('stand-detail');
   if (!panel) return;
+
+  // Multi-select: show merge UI
+  if (state.selectedStands.length >= 2) {
+    const totalCells = state.selectedStands.reduce((sum, s) => sum + (s.cells ? s.cells.length : 0), 0);
+    const codes = state.selectedStands.map(s => s.stand_code).join(' + ');
+    panel.innerHTML = `
+      <div style="background:#fef3c7;border-radius:8px;padding:12px;margin-bottom:10px;">
+        <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:4px;">${state.selectedStands.length} Stands Selected</div>
+        <div style="font-size:11px;color:#92400e;">${codes}</div>
+        <div style="font-size:11px;color:#92400e;margin-top:4px;">Total: ${totalCells} m²</div>
+      </div>
+      <button class="btn btn-primary btn-sm btn-block" id="btn-merge-stands"><i class="bi bi-union"></i> Merge Stands</button>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;text-align:center;">Shift+click to select/deselect stands</div>
+    `;
+    document.getElementById('btn-merge-stands')?.addEventListener('click', handleMergeStands);
+
+    const deleteBtn = document.getElementById('btn-delete-stand');
+    if (deleteBtn) deleteBtn.style.display = 'none';
+    const splitBtn = document.getElementById('btn-split-stand');
+    if (splitBtn) splitBtn.style.display = 'none';
+    return;
+  }
 
   if (!stand) {
     panel.innerHTML = '<div class="detail-empty">Select a stand to view details</div>';
@@ -308,6 +330,29 @@ async function handleDeleteStand() {
   try {
     await deleteStand(stand.id);
     state.removeStand(stand.id);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// --- Merge ---
+
+async function handleMergeStands() {
+  if (state.selectedStands.length < 2) return;
+  if (!state.isDraft()) { alert('Can only merge stands in draft versions'); return; }
+
+  const codes = state.selectedStands.map(s => s.stand_code).join('+');
+  const mergedCode = prompt('Stand code for merged stand:', codes) || '';
+
+  const ids = state.selectedStands.map(s => s.id);
+
+  try {
+    const merged = await mergeStands(ids, mergedCode.trim() || undefined);
+
+    // Remove old stands, add merged
+    for (const id of ids) state.removeStand(id);
+    state.addStand(merged);
+    state.selectStand(merged);
   } catch (err) {
     alert(err.message);
   }

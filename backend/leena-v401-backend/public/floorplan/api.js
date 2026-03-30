@@ -91,6 +91,14 @@ export async function updateStandStatus(standId, commercialStatus) {
   return data.stand;
 }
 
+export async function mergeStands(standIds, mergedStandCode) {
+  const data = await apiCall('POST', '/stands/merge', {
+    stand_ids: standIds,
+    merged_stand_code: mergedStandCode || undefined
+  });
+  return data.stand;
+}
+
 export async function splitStand(standId, newStands) {
   const data = await apiCall('POST', `/stands/${standId}/split`, { new_stands: newStands });
   return data.stands;
