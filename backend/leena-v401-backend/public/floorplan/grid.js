@@ -457,6 +457,13 @@ function drawHover() {
 }
 
 function getStandColor(stand) {
+  // Custom color from metadata takes priority (for area_kind='stand' only)
+  const meta = stand.metadata || {};
+  const parsed = typeof meta === 'string' ? JSON.parse(meta || '{}') : meta;
+  if (parsed.color && stand.area_kind === 'stand') {
+    return { fill: parsed.color, stroke: darkenColor(parsed.color) };
+  }
+
   if (stand.area_kind === 'special') {
     return SPECIAL_TYPE_COLORS[stand.special_area_type] || AREA_KIND_COLORS.special;
   }
@@ -464,6 +471,15 @@ function getStandColor(stand) {
     return AREA_KIND_COLORS.blocked;
   }
   return STATUS_COLORS[stand.commercial_status] || STATUS_COLORS.available;
+}
+
+/** Darken a hex color by ~20% for stroke */
+function darkenColor(hex) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.max(0, ((num >> 16) & 0xFF) - 40);
+  const g = Math.max(0, ((num >> 8) & 0xFF) - 40);
+  const b = Math.max(0, (num & 0xFF) - 40);
+  return `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
 }
 
 function getCellCentroid(cells) {

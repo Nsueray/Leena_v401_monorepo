@@ -85,6 +85,10 @@
         .detail-input { width: 100%; padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 12px; font-family: inherit; }
         .detail-input:focus { border-color: var(--primary); outline: none; }
         .detail-select { padding: 3px 6px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 11px; font-family: inherit; font-weight: 500; cursor: pointer; }
+        .color-palette { display: flex; gap: 4px; flex-wrap: wrap; }
+        .color-swatch { width: 20px; height: 20px; border-radius: 4px; border: 2px solid #e2e8f0; cursor: pointer; transition: border-color 0.15s; }
+        .color-swatch:hover { border-color: var(--primary); }
+        .color-swatch-active { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(74,111,165,0.3); }
 
         .status-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
         .status-available { background: #f3f4f6; color: #374151; }

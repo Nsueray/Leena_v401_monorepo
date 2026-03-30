@@ -47,6 +47,19 @@ const STATUS_OPTIONS = [
   { value: 'sold', label: 'Sold' }
 ];
 
+const COLOR_PALETTE = [
+  { color: '', label: 'Default' },
+  { color: '#dbeafe', label: 'Blue' },
+  { color: '#dcfce7', label: 'Green' },
+  { color: '#fef3c7', label: 'Yellow' },
+  { color: '#fce7f3', label: 'Pink' },
+  { color: '#ede9fe', label: 'Purple' },
+  { color: '#ffedd5', label: 'Orange' },
+  { color: '#f0fdfa', label: 'Teal' },
+  { color: '#fef2f2', label: 'Red' },
+  { color: '#f3f4f6', label: 'Grey' }
+];
+
 function updateDetailPanel(stand) {
   const panel = document.getElementById('stand-detail');
   if (!panel) return;
@@ -74,12 +87,28 @@ function updateDetailPanel(stand) {
   // Company name input (editable for all stands)
   const companyVal = stand.assigned_company_name || '';
 
+  // Current custom color from metadata
+  const meta = typeof stand.metadata === 'string' ? JSON.parse(stand.metadata || '{}') : (stand.metadata || {});
+  const currentColor = meta.color || '';
+
+  // Color palette swatches (only for area_kind='stand')
+  let colorHtml = '';
+  if (isStandType) {
+    const swatches = COLOR_PALETTE.map(c => {
+      const bg = c.color || '#ffffff';
+      const sel = currentColor === c.color ? 'color-swatch-active' : '';
+      return `<div class="color-swatch ${sel}" data-color="${c.color}" title="${c.label}" style="background:${bg};"></div>`;
+    }).join('');
+    colorHtml = `<div class="detail-row detail-edit-row"><span class="detail-label">Color</span><div class="color-palette">${swatches}</div></div>`;
+  }
+
   panel.innerHTML = `
     <div class="detail-row"><span class="detail-label">Code</span><span class="detail-value">${stand.stand_code}</span></div>
     <div class="detail-row"><span class="detail-label">Zone</span><span class="detail-value">${stand.zone || '—'}</span></div>
     <div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">${stand.area_kind}${stand.special_area_type ? ' / ' + stand.special_area_type : ''}</span></div>
     <div class="detail-row"><span class="detail-label">Size</span><span class="detail-value">${stand.size_m2 ? parseFloat(stand.size_m2) + ' m²' : '—'}</span></div>
     <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${statusHtml}</span></div>
+    ${colorHtml}
     <div class="detail-row detail-edit-row">
       <span class="detail-label">Company</span>
       <input class="detail-input" id="detail-company" type="text" value="${escapeHtml(companyVal)}" placeholder="Company name">
@@ -108,6 +137,21 @@ function updateDetailPanel(stand) {
       }
     });
   }
+
+  // Bind color swatch clicks (instant save)
+  document.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.addEventListener('click', async () => {
+      const color = swatch.dataset.color;
+      const newMeta = { ...meta, color: color || undefined };
+      if (!color) delete newMeta.color;
+      try {
+        const updated = await updateStand(stand.id, { metadata: newMeta });
+        state.updateStand(updated);
+      } catch (err) {
+        alert(err.message);
+      }
+    });
+  });
 
   // Bind save button for text fields
   const saveBtn = document.getElementById('btn-save-stand');
