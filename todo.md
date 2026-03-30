@@ -96,25 +96,33 @@
 
 ---
 
-## 🔴 Floor Plan Builder — Sprint 2 (Next)
+## ✅ Floor Plan Builder — Sprint 2 (30 Mart 2026) — COMPLETED
 
-- [ ] Stand renk seçimi (varsayılan beyaz, soluk mat renkler)
-- [ ] PDF/Image background overlay (referans plan yükleme)
-- [ ] Stand duplicate (kopyala)
-- [ ] Stand sürükle-taşı (drag to move)
-- [ ] Version activate/archive (POST /versions/:id/activate — draft→active→archived state machine)
-- [ ] Stand update (PUT /stands/:id — commercial_status, display_label, notes, zone)
-- [ ] Commercial status değiştirme (detail panel dropdown)
-- [ ] Special area creation UX (area_kind='special' with special_area_type selector)
-- [ ] Stats bar live update (real-time recalculation on stand add/remove/status change)
-- [ ] Connected shape validation (cell adjacency check — warn if stand cells are not contiguous)
-- [ ] Hall delete (DELETE /halls/:id — with stand count protection, confirm dialog)
+- [x] Stand update (PUT /stands/:id — general fields, structural=draft only, commercial=active OK)
+- [x] Commercial status change (PUT /stands/:id/status — instant dropdown save)
+- [x] Inline editing in detail panel (company, label, notes + Save Changes button)
+- [x] Stand renk seçimi (10-color pastel palette via metadata.color)
+- [x] Special area type selector (vip, conference, registration, entrance, exit, technical)
+- [x] Version activate/archive (POST /versions/:id/activate — draft→active, old active→archived)
+- [x] Version label/notes update (PUT /versions/:id)
+- [x] Background image overlay (PNG/JPG upload, localStorage, opacity slider, bgLayer)
+- [x] Stats bar live update (standUpdated event wired to updateStats + drawStands)
+- [x] Background image fix (grid rect opacity toggle when bg present)
 
-### Sprint 3+ Scope
-- [ ] Stand split / merge
-- [ ] Version clone (versiyon ve expo bazlı)
-- [ ] Firma atama (LİFFY entegrasyonu hazırlık)
-- [ ] PNG/PDF export (client-side)
+---
+
+## 🔴 Floor Plan Builder — Sprint 3 (Next)
+
+- [ ] Stand split (bölme — selected cells → new stand)
+- [ ] Stand merge (birleştirme — multiple stands → single stand)
+- [ ] Version clone (aynı hall içinde kopyala — all stands + cells)
+- [ ] Clone to new expo (firma atamaları temizle, statüler reset)
+- [ ] Stand duplicate (kopyala-yapıştır — offset cells)
+- [ ] Stand drag-to-move (sürükle-taşı — reposition cells)
+- [ ] PNG/PDF export (client-side Konva.toDataURL + jsPDF)
+- [ ] Background image UX (resize, reposition, hizalama)
+- [ ] Connected shape validation (cell adjacency check)
+- [ ] Sidebar link to existing 15 admin pages
 
 ---
 

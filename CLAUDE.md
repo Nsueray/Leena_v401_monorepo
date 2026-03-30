@@ -976,16 +976,26 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - Spec file: `ELL_FloorPlan_Builder_Spec_v2.md` in repo root
 - **Summary:** 5 DB tables, 8 API endpoints, 6 frontend modules (1 HTML + 5 ES modules), Vanilla JS + Konva.js (CDN), no React, no build tools
 
-**Floor Plan Builder — Sprint 2 Backlog:**
-- Stand renk seçimi (varsayılan beyaz, soluk mat renkler)
-- PDF/Image background overlay (referans plan yükleme)
-- Stand duplicate + drag-to-move
-- Version activate/archive (state machine)
-- Stand update (PUT /stands/:id)
-- Commercial status değiştirme
-- Special area creation (area_kind='special')
-- Stats bar live update
+**Floor Plan Builder — Sprint 2 COMPLETED (30 Mar 2026):**
+- Stand update: `PUT /api/floorplan/stands/:id` — general fields (structural changes require draft, commercial fields allowed on active per Invariant #2)
+- Commercial status change: `PUT /api/floorplan/stands/:id/status` — quick status dropdown in detail panel, instant save, works on active versions
+- Inline editing: detail panel with company name, display label, notes inputs + Save Changes button
+- Stand color selection: 10-color pastel palette stored in `metadata.color` JSONB field. Custom color overrides status color in grid rendering (`getStandColor()` checks metadata first). `darkenColor()` generates matching stroke.
+- Special area type selector: create dialog shows `special_area_type` dropdown (vip, conference, registration, entrance, exit, technical, other) when `area_kind='special'` selected
+- Version activate/archive: `POST /api/floorplan/versions/:id/activate` — draft→active transition, archives current active (transaction). `PUT /api/floorplan/versions/:id` for label/notes update. Activate button (green checkmark) visible only for draft versions.
+- Background image overlay: PNG/JPG upload as reference behind grid. Stored in localStorage (base64, per expo+hall). Opacity slider 5%-100%. Grid background rect becomes semi-transparent when image present. New `bgLayer` below `gridLayer`.
+- Stats bar live update: `standUpdated` event triggers `updateStats()` + `drawStands()` on every status/field change
+- 4 new endpoints: PUT stands/:id, PUT stands/:id/status, POST versions/:id/activate, PUT versions/:id
+- **Summary:** Total 12 API endpoints (8 Sprint 1 + 4 Sprint 2)
+
+**Floor Plan Builder — Sprint 3 Backlog:**
+- Stand split / merge
+- Version clone (same hall + cross-expo)
+- Stand duplicate (copy-paste)
+- Stand drag-to-move
+- PNG/PDF export (client-side)
 - Connected shape validation (cell adjacency)
+- Sidebar link to existing 15 admin pages
 - Hall delete (with protection)
 
 ### v4.0.2 (6 Şubat 2026)

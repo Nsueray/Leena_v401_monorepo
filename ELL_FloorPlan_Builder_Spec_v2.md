@@ -681,18 +681,20 @@ ELL Roadmap v1.1
 
 **Teknoloji kararı değişikliği:** Spec'te react-konva önerilmişti, implementasyonda Vanilla JS + Konva.js (CDN) tercih edildi. Gerekçe: mevcut sistemde React/build tool yok, sıfır altyapı değişikliği.
 
-### Sprint 2: Stand Builder & Versiyonlama (sıradaki)
-- Stand renk seçimi (varsayılan beyaz, soluk mat renkler)
-- PDF/Image background overlay (referans plan yükleme)
-- Stand duplicate (kopyala)
-- Stand sürükle-taşı (drag to move)
-- Version activate/archive (draft→active→archived state machine)
-- Stand update (PUT /stands/:id — commercial_status, display_label, notes, zone)
-- Commercial status değiştirme (detail panel dropdown)
-- Special area oluşturma (area_kind='special' with type selector)
-- Stats bar live update (real-time recalculation)
-- Connected shape validation (cell adjacency check)
-- Hall delete (koruma mantığı ile — stand varsa uyarı)
+### Sprint 2: Stand Builder & Versiyonlama — ✅ TAMAMLANDI (2026-03-30)
+
+**Deliverables:**
+- Stand update: `PUT /stands/:id` general update + `PUT /stands/:id/status` quick status change
+- Inline editing: detail panel with company name, display label, notes, Save Changes button
+- Commercial status dropdown in detail panel (instant save, works on active versions per Invariant #2)
+- Stand renk seçimi: 10-color pastel palette, stored in `metadata.color` JSONB. Custom color overrides status color in rendering.
+- Special area type selector: `special_area_type` dropdown (vip, conference, registration, entrance, exit, technical, other) shown when `area_kind='special'`
+- Version activate/archive: `POST /versions/:id/activate` (draft→active, old active→archived, transaction). `PUT /versions/:id` for label/notes.
+- Background image overlay: PNG/JPG upload behind grid, localStorage persistence (base64, per expo+hall), opacity slider 5%-100%, `bgLayer` below `gridLayer`
+- Stats bar live update: `standUpdated` event triggers real-time recalculation
+- 4 new endpoints (total: 12 API endpoints)
+
+**Not implemented (deferred to Sprint 3):** Stand duplicate, stand drag-to-move, connected shape validation, hall delete
 
 ### Sprint 3: İleri Operasyonlar & Export
 - Stand split (böl)
