@@ -4,7 +4,7 @@
  */
 
 import { state } from './state.js';
-import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion } from './api.js';
+import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion, cloneVersion } from './api.js';
 import { fitToView, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground } from './grid.js';
 import { updateStats } from './stands.js';
 
@@ -95,6 +95,12 @@ export function initToolbar() {
     bgOpacity.addEventListener('input', () => {
       setBackgroundOpacity(parseInt(bgOpacity.value) / 100);
     });
+  }
+
+  // Clone version button
+  const cloneBtn = document.getElementById('btn-clone-version');
+  if (cloneBtn) {
+    cloneBtn.addEventListener('click', handleCloneVersion);
   }
 
   // Activate version button
@@ -227,6 +233,38 @@ async function handleActivateVersion() {
     if (state.currentHall) {
       const versions = await fetchVersions(state.currentHall.id);
       state.setVersions(versions);
+    }
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function handleCloneVersion() {
+  if (!state.currentVersion) return;
+
+  const clear = confirm('Clone this version?\n\nOK = Clone with assignments\nCancel first, then use code if you need to clear assignments.');
+  // Simple: always clone with assignments. clear_assignments=false
+  try {
+    const cloned = await cloneVersion(state.currentVersion.id, false);
+
+    // Reload versions and select the new one
+    if (state.currentHall) {
+      const versions = await fetchVersions(state.currentHall.id);
+      state.setVersions(versions);
+      state.setCurrentVersion(cloned);
+
+      const select = document.getElementById('version-select');
+      if (select) select.value = cloned.id;
+
+      // Load stands for cloned version
+      const { version, stands } = await fetchStands(cloned.id);
+      if (version) {
+        state.gridWidth = version.grid_width;
+        state.gridHeight = version.grid_height;
+      }
+      state.setStands(stands);
+      updateStats();
+      setTimeout(fitToView, 50);
     }
   } catch (err) {
     alert(err.message);

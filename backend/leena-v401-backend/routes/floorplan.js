@@ -322,6 +322,96 @@ router.post('/versions/:id/activate', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/floorplan/versions/:id/clone — Clone version (all stands + cells)
+router.post('/versions/:id/clone', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const versionId = req.params.id;
+    const organizer_id = req.organizer_id;
+    const { clear_assignments } = req.body || {};
+
+    // Verify ownership
+    const check = await client.query(
+      `SELECT v.*, h.id AS hall_id
+       FROM expo_floorplan_versions v
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE v.id = $1 AND h.organizer_id = $2`,
+      [versionId, organizer_id]
+    );
+    if (check.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'Version not found' });
+    }
+
+    const source = check.rows[0];
+
+    // Get next version number
+    const maxV = await client.query(
+      'SELECT COALESCE(MAX(version_number), 0) AS max_num FROM expo_floorplan_versions WHERE hall_id = $1',
+      [source.hall_id]
+    );
+    const nextNum = maxV.rows[0].max_num + 1;
+
+    await client.query('BEGIN');
+
+    // Create new version
+    const newVersionRes = await client.query(
+      `INSERT INTO expo_floorplan_versions (hall_id, version_number, version_label, status, notes, cloned_from_version_id, created_by)
+       VALUES ($1, $2, $3, 'draft', $4, $5, $6) RETURNING *`,
+      [source.hall_id, nextNum, `Clone of v${source.version_number}`, source.notes, versionId, organizer_id]
+    );
+    const newVersion = newVersionRes.rows[0];
+
+    // Copy all stands
+    const standsRes = await client.query('SELECT * FROM expo_stands WHERE floorplan_version_id = $1', [versionId]);
+
+    for (const oldStand of standsRes.rows) {
+      const newStandRes = await client.query(
+        `INSERT INTO expo_stands (
+          floorplan_version_id, stand_code, zone, display_label, area_kind, special_area_type,
+          commercial_status, stand_type, assigned_company_name, company_id, contract_id,
+          reservation_type, reserved_by_user_id, reserved_until, price_per_m2,
+          notes, metadata, created_by
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id`,
+        [
+          newVersion.id, oldStand.stand_code, oldStand.zone, oldStand.display_label,
+          oldStand.area_kind, oldStand.special_area_type,
+          clear_assignments ? 'available' : oldStand.commercial_status,
+          oldStand.stand_type,
+          clear_assignments ? null : oldStand.assigned_company_name,
+          clear_assignments ? null : oldStand.company_id,
+          clear_assignments ? null : oldStand.contract_id,
+          clear_assignments ? null : oldStand.reservation_type,
+          clear_assignments ? null : oldStand.reserved_by_user_id,
+          clear_assignments ? null : oldStand.reserved_until,
+          oldStand.price_per_m2,
+          oldStand.notes, oldStand.metadata, organizer_id
+        ]
+      );
+
+      const newStandId = newStandRes.rows[0].id;
+
+      // Copy cells
+      await client.query(
+        `INSERT INTO expo_stand_cells (stand_id, floorplan_version_id, cell_x, cell_y)
+         SELECT $1, $2, cell_x, cell_y FROM expo_stand_cells WHERE stand_id = $3`,
+        [newStandId, newVersion.id, oldStand.id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.status(201).json({ success: true, version: newVersion });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[floorplan] Error cloning version:', err);
+    res.status(500).json({ success: false, message: 'Failed to clone version' });
+  } finally {
+    client.release();
+  }
+});
+
 // ============================================================
 // STANDS
 // ============================================================

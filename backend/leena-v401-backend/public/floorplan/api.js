@@ -64,6 +64,11 @@ export async function createVersion(hallId, label, notes) {
   return data.version;
 }
 
+export async function cloneVersion(versionId, clearAssignments = false) {
+  const data = await apiCall('POST', `/versions/${versionId}/clone`, { clear_assignments: clearAssignments });
+  return data.version;
+}
+
 export async function activateVersion(versionId) {
   const data = await apiCall('POST', `/versions/${versionId}/activate`);
   return data.version;
