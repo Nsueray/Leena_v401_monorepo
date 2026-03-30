@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion, cloneVersion } from './api.js';
-import { fitToView, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground } from './grid.js';
+import { fitToView, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground } from './grid.js';
 import { updateStats } from './stands.js';
 
 export function initToolbar() {
@@ -95,6 +95,12 @@ export function initToolbar() {
     bgOpacity.addEventListener('input', () => {
       setBackgroundOpacity(parseInt(bgOpacity.value) / 100);
     });
+  }
+
+  // Export PNG button
+  const exportBtn = document.getElementById('btn-export-png');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportPNG);
   }
 
   // Clone version button

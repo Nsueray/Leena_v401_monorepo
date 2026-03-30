@@ -540,6 +540,44 @@ function getCellBBox(cells) {
   };
 }
 
+export function exportPNG() {
+  if (!stage || !state.gridWidth) return;
+
+  // Temporarily reset transform to capture full grid at 2x
+  const oldScale = stage.scaleX();
+  const oldPos = stage.position();
+
+  stage.scale({ x: 1, y: 1 });
+  stage.position({ x: 0, y: 0 });
+
+  // Hide interaction layer (selection rects, hover)
+  if (interactionLayer) interactionLayer.visible(false);
+
+  const gridW = state.gridWidth * CELL_SIZE;
+  const gridH = state.gridHeight * CELL_SIZE;
+
+  const dataUrl = stage.toDataURL({
+    x: 0, y: 0,
+    width: gridW,
+    height: gridH,
+    pixelRatio: 2
+  });
+
+  // Restore
+  if (interactionLayer) interactionLayer.visible(true);
+  stage.scale({ x: oldScale, y: oldScale });
+  stage.position(oldPos);
+  stage.batchDraw();
+
+  // Download
+  const hallName = (state.currentHall?.name || 'hall').replace(/\s+/g, '-');
+  const vNum = state.currentVersion?.version_number || 0;
+  const link = document.createElement('a');
+  link.download = `floorplan-${hallName}-v${vNum}.png`;
+  link.href = dataUrl;
+  link.click();
+}
+
 export function fitToView() {
   if (!stage || !state.gridWidth) return;
 
