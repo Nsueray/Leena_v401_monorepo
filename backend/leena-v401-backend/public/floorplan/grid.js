@@ -41,6 +41,7 @@ let standLayer = null;
 let interactionLayer = null;
 let selectionRects = [];
 let hoverRect = null;
+let isDrawing = false;  // drag-select state
 
 export function initGrid(containerId) {
   const container = document.getElementById(containerId);
@@ -87,55 +88,75 @@ export function initGrid(containerId) {
     });
   });
 
-  // Cell click handler
-  stage.on('click tap', (e) => {
-    if (e.target === stage) {
-      // Clicked on empty stage — clear selection if in select mode
-      if (state.tool === 'select') {
-        state.clearSelection();
-      }
-      return;
-    }
-
-    const pos = stage.getPointerPosition();
+  // --- Pointer → cell helper ---
+  function pointerToCell(pos) {
+    if (!pos) return null;
     const transform = stage.getAbsoluteTransform().copy().invert();
-    const realPos = transform.point(pos);
-    const cellX = Math.floor(realPos.x / CELL_SIZE);
-    const cellY = Math.floor(realPos.y / CELL_SIZE);
+    const real = transform.point(pos);
+    const cx = Math.floor(real.x / CELL_SIZE);
+    const cy = Math.floor(real.y / CELL_SIZE);
+    if (cx < 0 || cy < 0 || cx >= state.gridWidth || cy >= state.gridHeight) return null;
+    return { x: cx, y: cy };
+  }
 
-    if (cellX < 0 || cellY < 0 || cellX >= state.gridWidth || cellY >= state.gridHeight) return;
+  // --- Mouse down: start drag-select in draw mode, or handle click for select/erase ---
+  stage.on('mousedown touchstart', (e) => {
+    const cell = pointerToCell(stage.getPointerPosition());
 
-    const occupied = state.getOccupiedCells();
-    const key = `${cellX},${cellY}`;
-
-    if (state.tool === 'select') {
-      const stand = state.getStandAtCell(cellX, cellY);
-      state.selectStand(stand);
-    } else if (state.tool === 'draw') {
-      if (!occupied.has(key)) {
-        state.toggleCell(cellX, cellY);
-      }
-    } else if (state.tool === 'erase') {
-      if (state.selectedCells.has(key)) {
-        state.toggleCell(cellX, cellY);
+    if (state.tool === 'draw') {
+      // Disable stage drag while drawing
+      stage.draggable(false);
+      isDrawing = true;
+      if (cell) {
+        const key = `${cell.x},${cell.y}`;
+        if (!state.getOccupiedCells().has(key) && !state.selectedCells.has(key)) {
+          state.toggleCell(cell.x, cell.y);
+        }
       }
     }
   });
 
-  // Mouse move for hover
-  stage.on('mousemove', (e) => {
+  // --- Mouse move: drag-select in draw mode + hover ---
+  stage.on('mousemove touchmove', (e) => {
     const pos = stage.getPointerPosition();
-    if (!pos) return;
-    const transform = stage.getAbsoluteTransform().copy().invert();
-    const realPos = transform.point(pos);
-    const cellX = Math.floor(realPos.x / CELL_SIZE);
-    const cellY = Math.floor(realPos.y / CELL_SIZE);
+    const cell = pointerToCell(pos);
 
-    if (cellX >= 0 && cellY >= 0 && cellX < state.gridWidth && cellY < state.gridHeight) {
-      state.setHoveredCell({ x: cellX, y: cellY });
-    } else {
-      state.setHoveredCell(null);
+    // Hover update
+    state.setHoveredCell(cell);
+
+    // Drag-select: add cells while mouse is held in draw mode
+    if (isDrawing && state.tool === 'draw' && cell) {
+      const key = `${cell.x},${cell.y}`;
+      if (!state.getOccupiedCells().has(key) && !state.selectedCells.has(key)) {
+        state.toggleCell(cell.x, cell.y);
+      }
     }
+  });
+
+  // --- Mouse up: end drag-select ---
+  stage.on('mouseup touchend', () => {
+    if (isDrawing) {
+      isDrawing = false;
+      stage.draggable(true);
+    }
+  });
+
+  // --- Click: select stand or erase cell (non-draw modes) ---
+  stage.on('click tap', (e) => {
+    const cell = pointerToCell(stage.getPointerPosition());
+
+    if (state.tool === 'select') {
+      if (!cell) { state.clearSelection(); return; }
+      const stand = state.getStandAtCell(cell.x, cell.y);
+      state.selectStand(stand);
+    } else if (state.tool === 'erase') {
+      if (!cell) return;
+      const key = `${cell.x},${cell.y}`;
+      if (state.selectedCells.has(key)) {
+        state.toggleCell(cell.x, cell.y);
+      }
+    }
+    // draw mode handled by mousedown/mousemove drag
   });
 
   // Listen to state events
@@ -206,17 +227,57 @@ export function drawStands() {
     const isSelected = state.selectedStand && state.selectedStand.id === stand.id;
     const colorInfo = getStandColor(stand);
 
-    // Draw each cell
+    // Build a Set of this stand's cells for boundary detection
+    const cellSet = new Set();
+    for (const c of stand.cells) cellSet.add(`${c.x},${c.y}`);
+
+    // Draw each cell as a filled rect with NO stroke (clean interior)
     for (const cell of stand.cells) {
       standLayer.add(new Konva.Rect({
-        x: cell.x * CELL_SIZE + 0.5,
-        y: cell.y * CELL_SIZE + 0.5,
-        width: CELL_SIZE - 1,
-        height: CELL_SIZE - 1,
+        x: cell.x * CELL_SIZE,
+        y: cell.y * CELL_SIZE,
+        width: CELL_SIZE,
+        height: CELL_SIZE,
         fill: colorInfo.fill,
-        stroke: isSelected ? '#1d4ed8' : colorInfo.stroke,
-        strokeWidth: isSelected ? 2 : 1,
-        cornerRadius: 1
+        stroke: null,
+        listening: false
+      }));
+    }
+
+    // Draw outer boundary: for each cell, draw edges that face non-stand cells
+    const boundaryStroke = isSelected ? '#1d4ed8' : colorInfo.stroke;
+    const boundaryWidth = isSelected ? 2.5 : 1.5;
+    const boundaryLines = [];
+
+    for (const cell of stand.cells) {
+      const px = cell.x * CELL_SIZE;
+      const py = cell.y * CELL_SIZE;
+
+      // Top edge: no neighbor above
+      if (!cellSet.has(`${cell.x},${cell.y - 1}`)) {
+        boundaryLines.push([px, py, px + CELL_SIZE, py]);
+      }
+      // Bottom edge: no neighbor below
+      if (!cellSet.has(`${cell.x},${cell.y + 1}`)) {
+        boundaryLines.push([px, py + CELL_SIZE, px + CELL_SIZE, py + CELL_SIZE]);
+      }
+      // Left edge: no neighbor left
+      if (!cellSet.has(`${cell.x - 1},${cell.y}`)) {
+        boundaryLines.push([px, py, px, py + CELL_SIZE]);
+      }
+      // Right edge: no neighbor right
+      if (!cellSet.has(`${cell.x + 1},${cell.y}`)) {
+        boundaryLines.push([px + CELL_SIZE, py, px + CELL_SIZE, py + CELL_SIZE]);
+      }
+    }
+
+    for (const pts of boundaryLines) {
+      standLayer.add(new Konva.Line({
+        points: pts,
+        stroke: boundaryStroke,
+        strokeWidth: boundaryWidth,
+        lineCap: 'round',
+        listening: false
       }));
     }
 
