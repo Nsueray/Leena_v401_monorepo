@@ -76,6 +76,16 @@ export async function createStand(versionId, standData) {
   return data.stand;
 }
 
+export async function updateStand(standId, fields) {
+  const data = await apiCall('PUT', `/stands/${standId}`, fields);
+  return data.stand;
+}
+
+export async function updateStandStatus(standId, commercialStatus) {
+  const data = await apiCall('PUT', `/stands/${standId}/status`, { commercial_status: commercialStatus });
+  return data.stand;
+}
+
 export async function deleteStand(standId) {
   return apiCall('DELETE', `/stands/${standId}`);
 }

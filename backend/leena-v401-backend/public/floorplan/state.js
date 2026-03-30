@@ -119,6 +119,17 @@ class FloorPlanState {
     this.emit('standAdded', stand);
   }
 
+  updateStand(updatedStand) {
+    const idx = this.stands.findIndex(s => s.id === updatedStand.id);
+    if (idx !== -1) {
+      this.stands[idx] = updatedStand;
+    }
+    if (this.selectedStand && this.selectedStand.id === updatedStand.id) {
+      this.selectedStand = updatedStand;
+    }
+    this.emit('standUpdated', updatedStand);
+  }
+
   removeStand(standId) {
     this._removeStandFromCellMap(standId);
     this.stands = this.stands.filter(s => s.id !== standId);

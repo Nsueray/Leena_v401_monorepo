@@ -1,10 +1,10 @@
 /**
  * Floor Plan Builder — Stands Module
- * Stand creation, deletion, and dialog management.
+ * Stand creation, deletion, editing, status change, and dialog management.
  */
 
 import { state } from './state.js';
-import { createStand, deleteStand } from './api.js';
+import { createStand, deleteStand, updateStand, updateStandStatus } from './api.js';
 import { drawStands, drawSelection } from './grid.js';
 
 export function initStandActions() {
@@ -22,6 +22,7 @@ export function initStandActions() {
 
   // Listen for stand selection to update detail panel
   state.on('standSelected', updateDetailPanel);
+  state.on('standUpdated', (stand) => { updateDetailPanel(stand); updateStats(); });
   state.on('selectionChanged', updateCreateButton);
   state.on('standsLoaded', updateStats);
   state.on('standAdded', updateStats);
@@ -36,6 +37,16 @@ function updateCreateButton() {
   btn.textContent = count > 0 ? `Create Stand (${count}m²)` : 'Create Stand';
 }
 
+// --- Detail Panel with inline editing ---
+
+const STATUS_OPTIONS = [
+  { value: 'available', label: 'Available' },
+  { value: 'hold', label: 'Hold' },
+  { value: 'reserved', label: 'Reserved' },
+  { value: 'pending_contract', label: 'Pending Contract' },
+  { value: 'sold', label: 'Sold' }
+];
+
 function updateDetailPanel(stand) {
   const panel = document.getElementById('stand-detail');
   if (!panel) return;
@@ -47,23 +58,94 @@ function updateDetailPanel(stand) {
     return;
   }
 
-  const statusBadge = getStatusBadgeHtml(stand);
+  const isStandType = stand.area_kind === 'stand';
+
+  // Status dropdown (only for area_kind='stand')
+  let statusHtml;
+  if (isStandType) {
+    const opts = STATUS_OPTIONS.map(o =>
+      `<option value="${o.value}" ${stand.commercial_status === o.value ? 'selected' : ''}>${o.label}</option>`
+    ).join('');
+    statusHtml = `<select class="detail-select" id="detail-status">${opts}</select>`;
+  } else {
+    statusHtml = getStatusBadgeHtml(stand);
+  }
+
+  // Company name input (editable for all stands)
+  const companyVal = stand.assigned_company_name || '';
 
   panel.innerHTML = `
     <div class="detail-row"><span class="detail-label">Code</span><span class="detail-value">${stand.stand_code}</span></div>
     <div class="detail-row"><span class="detail-label">Zone</span><span class="detail-value">${stand.zone || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">${stand.area_kind}</span></div>
+    <div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">${stand.area_kind}${stand.special_area_type ? ' / ' + stand.special_area_type : ''}</span></div>
     <div class="detail-row"><span class="detail-label">Size</span><span class="detail-value">${stand.size_m2 ? parseFloat(stand.size_m2) + ' m²' : '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${statusBadge}</span></div>
-    <div class="detail-row"><span class="detail-label">Company</span><span class="detail-value">${stand.assigned_company_name || '—'}</span></div>
-    <div class="detail-row"><span class="detail-label">Stand Type</span><span class="detail-value">${stand.stand_type || '—'}</span></div>
-    ${stand.notes ? `<div class="detail-row"><span class="detail-label">Notes</span><span class="detail-value">${stand.notes}</span></div>` : ''}
+    <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${statusHtml}</span></div>
+    <div class="detail-row detail-edit-row">
+      <span class="detail-label">Company</span>
+      <input class="detail-input" id="detail-company" type="text" value="${escapeHtml(companyVal)}" placeholder="Company name">
+    </div>
+    <div class="detail-row detail-edit-row">
+      <span class="detail-label">Label</span>
+      <input class="detail-input" id="detail-label" type="text" value="${escapeHtml(stand.display_label || '')}" placeholder="Display label">
+    </div>
+    <div class="detail-row detail-edit-row">
+      <span class="detail-label">Notes</span>
+      <input class="detail-input" id="detail-notes" type="text" value="${escapeHtml(stand.notes || '')}" placeholder="Notes">
+    </div>
+    <button class="btn btn-primary btn-sm btn-block" id="btn-save-stand" style="margin-top:10px;"><i class="bi bi-check-lg"></i> Save Changes</button>
   `;
+
+  // Bind status dropdown change (instant save)
+  const statusSelect = document.getElementById('detail-status');
+  if (statusSelect) {
+    statusSelect.addEventListener('change', async () => {
+      try {
+        const updated = await updateStandStatus(stand.id, statusSelect.value);
+        state.updateStand(updated);
+      } catch (err) {
+        alert(err.message);
+        statusSelect.value = stand.commercial_status;
+      }
+    });
+  }
+
+  // Bind save button for text fields
+  const saveBtn = document.getElementById('btn-save-stand');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', async () => {
+      const fields = {};
+      const newCompany = document.getElementById('detail-company')?.value?.trim() ?? '';
+      const newLabel = document.getElementById('detail-label')?.value?.trim() ?? '';
+      const newNotes = document.getElementById('detail-notes')?.value?.trim() ?? '';
+
+      if (newCompany !== (stand.assigned_company_name || '')) fields.assigned_company_name = newCompany;
+      if (newLabel !== (stand.display_label || '')) fields.display_label = newLabel;
+      if (newNotes !== (stand.notes || '')) fields.notes = newNotes;
+
+      if (Object.keys(fields).length === 0) return;
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = 'Saving...';
+      try {
+        const updated = await updateStand(stand.id, fields);
+        state.updateStand(updated);
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Changes';
+      }
+    });
+  }
 
   const deleteBtn = document.getElementById('btn-delete-stand');
   if (deleteBtn) {
     deleteBtn.style.display = state.isDraft() ? 'inline-flex' : 'none';
   }
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function getStatusBadgeHtml(stand) {
@@ -125,6 +207,7 @@ export async function handleCreateStand(e) {
   const zone = document.getElementById('dialog-zone')?.value?.trim();
   const label = document.getElementById('dialog-label')?.value?.trim();
   const areaKind = document.getElementById('dialog-area-kind')?.value || 'stand';
+  const specialType = document.getElementById('dialog-special-type')?.value || undefined;
 
   const cells = [];
   for (const key of state.selectedCells) {
@@ -143,6 +226,7 @@ export async function handleCreateStand(e) {
       cells
     };
     if (code) standData.stand_code = code;
+    if (areaKind === 'special' && specialType) standData.special_area_type = specialType;
 
     const stand = await createStand(state.currentVersion.id, standData);
 

@@ -11,6 +11,12 @@
  *   GET    /api/floorplan/versions/:versionId/stands   — All stands + cells for version
  *   POST   /api/floorplan/versions/:versionId/stands   — Create stand with cells (transaction)
  *   DELETE /api/floorplan/stands/:id                   — Delete stand (cells cascade)
+ *
+ * Sprint 2 Endpoints:
+ *   PUT    /api/floorplan/stands/:id                   — Update stand (general fields)
+ *   PUT    /api/floorplan/stands/:id/status            — Update commercial status only
+ *   POST   /api/floorplan/versions/:id/activate        — Activate version (draft→active)
+ *   PUT    /api/floorplan/versions/:id                 — Update version label/notes
  */
 
 const express = require('express');
@@ -430,6 +436,135 @@ router.post('/versions/:versionId/stands', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to create stand' });
   } finally {
     client.release();
+  }
+});
+
+// PUT /api/floorplan/stands/:id — Update stand fields
+// Structural fields (stand_code, zone, area_kind, stand_type) require draft version
+// Commercial fields (commercial_status, assigned_company_name, display_label, notes, metadata) allowed on active too
+router.put('/stands/:id', authMiddleware, async (req, res) => {
+  try {
+    const standId = req.params.id;
+    const organizer_id = req.organizer_id;
+    const { stand_code, zone, display_label, area_kind, special_area_type,
+            commercial_status, stand_type, assigned_company_name, notes, metadata } = req.body;
+
+    // Verify ownership and get version status
+    const standCheck = await pool.query(
+      `SELECT s.*, v.status AS version_status
+       FROM expo_stands s
+       JOIN expo_floorplan_versions v ON v.id = s.floorplan_version_id
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE s.id = $1 AND h.organizer_id = $2`,
+      [standId, organizer_id]
+    );
+    if (standCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Stand not found' });
+    }
+
+    const current = standCheck.rows[0];
+    const isDraft = current.version_status === 'draft';
+
+    // Structural fields require draft
+    const structuralFields = { stand_code, zone, area_kind, special_area_type, stand_type };
+    const hasStructuralChange = Object.values(structuralFields).some(v => v !== undefined);
+    if (hasStructuralChange && !isDraft) {
+      return res.status(400).json({ success: false, message: 'Structural changes (code, zone, area_kind, stand_type) require draft version' });
+    }
+
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (stand_code !== undefined) { updates.push(`stand_code = $${idx++}`); values.push(stand_code); }
+    if (zone !== undefined) { updates.push(`zone = $${idx++}`); values.push(zone); }
+    if (display_label !== undefined) { updates.push(`display_label = $${idx++}`); values.push(display_label); }
+    if (area_kind !== undefined) { updates.push(`area_kind = $${idx++}`); values.push(area_kind); }
+    if (special_area_type !== undefined) { updates.push(`special_area_type = $${idx++}`); values.push(special_area_type); }
+    if (commercial_status !== undefined) { updates.push(`commercial_status = $${idx++}`); values.push(commercial_status); }
+    if (stand_type !== undefined) { updates.push(`stand_type = $${idx++}`); values.push(stand_type); }
+    if (assigned_company_name !== undefined) { updates.push(`assigned_company_name = $${idx++}`); values.push(assigned_company_name); }
+    if (notes !== undefined) { updates.push(`notes = $${idx++}`); values.push(notes); }
+    if (metadata !== undefined) { updates.push(`metadata = $${idx++}`); values.push(JSON.stringify(metadata)); }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+
+    updates.push(`updated_by = $${idx++}`); values.push(organizer_id);
+    updates.push(`updated_at = NOW()`);
+    values.push(standId);
+
+    const result = await pool.query(
+      `UPDATE expo_stands SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+
+    // Re-attach cells for frontend
+    const cells = await pool.query(
+      'SELECT cell_x, cell_y FROM expo_stand_cells WHERE stand_id = $1',
+      [standId]
+    );
+
+    res.json({
+      success: true,
+      stand: { ...result.rows[0], cells: cells.rows.map(c => ({ x: c.cell_x, y: c.cell_y })) }
+    });
+  } catch (err) {
+    console.error('[floorplan] Error updating stand:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ success: false, message: 'Stand code already exists in this version' });
+    }
+    res.status(500).json({ success: false, message: 'Failed to update stand' });
+  }
+});
+
+// PUT /api/floorplan/stands/:id/status — Quick status change (allowed on active versions)
+router.put('/stands/:id/status', authMiddleware, async (req, res) => {
+  try {
+    const standId = req.params.id;
+    const organizer_id = req.organizer_id;
+    const { commercial_status } = req.body;
+
+    const validStatuses = ['available', 'hold', 'reserved', 'pending_contract', 'sold'];
+    if (!commercial_status || !validStatuses.includes(commercial_status)) {
+      return res.status(400).json({ success: false, message: `commercial_status must be one of: ${validStatuses.join(', ')}` });
+    }
+
+    // Verify ownership (no draft requirement — commercial changes allowed on active)
+    const standCheck = await pool.query(
+      `SELECT s.id, s.area_kind
+       FROM expo_stands s
+       JOIN expo_floorplan_versions v ON v.id = s.floorplan_version_id
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE s.id = $1 AND h.organizer_id = $2`,
+      [standId, organizer_id]
+    );
+    if (standCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Stand not found' });
+    }
+    if (standCheck.rows[0].area_kind !== 'stand') {
+      return res.status(400).json({ success: false, message: 'Cannot set commercial status on special/blocked areas' });
+    }
+
+    const result = await pool.query(
+      `UPDATE expo_stands SET commercial_status = $1, updated_by = $2, updated_at = NOW()
+       WHERE id = $3 RETURNING *`,
+      [commercial_status, organizer_id, standId]
+    );
+
+    const cells = await pool.query(
+      'SELECT cell_x, cell_y FROM expo_stand_cells WHERE stand_id = $1',
+      [standId]
+    );
+
+    res.json({
+      success: true,
+      stand: { ...result.rows[0], cells: cells.rows.map(c => ({ x: c.cell_x, y: c.cell_y })) }
+    });
+  } catch (err) {
+    console.error('[floorplan] Error updating stand status:', err);
+    res.status(500).json({ success: false, message: 'Failed to update status' });
   }
 });
 

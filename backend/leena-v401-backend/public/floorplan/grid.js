@@ -218,6 +218,7 @@ export function initGrid(containerId) {
   state.on('selectionChanged', () => { drawSelection(); });
   state.on('hoverChanged', () => { drawHover(); });
   state.on('standSelected', () => { drawStands(); });
+  state.on('standUpdated', () => { drawStands(); });
 
   window.addEventListener('resize', () => {
     if (!stage) return;
