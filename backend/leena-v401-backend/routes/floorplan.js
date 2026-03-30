@@ -665,6 +665,144 @@ router.put('/stands/:id/status', authMiddleware, async (req, res) => {
   }
 });
 
+// POST /api/floorplan/stands/:id/split — Split stand into multiple new stands
+router.post('/stands/:id/split', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const standId = req.params.id;
+    const organizer_id = req.organizer_id;
+    const { new_stands } = req.body;
+
+    if (!new_stands || !Array.isArray(new_stands) || new_stands.length < 2) {
+      client.release();
+      return res.status(400).json({ success: false, message: 'new_stands must be an array with at least 2 entries' });
+    }
+
+    // Verify ownership, draft status, and get original stand + cells
+    const standCheck = await client.query(
+      `SELECT s.*, v.status AS version_status, v.id AS version_id
+       FROM expo_stands s
+       JOIN expo_floorplan_versions v ON v.id = s.floorplan_version_id
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE s.id = $1 AND h.organizer_id = $2`,
+      [standId, organizer_id]
+    );
+    if (standCheck.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'Stand not found' });
+    }
+
+    const original = standCheck.rows[0];
+    if (original.version_status !== 'draft') {
+      client.release();
+      return res.status(400).json({ success: false, message: 'Can only split stands in draft versions' });
+    }
+
+    // Get original cells
+    const origCellsRes = await client.query(
+      'SELECT cell_x, cell_y FROM expo_stand_cells WHERE stand_id = $1',
+      [standId]
+    );
+    const origCellSet = new Set(origCellsRes.rows.map(c => `${c.cell_x},${c.cell_y}`));
+
+    // Validate: union of all new_stands cells must equal original cells exactly
+    const allNewCells = new Set();
+    for (const ns of new_stands) {
+      if (!ns.cells || !Array.isArray(ns.cells) || ns.cells.length === 0) {
+        client.release();
+        return res.status(400).json({ success: false, message: 'Each new stand must have non-empty cells array' });
+      }
+      for (const c of ns.cells) {
+        const key = `${c.x},${c.y}`;
+        if (!origCellSet.has(key)) {
+          client.release();
+          return res.status(400).json({ success: false, message: `Cell (${c.x},${c.y}) is not part of the original stand` });
+        }
+        if (allNewCells.has(key)) {
+          client.release();
+          return res.status(400).json({ success: false, message: `Cell (${c.x},${c.y}) is assigned to multiple new stands` });
+        }
+        allNewCells.add(key);
+      }
+    }
+    if (allNewCells.size !== origCellSet.size) {
+      client.release();
+      return res.status(400).json({ success: false, message: `All original cells must be assigned. Original: ${origCellSet.size}, assigned: ${allNewCells.size}` });
+    }
+
+    const versionId = original.version_id;
+
+    await client.query('BEGIN');
+
+    // Delete original stand (cells cascade)
+    await client.query('DELETE FROM expo_stands WHERE id = $1', [standId]);
+
+    // Create new stands
+    const createdStands = [];
+    for (const ns of new_stands) {
+      const code = ns.stand_code || `__temp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+      const standRes = await client.query(
+        `INSERT INTO expo_stands (
+          floorplan_version_id, stand_code, zone, display_label, area_kind, special_area_type,
+          commercial_status, stand_type, notes, metadata, created_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [
+          versionId, code, original.zone, ns.display_label || null,
+          original.area_kind, original.special_area_type,
+          original.commercial_status, original.stand_type,
+          null, original.metadata || '{}', organizer_id
+        ]
+      );
+
+      let newStand = standRes.rows[0];
+
+      // Auto-generate code if not provided
+      if (!ns.stand_code) {
+        const autoCode = `S-${newStand.id}`;
+        const upd = await client.query('UPDATE expo_stands SET stand_code = $1 WHERE id = $2 RETURNING *', [autoCode, newStand.id]);
+        newStand = upd.rows[0];
+      }
+
+      // Insert cells
+      const cellValues = [];
+      const cellParams = [];
+      let pi = 1;
+      for (const c of ns.cells) {
+        cellValues.push(`($${pi++}, $${pi++}, $${pi++}, $${pi++})`);
+        cellParams.push(newStand.id, versionId, c.x, c.y);
+      }
+      await client.query(
+        `INSERT INTO expo_stand_cells (stand_id, floorplan_version_id, cell_x, cell_y) VALUES ${cellValues.join(', ')}`,
+        cellParams
+      );
+
+      createdStands.push({ ...newStand, cells: ns.cells });
+    }
+
+    await client.query('COMMIT');
+
+    // Re-read to get trigger-updated size_m2
+    const finalStands = [];
+    for (const cs of createdStands) {
+      const r = await pool.query('SELECT * FROM expo_stands WHERE id = $1', [cs.id]);
+      finalStands.push({ ...r.rows[0], cells: cs.cells });
+    }
+
+    res.json({ success: true, stands: finalStands });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[floorplan] Error splitting stand:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ success: false, message: 'Stand code conflict during split' });
+    }
+    res.status(500).json({ success: false, message: 'Failed to split stand' });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /api/floorplan/stands/:id
 router.delete('/stands/:id', authMiddleware, async (req, res) => {
   try {

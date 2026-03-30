@@ -4,7 +4,7 @@
  */
 
 import { state } from './state.js';
-import { createStand, deleteStand, updateStand, updateStandStatus } from './api.js';
+import { createStand, deleteStand, updateStand, updateStandStatus, splitStand } from './api.js';
 import { drawStands, drawSelection } from './grid.js';
 
 export function initStandActions() {
@@ -186,6 +186,17 @@ function updateDetailPanel(stand) {
   if (deleteBtn) {
     deleteBtn.style.display = state.isDraft() ? 'inline-flex' : 'none';
   }
+
+  // Split button (only for stands with 2+ cells, draft only)
+  const splitBtn = document.getElementById('btn-split-stand');
+  if (splitBtn) {
+    const canSplit = state.isDraft() && stand.cells && stand.cells.length >= 2 && stand.area_kind === 'stand';
+    splitBtn.style.display = canSplit ? 'inline-flex' : 'none';
+    splitBtn.onclick = () => {
+      state.enterSplitMode(stand);
+      showSplitUI(stand);
+    };
+  }
 }
 
 function escapeHtml(str) {
@@ -300,4 +311,84 @@ async function handleDeleteStand() {
   } catch (err) {
     alert(err.message);
   }
+}
+
+// --- Split Mode ---
+
+function showSplitUI(stand) {
+  const panel = document.getElementById('stand-detail');
+  if (!panel) return;
+
+  const totalCells = stand.cells ? stand.cells.length : 0;
+
+  panel.innerHTML = `
+    <div style="background:#dbeafe;border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="font-size:12px;font-weight:600;color:#1e40af;margin-bottom:4px;">Split Mode</div>
+      <div style="font-size:11px;color:#1e40af;">Click cells to assign to <strong>Stand B</strong> (blue). Remaining = <strong>Stand A</strong>.</div>
+    </div>
+    <div class="detail-row"><span class="detail-label">Original</span><span class="detail-value">${stand.stand_code} (${totalCells}m²)</span></div>
+    <div class="detail-row"><span class="detail-label">Stand A</span><span class="detail-value" id="split-a-count">${totalCells} cells</span></div>
+    <div class="detail-row"><span class="detail-label">Stand B</span><span class="detail-value" id="split-b-count">0 cells</span></div>
+    <div style="display:flex;gap:6px;margin-top:12px;">
+      <button class="btn btn-primary btn-sm" id="btn-confirm-split" disabled style="flex:1;justify-content:center;">Confirm Split</button>
+      <button class="btn btn-secondary btn-sm" id="btn-cancel-split" style="flex:1;justify-content:center;background:#f3f4f6;border-color:#e2e8f0;">Cancel</button>
+    </div>
+  `;
+
+  // Update counts on split cell changes
+  const updateCounts = () => {
+    const bCount = state.splitCells.size;
+    const aCount = totalCells - bCount;
+    const aEl = document.getElementById('split-a-count');
+    const bEl = document.getElementById('split-b-count');
+    const confirmBtn = document.getElementById('btn-confirm-split');
+    if (aEl) aEl.textContent = `${aCount} cells`;
+    if (bEl) bEl.textContent = `${bCount} cells`;
+    if (confirmBtn) confirmBtn.disabled = bCount === 0 || aCount === 0;
+  };
+  state.on('splitCellsChanged', updateCounts);
+
+  document.getElementById('btn-cancel-split').addEventListener('click', () => {
+    state.off('splitCellsChanged', updateCounts);
+    state.exitSplitMode();
+    updateDetailPanel(stand);
+  });
+
+  document.getElementById('btn-confirm-split').addEventListener('click', async () => {
+    const codeA = prompt('Stand code for A (remaining):', stand.stand_code + 'a') || '';
+    const codeB = prompt('Stand code for B (selected):', stand.stand_code + 'b') || '';
+
+    const allCells = stand.cells || [];
+    const cellsB = [];
+    const cellsA = [];
+    for (const c of allCells) {
+      if (state.splitCells.has(`${c.x},${c.y}`)) {
+        cellsB.push(c);
+      } else {
+        cellsA.push(c);
+      }
+    }
+
+    const confirmBtn = document.getElementById('btn-confirm-split');
+    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Splitting...'; }
+
+    try {
+      const newStands = await splitStand(stand.id, [
+        { stand_code: codeA.trim() || undefined, cells: cellsA },
+        { stand_code: codeB.trim() || undefined, cells: cellsB }
+      ]);
+
+      state.off('splitCellsChanged', updateCounts);
+      state.exitSplitMode();
+
+      // Remove old, add new
+      state.removeStand(stand.id);
+      for (const ns of newStands) {
+        state.addStand(ns);
+      }
+    } catch (err) {
+      alert(err.message);
+      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm Split'; }
+    }
+  });
 }

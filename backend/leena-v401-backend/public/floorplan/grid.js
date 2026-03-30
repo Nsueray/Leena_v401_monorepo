@@ -195,16 +195,32 @@ export function initGrid(containerId) {
     stage.draggable(true);
   });
 
-  // --- Click: select stand or erase cell (non-draw modes) ---
+  // --- Click: select stand, erase cell, or split cell assignment ---
   stage.on('click tap', (e) => {
     if (state.tool === 'draw') return; // handled by mousedown/mouseup
 
     const cell = pointerToCell(stage.getPointerPosition());
 
+    // Split mode: toggle cells between stand A and B
+    if (state.splitMode && cell) {
+      if (!state.splitStand) return;
+      // Only allow toggling cells that belong to the stand being split
+      const stand = state.getStandAtCell(cell.x, cell.y);
+      if (stand && stand.id === state.splitStand.id) {
+        state.toggleSplitCell(cell.x, cell.y);
+      }
+      return;
+    }
+
     if (state.tool === 'select') {
       if (!cell) { state.clearSelection(); return; }
       const stand = state.getStandAtCell(cell.x, cell.y);
-      state.selectStand(stand);
+      // Shift+click for multi-select (merge)
+      if (e.evt && e.evt.shiftKey && stand) {
+        state.toggleStandSelection(stand);
+      } else {
+        state.selectStand(stand);
+      }
     } else if (state.tool === 'erase') {
       if (!cell) return;
       const key = `${cell.x},${cell.y}`;
@@ -223,6 +239,8 @@ export function initGrid(containerId) {
   state.on('hoverChanged', () => { drawHover(); });
   state.on('standSelected', () => { drawStands(); });
   state.on('standUpdated', () => { drawStands(); });
+  state.on('splitCellsChanged', () => { drawStands(); drawSelection(); });
+  state.on('splitModeChanged', () => { drawStands(); drawSelection(); });
 
   window.addEventListener('resize', () => {
     if (!stage) return;
@@ -282,6 +300,8 @@ export function drawStands() {
     if (!stand.cells || stand.cells.length === 0) continue;
 
     const isSelected = state.selectedStand && state.selectedStand.id === stand.id;
+    const isMultiSelected = state.selectedStands.some(s => s.id === stand.id);
+    const isSplitTarget = state.splitMode && state.splitStand && state.splitStand.id === stand.id;
     const colorInfo = getStandColor(stand);
 
     // Build a Set of this stand's cells for boundary detection
@@ -290,20 +310,27 @@ export function drawStands() {
 
     // Draw each cell as a filled rect with NO stroke (clean interior)
     for (const cell of stand.cells) {
+      const key = `${cell.x},${cell.y}`;
+      // In split mode: cells in splitCells set get a different color (stand B)
+      let cellFill = colorInfo.fill;
+      if (isSplitTarget && state.splitCells.has(key)) {
+        cellFill = '#bfdbfe'; // light blue for "new stand B"
+      }
+
       standLayer.add(new Konva.Rect({
         x: cell.x * CELL_SIZE,
         y: cell.y * CELL_SIZE,
         width: CELL_SIZE,
         height: CELL_SIZE,
-        fill: colorInfo.fill,
+        fill: cellFill,
         stroke: null,
         listening: false
       }));
     }
 
     // Draw outer boundary: for each cell, draw edges that face non-stand cells
-    const boundaryStroke = isSelected ? '#1d4ed8' : colorInfo.stroke;
-    const boundaryWidth = isSelected ? 2.5 : 1.5;
+    const boundaryStroke = (isSelected || isMultiSelected) ? '#1d4ed8' : colorInfo.stroke;
+    const boundaryWidth = (isSelected || isMultiSelected) ? 2.5 : 1.5;
     const boundaryLines = [];
 
     for (const cell of stand.cells) {
