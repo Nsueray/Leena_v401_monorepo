@@ -664,33 +664,50 @@ ELL Roadmap v1.1
 
 ## 13. Sprint Planı (MVP Tahmini)
 
-### Sprint 1: Altyapı (1-2 hafta)
-- Database tabloları oluştur (expo_halls, expo_floorplan_versions, expo_stands, expo_stand_cells)
-- CRUD API endpoints (halls, versions, stands)
-- Boş sayfa + grid rendering (react-konva PoC)
+### Sprint 1: Altyapı — ✅ TAMAMLANDI (2026-03-30)
 
-### Sprint 2: Stand Builder (2 hafta)
-- Kutucuk seçim mekanizması (tıkla-sürükle, çoklu seçim)
-- Stand oluşturma (seçili hücrelerden)
-- Stand numaralama, bölge atama
-- Renk kodlaması (commercial_status → renk)
-- Zoom + pan
+**Deliverables:**
+- 5 DB tablo: `expo_halls`, `expo_floorplan_versions`, `expo_stands`, `expo_stand_cells`, `expo_stand_assignments`
+- Trigger (`fn_update_stand_size_m2`) + partial unique index (one active per hall) + cell uniqueness constraint
+- 8 API endpoint: halls CRUD, versions create/list, stands create/list/delete
+- Frontend: Vanilla JS + Konva.js (CDN), modüler ES modules (state.js, grid.js, stands.js, toolbar.js, api.js)
+- Rectangular marquee selection (draw mode — mousedown→drag→mouseup)
+- Stand boundary rendering (iç hücre çizgileri yok, dış sınır belirgin 1.5px/2.5px)
+- Label layout: stand_code sol alt, m² sağ alt, firma adı ortada (bounding box based)
+- Optional stand_code (boş bırakılırsa otomatik `S-{id}`)
+- `_cellMap` O(1) optimizasyon (getStandAtCell, getOccupiedCells)
+- Leena sidebar entegrasyonu (bi-grid-3x3 icon)
+- Migration file: `migrations/001_floorplan_tables.sql`
 
-### Sprint 3: Firma Atama & Detay (1 hafta)
-- Stand detay paneli (sol sidebar)
-- Firma atama (text input)
-- Statü değiştirme
-- Özel alan tanımlama
+**Teknoloji kararı değişikliği:** Spec'te react-konva önerilmişti, implementasyonda Vanilla JS + Konva.js (CDN) tercih edildi. Gerekçe: mevcut sistemde React/build tool yok, sıfır altyapı değişikliği.
 
-### Sprint 4: Versiyonlama, Export & Operasyonlar (1-2 hafta)
-- Versiyon yönetimi (draft/active/archived)
-- Stand bölme / birleştirme
-- Clone (versiyon veya expo bazlı)
-- PNG + PDF export (client-side)
-- Doluluk istatistikleri (stats bar)
+### Sprint 2: Stand Builder & Versiyonlama (sıradaki)
+- Stand renk seçimi (varsayılan beyaz, soluk mat renkler)
+- PDF/Image background overlay (referans plan yükleme)
+- Stand duplicate (kopyala)
+- Stand sürükle-taşı (drag to move)
+- Version activate/archive (draft→active→archived state machine)
+- Stand update (PUT /stands/:id — commercial_status, display_label, notes, zone)
+- Commercial status değiştirme (detail panel dropdown)
+- Special area oluşturma (area_kind='special' with type selector)
+- Stats bar live update (real-time recalculation)
+- Connected shape validation (cell adjacency check)
+- Hall delete (koruma mantığı ile — stand varsa uyarı)
+
+### Sprint 3: İleri Operasyonlar & Export
+- Stand split (böl)
+- Stand merge (birleştir)
+- Version clone (versiyon ve expo bazlı)
+- Firma atama (LİFFY entegrasyonu hazırlık — assigned_company_name)
+- PNG/PDF export (client-side, Konva.toDataURL)
+
+### Sprint 4: Olgunlaştırma
 - Gerçek veriyle test (Mega Clima planını sisteme gir)
+- Server-side branded PDF export (Faz 2)
+- Canlı paylaşım linki (read-only)
+- Expo bazlı kombine görünüm
 
-### Toplam MVP tahmini: 5-7 hafta
+### Toplam MVP tahmini: 5-7 hafta (Sprint 1 tamamlandı, Sprint 2-3 devam)
 
 ---
 

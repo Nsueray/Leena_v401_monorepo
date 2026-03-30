@@ -957,22 +957,36 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - Conference topic filters: `/paginated` and `/export` changed from `=` to `ILIKE` for multi-topic support
 - `/conference-topics` and `/topics` endpoints unnest `" || "`-separated values into individual topic counts
 
-**Floor Plan Builder — Sprint 1 (30 Mar 2026):**
+**Floor Plan Builder — Sprint 1 COMPLETED (30 Mar 2026):**
 - New module: Floor Plan Builder (ELL Extension) — spatial CRM layer for expo stand management
 - 5 new DB tables: `expo_halls`, `expo_floorplan_versions`, `expo_stands`, `expo_stand_cells`, `expo_stand_assignments` (Phase 2 stub)
 - DB features new to codebase: `GENERATED ALWAYS AS` column (total_area_sqm), PostgreSQL trigger (`fn_update_stand_size_m2`), partial unique index (one active version per hall)
-- Migration file: `migrations/001_floorplan_tables.sql` — must be run on Render Shell before deploy
+- Migration: `migrations/001_floorplan_tables.sql` — run on Render Shell: `psql $DATABASE_INTERNAL_URL -f migrations/001_floorplan_tables.sql`
 - New route: `routes/floorplan.js` — 8 endpoints (halls CRUD, versions list+create, stands list+create+delete)
 - Stand creation uses transaction (`pool.connect()` + `BEGIN/COMMIT/ROLLBACK`) with batch cell INSERT
 - Draft-only enforcement: stand create/delete blocked on active/archived versions
+- Optional stand_code: if omitted, auto-generates `S-{id}` after INSERT
 - Frontend: `floorplan-builder.html` + 5 ES module files in `public/floorplan/` (state.js, grid.js, stands.js, toolbar.js, api.js)
-- Canvas: Konva.js (CDN, v9.3.15) — grid rendering, zoom/pan, cell selection, stand color coding
-- Modular architecture: ES modules with central event emitter state management (no React, no build tools)
+- Canvas: Konva.js (CDN, v9.3.15) — grid rendering, zoom/pan, rectangular marquee selection, stand boundary rendering
+- State: `FloorPlanState` class with event emitter pattern (state.js). `_cellMap` provides O(1) lookup for `getStandAtCell()` and `getOccupiedCells()`
+- Stand rendering: no internal cell lines, outer boundary as separate Konva.Line segments. Labels: stand_code bottom-left, m² bottom-right, company name centered (bounding box based)
+- Organizer isolation: `expo_halls.organizer_id` direct, sub-tables via JOIN chain (version→hall→organizer)
 - Sidebar: standard Leena sidebar + "Floor Plan" link (bi-grid-3x3 icon, under Management section)
 - index.js: 2 lines added (require + mount at `/api/floorplan`)
-- Cell lookup optimization: O(1) via `_cellMap` hash in state.js (rebuilt on standsLoaded, incremental on add/remove)
-- Spec file: `ELL_FloorPlan_Builder_Spec_v2.md` in repo root (full architectural spec, approved by all AI reviewers)
+- Spec file: `ELL_FloorPlan_Builder_Spec_v2.md` in repo root
 - **Summary:** 5 DB tables, 8 API endpoints, 6 frontend modules (1 HTML + 5 ES modules), Vanilla JS + Konva.js (CDN), no React, no build tools
+
+**Floor Plan Builder — Sprint 2 Backlog:**
+- Stand renk seçimi (varsayılan beyaz, soluk mat renkler)
+- PDF/Image background overlay (referans plan yükleme)
+- Stand duplicate + drag-to-move
+- Version activate/archive (state machine)
+- Stand update (PUT /stands/:id)
+- Commercial status değiştirme
+- Special area creation (area_kind='special')
+- Stats bar live update
+- Connected shape validation (cell adjacency)
+- Hall delete (with protection)
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

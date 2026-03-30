@@ -83,10 +83,14 @@
 - [x] Frontend page: `floorplan-builder.html` (Konva.js canvas, standard Leena sidebar)
 - [x] Frontend modules: `public/floorplan/` (state.js, grid.js, stands.js, toolbar.js, api.js)
 - [x] Cell lookup optimization: O(1) via `_cellMap` in state.js
-- [x] CLAUDE.md + todo.md updated
+- [x] Rectangular marquee selection (draw mode)
+- [x] Stand boundary rendering (no internal lines, outer boundary as Konva.Line)
+- [x] Label layout: stand_code bottom-left, m² bottom-right, company centered
+- [x] Optional stand_code (auto-generates S-{id})
+- [x] CLAUDE.md + todo.md + spec updated
 
 ### Post-Deploy Tasks
-- [ ] **Run migration on production:** Render Shell → `psql $DATABASE_URL -f migrations/001_floorplan_tables.sql`
+- [ ] **Run migration on production:** Render Shell → `psql $DATABASE_INTERNAL_URL -f migrations/001_floorplan_tables.sql`
 - [ ] **Add "Floor Plan" sidebar link to existing 15 admin pages** (currently only in floorplan-builder.html)
 - [ ] **Test end-to-end:** Create hall → create version → draw stands → delete stand
 
@@ -94,24 +98,22 @@
 
 ## 🔴 Floor Plan Builder — Sprint 2 (Next)
 
+- [ ] Stand renk seçimi (varsayılan beyaz, soluk mat renkler)
+- [ ] PDF/Image background overlay (referans plan yükleme)
+- [ ] Stand duplicate (kopyala)
+- [ ] Stand sürükle-taşı (drag to move)
 - [ ] Version activate/archive (POST /versions/:id/activate — draft→active→archived state machine)
 - [ ] Stand update (PUT /stands/:id — commercial_status, display_label, notes, zone)
-- [ ] Stand status change (commercial_status dropdown in detail panel)
+- [ ] Commercial status değiştirme (detail panel dropdown)
 - [ ] Special area creation UX (area_kind='special' with special_area_type selector)
 - [ ] Stats bar live update (real-time recalculation on stand add/remove/status change)
-- [ ] Hall delete (DELETE /halls/:id — with stand count protection, confirm dialog)
 - [ ] Connected shape validation (cell adjacency check — warn if stand cells are not contiguous)
-- [ ] Drag-select for cells (rectangle selection for faster stand drawing)
+- [ ] Hall delete (DELETE /halls/:id — with stand count protection, confirm dialog)
 
-### Sprint 3 Scope
-- [ ] Stand split
-- [ ] Stand merge
-- [ ] Company assignment UI
-- [ ] Status change UI
-
-### Sprint 4 Scope
-- [ ] Version clone
-- [ ] Clone to new expo
+### Sprint 3+ Scope
+- [ ] Stand split / merge
+- [ ] Version clone (versiyon ve expo bazlı)
+- [ ] Firma atama (LİFFY entegrasyonu hazırlık)
 - [ ] PNG/PDF export (client-side)
 
 ---
