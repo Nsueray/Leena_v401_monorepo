@@ -219,6 +219,13 @@ function updateDetailPanel(stand) {
       showSplitUI(stand);
     };
   }
+
+  // Duplicate button (draft only)
+  const dupBtn = document.getElementById('btn-duplicate-stand');
+  if (dupBtn) {
+    dupBtn.style.display = state.isDraft() ? 'inline-flex' : 'none';
+    dupBtn.onclick = () => startDuplicate(stand);
+  }
 }
 
 function escapeHtml(str) {
@@ -267,6 +274,27 @@ function showCreateDialog() {
   // Hide special type group (form.reset doesn't affect display)
   const specialGroup = document.getElementById('special-type-group');
   if (specialGroup) specialGroup.style.display = 'none';
+
+  // Pre-fill from duplicate template if available
+  const dup = getPendingDuplicate();
+  if (dup) {
+    const codeInput = document.getElementById('dialog-stand-code');
+    const zoneInput = document.getElementById('dialog-zone');
+    const labelInput = document.getElementById('dialog-label');
+    const areaKindSelect = document.getElementById('dialog-area-kind');
+    const specialTypeSelect = document.getElementById('dialog-special-type');
+
+    if (codeInput) codeInput.value = dup.originalCode + '-copy';
+    if (zoneInput) zoneInput.value = dup.zone || '';
+    if (labelInput) labelInput.value = dup.display_label || '';
+    if (areaKindSelect) {
+      areaKindSelect.value = dup.area_kind || 'stand';
+      if (dup.area_kind === 'special' && specialGroup) {
+        specialGroup.style.display = 'block';
+        if (specialTypeSelect) specialTypeSelect.value = dup.special_area_type || 'vip';
+      }
+    }
+  }
 
   const sizeEl = dialog.querySelector('#dialog-size');
   if (sizeEl) sizeEl.textContent = `${state.selectedCells.size} m²`;
@@ -333,6 +361,40 @@ async function handleDeleteStand() {
   } catch (err) {
     alert(err.message);
   }
+}
+
+// --- Duplicate ---
+
+let pendingDuplicate = null; // stand template to duplicate
+
+function startDuplicate(stand) {
+  // Store template, switch to draw mode — user selects new cells, then dialog opens pre-filled
+  pendingDuplicate = {
+    zone: stand.zone,
+    display_label: stand.display_label,
+    area_kind: stand.area_kind,
+    special_area_type: stand.special_area_type,
+    stand_type: stand.stand_type,
+    metadata: stand.metadata,
+    originalCode: stand.stand_code
+  };
+  state.setTool('draw');
+  // Show hint
+  const panel = document.getElementById('stand-detail');
+  if (panel) {
+    panel.innerHTML = `
+      <div style="background:#d1fae5;border-radius:8px;padding:12px;">
+        <div style="font-size:12px;font-weight:600;color:#065f46;margin-bottom:4px;">Duplicate Mode</div>
+        <div style="font-size:11px;color:#065f46;">Select cells for the duplicate of <strong>${stand.stand_code}</strong>, then click "Create Stand".</div>
+      </div>
+    `;
+  }
+}
+
+export function getPendingDuplicate() {
+  const dup = pendingDuplicate;
+  pendingDuplicate = null;
+  return dup;
 }
 
 // --- Merge ---
