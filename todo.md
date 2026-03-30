@@ -111,18 +111,24 @@
 
 ---
 
-## 🔴 Floor Plan Builder — Sprint 3 (Next)
+## ✅ Floor Plan Builder — Sprint 3 (30 Mart 2026) — COMPLETED
 
-- [ ] Stand split (bölme — selected cells → new stand)
-- [ ] Stand merge (birleştirme — multiple stands → single stand)
-- [ ] Version clone (aynı hall içinde kopyala — all stands + cells)
-- [ ] Clone to new expo (firma atamaları temizle, statüler reset)
-- [ ] Stand duplicate (kopyala-yapıştır — offset cells)
+- [x] Stand split (POST /stands/:id/split — visual split mode, cell assignment)
+- [x] Stand merge (POST /stands/merge — Shift+click multi-select, combine)
+- [x] Version clone (POST /versions/:id/clone — deep copy stands + cells)
+- [x] PNG export (client-side, stage.toDataURL pixelRatio:2, auto-download)
+- [x] Stand duplicate (copy template → draw new cells → pre-filled dialog)
+
+---
+
+## 🔴 Floor Plan Builder — Sprint 4 (Next)
+
 - [ ] Stand drag-to-move (sürükle-taşı — reposition cells)
-- [ ] PNG/PDF export (client-side Konva.toDataURL + jsPDF)
-- [ ] Background image UX (resize, reposition, hizalama)
 - [ ] Connected shape validation (cell adjacency check)
+- [ ] Background image UX (resize, reposition, hizalama)
 - [ ] Sidebar link to existing 15 admin pages
+- [ ] Hall delete (with protection)
+- [ ] PDF export (jsPDF branded output)
 
 ---
 

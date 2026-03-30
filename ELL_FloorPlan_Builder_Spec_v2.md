@@ -696,20 +696,28 @@ ELL Roadmap v1.1
 
 **Not implemented (deferred to Sprint 3):** Stand duplicate, stand drag-to-move, connected shape validation, hall delete
 
-### Sprint 3: İleri Operasyonlar & Export
-- Stand split (böl)
-- Stand merge (birleştir)
-- Version clone (versiyon ve expo bazlı)
-- Firma atama (LİFFY entegrasyonu hazırlık — assigned_company_name)
-- PNG/PDF export (client-side, Konva.toDataURL)
+### Sprint 3: İleri Operasyonlar & Export — ✅ TAMAMLANDI (2026-03-30)
 
-### Sprint 4: Olgunlaştırma
+**Deliverables:**
+- Stand split: `POST /stands/:id/split` — visual split mode (click cells to assign to stand B, remaining = stand A). Transaction validates cell coverage.
+- Stand merge: `POST /stands/merge` — Shift+click multi-select, merge 2+ stands. Inherits properties from first stand.
+- Version clone: `POST /versions/:id/clone` — deep copy all stands + cells. Optional `clear_assignments` flag.
+- PNG export: client-side `stage.toDataURL({ pixelRatio: 2 })`. Auto-download `floorplan-{hall}-v{num}.png`. Includes background image.
+- Stand duplicate: copy template (zone, area_kind, metadata) → switch to draw mode → user selects new cells → pre-filled create dialog.
+- 3 new endpoints (total: 15 API endpoints)
+
+**Not implemented (deferred to Sprint 4):** Stand drag-to-move, connected shape validation, hall delete, PDF branded export
+
+### Sprint 4: Olgunlaştırma (sıradaki)
+- Stand drag-to-move
+- Connected shape validation (cell adjacency)
+- Background image UX (resize, reposition)
+- Sidebar link to existing admin pages
+- Hall delete (with protection)
+- PDF export (jsPDF branded)
 - Gerçek veriyle test (Mega Clima planını sisteme gir)
-- Server-side branded PDF export (Faz 2)
-- Canlı paylaşım linki (read-only)
-- Expo bazlı kombine görünüm
 
-### Toplam MVP tahmini: 5-7 hafta (Sprint 1 tamamlandı, Sprint 2-3 devam)
+### Toplam MVP tahmini: 5-7 hafta (Sprint 1-3 tamamlandı, Sprint 4 devam)
 
 ---
 

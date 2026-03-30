@@ -988,15 +988,24 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - 4 new endpoints: PUT stands/:id, PUT stands/:id/status, POST versions/:id/activate, PUT versions/:id
 - **Summary:** Total 12 API endpoints (8 Sprint 1 + 4 Sprint 2)
 
-**Floor Plan Builder — Sprint 3 Backlog:**
-- Stand split / merge
-- Version clone (same hall + cross-expo)
-- Stand duplicate (copy-paste)
+**Floor Plan Builder — Sprint 3 COMPLETED (30 Mar 2026):**
+- Stand split: `POST /api/floorplan/stands/:id/split` — split into 2+ stands (transaction, validates cell coverage)
+- Stand merge: `POST /api/floorplan/stands/merge` — merge 2+ stands into one (transaction, same version required)
+- Version clone: `POST /api/floorplan/versions/:id/clone` — deep copy (all stands + cells), optional `clear_assignments`
+- PNG export: client-side `stage.toDataURL({ pixelRatio: 2 })`, auto-download `floorplan-{hall}-v{num}.png`
+- Stand duplicate: copy template (zone, area_kind, metadata) → draw new cells → pre-filled create dialog
+- Split mode UX: visual cell assignment (blue = stand B), live count, confirm/cancel
+- Merge UX: Shift+click multi-select → merge button → prompt for new code
+- 3 new endpoints: POST stands/:id/split, POST stands/merge, POST versions/:id/clone
+- **Summary:** Total 15 API endpoints (8 Sprint 1 + 4 Sprint 2 + 3 Sprint 3)
+
+**Floor Plan Builder — Sprint 4 Backlog:**
 - Stand drag-to-move
-- PNG/PDF export (client-side)
 - Connected shape validation (cell adjacency)
+- Background image UX (resize, reposition)
 - Sidebar link to existing 15 admin pages
 - Hall delete (with protection)
+- PDF export (jsPDF branded output)
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
