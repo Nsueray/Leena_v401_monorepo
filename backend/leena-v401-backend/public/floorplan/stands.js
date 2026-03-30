@@ -231,6 +231,10 @@ function showCreateDialog() {
   const form = dialog.querySelector('form');
   if (form) form.reset();
 
+  // Hide special type group (form.reset doesn't affect display)
+  const specialGroup = document.getElementById('special-type-group');
+  if (specialGroup) specialGroup.style.display = 'none';
+
   const sizeEl = dialog.querySelector('#dialog-size');
   if (sizeEl) sizeEl.textContent = `${state.selectedCells.size} m²`;
 

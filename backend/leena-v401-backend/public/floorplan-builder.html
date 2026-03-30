@@ -291,11 +291,24 @@
                 <input type="text" id="dialog-label" placeholder="e.g. Company name or area label">
 
                 <label for="dialog-area-kind">Area Type</label>
-                <select id="dialog-area-kind">
+                <select id="dialog-area-kind" onchange="document.getElementById('special-type-group').style.display=this.value==='special'?'block':'none'">
                     <option value="stand">Stand (sellable)</option>
                     <option value="special">Special Area</option>
                     <option value="blocked">Blocked</option>
                 </select>
+
+                <div id="special-type-group" style="display:none;">
+                    <label for="dialog-special-type">Special Area Type</label>
+                    <select id="dialog-special-type">
+                        <option value="vip">VIP Lounge</option>
+                        <option value="conference">Conference Area</option>
+                        <option value="registration">Registration Desk</option>
+                        <option value="entrance">Entrance</option>
+                        <option value="exit">Exit</option>
+                        <option value="technical">Technical Area</option>
+                        <option value="other">Other</option>
+                    </select>
+                </div>
 
                 <div class="dialog-actions">
                     <button type="button" class="btn btn-secondary" onclick="document.getElementById('create-stand-dialog').style.display='none'">Cancel</button>
