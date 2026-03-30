@@ -372,10 +372,10 @@ export function drawStands() {
         }));
       }
 
-      // Stand code — bottom left
+      // Stand code — bottom left (inside boundary)
       standLayer.add(new Konva.Text({
-        x: bbox.px + 3,
-        y: bbox.py + bbox.ph - 13,
+        x: bbox.px + 5,
+        y: bbox.py + bbox.ph - 16,
         text: stand.stand_code,
         fontSize: 9,
         fontFamily: 'Inter, sans-serif',
@@ -383,13 +383,14 @@ export function drawStands() {
         listening: false
       }));
 
-      // Size m² — bottom right
+      // Size m² — bottom right (inside boundary, right-aligned via width)
       if (sizeLabel) {
         standLayer.add(new Konva.Text({
-          x: bbox.px + bbox.pw - 3,
-          y: bbox.py + bbox.ph - 13,
+          x: bbox.px + 5,
+          y: bbox.py + bbox.ph - 16,
+          width: bbox.pw - 10,
           text: sizeLabel,
-          fontSize: 9,
+          fontSize: 10,
           fontFamily: 'Inter, sans-serif',
           fill: '#9ca3af',
           align: 'right',
