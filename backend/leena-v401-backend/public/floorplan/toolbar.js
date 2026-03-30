@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion } from './api.js';
-import { fitToView } from './grid.js';
+import { fitToView, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground } from './grid.js';
 import { updateStats } from './stands.js';
 
 export function initToolbar() {
@@ -63,6 +63,40 @@ export function initToolbar() {
     createVersionBtn.addEventListener('click', handleCreateVersion);
   }
 
+  // Background image controls
+  const bgFileInput = document.getElementById('bg-file-input');
+  const uploadBgBtn = document.getElementById('btn-upload-bg');
+  const removeBgBtn = document.getElementById('btn-remove-bg');
+  const bgOpacity = document.getElementById('bg-opacity');
+
+  if (uploadBgBtn && bgFileInput) {
+    uploadBgBtn.addEventListener('click', () => bgFileInput.click());
+    bgFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setBackgroundImage(ev.target.result);
+        if (removeBgBtn) removeBgBtn.style.display = 'flex';
+        if (bgOpacity) bgOpacity.style.display = 'block';
+      };
+      reader.readAsDataURL(file);
+      bgFileInput.value = '';
+    });
+  }
+  if (removeBgBtn) {
+    removeBgBtn.addEventListener('click', () => {
+      removeBackgroundImage();
+      removeBgBtn.style.display = 'none';
+      if (bgOpacity) bgOpacity.style.display = 'none';
+    });
+  }
+  if (bgOpacity) {
+    bgOpacity.addEventListener('input', () => {
+      setBackgroundOpacity(parseInt(bgOpacity.value) / 100);
+    });
+  }
+
   // Activate version button
   const activateBtn = document.getElementById('btn-activate-version');
   if (activateBtn) {
@@ -117,7 +151,17 @@ async function loadStands(versionId) {
     }
     state.setStands(stands);
     updateStats();
-    setTimeout(fitToView, 50);
+    setTimeout(() => {
+      fitToView();
+      loadSavedBackground();
+      // Show/hide bg controls if saved background exists
+      const key = `fp_bg_${state.expoId}_${state.currentHall?.id}`;
+      const hasBg = !!localStorage.getItem(key);
+      const removeBgBtn = document.getElementById('btn-remove-bg');
+      const bgOpacity = document.getElementById('bg-opacity');
+      if (removeBgBtn) removeBgBtn.style.display = hasBg ? 'flex' : 'none';
+      if (bgOpacity) bgOpacity.style.display = hasBg ? 'block' : 'none';
+    }, 50);
   } catch (err) {
     console.error('Failed to load stands:', err);
   }

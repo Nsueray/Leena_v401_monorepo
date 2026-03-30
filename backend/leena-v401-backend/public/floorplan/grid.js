@@ -36,9 +36,11 @@ const HOVER_FILL = '#60a5fa';
 const HOVER_OPACITY = 0.2;
 
 let stage = null;
+let bgLayer = null;
 let gridLayer = null;
 let standLayer = null;
 let interactionLayer = null;
+let bgImage = null;        // Konva.Image for background overlay
 let selectionRects = [];
 let hoverRect = null;
 let isDrawing = false;      // marquee drag active
@@ -59,10 +61,12 @@ export function initGrid(containerId) {
     draggable: true
   });
 
+  bgLayer = new Konva.Layer();
   gridLayer = new Konva.Layer();
   standLayer = new Konva.Layer();
   interactionLayer = new Konva.Layer();
 
+  stage.add(bgLayer);
   stage.add(gridLayer);
   stage.add(standLayer);
   stage.add(interactionLayer);
@@ -525,4 +529,60 @@ export function fitToView() {
     y: (stage.height() - gridPixelH * scale) / 2
   });
   stage.batchDraw();
+}
+
+// ============================================================
+// BACKGROUND IMAGE
+// ============================================================
+
+export function setBackgroundImage(dataUrl) {
+  removeBackgroundImage();
+  if (!dataUrl || !bgLayer) return;
+
+  const img = new Image();
+  img.onload = () => {
+    const gridW = state.gridWidth * CELL_SIZE;
+    const gridH = state.gridHeight * CELL_SIZE;
+
+    bgImage = new Konva.Image({
+      image: img,
+      x: 0,
+      y: 0,
+      width: gridW,
+      height: gridH,
+      opacity: 0.3,
+      listening: false
+    });
+    bgLayer.add(bgImage);
+    bgLayer.draw();
+
+    // Save to localStorage
+    const key = `fp_bg_${state.expoId}_${state.currentHall?.id}`;
+    try { localStorage.setItem(key, dataUrl); } catch (e) { /* quota */ }
+  };
+  img.src = dataUrl;
+}
+
+export function removeBackgroundImage() {
+  if (bgImage) {
+    bgImage.destroy();
+    bgImage = null;
+    if (bgLayer) bgLayer.draw();
+  }
+  const key = `fp_bg_${state.expoId}_${state.currentHall?.id}`;
+  localStorage.removeItem(key);
+}
+
+export function setBackgroundOpacity(opacity) {
+  if (bgImage) {
+    bgImage.opacity(opacity);
+    bgLayer.draw();
+  }
+}
+
+export function loadSavedBackground() {
+  if (!state.currentHall) return;
+  const key = `fp_bg_${state.expoId}_${state.currentHall.id}`;
+  const saved = localStorage.getItem(key);
+  if (saved) setBackgroundImage(saved);
 }
