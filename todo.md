@@ -1,7 +1,7 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 27 Şubat 2026
-> Aktif fuar: Mega Horeca Ghana
+> Son güncelleme: 30 Mart 2026
+> Aktif modül: Floor Plan Builder (ELL Extension)
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
 ---
@@ -75,8 +75,50 @@
 
 ---
 
-## 🔴 Bugün Yapılacak (27 Şubat 2026)
+## ✅ Floor Plan Builder — Sprint 1 (30 Mart 2026) — COMPLETED
 
+- [x] Migration SQL: `migrations/001_floorplan_tables.sql` (5 tables, indexes, trigger, constraints)
+- [x] Backend route: `routes/floorplan.js` (8 endpoints: halls CRUD, versions list+create, stands list+create+delete)
+- [x] index.js mount: `/api/floorplan` (2 lines added)
+- [x] Frontend page: `floorplan-builder.html` (Konva.js canvas, standard Leena sidebar)
+- [x] Frontend modules: `public/floorplan/` (state.js, grid.js, stands.js, toolbar.js, api.js)
+- [x] Cell lookup optimization: O(1) via `_cellMap` in state.js
+- [x] CLAUDE.md + todo.md updated
+
+### Post-Deploy Tasks
+- [ ] **Run migration on production:** Render Shell → `psql $DATABASE_URL -f migrations/001_floorplan_tables.sql`
+- [ ] **Add "Floor Plan" sidebar link to existing 15 admin pages** (currently only in floorplan-builder.html)
+- [ ] **Test end-to-end:** Create hall → create version → draw stands → delete stand
+
+---
+
+## 🔴 Floor Plan Builder — Sprint 2 (Next)
+
+- [ ] Version activate/archive (POST /versions/:id/activate — draft→active→archived state machine)
+- [ ] Stand update (PUT /stands/:id — commercial_status, display_label, notes, zone)
+- [ ] Stand status change (commercial_status dropdown in detail panel)
+- [ ] Special area creation UX (area_kind='special' with special_area_type selector)
+- [ ] Stats bar live update (real-time recalculation on stand add/remove/status change)
+- [ ] Hall delete (DELETE /halls/:id — with stand count protection, confirm dialog)
+- [ ] Connected shape validation (cell adjacency check — warn if stand cells are not contiguous)
+- [ ] Drag-select for cells (rectangle selection for faster stand drawing)
+
+### Sprint 3 Scope
+- [ ] Stand split
+- [ ] Stand merge
+- [ ] Company assignment UI
+- [ ] Status change UI
+
+### Sprint 4 Scope
+- [ ] Version clone
+- [ ] Clone to new expo
+- [ ] PNG/PDF export (client-side)
+
+---
+
+## 📌 Previous TODOs
+
+### Conference topic backfill
 - [ ] Conference topic backfill: Zoho'dan Excel export → import page ile conference_topic güncelle
 
 ---

@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 26 Şubat 2026 | Versiyon: v4.0.2+
+> Son güncelleme: 30 Mart 2026 | Versiyon: v4.0.2+
 
 ---
 
@@ -108,6 +108,8 @@ git add . → git commit -m "mesaj" → git push → Render otomatik deploy
 backend/leena-v401-backend/
 ├── index.js                    # Ana giriş noktası (CORS, static serve, route mount)
 ├── initial.sql                 # Temel DB şeması (DİKKAT: production ile tam senkron DEĞİL)
+├── migrations/
+│   └── 001_floorplan_tables.sql # Floor Plan Builder tables (expo_halls, expo_floorplan_versions, expo_stands, expo_stand_cells)
 ├── email_worker.js             # Async email kuyruğu işçisi (Render Background Worker)
 ├── routes/
 │   ├── auth.js                 # Login/Register, JWT
@@ -129,7 +131,8 @@ backend/leena-v401-backend/
 │   ├── badgeTemplates.js       # Badge template CRUD + terminal endpoint
 │   ├── reactivation.js         # Reactivation campaign API + resend-pending
 │   ├── leads.js                # Exhibitor lead scanner API (public, QR auth)
-│   └── conferenceCertificates.js # Conference certificate system (scan, certify, email)
+│   ├── conferenceCertificates.js # Conference certificate system (scan, certify, email)
+│   └── floorplan.js            # Floor Plan Builder CRUD (halls, versions, stands, cells)
 ├── middleware/
 │   ├── authMiddleware.js       # JWT doğrulama (req.organizer_id atar)
 │   ├── auth.js                 # Alternatif JWT middleware (req.user objesi atar — aşağıya bak)
@@ -168,6 +171,13 @@ backend/leena-v401-backend/
 │   ├── email-history.html          # Email send history log (paginated, filtered)
 │   ├── conference-scanner.html    # Hostess conference check-in scanner (mobile, terminal auth)
 │   ├── certificate.html           # Public certificate view (print-to-PDF)
+│   ├── floorplan-builder.html     # Floor Plan Builder (Konva.js canvas, ES modules)
+│   ├── floorplan/                 # Floor Plan Builder JS modules (ES modules)
+│   │   ├── api.js                 # API fetch wrapper
+│   │   ├── state.js               # Central state + event emitter
+│   │   ├── grid.js                # Konva grid rendering, zoom/pan, cell interaction
+│   │   ├── stands.js              # Stand CRUD, detail panel, stats
+│   │   └── toolbar.js             # Tool selection, hall/version dropdowns
 │   └── assets/                     # Logo vb.
 # ⚠️ public/ altında *.backup.html ve eski varyantlar (dashboard.html,
 #    admin-dashboard.html, main-panel.html) mevcut, aktif olarak kullanılmıyor.
@@ -198,6 +208,11 @@ backend/leena-v401-backend/
 | exhibitor_leads | Exhibitor lead kayıtları (exhibitor_company bazlı) |
 | import_logs | Import operation logs (per-import stats, errors, options) |
 | conference_certificates | Conference attendance certificates (visitor_id, expo_id, topic, token) |
+| expo_halls | Floor Plan: physical hall definitions (expo_id, grid dimensions) |
+| expo_floorplan_versions | Floor Plan: plan versions per hall (draft/active/archived) |
+| expo_stands | Floor Plan: stand units (cells-based geometry, commercial status) |
+| expo_stand_cells | Floor Plan: individual grid cells per stand (1 row = 1m²) |
+| expo_stand_assignments | Floor Plan: assignment history (Phase 2, not used in MVP) |
 
 ### visitors Tablosu Önemli Kolonlar
 - `id`, `name`, `last_name`, `email` (unique per expo), `phone`
@@ -584,6 +599,16 @@ Hostess opens conference-scanner.html?terminal_key=X
 - `GET /api/conference-certificates/topics` — Conference topics for hostess dropdown (terminalAuth). Unnests `" || "`-separated multi-topic values.
 - `GET /api/conference-certificates/stats` — Certificate stats per topic (JWT auth)
 
+### Floor Plan Builder
+- `GET /api/floorplan/halls?expo_id=X` — Hall list for expo (JWT)
+- `POST /api/floorplan/halls` — Create hall (JWT)
+- `PUT /api/floorplan/halls/:id` — Update hall (JWT)
+- `GET /api/floorplan/halls/:hallId/versions` — Version list for hall (JWT)
+- `POST /api/floorplan/halls/:hallId/versions` — Create new draft version (JWT)
+- `GET /api/floorplan/versions/:versionId/stands` — All stands + cells for version (JWT)
+- `POST /api/floorplan/versions/:versionId/stands` — Create stand with cells (JWT, transaction)
+- `DELETE /api/floorplan/stands/:id` — Delete stand (JWT, draft-only)
+
 ### Inline Endpoint'ler (index.js)
 - `GET /api/templates` — Form-builder dropdown için email template listesi
 - `GET /api/qr-image/:qrcode` — Dinamik QR kod resmi (PNG)
@@ -689,10 +714,10 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 | Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder, conference-sessions |
 | Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | login.html, main-panel-v2, dashboard_new |
 
-### Sidebar Status (Updated 26 Feb 2026)
-- ✅ All 15 admin pages sidebar links standardized
+### Sidebar Status (Updated 30 Mar 2026)
+- ✅ All 16 admin pages sidebar links standardized
 - Standard order: Overview → Management → Communication → Settings → Tools
-- 14 links: Dashboard, Visitors, Forms, Check-ins, Terminals, **Conferences**, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
+- 15 links: Dashboard, Visitors, Forms, Check-ins, Terminals, **Conferences**, **Floor Plan**, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
 - ✅ CSS `::before` accent bar added to all 15 pages (Gen 2 pages updated 23 Feb 2026)
 - ✅ Active expo indicator added to all 14 admin sidebars (24 Feb 2026) — reads `selectedExpoName` from localStorage, hidden if no expo selected
 - ✅ Expo indicator is now a clickable `<a>` link to `dashboard_new.html` (25 Feb 2026) — allows switching expo from any page. Small `⇄` icon on the right as visual hint.
@@ -808,6 +833,7 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 18. reactivationRoutes    → app.use('/api/reactivation', reactivationRoutes)
 19. badgeTemplateRoutes   → app.use('/api/badge-templates', badgeTemplateRoutes)
 20. conferenceCertRoutes  → app.use('/api/conference-certificates', conferenceCertRoutes)
+21. floorplanRoutes       → app.use('/api/floorplan', floorplanRoutes)
 
 // Inline route'lar (index.js satır 107-142):
 // GET /api/templates       — form-builder dropdown (authMiddleware)
@@ -930,6 +956,23 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - Duplicate scan UX: overlay persists with "Resend Certificate" + "Dismiss" buttons (no auto-dismiss)
 - Conference topic filters: `/paginated` and `/export` changed from `=` to `ILIKE` for multi-topic support
 - `/conference-topics` and `/topics` endpoints unnest `" || "`-separated values into individual topic counts
+
+**Floor Plan Builder — Sprint 1 (30 Mar 2026):**
+- New module: Floor Plan Builder (ELL Extension) — spatial CRM layer for expo stand management
+- 5 new DB tables: `expo_halls`, `expo_floorplan_versions`, `expo_stands`, `expo_stand_cells`, `expo_stand_assignments` (Phase 2 stub)
+- DB features new to codebase: `GENERATED ALWAYS AS` column (total_area_sqm), PostgreSQL trigger (`fn_update_stand_size_m2`), partial unique index (one active version per hall)
+- Migration file: `migrations/001_floorplan_tables.sql` — must be run on Render Shell before deploy
+- New route: `routes/floorplan.js` — 8 endpoints (halls CRUD, versions list+create, stands list+create+delete)
+- Stand creation uses transaction (`pool.connect()` + `BEGIN/COMMIT/ROLLBACK`) with batch cell INSERT
+- Draft-only enforcement: stand create/delete blocked on active/archived versions
+- Frontend: `floorplan-builder.html` + 5 ES module files in `public/floorplan/` (state.js, grid.js, stands.js, toolbar.js, api.js)
+- Canvas: Konva.js (CDN, v9.3.15) — grid rendering, zoom/pan, cell selection, stand color coding
+- Modular architecture: ES modules with central event emitter state management (no React, no build tools)
+- Sidebar: standard Leena sidebar + "Floor Plan" link (bi-grid-3x3 icon, under Management section)
+- index.js: 2 lines added (require + mount at `/api/floorplan`)
+- Cell lookup optimization: O(1) via `_cellMap` hash in state.js (rebuilt on standsLoaded, incremental on add/remove)
+- Spec file: `ELL_FloorPlan_Builder_Spec_v2.md` in repo root (full architectural spec, approved by all AI reviewers)
+- **Summary:** 5 DB tables, 8 API endpoints, 6 frontend modules (1 HTML + 5 ES modules), Vanilla JS + Konva.js (CDN), no React, no build tools
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

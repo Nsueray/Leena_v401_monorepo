@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Floor Plan Builder - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/konva@9.3.15/konva.min.js"></script>
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --danger: #ef4444; --warning: #f59e0b;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; overflow: hidden; }
+
+        /* ---- App Shell ---- */
+        .app-shell { display: flex; height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; z-index: 100; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; overflow-y: auto; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; position: relative; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 24px; background: var(--primary); border-radius: 0 3px 3px 0; }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+
+        /* ---- Main Area ---- */
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; height: 100vh; }
+
+        /* ---- Top Bar ---- */
+        .top-bar { height: 56px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; padding: 0 16px; flex-shrink: 0; }
+        .top-bar h1 { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-right: 16px; white-space: nowrap; }
+        .top-bar h1 i { color: var(--primary); }
+        .top-bar select { padding: 6px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; font-family: inherit; background: #fff; }
+        .top-bar .btn-icon { width: 34px; height: 34px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; color: var(--text-secondary); }
+        .top-bar .btn-icon:hover { background: var(--primary-light); color: var(--primary); }
+        .version-status { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .status-draft { background: #dbeafe; color: #1e40af; }
+        .status-active { background: #d1fae5; color: #065f46; }
+        .status-archived { background: #f3f4f6; color: #6b7280; }
+        .spacer { flex: 1; }
+
+        /* ---- Body = Left Panel + Canvas ---- */
+        .body-area { flex: 1; display: flex; overflow: hidden; }
+
+        /* ---- Left Panel (Tools + Detail) ---- */
+        .left-panel { width: 240px; background: var(--bg-card); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+        .panel-section { padding: 16px; border-bottom: 1px solid var(--border-color); }
+        .panel-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; }
+
+        /* Tool buttons */
+        .tool-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+        .tool-btn { padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-md); background: #fff; cursor: pointer; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: all 0.15s; }
+        .tool-btn:hover { border-color: var(--primary); color: var(--primary); }
+        .tool-btn.tool-active { background: var(--primary); color: #fff; border-color: var(--primary); }
+
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-danger { background: #fff; color: var(--danger); border-color: var(--danger); }
+        .btn-danger:hover { background: #fef2f2; }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn-block { width: 100%; justify-content: center; }
+
+        /* Stand detail */
+        .detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+        .detail-label { font-size: 12px; color: var(--text-muted); }
+        .detail-value { font-size: 12px; font-weight: 500; }
+        .detail-empty { text-align: center; color: var(--text-muted); padding: 20px 0; font-size: 12px; }
+
+        .status-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+        .status-available { background: #f3f4f6; color: #374151; }
+        .status-hold { background: #fef3c7; color: #92400e; }
+        .status-reserved { background: #fde68a; color: #78350f; }
+        .status-pending_contract { background: #fed7aa; color: #9a3412; }
+        .status-sold { background: #d1fae5; color: #065f46; }
+        .status-special { background: #ede9fe; color: #5b21b6; }
+        .status-blocked { background: #fecaca; color: #991b1b; }
+
+        /* ---- Canvas Container ---- */
+        .canvas-area { flex: 1; background: #f1f5f9; position: relative; overflow: hidden; }
+        #canvas-container { width: 100%; height: 100%; }
+
+        /* Empty state */
+        .empty-canvas { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); pointer-events: none; }
+        .empty-canvas i { font-size: 56px; opacity: 0.3; margin-bottom: 12px; }
+        .empty-canvas p { font-size: 14px; }
+
+        /* ---- Stats Bar ---- */
+        .stats-bar { height: 40px; background: var(--bg-card); border-top: 1px solid var(--border-color); display: flex; align-items: center; gap: 20px; padding: 0 16px; font-size: 12px; font-weight: 500; color: var(--text-secondary); flex-shrink: 0; }
+        .stats-bar .stat-item { display: flex; align-items: center; gap: 4px; }
+        .stats-bar .stat-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot-total { background: var(--primary); }
+        .dot-sold { background: var(--success); }
+        .dot-available { background: #d1d5db; }
+        .dot-reserved { background: var(--warning); }
+
+        /* ---- Dialogs (Modal Overlay) ---- */
+        .dialog-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; }
+        .dialog-box { background: #fff; border-radius: var(--radius-lg); padding: 24px; width: 380px; max-width: 90vw; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+        .dialog-box h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+        .dialog-box label { display: block; font-size: 12px; font-weight: 500; color: var(--text-secondary); margin-bottom: 4px; margin-top: 12px; }
+        .dialog-box input, .dialog-box select { width: 100%; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; font-family: inherit; }
+        .dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+        .dialog-actions .btn-secondary { background: #f3f4f6; color: var(--text-primary); border-color: var(--border-color); }
+
+        /* ---- Responsive ---- */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .main-wrapper { margin-left: 0; }
+            .left-panel { width: 200px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <!-- Sidebar (standard Leena sidebar) -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <a id="sidebarExpo" href="dashboard_new.html" title="Switch Expo" style="padding:8px 20px;font-size:11px;color:#9ca3af;border-bottom:1px solid #252542;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;text-decoration:none;cursor:pointer;"><i class="bi bi-geo-alt" style="margin-right:4px;color:#4a6fa5;"></i><span id="expoNameDisplay"></span> <i class="bi bi-arrow-left-right" style="float:right;font-size:9px;opacity:0.5;margin-top:2px;"></i></a>
+            <script>(function(){var n=localStorage.getItem('selectedExpoName'),el=document.getElementById('sidebarExpo');if(n&&el){document.getElementById('expoNameDisplay').textContent=n;el.style.display='block';}})();</script>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                    <a class="nav-item" href="conference-sessions.html"><i class="bi bi-mortarboard"></i><span>Conferences</span></a>
+                    <a class="nav-item active" href="floorplan-builder.html"><i class="bi bi-grid-3x3"></i><span>Floor Plan</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-send.html"><i class="bi bi-send"></i><span>Send Emails</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                    <a class="nav-item" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="checkin-reports.html"><i class="bi bi-clipboard-data"></i><span>Check-in Reports</span></a>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Wrapper -->
+        <div class="main-wrapper">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <h1><i class="bi bi-grid-3x3"></i> Floor Plan</h1>
+                <select id="hall-select"><option value="">-- Select Hall --</option></select>
+                <button class="btn-icon" id="btn-create-hall" title="New Hall"><i class="bi bi-plus-lg"></i></button>
+                <select id="version-select"><option value="">-- Select Version --</option></select>
+                <button class="btn-icon" id="btn-create-version" title="New Version"><i class="bi bi-plus-circle"></i></button>
+                <span id="draft-indicator" class="version-status"></span>
+                <div class="spacer"></div>
+                <button class="btn-icon" id="btn-fit-view" title="Fit to View"><i class="bi bi-fullscreen"></i></button>
+            </div>
+
+            <!-- Body -->
+            <div class="body-area">
+                <!-- Left Panel -->
+                <div class="left-panel">
+                    <div class="panel-section">
+                        <div class="panel-section-title">Tools</div>
+                        <div class="tool-grid">
+                            <button class="tool-btn tool-active" data-tool="select"><i class="bi bi-cursor"></i> Select</button>
+                            <button class="tool-btn" data-tool="draw"><i class="bi bi-pencil-square"></i> Draw</button>
+                            <button class="tool-btn" data-tool="erase"><i class="bi bi-eraser"></i> Erase</button>
+                        </div>
+                    </div>
+
+                    <div class="panel-section">
+                        <button class="btn btn-primary btn-block" id="btn-create-stand" disabled>Create Stand</button>
+                    </div>
+
+                    <div class="panel-section" style="flex:1;">
+                        <div class="panel-section-title">Stand Detail</div>
+                        <div id="stand-detail">
+                            <div class="detail-empty">Select a stand to view details</div>
+                        </div>
+                        <div style="margin-top:12px;">
+                            <button class="btn btn-danger btn-sm btn-block" id="btn-delete-stand" style="display:none;"><i class="bi bi-trash"></i> Delete Stand</button>
+                        </div>
+                    </div>
+
+                    <div class="panel-section">
+                        <div class="panel-section-title">Legend</div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;">
+                            <div><span style="display:inline-block;width:12px;height:12px;background:#fff;border:1px solid #d1d5db;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Available</div>
+                            <div><span style="display:inline-block;width:12px;height:12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Hold</div>
+                            <div><span style="display:inline-block;width:12px;height:12px;background:#fde68a;border:1px solid #d97706;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Reserved</div>
+                            <div><span style="display:inline-block;width:12px;height:12px;background:#fed7aa;border:1px solid #ea580c;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Pending</div>
+                            <div><span style="display:inline-block;width:12px;height:12px;background:#bbf7d0;border:1px solid #16a34a;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Sold</div>
+                            <div><span style="display:inline-block;width:12px;height:12px;background:#e9d5ff;border:1px solid #7c3aed;border-radius:2px;vertical-align:middle;margin-right:4px;"></span>Special</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Canvas -->
+                <div class="canvas-area">
+                    <div id="canvas-container"></div>
+                    <div class="empty-canvas" id="empty-canvas">
+                        <i class="bi bi-grid-3x3-gap"></i>
+                        <p>Select or create a hall to start building</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="stats-bar">
+                <div class="stat-item"><span class="stat-dot dot-total"></span> Gross: <strong id="stat-total-area">0 m²</strong></div>
+                <div class="stat-item"><span class="stat-dot dot-total"></span> Net: <strong id="stat-net-area">0 m²</strong></div>
+                <div class="stat-item"><span class="stat-dot dot-sold"></span> Sold: <strong id="stat-sold">0 m²</strong></div>
+                <div class="stat-item"><span class="stat-dot dot-available"></span> Available: <strong id="stat-available">0 m²</strong></div>
+                <div class="stat-item"><span class="stat-dot dot-reserved"></span> Reserved: <strong id="stat-reserved">0 m²</strong></div>
+                <div class="stat-item">Stands: <strong id="stat-stands">0</strong></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Hall Dialog -->
+    <div class="dialog-overlay" id="create-hall-dialog">
+        <div class="dialog-box">
+            <h3><i class="bi bi-building" style="color:var(--primary);margin-right:6px;"></i>New Hall</h3>
+            <form id="hall-form">
+                <label for="hall-name">Hall Name</label>
+                <input type="text" id="hall-name" placeholder="e.g. Hall 1, Pavilion A" required>
+
+                <label for="hall-width">Grid Width (meters)</label>
+                <input type="number" id="hall-width" min="5" max="200" value="40" required>
+
+                <label for="hall-height">Grid Height (meters)</label>
+                <input type="number" id="hall-height" min="5" max="200" value="25" required>
+
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('create-hall-dialog').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Create Hall</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Create Stand Dialog -->
+    <div class="dialog-overlay" id="create-stand-dialog">
+        <div class="dialog-box">
+            <h3><i class="bi bi-bounding-box" style="color:var(--primary);margin-right:6px;"></i>New Stand <span id="dialog-size" style="font-size:13px;color:var(--text-muted);font-weight:400;"></span></h3>
+            <form id="stand-form">
+                <label for="dialog-stand-code">Stand Code *</label>
+                <input type="text" id="dialog-stand-code" placeholder="e.g. A1, B3" required>
+
+                <label for="dialog-zone">Zone</label>
+                <input type="text" id="dialog-zone" placeholder="e.g. A, B, C">
+
+                <label for="dialog-label">Display Label</label>
+                <input type="text" id="dialog-label" placeholder="e.g. Company name or area label">
+
+                <label for="dialog-area-kind">Area Type</label>
+                <select id="dialog-area-kind">
+                    <option value="stand">Stand (sellable)</option>
+                    <option value="special">Special Area</option>
+                    <option value="blocked">Blocked</option>
+                </select>
+
+                <div class="dialog-actions">
+                    <button type="button" class="btn btn-secondary" onclick="document.getElementById('create-stand-dialog').style.display='none'">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="dialog-submit">Create</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- App Init (ES Modules) -->
+    <script type="module">
+        import { state } from './floorplan/state.js';
+        import { initGrid, drawGrid } from './floorplan/grid.js';
+        import { initStandActions, handleCreateStand, hideCreateDialog } from './floorplan/stands.js';
+        import { initToolbar, loadHalls, handleCreateHall, hideHallDialog } from './floorplan/toolbar.js';
+
+        // Auth check
+        const token = localStorage.getItem('token');
+        if (!token) { window.location.href = 'login.html'; }
+
+        const expoId = localStorage.getItem('selectedExpoId');
+        const expoName = localStorage.getItem('selectedExpoName');
+        if (!expoId) { window.location.href = 'dashboard_new.html'; }
+
+        // Init state
+        state.expoId = expoId;
+        state.expoName = expoName || '';
+
+        // Init modules
+        initGrid('canvas-container');
+        initToolbar();
+        initStandActions();
+
+        // Hide empty canvas when hall is loaded
+        state.on('hallChanged', (hall) => {
+            const empty = document.getElementById('empty-canvas');
+            if (empty) empty.style.display = hall ? 'none' : 'flex';
+        });
+
+        // Form handlers
+        document.getElementById('hall-form').addEventListener('submit', handleCreateHall);
+        document.getElementById('stand-form').addEventListener('submit', handleCreateStand);
+
+        // Load halls
+        loadHalls();
+    </script>
+</body>
+</html>
