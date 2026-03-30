@@ -41,7 +41,9 @@ let standLayer = null;
 let interactionLayer = null;
 let selectionRects = [];
 let hoverRect = null;
-let isDrawing = false;  // drag-select state
+let isDrawing = false;      // marquee drag active
+let drawStartCell = null;   // {x, y} where marquee started
+let marqueeRect = null;     // Konva.Rect overlay during drag
 
 export function initGrid(containerId) {
   const container = document.getElementById(containerId);
@@ -99,24 +101,35 @@ export function initGrid(containerId) {
     return { x: cx, y: cy };
   }
 
-  // --- Mouse down: start drag-select in draw mode, or handle click for select/erase ---
+  // --- Mouse down: start marquee in draw mode ---
   stage.on('mousedown touchstart', (e) => {
     const cell = pointerToCell(stage.getPointerPosition());
 
-    if (state.tool === 'draw') {
-      // Disable stage drag while drawing
+    if (state.tool === 'draw' && cell) {
       stage.draggable(false);
       isDrawing = true;
-      if (cell) {
-        const key = `${cell.x},${cell.y}`;
-        if (!state.getOccupiedCells().has(key) && !state.selectedCells.has(key)) {
-          state.toggleCell(cell.x, cell.y);
-        }
-      }
+      drawStartCell = { x: cell.x, y: cell.y };
+
+      // Create marquee overlay rect
+      if (marqueeRect) { marqueeRect.destroy(); marqueeRect = null; }
+      marqueeRect = new Konva.Rect({
+        x: cell.x * CELL_SIZE,
+        y: cell.y * CELL_SIZE,
+        width: CELL_SIZE,
+        height: CELL_SIZE,
+        fill: SELECTED_FILL,
+        opacity: 0.25,
+        stroke: '#2563eb',
+        strokeWidth: 1,
+        dash: [4, 3],
+        listening: false
+      });
+      interactionLayer.add(marqueeRect);
+      interactionLayer.draw();
     }
   });
 
-  // --- Mouse move: drag-select in draw mode + hover ---
+  // --- Mouse move: update marquee rectangle + hover ---
   stage.on('mousemove touchmove', (e) => {
     const pos = stage.getPointerPosition();
     const cell = pointerToCell(pos);
@@ -124,25 +137,64 @@ export function initGrid(containerId) {
     // Hover update
     state.setHoveredCell(cell);
 
-    // Drag-select: add cells while mouse is held in draw mode
-    if (isDrawing && state.tool === 'draw' && cell) {
-      const key = `${cell.x},${cell.y}`;
-      if (!state.getOccupiedCells().has(key) && !state.selectedCells.has(key)) {
-        state.toggleCell(cell.x, cell.y);
-      }
+    // Update marquee size while dragging
+    if (isDrawing && state.tool === 'draw' && drawStartCell && cell && marqueeRect) {
+      const minX = Math.min(drawStartCell.x, cell.x);
+      const maxX = Math.max(drawStartCell.x, cell.x);
+      const minY = Math.min(drawStartCell.y, cell.y);
+      const maxY = Math.max(drawStartCell.y, cell.y);
+
+      marqueeRect.x(minX * CELL_SIZE);
+      marqueeRect.y(minY * CELL_SIZE);
+      marqueeRect.width((maxX - minX + 1) * CELL_SIZE);
+      marqueeRect.height((maxY - minY + 1) * CELL_SIZE);
+      interactionLayer.batchDraw();
     }
   });
 
-  // --- Mouse up: end drag-select ---
+  // --- Mouse up: commit marquee selection ---
   stage.on('mouseup touchend', () => {
-    if (isDrawing) {
-      isDrawing = false;
-      stage.draggable(true);
+    if (!isDrawing || !drawStartCell) return;
+
+    const endCell = pointerToCell(stage.getPointerPosition());
+    const occupied = state.getOccupiedCells();
+
+    if (endCell && (endCell.x !== drawStartCell.x || endCell.y !== drawStartCell.y)) {
+      // Marquee drag: add all unoccupied cells in the rectangle
+      const minX = Math.min(drawStartCell.x, endCell.x);
+      const maxX = Math.max(drawStartCell.x, endCell.x);
+      const minY = Math.min(drawStartCell.y, endCell.y);
+      const maxY = Math.max(drawStartCell.y, endCell.y);
+
+      for (let y = minY; y <= maxY; y++) {
+        for (let x = minX; x <= maxX; x++) {
+          const key = `${x},${y}`;
+          if (!occupied.has(key) && !state.selectedCells.has(key)) {
+            state.selectedCells.add(key);
+          }
+        }
+      }
+      state.emit('selectionChanged', state.selectedCells);
+    } else if (drawStartCell) {
+      // Single click: toggle one cell
+      const key = `${drawStartCell.x},${drawStartCell.y}`;
+      if (!occupied.has(key)) {
+        state.toggleCell(drawStartCell.x, drawStartCell.y);
+      }
     }
+
+    // Cleanup marquee
+    if (marqueeRect) { marqueeRect.destroy(); marqueeRect = null; }
+    interactionLayer.draw();
+    isDrawing = false;
+    drawStartCell = null;
+    stage.draggable(true);
   });
 
   // --- Click: select stand or erase cell (non-draw modes) ---
   stage.on('click tap', (e) => {
+    if (state.tool === 'draw') return; // handled by mousedown/mouseup
+
     const cell = pointerToCell(stage.getPointerPosition());
 
     if (state.tool === 'select') {
@@ -156,7 +208,6 @@ export function initGrid(containerId) {
         state.toggleCell(cell.x, cell.y);
       }
     }
-    // draw mode handled by mousedown/mousemove drag
   });
 
   // Listen to state events
