@@ -225,6 +225,103 @@ router.post('/halls/:hallId/versions', authMiddleware, async (req, res) => {
   }
 });
 
+// PUT /api/floorplan/versions/:id — Update version label/notes (not status)
+router.put('/versions/:id', authMiddleware, async (req, res) => {
+  try {
+    const versionId = req.params.id;
+    const organizer_id = req.organizer_id;
+    const { version_label, notes } = req.body;
+
+    // Verify ownership
+    const check = await pool.query(
+      `SELECT v.id FROM expo_floorplan_versions v
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE v.id = $1 AND h.organizer_id = $2`,
+      [versionId, organizer_id]
+    );
+    if (check.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Version not found' });
+    }
+
+    const updates = [];
+    const values = [];
+    let idx = 1;
+
+    if (version_label !== undefined) { updates.push(`version_label = $${idx++}`); values.push(version_label); }
+    if (notes !== undefined) { updates.push(`notes = $${idx++}`); values.push(notes); }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+
+    values.push(versionId);
+    const result = await pool.query(
+      `UPDATE expo_floorplan_versions SET ${updates.join(', ')} WHERE id = $${idx} RETURNING *`,
+      values
+    );
+
+    res.json({ success: true, version: result.rows[0] });
+  } catch (err) {
+    console.error('[floorplan] Error updating version:', err);
+    res.status(500).json({ success: false, message: 'Failed to update version' });
+  }
+});
+
+// POST /api/floorplan/versions/:id/activate — Draft → Active (archives current active)
+router.post('/versions/:id/activate', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const versionId = req.params.id;
+    const organizer_id = req.organizer_id;
+
+    // Verify ownership and get version + hall info
+    const check = await client.query(
+      `SELECT v.id, v.status, v.hall_id
+       FROM expo_floorplan_versions v
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE v.id = $1 AND h.organizer_id = $2`,
+      [versionId, organizer_id]
+    );
+    if (check.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'Version not found' });
+    }
+
+    const version = check.rows[0];
+    if (version.status !== 'draft') {
+      client.release();
+      return res.status(400).json({ success: false, message: 'Only draft versions can be activated' });
+    }
+
+    await client.query('BEGIN');
+
+    // Archive current active version for this hall (if any)
+    await client.query(
+      `UPDATE expo_floorplan_versions SET status = 'archived'
+       WHERE hall_id = $1 AND status = 'active'`,
+      [version.hall_id]
+    );
+
+    // Activate this version
+    const result = await client.query(
+      `UPDATE expo_floorplan_versions SET status = 'active', activated_at = NOW()
+       WHERE id = $1 RETURNING *`,
+      [versionId]
+    );
+
+    await client.query('COMMIT');
+
+    res.json({ success: true, version: result.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[floorplan] Error activating version:', err);
+    res.status(500).json({ success: false, message: 'Failed to activate version' });
+  } finally {
+    client.release();
+  }
+});
+
 // ============================================================
 // STANDS
 // ============================================================

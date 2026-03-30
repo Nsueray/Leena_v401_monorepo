@@ -4,7 +4,7 @@
  */
 
 import { state } from './state.js';
-import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands } from './api.js';
+import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion } from './api.js';
 import { fitToView } from './grid.js';
 import { updateStats } from './stands.js';
 
@@ -61,6 +61,12 @@ export function initToolbar() {
   const createVersionBtn = document.getElementById('btn-create-version');
   if (createVersionBtn) {
     createVersionBtn.addEventListener('click', handleCreateVersion);
+  }
+
+  // Activate version button
+  const activateBtn = document.getElementById('btn-activate-version');
+  if (activateBtn) {
+    activateBtn.addEventListener('click', handleActivateVersion);
   }
 
   // Fit to view button
@@ -156,6 +162,31 @@ function updateDraftIndicator() {
   const s = state.currentVersion.status;
   indicator.textContent = s.toUpperCase();
   indicator.className = `version-status status-${s}`;
+
+  // Show/hide activate button
+  const activateBtn = document.getElementById('btn-activate-version');
+  if (activateBtn) {
+    activateBtn.style.display = s === 'draft' ? 'flex' : 'none';
+  }
+}
+
+async function handleActivateVersion() {
+  if (!state.currentVersion || state.currentVersion.status !== 'draft') return;
+
+  if (!confirm('Activate this version? The current active version (if any) will be archived.')) return;
+
+  try {
+    const activated = await activateVersion(state.currentVersion.id);
+    state.setCurrentVersion(activated);
+
+    // Reload versions list to reflect status changes
+    if (state.currentHall) {
+      const versions = await fetchVersions(state.currentHall.id);
+      state.setVersions(versions);
+    }
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 // --- Hall Creation Dialog ---
