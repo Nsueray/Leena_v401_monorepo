@@ -242,12 +242,13 @@ export function drawGrid() {
   const h = state.gridHeight;
   if (w === 0 || h === 0) return;
 
-  // Background
+  // Background — semi-transparent so bgLayer image shows through
   gridLayer.add(new Konva.Rect({
     x: 0, y: 0,
     width: w * CELL_SIZE,
     height: h * CELL_SIZE,
-    fill: '#f9fafb'
+    fill: '#f9fafb',
+    opacity: bgImage ? 0.15 : 1
   }));
 
   // Vertical lines
@@ -543,6 +544,7 @@ export function setBackgroundImage(dataUrl) {
   img.onload = () => {
     const gridW = state.gridWidth * CELL_SIZE;
     const gridH = state.gridHeight * CELL_SIZE;
+    console.log(`[floorplan] Background loaded, image: ${img.naturalWidth}x${img.naturalHeight}, grid: ${gridW}x${gridH}`);
 
     bgImage = new Konva.Image({
       image: img,
@@ -556,6 +558,9 @@ export function setBackgroundImage(dataUrl) {
     bgLayer.add(bgImage);
     bgLayer.draw();
 
+    // Redraw grid with transparent background so bgImage shows through
+    drawGrid();
+
     // Save to localStorage
     const key = `fp_bg_${state.expoId}_${state.currentHall?.id}`;
     try { localStorage.setItem(key, dataUrl); } catch (e) { /* quota */ }
@@ -568,6 +573,8 @@ export function removeBackgroundImage() {
     bgImage.destroy();
     bgImage = null;
     if (bgLayer) bgLayer.draw();
+    // Redraw grid to restore opaque background
+    drawGrid();
   }
   const key = `fp_bg_${state.expoId}_${state.currentHall?.id}`;
   localStorage.removeItem(key);
