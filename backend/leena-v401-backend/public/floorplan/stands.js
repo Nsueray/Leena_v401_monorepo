@@ -126,11 +126,6 @@ export async function handleCreateStand(e) {
   const label = document.getElementById('dialog-label')?.value?.trim();
   const areaKind = document.getElementById('dialog-area-kind')?.value || 'stand';
 
-  if (!code) {
-    alert('Stand code is required');
-    return;
-  }
-
   const cells = [];
   for (const key of state.selectedCells) {
     const [x, y] = key.split(',').map(Number);
@@ -141,13 +136,15 @@ export async function handleCreateStand(e) {
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating...'; }
 
   try {
-    const stand = await createStand(state.currentVersion.id, {
-      stand_code: code,
+    const standData = {
       zone: zone || undefined,
       display_label: label || undefined,
       area_kind: areaKind,
       cells
-    });
+    };
+    if (code) standData.stand_code = code;
+
+    const stand = await createStand(state.currentVersion.id, standData);
 
     state.addStand(stand);
     hideCreateDialog();

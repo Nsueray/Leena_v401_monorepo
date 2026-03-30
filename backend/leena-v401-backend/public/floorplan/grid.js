@@ -332,38 +332,70 @@ export function drawStands() {
       }));
     }
 
-    // Draw label at centroid
-    const centroid = getCellCentroid(stand.cells);
-    const label = stand.display_label || stand.assigned_company_name || stand.stand_code;
+    // --- Labels: bounding box based ---
+    const bbox = getCellBBox(stand.cells);
+    const cellCount = stand.cells.length;
+    const companyName = stand.display_label || stand.assigned_company_name || '';
     const sizeLabel = stand.size_m2 ? `${parseFloat(stand.size_m2)}m²` : '';
 
-    if (label) {
+    if (cellCount <= 2) {
+      // Tiny stands: only stand_code, centered
       standLayer.add(new Konva.Text({
-        x: centroid.x - 50,
-        y: centroid.y - 12,
-        width: 100,
-        text: label,
-        fontSize: 10,
-        fontFamily: 'Inter, sans-serif',
-        fontStyle: 'bold',
-        fill: '#1f2937',
-        align: 'center',
-        listening: false
-      }));
-    }
-
-    if (sizeLabel) {
-      standLayer.add(new Konva.Text({
-        x: centroid.x - 50,
-        y: centroid.y + (label ? 2 : -6),
-        width: 100,
-        text: sizeLabel,
+        x: bbox.px,
+        y: bbox.py,
+        width: bbox.pw,
+        height: bbox.ph,
+        text: stand.stand_code,
         fontSize: 9,
         fontFamily: 'Inter, sans-serif',
+        fontStyle: 'bold',
         fill: '#6b7280',
         align: 'center',
+        verticalAlign: 'middle',
         listening: false
       }));
+    } else {
+      // Company name — center
+      if (companyName) {
+        const centroid = getCellCentroid(stand.cells);
+        standLayer.add(new Konva.Text({
+          x: bbox.px + 2,
+          y: centroid.y - 7,
+          width: bbox.pw - 4,
+          text: companyName,
+          fontSize: 11,
+          fontFamily: 'Inter, sans-serif',
+          fontStyle: 'bold',
+          fill: '#1f2937',
+          align: 'center',
+          listening: false
+        }));
+      }
+
+      // Stand code — bottom left
+      standLayer.add(new Konva.Text({
+        x: bbox.px + 3,
+        y: bbox.py + bbox.ph - 13,
+        text: stand.stand_code,
+        fontSize: 9,
+        fontFamily: 'Inter, sans-serif',
+        fill: '#9ca3af',
+        listening: false
+      }));
+
+      // Size m² — bottom right
+      if (sizeLabel) {
+        standLayer.add(new Konva.Text({
+          x: bbox.px + bbox.pw - 3,
+          y: bbox.py + bbox.ph - 13,
+          text: sizeLabel,
+          fontSize: 9,
+          fontFamily: 'Inter, sans-serif',
+          fill: '#9ca3af',
+          align: 'right',
+          listening: false
+        }));
+      }
     }
   }
 
@@ -439,6 +471,23 @@ function getCellCentroid(cells) {
     sumY += c.y * CELL_SIZE + CELL_SIZE / 2;
   }
   return { x: sumX / cells.length, y: sumY / cells.length };
+}
+
+/** Bounding box in pixels for a stand's cells */
+function getCellBBox(cells) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const c of cells) {
+    if (c.x < minX) minX = c.x;
+    if (c.y < minY) minY = c.y;
+    if (c.x > maxX) maxX = c.x;
+    if (c.y > maxY) maxY = c.y;
+  }
+  return {
+    px: minX * CELL_SIZE,
+    py: minY * CELL_SIZE,
+    pw: (maxX - minX + 1) * CELL_SIZE,
+    ph: (maxY - minY + 1) * CELL_SIZE
+  };
 }
 
 export function fitToView() {

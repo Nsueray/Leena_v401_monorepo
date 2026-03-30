@@ -295,9 +295,9 @@ router.post('/versions/:versionId/stands', authMiddleware, async (req, res) => {
     const organizer_id = req.organizer_id;
     const { stand_code, zone, display_label, area_kind, special_area_type, commercial_status, stand_type, notes, metadata, cells } = req.body;
 
-    if (!stand_code || !cells || !Array.isArray(cells) || cells.length === 0) {
+    if (!cells || !Array.isArray(cells) || cells.length === 0) {
       client.release();
-      return res.status(400).json({ success: false, message: 'stand_code and cells[] are required (cells must be non-empty array)' });
+      return res.status(400).json({ success: false, message: 'cells[] is required (must be non-empty array)' });
     }
 
     // Validate cell format
@@ -340,6 +340,9 @@ router.post('/versions/:versionId/stands', authMiddleware, async (req, res) => {
 
     await client.query('BEGIN');
 
+    // Use a temporary placeholder if stand_code not provided — will be replaced after INSERT
+    const tempCode = stand_code || `__temp_${Date.now()}`;
+
     // Insert stand
     const standResult = await client.query(
       `INSERT INTO expo_stands (
@@ -350,7 +353,7 @@ router.post('/versions/:versionId/stands', authMiddleware, async (req, res) => {
        RETURNING *`,
       [
         versionId,
-        stand_code,
+        tempCode,
         zone || null,
         display_label || null,
         area_kind || 'stand',
@@ -363,7 +366,17 @@ router.post('/versions/:versionId/stands', authMiddleware, async (req, res) => {
       ]
     );
 
-    const stand = standResult.rows[0];
+    let stand = standResult.rows[0];
+
+    // Auto-generate stand_code from ID if not provided
+    if (!stand_code) {
+      const autoCode = `S-${stand.id}`;
+      const updated = await client.query(
+        'UPDATE expo_stands SET stand_code = $1 WHERE id = $2 RETURNING *',
+        [autoCode, stand.id]
+      );
+      stand = updated.rows[0];
+    }
 
     // Batch insert cells
     // Build a multi-row VALUES clause for efficiency
