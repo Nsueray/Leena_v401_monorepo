@@ -104,6 +104,11 @@ export async function mergeStands(standIds, mergedStandCode) {
   return data.stand;
 }
 
+export async function moveStand(standId, cells) {
+  const data = await apiCall('PUT', `/stands/${standId}/move`, { cells });
+  return data.stand;
+}
+
 export async function splitStand(standId, newStands) {
   const data = await apiCall('POST', `/stands/${standId}/split`, { new_stands: newStands });
   return data.stands;

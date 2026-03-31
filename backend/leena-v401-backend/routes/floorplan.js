@@ -1012,6 +1012,87 @@ router.post('/stands/merge', authMiddleware, async (req, res) => {
 });
 
 // DELETE /api/floorplan/stands/:id
+// PUT /api/floorplan/stands/:id/move — Move stand to new cell positions
+router.put('/stands/:id/move', authMiddleware, async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const standId = req.params.id;
+    const organizer_id = req.organizer_id;
+    const { cells } = req.body;
+
+    if (!cells || !Array.isArray(cells) || cells.length === 0) {
+      client.release();
+      return res.status(400).json({ success: false, message: 'cells[] is required' });
+    }
+
+    // Verify ownership + draft
+    const standCheck = await client.query(
+      `SELECT s.id, s.floorplan_version_id, v.status, h.grid_width, h.grid_height
+       FROM expo_stands s
+       JOIN expo_floorplan_versions v ON v.id = s.floorplan_version_id
+       JOIN expo_halls h ON h.id = v.hall_id
+       WHERE s.id = $1 AND h.organizer_id = $2`,
+      [standId, organizer_id]
+    );
+    if (standCheck.rows.length === 0) {
+      client.release();
+      return res.status(404).json({ success: false, message: 'Stand not found' });
+    }
+
+    const info = standCheck.rows[0];
+    if (info.status !== 'draft') {
+      client.release();
+      return res.status(400).json({ success: false, message: 'Can only move stands in draft versions' });
+    }
+
+    // Validate bounds
+    for (const c of cells) {
+      if (c.x < 0 || c.y < 0 || c.x >= info.grid_width || c.y >= info.grid_height) {
+        client.release();
+        return res.status(400).json({ success: false, message: `Cell (${c.x},${c.y}) is outside grid bounds` });
+      }
+    }
+
+    await client.query('BEGIN');
+
+    // Delete old cells
+    await client.query('DELETE FROM expo_stand_cells WHERE stand_id = $1', [standId]);
+
+    // Insert new cells
+    const vals = [];
+    const params = [];
+    let pi = 1;
+    for (const c of cells) {
+      vals.push(`($${pi++}, $${pi++}, $${pi++}, $${pi++})`);
+      params.push(standId, info.floorplan_version_id, c.x, c.y);
+    }
+    await client.query(
+      `INSERT INTO expo_stand_cells (stand_id, floorplan_version_id, cell_x, cell_y) VALUES ${vals.join(', ')}`,
+      params
+    );
+
+    await client.query('COMMIT');
+
+    // Re-read stand with trigger-updated size_m2
+    const updated = await pool.query('SELECT * FROM expo_stands WHERE id = $1', [standId]);
+
+    res.json({
+      success: true,
+      stand: { ...updated.rows[0], cells }
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[floorplan] Error moving stand:', err);
+    if (err.code === '23505') {
+      return res.status(409).json({ success: false, message: 'Target cells are occupied by another stand' });
+    }
+    res.status(500).json({ success: false, message: 'Failed to move stand' });
+  } finally {
+    client.release();
+  }
+});
+
 router.delete('/stands/:id', authMiddleware, async (req, res) => {
   try {
     const standId = req.params.id;
