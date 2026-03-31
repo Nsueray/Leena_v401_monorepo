@@ -34,9 +34,6 @@ class FloorPlanState {
     this.selectedStand = null;      // Currently selected stand object
     this.selectedStands = [];       // Multi-select for merge (Shift+click)
     this.hoveredCell = null;        // {x, y} or null
-    this.splitMode = false;         // Split mode active
-    this.splitStand = null;         // Stand being split
-    this.splitCells = new Set();    // Cells assigned to "new stand B" during split
 
     // Filters
     this.visibilityFilters = {
@@ -159,30 +156,6 @@ class FloorPlanState {
     }
     this.selectedStand = this.selectedStands[this.selectedStands.length - 1] || null;
     this.emit('standSelected', this.selectedStand);
-  }
-
-  enterSplitMode(stand) {
-    this.splitMode = true;
-    this.splitStand = stand;
-    this.splitCells.clear();
-    this.emit('splitModeChanged', true);
-  }
-
-  exitSplitMode() {
-    this.splitMode = false;
-    this.splitStand = null;
-    this.splitCells.clear();
-    this.emit('splitModeChanged', false);
-  }
-
-  toggleSplitCell(x, y) {
-    const key = `${x},${y}`;
-    if (this.splitCells.has(key)) {
-      this.splitCells.delete(key);
-    } else {
-      this.splitCells.add(key);
-    }
-    this.emit('splitCellsChanged', this.splitCells);
   }
 
   toggleCell(x, y) {

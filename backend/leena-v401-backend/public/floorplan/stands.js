@@ -214,10 +214,7 @@ function updateDetailPanel(stand) {
   if (splitBtn) {
     const canSplit = state.isDraft() && stand.cells && stand.cells.length >= 2 && stand.area_kind === 'stand';
     splitBtn.style.display = canSplit ? 'inline-flex' : 'none';
-    splitBtn.onclick = () => {
-      state.enterSplitMode(stand);
-      showSplitUI(stand);
-    };
+    splitBtn.onclick = () => showSplitDialog(stand);
   }
 
   // Duplicate button (draft only)
@@ -420,82 +417,92 @@ async function handleMergeStands() {
   }
 }
 
-// --- Split Mode ---
+// --- Split (Dialog-based: horizontal or vertical) ---
 
-function showSplitUI(stand) {
-  const panel = document.getElementById('stand-detail');
-  if (!panel) return;
+function showSplitDialog(stand) {
+  const dialog = document.getElementById('split-stand-dialog');
+  if (!dialog) return;
 
-  const totalCells = stand.cells ? stand.cells.length : 0;
+  const cells = stand.cells || [];
+  if (cells.length < 2) return;
 
-  panel.innerHTML = `
-    <div style="background:#dbeafe;border-radius:8px;padding:12px;margin-bottom:10px;">
-      <div style="font-size:12px;font-weight:600;color:#1e40af;margin-bottom:4px;">Split Mode</div>
-      <div style="font-size:11px;color:#1e40af;">Click cells to assign to <strong>Stand B</strong> (blue). Remaining = <strong>Stand A</strong>.</div>
-    </div>
-    <div class="detail-row"><span class="detail-label">Original</span><span class="detail-value">${stand.stand_code} (${totalCells}m²)</span></div>
-    <div class="detail-row"><span class="detail-label">Stand A</span><span class="detail-value" id="split-a-count">${totalCells} cells</span></div>
-    <div class="detail-row"><span class="detail-label">Stand B</span><span class="detail-value" id="split-b-count">0 cells</span></div>
-    <div style="display:flex;gap:6px;margin-top:12px;">
-      <button class="btn btn-primary btn-sm" id="btn-confirm-split" disabled style="flex:1;justify-content:center;">Confirm Split</button>
-      <button class="btn btn-secondary btn-sm" id="btn-cancel-split" style="flex:1;justify-content:center;background:#f3f4f6;border-color:#e2e8f0;">Cancel</button>
-    </div>
-  `;
+  // Compute bounding box
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const c of cells) {
+    if (c.x < minX) minX = c.x;
+    if (c.x > maxX) maxX = c.x;
+    if (c.y < minY) minY = c.y;
+    if (c.y > maxY) maxY = c.y;
+  }
 
-  // Update counts on split cell changes
-  const updateCounts = () => {
-    const bCount = state.splitCells.size;
-    const aCount = totalCells - bCount;
-    const aEl = document.getElementById('split-a-count');
-    const bEl = document.getElementById('split-b-count');
-    const confirmBtn = document.getElementById('btn-confirm-split');
-    if (aEl) aEl.textContent = `${aCount} cells`;
-    if (bEl) bEl.textContent = `${bCount} cells`;
-    if (confirmBtn) confirmBtn.disabled = bCount === 0 || aCount === 0;
-  };
-  state.on('splitCellsChanged', updateCounts);
+  const spanX = maxX - minX + 1;
+  const spanY = maxY - minY + 1;
+  const midX = minX + Math.floor(spanX / 2);
+  const midY = minY + Math.floor(spanY / 2);
 
-  document.getElementById('btn-cancel-split').addEventListener('click', () => {
-    state.off('splitCellsChanged', updateCounts);
-    state.exitSplitMode();
-    updateDetailPanel(stand);
-  });
+  // Enable/disable buttons based on dimensions
+  const hBtn = document.getElementById('split-horizontal');
+  const vBtn = document.getElementById('split-vertical');
+  if (hBtn) hBtn.disabled = spanY < 2;
+  if (vBtn) vBtn.disabled = spanX < 2;
 
-  document.getElementById('btn-confirm-split').addEventListener('click', async () => {
-    const codeA = prompt('Stand code for A (remaining):', stand.stand_code + 'a') || '';
-    const codeB = prompt('Stand code for B (selected):', stand.stand_code + 'b') || '';
+  // Show preview info
+  const infoEl = document.getElementById('split-info');
+  if (infoEl) {
+    infoEl.innerHTML = `
+      <strong>${stand.stand_code}</strong> (${cells.length} m²)<br>
+      ${spanX} x ${spanY} cells
+    `;
+  }
 
-    const allCells = stand.cells || [];
-    const cellsB = [];
+  // Code inputs
+  const codeA = document.getElementById('split-code-a');
+  const codeB = document.getElementById('split-code-b');
+  if (codeA) codeA.value = stand.stand_code + 'a';
+  if (codeB) codeB.value = stand.stand_code + 'b';
+
+  dialog.style.display = 'flex';
+
+  // Bind split actions
+  const doSplit = async (direction) => {
     const cellsA = [];
-    for (const c of allCells) {
-      if (state.splitCells.has(`${c.x},${c.y}`)) {
-        cellsB.push(c);
+    const cellsB = [];
+
+    for (const c of cells) {
+      if (direction === 'horizontal') {
+        (c.y < midY ? cellsA : cellsB).push(c);
       } else {
-        cellsA.push(c);
+        (c.x < midX ? cellsA : cellsB).push(c);
       }
     }
 
-    const confirmBtn = document.getElementById('btn-confirm-split');
-    if (confirmBtn) { confirmBtn.disabled = true; confirmBtn.textContent = 'Splitting...'; }
+    if (cellsA.length === 0 || cellsB.length === 0) {
+      alert('Cannot split: one side would be empty');
+      return;
+    }
+
+    const nameA = codeA?.value?.trim() || undefined;
+    const nameB = codeB?.value?.trim() || undefined;
+
+    if (hBtn) hBtn.disabled = true;
+    if (vBtn) vBtn.disabled = true;
 
     try {
       const newStands = await splitStand(stand.id, [
-        { stand_code: codeA.trim() || undefined, cells: cellsA },
-        { stand_code: codeB.trim() || undefined, cells: cellsB }
+        { stand_code: nameA, cells: cellsA },
+        { stand_code: nameB, cells: cellsB }
       ]);
 
-      state.off('splitCellsChanged', updateCounts);
-      state.exitSplitMode();
-
-      // Remove old, add new
+      dialog.style.display = 'none';
       state.removeStand(stand.id);
-      for (const ns of newStands) {
-        state.addStand(ns);
-      }
+      for (const ns of newStands) state.addStand(ns);
     } catch (err) {
       alert(err.message);
-      if (confirmBtn) { confirmBtn.disabled = false; confirmBtn.textContent = 'Confirm Split'; }
+      if (hBtn) hBtn.disabled = spanY < 2;
+      if (vBtn) vBtn.disabled = spanX < 2;
     }
-  });
+  };
+
+  if (hBtn) hBtn.onclick = () => doSplit('horizontal');
+  if (vBtn) vBtn.onclick = () => doSplit('vertical');
 }

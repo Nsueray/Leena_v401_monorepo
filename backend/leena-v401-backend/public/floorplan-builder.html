@@ -189,7 +189,7 @@
                 <button class="btn-icon" id="btn-create-version" title="New Version"><i class="bi bi-plus-circle"></i></button>
                 <span id="draft-indicator" class="version-status"></span>
                 <button class="btn-icon" id="btn-activate-version" title="Activate Version" style="display:none;color:var(--success);"><i class="bi bi-check-circle-fill"></i></button>
-                <button class="btn-icon" id="btn-clone-version" title="Clone Version"><i class="bi bi-copy"></i></button>
+                <button class="btn-icon" id="btn-clone-version" title="Clone Version"><i class="bi bi-files"></i></button>
                 <div class="spacer"></div>
                 <button class="btn-icon" id="btn-export-png" title="Export PNG"><i class="bi bi-download"></i></button>
                 <input type="file" id="bg-file-input" accept="image/png,image/jpeg" style="display:none;">
@@ -324,6 +324,28 @@
                     <button type="submit" class="btn btn-primary" id="dialog-submit">Create</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Split Stand Dialog -->
+    <div class="dialog-overlay" id="split-stand-dialog">
+        <div class="dialog-box">
+            <h3><i class="bi bi-scissors" style="color:var(--primary);margin-right:6px;"></i>Split Stand</h3>
+            <div id="split-info" style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;"></div>
+
+            <label for="split-code-a">Stand A Code</label>
+            <input type="text" id="split-code-a" placeholder="e.g. B3a">
+
+            <label for="split-code-b">Stand B Code</label>
+            <input type="text" id="split-code-b" placeholder="e.g. B3b">
+
+            <div style="display:flex;gap:8px;margin-top:16px;">
+                <button class="btn btn-primary" id="split-horizontal" style="flex:1;justify-content:center;"><i class="bi bi-arrows-expand"></i> Split Horizontal</button>
+                <button class="btn btn-primary" id="split-vertical" style="flex:1;justify-content:center;"><i class="bi bi-arrows-expand" style="transform:rotate(90deg);display:inline-block;"></i> Split Vertical</button>
+            </div>
+            <div class="dialog-actions" style="margin-top:8px;">
+                <button type="button" class="btn btn-secondary" onclick="document.getElementById('split-stand-dialog').style.display='none'">Cancel</button>
+            </div>
         </div>
     </div>
 
