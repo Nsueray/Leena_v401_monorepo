@@ -285,7 +285,7 @@ function showCreateDialog() {
     const areaKindSelect = document.getElementById('dialog-area-kind');
     const specialTypeSelect = document.getElementById('dialog-special-type');
 
-    if (codeInput) codeInput.value = dup.originalCode + '-copy';
+    if (codeInput) codeInput.value = '';
     if (zoneInput) zoneInput.value = dup.zone || '';
     if (labelInput) labelInput.value = dup.display_label || '';
     if (areaKindSelect) {
@@ -477,13 +477,10 @@ async function handleBulkDuplicate() {
     return;
   }
 
-  if (!confirm(`Duplicate ${stands.length} stands (offset: +${offsetX}x, +${offsetY}y)?`)) return;
-
   try {
     for (const s of stands) {
       const newCells = (s.cells || []).map(c => ({ x: c.x + offsetX, y: c.y + offsetY }));
       const newStand = await createStand(state.currentVersion.id, {
-        stand_code: s.stand_code + '-c',
         zone: s.zone || undefined,
         area_kind: s.area_kind,
         stand_type: s.stand_type || undefined,
