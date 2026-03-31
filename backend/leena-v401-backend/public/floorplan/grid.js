@@ -97,31 +97,19 @@ export function initGrid(containerId) {
   stage.add(standLayer);
   stage.add(interactionLayer);
 
-  // Wheel: Ctrl/pinch = zoom, otherwise = pan (trackpad-friendly)
+  // Wheel handler:
+  //   ctrlKey (pinch or Ctrl+wheel) → ZOOM
+  //   deltaX !== 0 (trackpad two-finger scroll) → PAN
+  //   deltaX === 0, no Ctrl (mouse wheel) → ZOOM
   stage.on('wheel', (e) => {
     e.evt.preventDefault();
     const evt = e.evt;
+    const isZoom = evt.ctrlKey || evt.metaKey || (Math.abs(evt.deltaX) === 0 && !evt.shiftKey);
 
-    if (evt.ctrlKey || evt.metaKey) {
-      // ZOOM (pinch-to-zoom on trackpad sends ctrlKey + small deltaY)
-      const oldScale = stage.scaleX();
-      const pointer = stage.getPointerPosition();
-      const scaleBy = 1.08;
-      const direction = evt.deltaY > 0 ? -1 : 1;
-      const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
-      const clampedScale = Math.max(0.2, Math.min(5, newScale));
-
-      const mousePointTo = {
-        x: (pointer.x - stage.x()) / oldScale,
-        y: (pointer.y - stage.y()) / oldScale
-      };
-      stage.scale({ x: clampedScale, y: clampedScale });
-      stage.position({
-        x: pointer.x - mousePointTo.x * clampedScale,
-        y: pointer.y - mousePointTo.y * clampedScale
-      });
+    if (isZoom) {
+      applyZoom(evt.deltaY > 0 ? -1 : 1, stage.getPointerPosition());
     } else {
-      // PAN (two-finger scroll on trackpad, or regular scroll wheel)
+      // PAN (trackpad two-finger or shift+wheel)
       stage.position({
         x: stage.x() - evt.deltaX,
         y: stage.y() - evt.deltaY
@@ -844,6 +832,29 @@ export function exportPNG() {
   link.href = dataUrl;
   link.click();
 }
+
+function applyZoom(direction, pointer) {
+  if (!stage) return;
+  if (!pointer) pointer = { x: stage.width() / 2, y: stage.height() / 2 };
+  const oldScale = stage.scaleX();
+  const scaleBy = 1.2;
+  const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+  const clampedScale = Math.max(0.2, Math.min(5, newScale));
+
+  const mousePointTo = {
+    x: (pointer.x - stage.x()) / oldScale,
+    y: (pointer.y - stage.y()) / oldScale
+  };
+  stage.scale({ x: clampedScale, y: clampedScale });
+  stage.position({
+    x: pointer.x - mousePointTo.x * clampedScale,
+    y: pointer.y - mousePointTo.y * clampedScale
+  });
+  stage.batchDraw();
+}
+
+export function zoomIn() { applyZoom(1); }
+export function zoomOut() { applyZoom(-1); }
 
 export function fitToView() {
   if (!stage || !state.gridWidth) return;

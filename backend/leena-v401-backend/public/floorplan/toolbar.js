@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion, cloneVersion } from './api.js';
-import { fitToView, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground } from './grid.js';
+import { fitToView, zoomIn, zoomOut, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground } from './grid.js';
 import { updateStats } from './stands.js';
 
 export function initToolbar() {
@@ -114,6 +114,12 @@ export function initToolbar() {
   if (activateBtn) {
     activateBtn.addEventListener('click', handleActivateVersion);
   }
+
+  // Zoom buttons
+  const zoomInBtn = document.getElementById('btn-zoom-in');
+  if (zoomInBtn) zoomInBtn.addEventListener('click', zoomIn);
+  const zoomOutBtn = document.getElementById('btn-zoom-out');
+  if (zoomOutBtn) zoomOutBtn.addEventListener('click', zoomOut);
 
   // Fit to view button
   const fitBtn = document.getElementById('btn-fit-view');
