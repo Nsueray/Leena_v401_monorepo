@@ -111,24 +111,32 @@
 
 ---
 
-## ✅ Floor Plan Builder — Sprint 3 (30 Mart 2026) — COMPLETED
+## ✅ Floor Plan Builder — Sprint 3 (31 Mart 2026) — COMPLETED
 
-- [x] Stand split (POST /stands/:id/split — visual split mode, cell assignment)
+- [x] Stand split (POST /stands/:id/split — dialog-based horizontal/vertical split)
 - [x] Stand merge (POST /stands/merge — Shift+click multi-select, combine)
 - [x] Version clone (POST /versions/:id/clone — deep copy stands + cells)
 - [x] PNG export (client-side, stage.toDataURL pixelRatio:2, auto-download)
 - [x] Stand duplicate (copy template → draw new cells → pre-filled dialog)
+- [x] Stand drag-to-move (PUT /stands/:id/move — ghost preview, grid snap, draft-only)
+- [x] Multi-stand drag (Shift+click or marquee → drag all selected stands together)
+- [x] Select mode marquee selection (left-drag on empty area → rectangle stand selection)
+- [x] Pan controls changed (stage.draggable=false, middle mouse or Space+drag = pan)
+- [x] Split UX overhaul (cell-selection → horizontal/vertical dialog)
+- [x] Clone button icon fix (bi-copy → bi-files)
 
 ---
 
 ## 🔴 Floor Plan Builder — Sprint 4 (Next)
 
-- [ ] Stand drag-to-move (sürükle-taşı — reposition cells)
+- [ ] Background image UX (resize, reposition, alignment)
+- [ ] Batch stand workflow (draw large area → split into grid)
+- [ ] Batch duplicate (copy selected stands to adjacent area)
+- [ ] PDF export (branded, server-side — Phase 2)
 - [ ] Connected shape validation (cell adjacency check)
-- [ ] Background image UX (resize, reposition, hizalama)
 - [ ] Sidebar link to existing 15 admin pages
-- [ ] Hall delete (with protection)
-- [ ] PDF export (jsPDF branded output)
+- [ ] Erase mode marquee selection
+- [ ] Stand resize (edge drag to expand/shrink)
 
 ---
 

@@ -988,24 +988,28 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - 4 new endpoints: PUT stands/:id, PUT stands/:id/status, POST versions/:id/activate, PUT versions/:id
 - **Summary:** Total 12 API endpoints (8 Sprint 1 + 4 Sprint 2)
 
-**Floor Plan Builder — Sprint 3 COMPLETED (30 Mar 2026):**
-- Stand split: `POST /api/floorplan/stands/:id/split` — split into 2+ stands (transaction, validates cell coverage)
-- Stand merge: `POST /api/floorplan/stands/merge` — merge 2+ stands into one (transaction, same version required)
-- Version clone: `POST /api/floorplan/versions/:id/clone` — deep copy (all stands + cells), optional `clear_assignments`
-- PNG export: client-side `stage.toDataURL({ pixelRatio: 2 })`, auto-download `floorplan-{hall}-v{num}.png`
-- Stand duplicate: copy template (zone, area_kind, metadata) → draw new cells → pre-filled create dialog
-- Split mode UX: visual cell assignment (blue = stand B), live count, confirm/cancel
-- Merge UX: Shift+click multi-select → merge button → prompt for new code
-- 3 new endpoints: POST stands/:id/split, POST stands/merge, POST versions/:id/clone
-- **Summary:** Total 15 API endpoints (8 Sprint 1 + 4 Sprint 2 + 3 Sprint 3)
+**Floor Plan Builder — Sprint 3 COMPLETED (31 Mar 2026):**
+- Stand split: `POST /api/floorplan/stands/:id/split` — dialog-based horizontal/vertical split at bounding box midpoint. Auto-suggests codes (B3a/B3b). Transaction validates complete cell coverage.
+- Stand merge: `POST /api/floorplan/stands/merge` — Shift+click multi-select → merge button → new code prompt. Inherits properties from first stand.
+- Version clone: `POST /api/floorplan/versions/:id/clone` — deep copy all stands + cells. Optional `clear_assignments` resets company/status.
+- PNG export: client-side `stage.toDataURL({ pixelRatio: 2 })`, auto-download `floorplan-{hall}-v{num}.png`. Includes background image.
+- Stand duplicate: copy template (zone, area_kind, metadata) → draw mode → pre-filled create dialog with `{code}-copy` suggestion.
+- Stand drag-to-move: `PUT /api/floorplan/stands/:id/move` — ghost overlay (green=valid, red=invalid), grid snap, draft-only. DB uniqueness constraint prevents overlap.
+- Multi-stand drag: Shift+click or marquee-select multiple stands → drag all together. Parallel `moveStand()` API calls on commit.
+- Select-mode marquee selection: left-drag on empty area → rectangle → selects all stands with cells inside.
+- Pan controls: `stage.draggable = false`. Middle mouse button + drag OR Space + left drag = manual pan. Scroll wheel = zoom (unchanged).
+- 4 new endpoints: POST stands/:id/split, POST stands/merge, POST versions/:id/clone, PUT stands/:id/move
+- **Summary:** Total 16 API endpoints (8 Sprint 1 + 4 Sprint 2 + 4 Sprint 3)
 
 **Floor Plan Builder — Sprint 4 Backlog:**
-- Stand drag-to-move
+- Background image UX (resize, reposition, alignment)
+- Batch stand workflow (draw large area → split)
+- Batch duplicate (copy selected stands to adjacent area)
+- PDF export (branded, server-side — Phase 2)
 - Connected shape validation (cell adjacency)
-- Background image UX (resize, reposition)
 - Sidebar link to existing 15 admin pages
-- Hall delete (with protection)
-- PDF export (jsPDF branded output)
+- Erase mode marquee selection
+- Stand resize (edge drag)
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

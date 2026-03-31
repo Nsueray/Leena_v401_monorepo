@@ -696,25 +696,31 @@ ELL Roadmap v1.1
 
 **Not implemented (deferred to Sprint 3):** Stand duplicate, stand drag-to-move, connected shape validation, hall delete
 
-### Sprint 3: İleri Operasyonlar & Export — ✅ TAMAMLANDI (2026-03-30)
+### Sprint 3: İleri Operasyonlar & Export — ✅ TAMAMLANDI (2026-03-31)
 
 **Deliverables:**
-- Stand split: `POST /stands/:id/split` — visual split mode (click cells to assign to stand B, remaining = stand A). Transaction validates cell coverage.
+- Stand split: `POST /stands/:id/split` — dialog-based horizontal/vertical split at bounding box midpoint. Auto-suggests codes (B3a/B3b). Transaction validates complete cell coverage.
 - Stand merge: `POST /stands/merge` — Shift+click multi-select, merge 2+ stands. Inherits properties from first stand.
 - Version clone: `POST /versions/:id/clone` — deep copy all stands + cells. Optional `clear_assignments` flag.
-- PNG export: client-side `stage.toDataURL({ pixelRatio: 2 })`. Auto-download `floorplan-{hall}-v{num}.png`. Includes background image.
-- Stand duplicate: copy template (zone, area_kind, metadata) → switch to draw mode → user selects new cells → pre-filled create dialog.
-- 3 new endpoints (total: 15 API endpoints)
+- PNG export: client-side `stage.toDataURL({ pixelRatio: 2 })`. Auto-download. Includes background image.
+- Stand duplicate: copy template → draw mode → pre-filled create dialog with `{code}-copy`.
+- Stand drag-to-move: `PUT /stands/:id/move` — ghost overlay (green=valid, red=invalid), grid snap, draft-only.
+- Multi-stand drag: Shift+click or marquee-select → drag all together. Parallel API calls.
+- Select-mode marquee: left-drag on empty area → rectangle → multi-select stands.
+- Pan controls: `stage.draggable=false`. Middle mouse or Space+drag = pan. Wheel = zoom.
+- 4 new endpoints (total: 16 API endpoints)
 
-**Not implemented (deferred to Sprint 4):** Stand drag-to-move, connected shape validation, hall delete, PDF branded export
+**Split UX note:** Original spec proposed cell-by-cell assignment. Replaced with simpler horizontal/vertical dialog for faster UX. Backend split endpoint supports arbitrary cell distribution if needed later.
 
 ### Sprint 4: Olgunlaştırma (sıradaki)
-- Stand drag-to-move
+- Background image UX (resize, reposition, alignment)
+- Batch stand workflow (draw large area → split)
+- Batch duplicate (copy selected stands to adjacent area)
+- PDF export (branded, server-side)
 - Connected shape validation (cell adjacency)
-- Background image UX (resize, reposition)
 - Sidebar link to existing admin pages
-- Hall delete (with protection)
-- PDF export (jsPDF branded)
+- Erase mode marquee selection
+- Stand resize (edge drag)
 - Gerçek veriyle test (Mega Clima planını sisteme gir)
 
 ### Toplam MVP tahmini: 5-7 hafta (Sprint 1-3 tamamlandı, Sprint 4 devam)
