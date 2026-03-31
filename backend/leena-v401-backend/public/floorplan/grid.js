@@ -48,14 +48,26 @@ let isDrawing = false;      // marquee drag active
 let drawStartCell = null;   // {x, y} where marquee started
 let marqueeRect = null;     // Konva.Rect overlay during drag
 
-// Stand drag-to-move state
+// Stand drag-to-move state (supports multi-stand)
 let isDraggingStand = false;
-let dragStand = null;       // stand being dragged
+let dragStands = [];        // stands being dragged (1 or more)
+let dragAllCells = [];      // combined cells of all dragged stands
+let dragOwnKeys = new Set();// "x,y" keys of all dragged stands' cells
 let dragStartCell = null;   // cell where drag started
-let dragDeltaX = 0;         // current cell delta
+let dragDeltaX = 0;
 let dragDeltaY = 0;
-let dragGhosts = [];        // Konva.Rect ghost shapes
-let dragValid = false;      // is current position valid?
+let dragGhosts = [];
+let dragValid = false;
+
+// Pan state (middle mouse or space+drag)
+let isPanning = false;
+let panLastPos = null;
+let spaceHeld = false;
+
+// Select-mode marquee (empty area drag)
+let isSelectMarquee = false;
+let selectMarqueeStart = null;
+let selectMarqueeRect = null;
 
 export function initGrid(containerId) {
   const container = document.getElementById(containerId);
@@ -68,8 +80,12 @@ export function initGrid(containerId) {
     container: containerId,
     width: containerWidth,
     height: containerHeight,
-    draggable: true
+    draggable: false
   });
+
+  // Space key for pan mode
+  window.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat) { spaceHeld = true; e.preventDefault(); } });
+  window.addEventListener('keyup', (e) => { if (e.code === 'Space') spaceHeld = false; });
 
   bgLayer = new Konva.Layer();
   gridLayer = new Konva.Layer();
@@ -115,61 +131,113 @@ export function initGrid(containerId) {
     return { x: cx, y: cy };
   }
 
-  // --- Mouse down: start marquee (draw) or stand drag (select) ---
-  stage.on('mousedown touchstart', (e) => {
-    const cell = pointerToCell(stage.getPointerPosition());
+  // =========================================================
+  // MOUSE HANDLERS
+  // =========================================================
 
+  let suppressClick = false;
+
+  // --- Mouse down ---
+  stage.on('mousedown touchstart', (e) => {
+    const pos = stage.getPointerPosition();
+    const cell = pointerToCell(pos);
+    const isMiddle = e.evt && e.evt.button === 1;
+
+    // PAN: middle mouse or space+left click
+    if (isMiddle || spaceHeld) {
+      isPanning = true;
+      panLastPos = { x: e.evt.clientX, y: e.evt.clientY };
+      e.evt.preventDefault();
+      return;
+    }
+
+    // DRAW MODE: marquee cell selection
     if (state.tool === 'draw' && cell) {
-      stage.draggable(false);
       isDrawing = true;
       drawStartCell = { x: cell.x, y: cell.y };
-
-      // Create marquee overlay rect
       if (marqueeRect) { marqueeRect.destroy(); marqueeRect = null; }
       marqueeRect = new Konva.Rect({
-        x: cell.x * CELL_SIZE,
-        y: cell.y * CELL_SIZE,
-        width: CELL_SIZE,
-        height: CELL_SIZE,
-        fill: SELECTED_FILL,
-        opacity: 0.25,
-        stroke: '#2563eb',
-        strokeWidth: 1,
-        dash: [4, 3],
-        listening: false
+        x: cell.x * CELL_SIZE, y: cell.y * CELL_SIZE,
+        width: CELL_SIZE, height: CELL_SIZE,
+        fill: SELECTED_FILL, opacity: 0.25,
+        stroke: '#2563eb', strokeWidth: 1, dash: [4, 3], listening: false
       });
       interactionLayer.add(marqueeRect);
       interactionLayer.draw();
-    } else if (state.tool === 'select' && cell && state.isDraft()) {
-      // Check if clicking on a stand → start drag
+      return;
+    }
+
+    // SELECT MODE
+    if (state.tool === 'select' && cell) {
       const stand = state.getStandAtCell(cell.x, cell.y);
-      if (stand && stand.cells && stand.cells.length > 0) {
-        stage.draggable(false);
+
+      if (stand && stand.cells && stand.cells.length > 0 && state.isDraft()) {
+        // Start stand drag — use selectedStands if this stand is in multi-select
         isDraggingStand = true;
-        dragStand = stand;
         dragStartCell = { x: cell.x, y: cell.y };
         dragDeltaX = 0;
         dragDeltaY = 0;
         dragValid = true;
+
+        // Determine which stands to drag
+        const isInSelection = state.selectedStands.some(s => s.id === stand.id);
+        if (isInSelection && state.selectedStands.length > 1) {
+          dragStands = [...state.selectedStands];
+        } else {
+          dragStands = [stand];
+        }
+
+        // Collect all cells and own-keys for collision checks
+        dragAllCells = [];
+        dragOwnKeys = new Set();
+        for (const s of dragStands) {
+          for (const c of (s.cells || [])) {
+            dragAllCells.push({ x: c.x, y: c.y, standId: s.id });
+            dragOwnKeys.add(`${c.x},${c.y}`);
+          }
+        }
+      } else if (!stand && !e.evt?.shiftKey) {
+        // Empty area drag → select marquee in select mode
+        isSelectMarquee = true;
+        selectMarqueeStart = { x: cell.x, y: cell.y };
+        if (selectMarqueeRect) { selectMarqueeRect.destroy(); selectMarqueeRect = null; }
+        selectMarqueeRect = new Konva.Rect({
+          x: cell.x * CELL_SIZE, y: cell.y * CELL_SIZE,
+          width: CELL_SIZE, height: CELL_SIZE,
+          fill: '#3b82f6', opacity: 0.1,
+          stroke: '#3b82f6', strokeWidth: 1, dash: [4, 3], listening: false
+        });
+        interactionLayer.add(selectMarqueeRect);
+        interactionLayer.draw();
       }
+      return;
     }
   });
 
-  // --- Mouse move: update marquee, stand drag ghost, or hover ---
+  // --- Mouse move ---
   stage.on('mousemove touchmove', (e) => {
     const pos = stage.getPointerPosition();
     const cell = pointerToCell(pos);
 
-    // Hover update
+    // Hover
     state.setHoveredCell(cell);
 
-    // Update marquee size while drawing
-    if (isDrawing && state.tool === 'draw' && drawStartCell && cell && marqueeRect) {
+    // Pan
+    if (isPanning && panLastPos) {
+      const dx = e.evt.clientX - panLastPos.x;
+      const dy = e.evt.clientY - panLastPos.y;
+      stage.position({ x: stage.x() + dx, y: stage.y() + dy });
+      stage.batchDraw();
+      panLastPos = { x: e.evt.clientX, y: e.evt.clientY };
+      return;
+    }
+
+    // Draw marquee
+    if (isDrawing && drawStartCell && cell && marqueeRect) {
       const minX = Math.min(drawStartCell.x, cell.x);
       const maxX = Math.max(drawStartCell.x, cell.x);
       const minY = Math.min(drawStartCell.y, cell.y);
       const maxY = Math.max(drawStartCell.y, cell.y);
-
       marqueeRect.x(minX * CELL_SIZE);
       marqueeRect.y(minY * CELL_SIZE);
       marqueeRect.width((maxX - minX + 1) * CELL_SIZE);
@@ -178,7 +246,7 @@ export function initGrid(containerId) {
     }
 
     // Stand drag ghost
-    if (isDraggingStand && dragStand && cell && dragStartCell) {
+    if (isDraggingStand && dragStands.length > 0 && cell && dragStartCell) {
       const newDX = cell.x - dragStartCell.x;
       const newDY = cell.y - dragStartCell.y;
       if (newDX !== dragDeltaX || newDY !== dragDeltaY) {
@@ -187,39 +255,99 @@ export function initGrid(containerId) {
         drawDragGhost();
       }
     }
+
+    // Select marquee
+    if (isSelectMarquee && selectMarqueeStart && cell && selectMarqueeRect) {
+      const minX = Math.min(selectMarqueeStart.x, cell.x);
+      const maxX = Math.max(selectMarqueeStart.x, cell.x);
+      const minY = Math.min(selectMarqueeStart.y, cell.y);
+      const maxY = Math.max(selectMarqueeStart.y, cell.y);
+      selectMarqueeRect.x(minX * CELL_SIZE);
+      selectMarqueeRect.y(minY * CELL_SIZE);
+      selectMarqueeRect.width((maxX - minX + 1) * CELL_SIZE);
+      selectMarqueeRect.height((maxY - minY + 1) * CELL_SIZE);
+      interactionLayer.batchDraw();
+    }
   });
 
-  // --- Mouse up: commit marquee selection or stand drag ---
-  stage.on('mouseup touchend', () => {
-    // Handle stand drag commit
-    if (isDraggingStand && dragStand) {
+  // --- Mouse up ---
+  stage.on('mouseup touchend', (e) => {
+    // End pan
+    if (isPanning) {
+      isPanning = false;
+      panLastPos = null;
+      return;
+    }
+
+    // End stand drag
+    if (isDraggingStand && dragStands.length > 0) {
       const didMove = dragDeltaX !== 0 || dragDeltaY !== 0;
       clearDragGhost();
 
       if (didMove && dragValid) {
-        // Compute new cells
-        const newCells = dragStand.cells.map(c => ({ x: c.x + dragDeltaX, y: c.y + dragDeltaY }));
-        moveStand(dragStand.id, newCells).then(updated => {
-          state.updateStand(updated);
+        // Move each stand sequentially
+        const promises = dragStands.map(s => {
+          const newCells = s.cells.map(c => ({ x: c.x + dragDeltaX, y: c.y + dragDeltaY }));
+          return moveStand(s.id, newCells).then(updated => {
+            state.updateStand(updated);
+          });
+        });
+        Promise.all(promises).then(() => {
           state._rebuildCellMap();
-          state.selectStand(updated);
+          drawStands();
         }).catch(err => {
           alert(err.message);
-          drawStands(); // restore original position visually
+          drawStands();
         });
       }
 
       if (didMove) suppressClick = true;
       isDraggingStand = false;
-      dragStand = null;
+      dragStands = [];
+      dragAllCells = [];
+      dragOwnKeys = new Set();
       dragStartCell = null;
       dragDeltaX = 0;
       dragDeltaY = 0;
-      stage.draggable(true);
       return;
     }
 
-    // Handle marquee commit
+    // End select marquee → select all stands inside the rectangle
+    if (isSelectMarquee && selectMarqueeStart) {
+      const endCell = pointerToCell(stage.getPointerPosition());
+      if (endCell && (endCell.x !== selectMarqueeStart.x || endCell.y !== selectMarqueeStart.y)) {
+        const minX = Math.min(selectMarqueeStart.x, endCell.x);
+        const maxX = Math.max(selectMarqueeStart.x, endCell.x);
+        const minY = Math.min(selectMarqueeStart.y, endCell.y);
+        const maxY = Math.max(selectMarqueeStart.y, endCell.y);
+
+        // Find all stands that have at least one cell inside the rectangle
+        const selected = [];
+        for (const stand of state.stands) {
+          if (!stand.cells) continue;
+          for (const c of stand.cells) {
+            if (c.x >= minX && c.x <= maxX && c.y >= minY && c.y <= maxY) {
+              selected.push(stand);
+              break;
+            }
+          }
+        }
+        if (selected.length > 0) {
+          state.selectedStands = selected;
+          state.selectedStand = selected[selected.length - 1];
+          state.emit('standSelected', state.selectedStand);
+        }
+        suppressClick = true;
+      }
+
+      if (selectMarqueeRect) { selectMarqueeRect.destroy(); selectMarqueeRect = null; }
+      interactionLayer.draw();
+      isSelectMarquee = false;
+      selectMarqueeStart = null;
+      return;
+    }
+
+    // End draw marquee
     if (!isDrawing || !drawStartCell) return;
 
     const endCell = pointerToCell(stage.getPointerPosition());
@@ -230,7 +358,6 @@ export function initGrid(containerId) {
       const maxX = Math.max(drawStartCell.x, endCell.x);
       const minY = Math.min(drawStartCell.y, endCell.y);
       const maxY = Math.max(drawStartCell.y, endCell.y);
-
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
           const key = `${x},${y}`;
@@ -251,11 +378,9 @@ export function initGrid(containerId) {
     interactionLayer.draw();
     isDrawing = false;
     drawStartCell = null;
-    stage.draggable(true);
   });
 
   // --- Click: select stand or erase cell (suppressed after drag) ---
-  let suppressClick = false;
   stage.on('click tap', (e) => {
     if (suppressClick) { suppressClick = false; return; }
     if (state.tool === 'draw') return;
@@ -531,48 +656,36 @@ function drawHover() {
 
 function drawDragGhost() {
   clearDragGhost();
-  if (!dragStand || !dragStand.cells || !interactionLayer) return;
+  if (dragAllCells.length === 0 || !interactionLayer) return;
 
   const occupied = state.getOccupiedCells();
-  // Build set of this stand's own cells (they don't block themselves)
-  const ownCells = new Set(dragStand.cells.map(c => `${c.x},${c.y}`));
 
+  // First pass: check all validity
   dragValid = true;
-  for (const c of dragStand.cells) {
+  for (const c of dragAllCells) {
     const nx = c.x + dragDeltaX;
     const ny = c.y + dragDeltaY;
-    const key = `${nx},${ny}`;
-
-    // Check bounds
     if (nx < 0 || ny < 0 || nx >= state.gridWidth || ny >= state.gridHeight) {
-      dragValid = false;
+      dragValid = false; break;
     }
-    // Check collision (ignore own cells)
-    if (occupied.has(key) && !ownCells.has(key)) {
-      dragValid = false;
+    const key = `${nx},${ny}`;
+    if (occupied.has(key) && !dragOwnKeys.has(key)) {
+      dragValid = false; break;
     }
+  }
 
+  // Second pass: draw ghosts
+  const fill = dragValid ? '#bbf7d0' : '#fecaca';
+  const stroke = dragValid ? '#16a34a' : '#dc2626';
+  for (const c of dragAllCells) {
     const ghost = new Konva.Rect({
-      x: nx * CELL_SIZE,
-      y: ny * CELL_SIZE,
-      width: CELL_SIZE,
-      height: CELL_SIZE,
-      fill: dragValid ? '#bbf7d0' : '#fecaca',
-      opacity: 0.5,
-      stroke: dragValid ? '#16a34a' : '#dc2626',
-      strokeWidth: 1,
-      listening: false
+      x: (c.x + dragDeltaX) * CELL_SIZE,
+      y: (c.y + dragDeltaY) * CELL_SIZE,
+      width: CELL_SIZE, height: CELL_SIZE,
+      fill, opacity: 0.5, stroke, strokeWidth: 1, listening: false
     });
     interactionLayer.add(ghost);
     dragGhosts.push(ghost);
-  }
-
-  // If any cell failed, re-color all to red
-  if (!dragValid) {
-    for (const g of dragGhosts) {
-      g.fill('#fecaca');
-      g.stroke('#dc2626');
-    }
   }
 
   interactionLayer.batchDraw();
