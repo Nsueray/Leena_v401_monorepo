@@ -127,15 +127,24 @@
 
 ---
 
+## ✅ Floor Plan Builder — Sprint 3.5 Polish (31 Mart 2026)
+
+- [x] Trackpad pan/zoom (wheel=pan, Ctrl+wheel/pinch=zoom — MacBook native)
+- [x] Bulk duplicate (multi-select → "Duplicate All" → offset right or below)
+- [x] Erase mode: click stand cell → confirm + delete entire stand
+- [x] Grid rulers (meter markers every 5 cells, top + left edges)
+- [x] Selection glow (blue shadow rect on selected/multi-selected stands)
+- [x] Fit to view auto (verified: already called on hall/version change)
+
+---
+
 ## 🔴 Floor Plan Builder — Sprint 4 (Next)
 
 - [ ] Background image UX (resize, reposition, alignment)
 - [ ] Batch stand workflow (draw large area → split into grid)
-- [ ] Batch duplicate (copy selected stands to adjacent area)
 - [ ] PDF export (branded, server-side — Phase 2)
 - [ ] Connected shape validation (cell adjacency check)
 - [ ] Sidebar link to existing 15 admin pages
-- [ ] Erase mode marquee selection
 - [ ] Stand resize (edge drag to expand/shrink)
 
 ---

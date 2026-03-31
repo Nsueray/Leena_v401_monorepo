@@ -97,27 +97,37 @@ export function initGrid(containerId) {
   stage.add(standLayer);
   stage.add(interactionLayer);
 
-  // Zoom with mouse wheel
+  // Wheel: Ctrl/pinch = zoom, otherwise = pan (trackpad-friendly)
   stage.on('wheel', (e) => {
     e.evt.preventDefault();
-    const oldScale = stage.scaleX();
-    const pointer = stage.getPointerPosition();
+    const evt = e.evt;
 
-    const scaleBy = 1.08;
-    const direction = e.evt.deltaY > 0 ? -1 : 1;
-    const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
-    const clampedScale = Math.max(0.2, Math.min(5, newScale));
+    if (evt.ctrlKey || evt.metaKey) {
+      // ZOOM (pinch-to-zoom on trackpad sends ctrlKey + small deltaY)
+      const oldScale = stage.scaleX();
+      const pointer = stage.getPointerPosition();
+      const scaleBy = 1.08;
+      const direction = evt.deltaY > 0 ? -1 : 1;
+      const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+      const clampedScale = Math.max(0.2, Math.min(5, newScale));
 
-    const mousePointTo = {
-      x: (pointer.x - stage.x()) / oldScale,
-      y: (pointer.y - stage.y()) / oldScale
-    };
-
-    stage.scale({ x: clampedScale, y: clampedScale });
-    stage.position({
-      x: pointer.x - mousePointTo.x * clampedScale,
-      y: pointer.y - mousePointTo.y * clampedScale
-    });
+      const mousePointTo = {
+        x: (pointer.x - stage.x()) / oldScale,
+        y: (pointer.y - stage.y()) / oldScale
+      };
+      stage.scale({ x: clampedScale, y: clampedScale });
+      stage.position({
+        x: pointer.x - mousePointTo.x * clampedScale,
+        y: pointer.y - mousePointTo.y * clampedScale
+      });
+    } else {
+      // PAN (two-finger scroll on trackpad, or regular scroll wheel)
+      stage.position({
+        x: stage.x() - evt.deltaX,
+        y: stage.y() - evt.deltaY
+      });
+    }
+    stage.batchDraw();
   });
 
   // --- Pointer → cell helper ---
@@ -398,7 +408,15 @@ export function initGrid(containerId) {
     } else if (state.tool === 'erase') {
       if (!cell) return;
       const key = `${cell.x},${cell.y}`;
-      if (state.selectedCells.has(key)) {
+      // Erase mode: delete stand at cell, or remove pending selection cell
+      const stand = state.getStandAtCell(cell.x, cell.y);
+      if (stand && state.isDraft()) {
+        if (confirm(`Delete stand ${stand.stand_code} (${stand.size_m2 || 0} m²)?`)) {
+          import('./api.js').then(api => {
+            api.deleteStand(stand.id).then(() => state.removeStand(stand.id)).catch(err => alert(err.message));
+          });
+        }
+      } else if (state.selectedCells.has(key)) {
         state.toggleCell(cell.x, cell.y);
       }
     }
@@ -459,6 +477,32 @@ export function drawGrid() {
     }));
   }
 
+  // Ruler labels (every 5 cells)
+  for (let x = 0; x <= w; x += 5) {
+    gridLayer.add(new Konva.Text({
+      x: x * CELL_SIZE - 1,
+      y: -14,
+      text: `${x}`,
+      fontSize: 9,
+      fontFamily: 'Inter, sans-serif',
+      fill: '#9ca3af',
+      listening: false
+    }));
+  }
+  for (let y = 0; y <= h; y += 5) {
+    gridLayer.add(new Konva.Text({
+      x: -20,
+      y: y * CELL_SIZE - 5,
+      text: `${y}`,
+      fontSize: 9,
+      fontFamily: 'Inter, sans-serif',
+      fill: '#9ca3af',
+      align: 'right',
+      width: 16,
+      listening: false
+    }));
+  }
+
   // Cache grid layer for performance (static content)
   gridLayer.cache();
   gridLayer.draw();
@@ -488,6 +532,21 @@ export function drawStands() {
         height: CELL_SIZE,
         fill: colorInfo.fill,
         stroke: null,
+        listening: false
+      }));
+    }
+
+    // Selection glow: draw a blurred shadow rect behind selected stands
+    if (isSelected || isMultiSelected) {
+      const bbox = getCellBBox(stand.cells);
+      standLayer.add(new Konva.Rect({
+        x: bbox.px - 2, y: bbox.py - 2,
+        width: bbox.pw + 4, height: bbox.ph + 4,
+        fill: 'transparent',
+        stroke: '#3b82f6',
+        strokeWidth: 4,
+        opacity: 0.3,
+        cornerRadius: 3,
         listening: false
       }));
     }

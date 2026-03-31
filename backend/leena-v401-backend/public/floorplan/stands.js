@@ -74,10 +74,14 @@ function updateDetailPanel(stand) {
         <div style="font-size:11px;color:#92400e;">${codes}</div>
         <div style="font-size:11px;color:#92400e;margin-top:4px;">Total: ${totalCells} m²</div>
       </div>
-      <button class="btn btn-primary btn-sm btn-block" id="btn-merge-stands"><i class="bi bi-union"></i> Merge Stands</button>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;text-align:center;">Shift+click to select/deselect stands</div>
+      <div style="display:flex;gap:6px;">
+        <button class="btn btn-primary btn-sm" id="btn-merge-stands" style="flex:1;justify-content:center;"><i class="bi bi-union"></i> Merge</button>
+        <button class="btn btn-sm" id="btn-bulk-duplicate" style="flex:1;justify-content:center;background:#d1fae5;color:#065f46;border-color:#6ee7b7;"><i class="bi bi-files"></i> Duplicate All</button>
+      </div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:6px;text-align:center;">Shift+click or drag-select to pick stands</div>
     `;
     document.getElementById('btn-merge-stands')?.addEventListener('click', handleMergeStands);
+    document.getElementById('btn-bulk-duplicate')?.addEventListener('click', handleBulkDuplicate);
 
     const deleteBtn = document.getElementById('btn-delete-stand');
     if (deleteBtn) deleteBtn.style.display = 'none';
@@ -412,6 +416,82 @@ async function handleMergeStands() {
     for (const id of ids) state.removeStand(id);
     state.addStand(merged);
     state.selectStand(merged);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// --- Bulk Duplicate ---
+
+async function handleBulkDuplicate() {
+  const stands = state.selectedStands;
+  if (stands.length === 0 || !state.isDraft() || !state.currentVersion) return;
+
+  // Compute bounding box of all selected stands
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const s of stands) {
+    for (const c of (s.cells || [])) {
+      if (c.x < minX) minX = c.x;
+      if (c.x > maxX) maxX = c.x;
+      if (c.y < minY) minY = c.y;
+      if (c.y > maxY) maxY = c.y;
+    }
+  }
+
+  const spanX = maxX - minX + 1;
+  const occupied = state.getOccupiedCells();
+
+  // Try placing to the right first (offset = spanX + 1)
+  let offsetX = spanX + 1;
+  let offsetY = 0;
+
+  // Check if right placement fits
+  let fits = true;
+  for (const s of stands) {
+    for (const c of (s.cells || [])) {
+      const nx = c.x + offsetX;
+      const ny = c.y + offsetY;
+      if (nx >= state.gridWidth || occupied.has(`${nx},${ny}`)) { fits = false; break; }
+    }
+    if (!fits) break;
+  }
+
+  // If right doesn't fit, try below
+  if (!fits) {
+    const spanY = maxY - minY + 1;
+    offsetX = 0;
+    offsetY = spanY + 1;
+    fits = true;
+    for (const s of stands) {
+      for (const c of (s.cells || [])) {
+        const nx = c.x + offsetX;
+        const ny = c.y + offsetY;
+        if (ny >= state.gridHeight || occupied.has(`${nx},${ny}`)) { fits = false; break; }
+      }
+      if (!fits) break;
+    }
+  }
+
+  if (!fits) {
+    alert('Not enough space to duplicate — no room to the right or below.');
+    return;
+  }
+
+  if (!confirm(`Duplicate ${stands.length} stands (offset: +${offsetX}x, +${offsetY}y)?`)) return;
+
+  try {
+    for (const s of stands) {
+      const newCells = (s.cells || []).map(c => ({ x: c.x + offsetX, y: c.y + offsetY }));
+      const newStand = await createStand(state.currentVersion.id, {
+        stand_code: s.stand_code + '-c',
+        zone: s.zone || undefined,
+        area_kind: s.area_kind,
+        stand_type: s.stand_type || undefined,
+        metadata: s.metadata || undefined,
+        cells: newCells
+      });
+      state.addStand(newStand);
+    }
   } catch (err) {
     alert(err.message);
   }

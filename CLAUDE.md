@@ -1001,14 +1001,20 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - 4 new endpoints: POST stands/:id/split, POST stands/merge, POST versions/:id/clone, PUT stands/:id/move
 - **Summary:** Total 16 API endpoints (8 Sprint 1 + 4 Sprint 2 + 4 Sprint 3)
 
+**Floor Plan Builder — Sprint 3.5 Polish (31 Mar 2026):**
+- Trackpad pan/zoom: wheel without Ctrl = pan (deltaX/deltaY), Ctrl+wheel or pinch = zoom. Works on MacBook trackpad natively.
+- Bulk duplicate: multi-select → "Duplicate All" button. Copies all selected stands offset to the right (or below if no room). Codes get `-c` suffix, commercial_status reset to available.
+- Erase mode improved: clicking a stand cell in erase mode → confirm + delete entire stand (not just pending cells)
+- Grid rulers: meter markers every 5 cells on top and left edges (9px grey text, cached with grid)
+- Selection glow: selected/multi-selected stands get blue shadow rect (4px, opacity 0.3) behind boundary
+- Fit to view: already auto-called on hall/version change (verified)
+
 **Floor Plan Builder — Sprint 4 Backlog:**
 - Background image UX (resize, reposition, alignment)
-- Batch stand workflow (draw large area → split)
-- Batch duplicate (copy selected stands to adjacent area)
+- Batch stand workflow (draw large area → split into grid)
 - PDF export (branded, server-side — Phase 2)
 - Connected shape validation (cell adjacency)
 - Sidebar link to existing 15 admin pages
-- Erase mode marquee selection
 - Stand resize (edge drag)
 
 ### v4.0.2 (6 Şubat 2026)
