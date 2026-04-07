@@ -179,7 +179,7 @@ function formatConferenceTopic(raw) {
     const items = topics.map(t =>
         `<li style="margin-bottom:4px;font-size:13px;color:#1e1b4b;line-height:1.5;">${t}</li>`
     ).join('');
-    return `<ol style="margin:4px 0 0 0;padding-left:20px;list-style-type:decimal;">${items}</ol>`;
+    return `<ul style="margin:4px 0 0 0;padding-left:20px;list-style-type:disc;">${items}</ul>`;
 }
 
 module.exports = {
