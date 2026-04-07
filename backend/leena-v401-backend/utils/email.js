@@ -161,8 +161,30 @@ async function sendBulkEmails(recipients, subject, htmlTemplate, commonData = {}
     return results;
 }
 
+/**
+ * Format conference_topic for email templates.
+ * Single topic → plain text. Multiple topics (separated by " || ") → HTML ordered list.
+ * @param {string} raw - Raw conference_topic string (e.g. "Topic A || Topic B")
+ * @returns {string} - Formatted HTML string
+ */
+function formatConferenceTopic(raw) {
+    if (!raw) return '';
+    const str = String(raw).trim();
+    if (!str) return '';
+
+    const topics = str.split(' || ').map(t => t.trim()).filter(Boolean);
+    if (topics.length === 0) return '';
+    if (topics.length === 1) return topics[0];
+
+    const items = topics.map(t =>
+        `<li style="margin-bottom:4px;font-size:13px;color:#1e1b4b;line-height:1.5;">${t}</li>`
+    ).join('');
+    return `<ol style="margin:4px 0 0 0;padding-left:20px;list-style-type:decimal;">${items}</ol>`;
+}
+
 module.exports = {
     processEmailTemplate,
+    formatConferenceTopic,
     sendEmail,
     sendEmailWithReplyTo,
     sendRegistrationEmail,

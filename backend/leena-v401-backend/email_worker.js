@@ -4,7 +4,7 @@
 
 const { Pool } = require('pg');
 require('dotenv').config();
-const { sendEmail, sendEmailWithReplyTo, processEmailTemplate } = require('./utils/email');
+const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('./utils/email');
 
 // --- Database pool (ENV-based SSL handling) ---
 const pool = new Pool({
@@ -149,6 +149,11 @@ async function processTask(task) {
       const qrImageTag = task.qr_code 
         ? `<img src="${baseUrl}/api/qr-image/${task.qr_code}" alt="QR Code" style="max-width:200px;">`
         : '';
+
+      // Format conference_topic for multi-topic display
+      if (custom_fields.conference_topic) {
+        custom_fields.conference_topic = formatConferenceTopic(custom_fields.conference_topic);
+      }
 
       // Template data
       const data = {

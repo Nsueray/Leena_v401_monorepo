@@ -5,7 +5,7 @@ const multer = require('multer');
 const XLSX = require('xlsx');
 const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
-const { sendEmail, sendEmailWithReplyTo, processEmailTemplate } = require('../utils/email');
+const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('../utils/email');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -295,9 +295,13 @@ router.post('/public', async (req, res) => {
 
           // Build email data with QR image
           // Spread custom_fields as top-level keys so {{conference_topic}} etc. work in templates
+          const cfSpread = { ...(custom_fields || {}) };
+          if (cfSpread.conference_topic) {
+            cfSpread.conference_topic = formatConferenceTopic(cfSpread.conference_topic);
+          }
           const emailData = {
             ...visitorData,
-            ...(custom_fields || {}),
+            ...cfSpread,
             qr_code: qrImageTag,
             badge_id: badgeId,
             badge_url: badgeUrl,
