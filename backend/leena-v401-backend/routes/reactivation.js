@@ -99,7 +99,7 @@ router.get('/campaign/:expoId', authMiddleware, async (req, res) => {
  */
 router.post('/create-from-excel', authMiddleware, upload.single('file'), async (req, res) => {
   try {
-    const { target_expo_id, template_id } = req.body;
+    const { target_expo_id, template_id, form_id } = req.body;
     const organizerId = req.organizer_id;
 
     if (!req.file) {
@@ -200,9 +200,9 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
           INSERT INTO reactivation_tokens (
             token, target_expo_id, organizer_id,
             email, name, last_name, company, country, job_title, phone,
-            status, created_at, expires_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', NOW(), NOW() + INTERVAL '30 days')
-        `, [token, target_expo_id, organizerId, email, name, last_name, company, country, job_title, phone]);
+            form_id, status, created_at, expires_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'pending', NOW(), NOW() + INTERVAL '30 days')
+        `, [token, target_expo_id, organizerId, email, name, last_name, company, country, job_title, phone, form_id || null]);
 
         // Queue email if template provided
         if (emailTemplate) {
@@ -267,7 +267,7 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
  */
 router.post('/create-from-expo', authMiddleware, async (req, res) => {
   try {
-    const { source_expo_id, target_expo_id, template_id, filter } = req.body;
+    const { source_expo_id, target_expo_id, template_id, filter, form_id } = req.body;
     const organizerId = req.organizer_id;
 
     if (!source_expo_id || !target_expo_id) {
@@ -360,11 +360,12 @@ router.post('/create-from-expo', authMiddleware, async (req, res) => {
           INSERT INTO reactivation_tokens (
             token, source_visitor_id, source_expo_id, target_expo_id, organizer_id,
             email, name, last_name, company, country, job_title, phone,
-            status, created_at, expires_at
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', NOW(), NOW() + INTERVAL '30 days')
+            form_id, status, created_at, expires_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'pending', NOW(), NOW() + INTERVAL '30 days')
         `, [
           token, visitor.id, source_expo_id, target_expo_id, organizerId,
-          email, visitor.name, visitor.last_name, visitor.company, visitor.country, visitor.job_title, visitor.phone
+          email, visitor.name, visitor.last_name, visitor.company, visitor.country, visitor.job_title, visitor.phone,
+          form_id || null
         ]);
 
         // Queue email
@@ -433,14 +434,16 @@ router.get('/verify/:token', async (req, res) => {
     const { token } = req.params;
 
     const result = await pool.query(`
-      SELECT 
+      SELECT
         rt.*,
         e.name as expo_name,
         e.location as expo_location,
         e.start_date,
-        e.end_date
+        e.end_date,
+        f.config as form_config
       FROM reactivation_tokens rt
       JOIN expos e ON rt.target_expo_id = e.id
+      LEFT JOIN forms f ON rt.form_id = f.id
       WHERE rt.token = $1
     `, [token]);
 
@@ -481,7 +484,8 @@ router.get('/verify/:token', async (req, res) => {
         location: tokenData.expo_location,
         start_date: tokenData.start_date,
         end_date: tokenData.end_date
-      }
+      },
+      form_config: tokenData.form_config || null
     });
 
   } catch (err) {

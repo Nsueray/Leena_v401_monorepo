@@ -490,6 +490,9 @@
                 
                 document.getElementById('expoLocation').textContent = data.expo.location || 'TBA';
 
+                // Apply form design if available
+                if (data.form_config) applyFormStyle(data.form_config);
+
                 showForm();
 
             } catch (err) {
@@ -571,6 +574,55 @@
             alertBox.className = `alert alert-${type}`;
             alertBox.textContent = message;
             alertBox.style.display = 'block';
+        }
+
+        // Apply form design from config (if form_config provided by verify endpoint)
+        function applyFormStyle(config) {
+            if (!config || !config.style) return; // null → keep hardcoded yellow theme
+
+            const s = config.style;
+
+            // Font
+            if (s.fontFamily && s.fontFamily !== 'system-ui') {
+                const link = document.createElement('link');
+                link.href = `https://fonts.googleapis.com/css2?family=${s.fontFamily.replace(/ /g, '+')}:wght@400;500;600;700&display=swap`;
+                link.rel = 'stylesheet';
+                document.head.appendChild(link);
+                document.body.style.fontFamily = `'${s.fontFamily}', system-ui, sans-serif`;
+            }
+
+            // Background
+            if (s.backgroundColor) document.body.style.background = s.backgroundColor;
+
+            // Header
+            const header = document.querySelector('.card-header');
+            if (header) {
+                if (s.headerBannerImage) {
+                    header.style.background = `url(${s.headerBannerImage}) center/cover no-repeat`;
+                    header.querySelectorAll('h1, p').forEach(el => el.style.color = 'white');
+                } else if (s.headerGradientEnd) {
+                    header.style.background = `linear-gradient(135deg, ${s.headerBannerColor}, ${s.headerGradientEnd})`;
+                    header.querySelectorAll('h1, p').forEach(el => el.style.color = 'white');
+                } else if (s.headerBannerColor) {
+                    header.style.background = s.headerBannerColor;
+                }
+                if (s.headerHeight) header.style.minHeight = s.headerHeight + 'px';
+            }
+
+            // Button + inputs
+            const styleTag = document.createElement('style');
+            styleTag.textContent = `
+                .btn-primary { background: ${s.primaryColor || '#FECC00'} !important; }
+                .btn-primary:hover { box-shadow: 0 8px 20px ${s.primaryColor || '#FECC00'}40 !important; }
+                .form-control:focus { border-color: ${s.primaryColor || '#FECC00'} !important; box-shadow: 0 0 0 3px ${s.primaryColor || '#FECC00'}25 !important; }
+                ${s.borderRadius ? `.form-control, .btn, .card { border-radius: ${s.borderRadius}px !important; }` : ''}
+            `;
+            document.head.appendChild(styleTag);
+
+            if (s.buttonText) {
+                const btn = document.getElementById('submitBtn');
+                if (btn) btn.innerHTML = `<i class="bi bi-check-circle"></i> ${s.buttonText}`;
+            }
         }
     </script>
 </body>

@@ -232,6 +232,13 @@
                                     </select>
                                     <div class="form-hint">Template should contain {{activation_url}} placeholder</div>
                                 </div>
+                                <div class="form-group" style="margin-top:12px;">
+                                    <label class="form-label">Form Design (optional)</label>
+                                    <select class="form-select" id="formDesign">
+                                        <option value="">Default Design</option>
+                                    </select>
+                                    <div class="form-hint">Use a form's design (colors, banners) for the activation page</div>
+                                </div>
                             </div>
                             
                             <!-- Preview Info -->
@@ -302,6 +309,7 @@
             
             loadExpos();
             loadTemplates();
+            loadFormsForDesign();
             setupTabs();
             setupDragDrop();
         });
@@ -388,6 +396,24 @@
             }
         }
 
+        async function loadFormsForDesign() {
+            try {
+                const response = await fetch(`${API_URL}/forms`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                const select = document.getElementById('formDesign');
+                (data.forms || []).forEach(f => {
+                    if (f.config && f.config.style) {
+                        select.innerHTML += `<option value="${f.id}">${f.name}</option>`;
+                    }
+                });
+            } catch (err) {
+                console.error('Error loading forms:', err);
+            }
+        }
+
         function handleFileSelect(e) {
             if (e.target.files[0]) handleFile(e.target.files[0]);
         }
@@ -442,10 +468,12 @@
                         return;
                     }
 
+                    const formDesignId = document.getElementById('formDesign').value;
                     const formData = new FormData();
                     formData.append('file', selectedFile);
                     formData.append('target_expo_id', targetExpoId);
                     formData.append('template_id', templateId);
+                    if (formDesignId) formData.append('form_id', formDesignId);
 
                     response = await fetch(`${API_URL}/reactivation/create-from-excel`, {
                         method: 'POST',
@@ -480,7 +508,8 @@
                             source_expo_id: sourceExpoId,
                             target_expo_id: targetExpoId,
                             template_id: templateId,
-                            filter: filter
+                            filter: filter,
+                            form_id: document.getElementById('formDesign').value || null
                         })
                     });
                 }
