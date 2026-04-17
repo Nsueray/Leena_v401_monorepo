@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 
+const multer = require('multer');
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
+
+const bannerUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 500 * 1024 } });
 
 // routes/forms.js - v402: EXHIBITOR = visitors.visitor_type (no separate exhibitors table)
 
@@ -242,9 +245,9 @@ router.post('/clone/:id', authMiddleware, async (req, res) => {
                 name, description, expo_id, organizer_id,
                 fields, is_active, email_template_id,
                 visitor_type, source, origin,
-                created_at, updated_at
+                config, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
             RETURNING *
         `;
 
@@ -258,7 +261,8 @@ router.post('/clone/:id', authMiddleware, async (req, res) => {
             source.email_template_id,
             source.visitor_type || 'visitor',
             source.source || 'form-builder',
-            source.origin || 'form-builder'
+            source.origin || 'form-builder',
+            source.config ? JSON.stringify(source.config) : null
         ];
 
         const result = await pool.query(query, values);
@@ -286,7 +290,8 @@ router.post('/', authMiddleware, async (req, res) => {
             email_template_id,
             visitor_type,
             source,
-            origin
+            origin,
+            config
         } = req.body;
 
         const organizerId = req.organizer_id;
@@ -296,9 +301,9 @@ router.post('/', authMiddleware, async (req, res) => {
                 name, description, expo_id, organizer_id,
                 fields, is_active, email_template_id,
                 visitor_type, source, origin,
-                created_at, updated_at
+                config, created_at, updated_at
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW(), NOW())
             RETURNING *
         `;
 
@@ -312,7 +317,8 @@ router.post('/', authMiddleware, async (req, res) => {
             email_template_id,
             visitor_type || 'visitor',
             source || 'form-builder',
-            origin || 'form-builder'
+            origin || 'form-builder',
+            config ? JSON.stringify(config) : null
         ];
 
         const result = await pool.query(query, values);
@@ -338,7 +344,7 @@ router.get('/public/:id', async (req, res) => {
         const { id } = req.params;
 
         const query = `
-            SELECT 
+            SELECT
                 f.id,
                 f.name,
                 f.description,
@@ -349,6 +355,7 @@ router.get('/public/:id', async (req, res) => {
                 f.source,
                 f.origin,
                 f.is_active,
+                f.config,
                 f.created_at,
                 e.name as expo_name,
                 et.name as email_template_name
@@ -394,15 +401,16 @@ router.put('/:id', authMiddleware, async (req, res) => {
             email_template_id,
             visitor_type,
             source,
-            origin
+            origin,
+            config
         } = req.body;
-        
+
         const organizerId = req.organizer_id;
 
         // First check if form exists and belongs to this organizer
         const checkQuery = 'SELECT id FROM forms WHERE id = $1 AND organizer_id = $2';
         const checkResult = await pool.query(checkQuery, [id, organizerId]);
-        
+
         if (checkResult.rows.length === 0) {
             return res.status(404).json({
                 success: false,
@@ -412,8 +420,8 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
         // Update the form
         const updateQuery = `
-            UPDATE forms 
-            SET 
+            UPDATE forms
+            SET
                 name = $1,
                 description = $2,
                 expo_id = $3,
@@ -423,8 +431,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
                 visitor_type = $7,
                 source = $8,
                 origin = $9,
+                config = $10,
                 updated_at = NOW()
-            WHERE id = $10 AND organizer_id = $11
+            WHERE id = $11 AND organizer_id = $12
             RETURNING *
         `;
 
@@ -438,6 +447,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             visitor_type || 'visitor',
             source,
             origin || 'form-builder',
+            config ? JSON.stringify(config) : null,
             id,
             organizerId
         ];
@@ -570,6 +580,26 @@ router.delete('/:id', authMiddleware, async (req, res) => {
             success: false,
             message: 'Failed to delete form'
         });
+    }
+});
+
+// POST /api/forms/upload-banner — Upload banner image, return base64 data URI
+router.post('/upload-banner', authMiddleware, bannerUpload.single('banner'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: 'No file uploaded' });
+        }
+
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/webp'];
+        if (!allowedTypes.includes(req.file.mimetype)) {
+            return res.status(400).json({ success: false, message: 'Invalid file type. Only PNG, JPEG, WebP allowed.' });
+        }
+
+        const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+        res.json({ success: true, dataUri: base64 });
+    } catch (err) {
+        console.error('Banner upload error:', err);
+        res.status(500).json({ success: false, message: 'Upload failed' });
     }
 });
 
