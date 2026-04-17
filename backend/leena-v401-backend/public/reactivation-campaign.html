@@ -405,9 +405,7 @@
                 const data = await response.json();
                 const select = document.getElementById('formDesign');
                 (data.forms || []).forEach(f => {
-                    if (f.config && f.config.style) {
-                        select.innerHTML += `<option value="${f.id}">${f.name}</option>`;
-                    }
+                    select.innerHTML += `<option value="${f.id}">${f.name}${f.expo_name ? ' (' + f.expo_name + ')' : ''}</option>`;
                 });
             } catch (err) {
                 console.error('Error loading forms:', err);
