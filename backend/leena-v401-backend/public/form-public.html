@@ -197,6 +197,7 @@
                 const data = await response.json();
                 formData = data.form;
                 renderForm();
+                applyFormStyle(formData.config);
             } catch (error) {
                 console.error('Error loading form:', error);
                 showError('Failed to load form. Please try again later.');
@@ -438,6 +439,85 @@
                     Powered by Leena v401 &copy; ${new Date().getFullYear()}
                 </div>
             `;
+        }
+        // ============================================================
+        // DYNAMIC STYLE FROM config.style
+        // ============================================================
+        function applyFormStyle(config) {
+            const DEFAULT_STYLE = {
+                headerBannerImage: null, headerBannerColor: '#667eea', headerGradientEnd: '#764ba2', headerHeight: '200',
+                footerBannerImage: null, footerBannerColor: '#667eea', footerGradientEnd: '#764ba2', footerHeight: '80',
+                footerText: 'Powered by Leena EMS · © Elan Expo',
+                primaryColor: '#667eea', backgroundColor: '#f5f7fa', fontFamily: 'Poppins', buttonText: 'Register', borderRadius: '12'
+            };
+
+            if (!config || !config.style) return; // null config → keep hardcoded defaults
+            const s = { ...DEFAULT_STYLE, ...config.style };
+
+            // Font
+            if (s.fontFamily && s.fontFamily !== 'system-ui') {
+                const link = document.createElement('link');
+                link.href = `https://fonts.googleapis.com/css2?family=${s.fontFamily.replace(/ /g, '+')}:wght@400;500;600;700&display=swap`;
+                link.rel = 'stylesheet';
+                document.head.appendChild(link);
+            }
+            document.body.style.fontFamily = `'${s.fontFamily}', system-ui, sans-serif`;
+
+            // Page background
+            document.body.style.background = s.backgroundColor;
+
+            // Header
+            const header = document.querySelector('.form-header');
+            if (header) {
+                header.style.minHeight = s.headerHeight + 'px';
+                header.style.display = 'flex';
+                header.style.flexDirection = 'column';
+                header.style.alignItems = 'center';
+                header.style.justifyContent = 'center';
+                if (s.headerBannerImage) {
+                    header.style.background = `url(${s.headerBannerImage}) center/cover no-repeat`;
+                } else if (s.headerGradientEnd) {
+                    header.style.background = `linear-gradient(135deg, ${s.headerBannerColor}, ${s.headerGradientEnd})`;
+                } else {
+                    header.style.background = s.headerBannerColor;
+                }
+            }
+
+            // Footer
+            const footer = document.querySelector('.form-footer');
+            if (footer) {
+                footer.style.minHeight = s.footerHeight + 'px';
+                footer.style.display = 'flex';
+                footer.style.alignItems = 'center';
+                footer.style.justifyContent = 'center';
+                if (s.footerBannerImage) {
+                    footer.style.background = `url(${s.footerBannerImage}) center/cover no-repeat`;
+                    footer.style.color = 'transparent';
+                } else if (s.footerGradientEnd) {
+                    footer.style.background = `linear-gradient(135deg, ${s.footerBannerColor}, ${s.footerGradientEnd})`;
+                    footer.style.color = 'white';
+                } else {
+                    footer.style.background = s.footerBannerColor;
+                }
+                if (s.footerText) footer.textContent = s.footerText;
+            }
+
+            // Button text
+            const submitBtn = document.querySelector('.btn-submit');
+            if (submitBtn && s.buttonText) {
+                submitBtn.innerHTML = `<i class="bi bi-send me-2"></i> ${s.buttonText}`;
+            }
+
+            // Dynamic CSS overrides
+            const styleTag = document.createElement('style');
+            styleTag.textContent = `
+                .btn-submit { background: ${s.primaryColor} !important; border-radius: ${s.borderRadius}px !important; }
+                .btn-submit:hover { box-shadow: 0 5px 15px ${s.primaryColor}40 !important; }
+                .form-control:focus, .form-select:focus { border-color: ${s.primaryColor} !important; box-shadow: 0 0 0 0.2rem ${s.primaryColor}25 !important; }
+                .form-control, .form-select { border-radius: ${s.borderRadius}px !important; }
+                .form-container { border-radius: ${s.borderRadius}px !important; }
+            `;
+            document.head.appendChild(styleTag);
         }
     </script>
 </body>
