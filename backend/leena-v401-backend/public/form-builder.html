@@ -323,7 +323,14 @@
                             </div>
                         </div>
 
-                        <!-- Form Fields -->
+                        <!-- Builder Tabs -->
+                        <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid #e5e7eb;padding-bottom:8px;">
+                            <button class="builder-tab" onclick="switchBuilderTab('fields')" id="tab-fields" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-weight:600;color:var(--primary);border-bottom:2px solid var(--primary);margin-bottom:-10px;font-family:inherit;font-size:13px;">Form Fields</button>
+                            <button class="builder-tab" onclick="switchBuilderTab('design')" id="tab-design" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-weight:500;color:#6b7280;margin-bottom:-10px;font-family:inherit;font-size:13px;">Design</button>
+                        </div>
+
+                        <!-- Form Fields Section -->
+                        <div id="section-fields">
                         <div class="card">
                             <div class="card-header">
                                 <h5><i class="bi bi-ui-checks"></i> Form Fields</h5>
@@ -338,6 +345,55 @@
                                 </div>
                             </div>
                         </div>
+                        </div>
+
+                        <!-- Design Section -->
+                        <div id="section-design" style="display:none;">
+                          <div style="margin-bottom:24px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
+                            <h4 style="margin:0 0 12px;font-size:14px;font-weight:600;color:#374151;">Header Banner</h4>
+                            <p style="margin:0 0 8px;font-size:12px;color:#6b7280;">Recommended: 1200×200px · Max 500KB · PNG, JPG, WebP</p>
+                            <div id="headerBannerPreview" style="width:100%;height:60px;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);margin-bottom:8px;background-size:cover;background-position:center;"></div>
+                            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                              <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;border:1px dashed #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;">Upload Image<input type="file" accept="image/png,image/jpeg,image/webp" onchange="uploadBanner(this,'header')" style="display:none;"></label>
+                              <button onclick="removeBannerImage('header')" id="removeHeaderBanner" disabled style="padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:12px;color:#ef4444;">✕ Remove</button>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;">Color</label><div style="display:flex;gap:4px;align-items:center;"><input type="color" id="headerBannerColor" value="#667eea" onchange="updateDesignPreview()" style="width:32px;height:32px;border:none;cursor:pointer;"><input type="text" id="headerBannerColorText" value="#667eea" onchange="syncColorInput(this,'headerBannerColor')" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;font-family:monospace;"></div></div>
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;"><input type="checkbox" id="headerGradientEnabled" checked onchange="updateDesignPreview()"> Gradient End</label><div style="display:flex;gap:4px;align-items:center;"><input type="color" id="headerGradientEnd" value="#764ba2" onchange="updateDesignPreview()" style="width:32px;height:32px;border:none;cursor:pointer;"><input type="text" id="headerGradientEndText" value="#764ba2" onchange="syncColorInput(this,'headerGradientEnd')" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;font-family:monospace;"></div></div>
+                            </div>
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">Height: <span id="headerHeightValue">200</span>px</label><input type="range" id="headerHeight" min="80" max="300" value="200" oninput="document.getElementById('headerHeightValue').textContent=this.value;updateDesignPreview()" style="width:100%;"></div>
+                          </div>
+
+                          <div style="margin-bottom:24px;padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
+                            <h4 style="margin:0 0 12px;font-size:14px;font-weight:600;color:#374151;">Footer Banner</h4>
+                            <p style="margin:0 0 8px;font-size:12px;color:#6b7280;">Recommended: 1200×80px · Max 500KB</p>
+                            <div id="footerBannerPreview" style="width:100%;height:40px;border-radius:6px;background:linear-gradient(135deg,#667eea,#764ba2);margin-bottom:8px;background-size:cover;background-position:center;"></div>
+                            <div style="display:flex;gap:8px;margin-bottom:12px;">
+                              <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:8px;border:1px dashed #d1d5db;border-radius:6px;cursor:pointer;font-size:12px;color:#6b7280;">Upload Image<input type="file" accept="image/png,image/jpeg,image/webp" onchange="uploadBanner(this,'footer')" style="display:none;"></label>
+                              <button onclick="removeBannerImage('footer')" id="removeFooterBanner" disabled style="padding:8px 12px;border:1px solid #d1d5db;border-radius:6px;background:white;cursor:pointer;font-size:12px;color:#ef4444;">✕ Remove</button>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;">Color</label><div style="display:flex;gap:4px;align-items:center;"><input type="color" id="footerBannerColor" value="#667eea" onchange="updateDesignPreview()" style="width:32px;height:32px;border:none;cursor:pointer;"><input type="text" id="footerBannerColorText" value="#667eea" onchange="syncColorInput(this,'footerBannerColor')" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;font-family:monospace;"></div></div>
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;"><input type="checkbox" id="footerGradientEnabled" checked onchange="updateDesignPreview()"> Gradient End</label><div style="display:flex;gap:4px;align-items:center;"><input type="color" id="footerGradientEnd" value="#764ba2" onchange="updateDesignPreview()" style="width:32px;height:32px;border:none;cursor:pointer;"><input type="text" id="footerGradientEndText" value="#764ba2" onchange="syncColorInput(this,'footerGradientEnd')" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;font-family:monospace;"></div></div>
+                            </div>
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">Height: <span id="footerHeightValue">80</span>px</label><input type="range" id="footerHeight" min="40" max="200" value="80" oninput="document.getElementById('footerHeightValue').textContent=this.value;updateDesignPreview()" style="width:100%;"></div>
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">Footer Text</label><input type="text" id="footerText" value="Powered by Leena EMS · © Elan Expo" onchange="updateDesignPreview()" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;"></div>
+                          </div>
+
+                          <div style="padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
+                            <h4 style="margin:0 0 12px;font-size:14px;font-weight:600;color:#374151;">Colors & Typography</h4>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;">Primary Color</label><div style="display:flex;gap:4px;align-items:center;margin-top:4px;"><input type="color" id="primaryColor" value="#667eea" onchange="updateDesignPreview()" style="width:32px;height:32px;border:none;cursor:pointer;"><input type="text" id="primaryColorText" value="#667eea" onchange="syncColorInput(this,'primaryColor')" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;font-family:monospace;"></div></div>
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;">Page Background</label><div style="display:flex;gap:4px;align-items:center;margin-top:4px;"><input type="color" id="backgroundColor" value="#f5f7fa" onchange="updateDesignPreview()" style="width:32px;height:32px;border:none;cursor:pointer;"><input type="text" id="backgroundColorText" value="#f5f7fa" onchange="syncColorInput(this,'backgroundColor')" style="flex:1;padding:4px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:12px;font-family:monospace;"></div></div>
+                            </div>
+                            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;">Font Family</label><select id="fontFamily" onchange="updateDesignPreview()" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"><option value="Poppins">Poppins</option><option value="Inter">Inter</option><option value="Roboto">Roboto</option><option value="Open Sans">Open Sans</option><option value="Montserrat">Montserrat</option><option value="system-ui">System Default</option></select></div>
+                              <div><label style="font-size:12px;color:#374151;font-weight:500;">Border Radius: <span id="borderRadiusValue">12</span>px</label><input type="range" id="borderRadius" min="0" max="24" value="12" oninput="document.getElementById('borderRadiusValue').textContent=this.value;updateDesignPreview()" style="width:100%;margin-top:4px;"></div>
+                            </div>
+                            <div style="margin-top:12px;"><label style="font-size:12px;color:#374151;font-weight:500;">Submit Button Text</label><input type="text" id="buttonText" value="Register" onchange="updateDesignPreview()" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"></div>
+                          </div>
+                        </div>
+
                     </div>
 
                     <!-- Preview Section -->
@@ -581,6 +637,7 @@
                 }
                 
                 formFields = data.fields || [];
+                loadStyleConfig(data.config);
                 renderFields();
                 updatePreview();
             } catch (error) {
@@ -623,7 +680,8 @@
                 name: formName, description: formDescription, expo_id: expoId,
                 fields: formFields, is_active: isActive,
                 email_template_id: emailTemplateId ? parseInt(emailTemplateId) : null,
-                visitor_type: visitorType, source: source || null, origin: origin
+                visitor_type: visitorType, source: source || null, origin: origin,
+                config: { style: getStyleConfig() }
             };
             
             try {
@@ -875,6 +933,128 @@
         function logout() {
             localStorage.clear();
             window.location.href = 'login.html';
+        }
+
+        // ============================================================
+        // DESIGN TAB — Form Style Customization
+        // ============================================================
+
+        let currentHeaderBannerImage = null;
+        let currentFooterBannerImage = null;
+
+        const DEFAULT_STYLE = {
+            headerBannerImage: null, headerBannerColor: '#667eea', headerGradientEnd: '#764ba2', headerHeight: '200',
+            footerBannerImage: null, footerBannerColor: '#667eea', footerGradientEnd: '#764ba2', footerHeight: '80',
+            footerText: 'Powered by Leena EMS · © Elan Expo',
+            primaryColor: '#667eea', backgroundColor: '#f5f7fa', fontFamily: 'Poppins', buttonText: 'Register', borderRadius: '12'
+        };
+
+        function switchBuilderTab(tab) {
+            document.getElementById('section-fields').style.display = tab === 'fields' ? '' : 'none';
+            document.getElementById('section-design').style.display = tab === 'design' ? '' : 'none';
+            document.querySelectorAll('.builder-tab').forEach(btn => {
+                const isActive = btn.id === `tab-${tab}`;
+                btn.style.fontWeight = isActive ? '600' : '500';
+                btn.style.color = isActive ? 'var(--primary)' : '#6b7280';
+                btn.style.borderBottom = isActive ? '2px solid var(--primary)' : 'none';
+            });
+        }
+
+        function syncColorInput(textInput, colorInputId) {
+            const val = textInput.value;
+            if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+                document.getElementById(colorInputId).value = val;
+                updateDesignPreview();
+            }
+        }
+
+        function getStyleConfig() {
+            return {
+                headerBannerImage: currentHeaderBannerImage,
+                headerBannerColor: document.getElementById('headerBannerColor').value,
+                headerGradientEnd: document.getElementById('headerGradientEnabled').checked ? document.getElementById('headerGradientEnd').value : null,
+                headerHeight: document.getElementById('headerHeight').value,
+                footerBannerImage: currentFooterBannerImage,
+                footerBannerColor: document.getElementById('footerBannerColor').value,
+                footerGradientEnd: document.getElementById('footerGradientEnabled').checked ? document.getElementById('footerGradientEnd').value : null,
+                footerHeight: document.getElementById('footerHeight').value,
+                footerText: document.getElementById('footerText').value,
+                primaryColor: document.getElementById('primaryColor').value,
+                backgroundColor: document.getElementById('backgroundColor').value,
+                fontFamily: document.getElementById('fontFamily').value,
+                buttonText: document.getElementById('buttonText').value,
+                borderRadius: document.getElementById('borderRadius').value
+            };
+        }
+
+        function loadStyleConfig(config) {
+            const s = { ...DEFAULT_STYLE, ...(config?.style || {}) };
+            currentHeaderBannerImage = s.headerBannerImage;
+            currentFooterBannerImage = s.footerBannerImage;
+            document.getElementById('headerBannerColor').value = s.headerBannerColor;
+            document.getElementById('headerBannerColorText').value = s.headerBannerColor;
+            document.getElementById('headerGradientEnd').value = s.headerGradientEnd || '#764ba2';
+            document.getElementById('headerGradientEndText').value = s.headerGradientEnd || '#764ba2';
+            document.getElementById('headerGradientEnabled').checked = !!s.headerGradientEnd;
+            document.getElementById('headerHeight').value = s.headerHeight;
+            document.getElementById('headerHeightValue').textContent = s.headerHeight;
+            document.getElementById('footerBannerColor').value = s.footerBannerColor;
+            document.getElementById('footerBannerColorText').value = s.footerBannerColor;
+            document.getElementById('footerGradientEnd').value = s.footerGradientEnd || '#764ba2';
+            document.getElementById('footerGradientEndText').value = s.footerGradientEnd || '#764ba2';
+            document.getElementById('footerGradientEnabled').checked = !!s.footerGradientEnd;
+            document.getElementById('footerHeight').value = s.footerHeight;
+            document.getElementById('footerHeightValue').textContent = s.footerHeight;
+            document.getElementById('footerText').value = s.footerText;
+            document.getElementById('primaryColor').value = s.primaryColor;
+            document.getElementById('primaryColorText').value = s.primaryColor;
+            document.getElementById('backgroundColor').value = s.backgroundColor;
+            document.getElementById('backgroundColorText').value = s.backgroundColor;
+            document.getElementById('fontFamily').value = s.fontFamily;
+            document.getElementById('buttonText').value = s.buttonText;
+            document.getElementById('borderRadius').value = s.borderRadius;
+            document.getElementById('borderRadiusValue').textContent = s.borderRadius;
+            document.getElementById('removeHeaderBanner').disabled = !currentHeaderBannerImage;
+            document.getElementById('removeFooterBanner').disabled = !currentFooterBannerImage;
+            updateDesignPreview();
+        }
+
+        async function uploadBanner(inputEl, target) {
+            const file = inputEl.files[0];
+            if (!file) return;
+            if (file.size > 500 * 1024) { alert('File too large. Max 500KB.'); inputEl.value = ''; return; }
+            const fd = new FormData();
+            fd.append('banner', file);
+            try {
+                const token = localStorage.getItem('token');
+                const res = await fetch('/api/forms/upload-banner', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
+                const result = await res.json();
+                if (result.success) {
+                    if (target === 'header') { currentHeaderBannerImage = result.dataUri; document.getElementById('removeHeaderBanner').disabled = false; }
+                    else { currentFooterBannerImage = result.dataUri; document.getElementById('removeFooterBanner').disabled = false; }
+                    updateDesignPreview();
+                } else { alert(result.message || 'Upload failed'); }
+            } catch (err) { console.error('Banner upload error:', err); alert('Upload failed.'); }
+            inputEl.value = '';
+        }
+
+        function removeBannerImage(target) {
+            if (target === 'header') { currentHeaderBannerImage = null; document.getElementById('removeHeaderBanner').disabled = true; }
+            else { currentFooterBannerImage = null; document.getElementById('removeFooterBanner').disabled = true; }
+            updateDesignPreview();
+        }
+
+        function updateDesignPreview() {
+            const s = getStyleConfig();
+            const hp = document.getElementById('headerBannerPreview');
+            if (s.headerBannerImage) hp.style.background = `url(${s.headerBannerImage}) center/cover no-repeat`;
+            else if (s.headerGradientEnd) hp.style.background = `linear-gradient(135deg, ${s.headerBannerColor}, ${s.headerGradientEnd})`;
+            else hp.style.background = s.headerBannerColor;
+
+            const fp = document.getElementById('footerBannerPreview');
+            if (s.footerBannerImage) fp.style.background = `url(${s.footerBannerImage}) center/cover no-repeat`;
+            else if (s.footerGradientEnd) fp.style.background = `linear-gradient(135deg, ${s.footerBannerColor}, ${s.footerGradientEnd})`;
+            else fp.style.background = s.footerBannerColor;
         }
     </script>
 </body>
