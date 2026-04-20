@@ -578,6 +578,7 @@
 
         // Apply form design from config (if form_config provided by verify endpoint)
         function applyFormStyle(config) {
+            if (typeof config === 'string') { try { config = JSON.parse(config); } catch(e) { return; } }
             if (!config || !config.style) return; // null → keep hardcoded yellow theme
 
             const s = config.style;
