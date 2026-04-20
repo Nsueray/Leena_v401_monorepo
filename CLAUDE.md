@@ -110,7 +110,8 @@ backend/leena-v401-backend/
 ├── initial.sql                 # Temel DB şeması (DİKKAT: production ile tam senkron DEĞİL)
 ├── migrations/
 │   ├── 001_floorplan_tables.sql # Floor Plan Builder tables (expo_halls, expo_floorplan_versions, expo_stands, expo_stand_cells)
-│   └── 002_reactivation_form_id.sql # Adds form_id to reactivation_tokens for design inheritance
+│   ├── 002_reactivation_form_id.sql # Adds form_id to reactivation_tokens for design inheritance
+│   └── 003_exhibitors_table.sql # Exhibitor registry (expo_exhibitors) + expo_stands.exhibitor_id FK
 ├── email_worker.js             # Async email kuyruğu işçisi (Render Background Worker)
 ├── routes/
 │   ├── auth.js                 # Login/Register, JWT
@@ -214,6 +215,7 @@ backend/leena-v401-backend/
 | expo_stands | Floor Plan: stand units (cells-based geometry, commercial status) |
 | expo_stand_cells | Floor Plan: individual grid cells per stand (1 row = 1m²) |
 | expo_stand_assignments | Floor Plan: assignment history (Phase 2, not used in MVP) |
+| expo_exhibitors | Exhibitor registry per expo (name, contact, email, sector, company_id nullable) |
 
 ### visitors Tablosu Önemli Kolonlar
 - `id`, `name`, `last_name`, `email` (unique per expo), `phone`
@@ -285,6 +287,29 @@ Default fallback: when config is null, hardcoded CSS defaults apply (backward co
 - `ALTER TABLE reactivation_tokens ADD COLUMN form_id INTEGER REFERENCES forms(id)`
 - Links reactivation campaigns to a form's design (colors, banners)
 - NULL = default yellow theme preserved
+
+### expo_exhibitors (v403)
+```sql
+CREATE TABLE expo_exhibitors (
+  id SERIAL PRIMARY KEY,
+  expo_id INTEGER NOT NULL REFERENCES expos(id) ON DELETE CASCADE,
+  organizer_id INTEGER NOT NULL REFERENCES organizers(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  contact_person VARCHAR(255),
+  email VARCHAR(255),
+  phone VARCHAR(100),
+  country VARCHAR(100),
+  sector VARCHAR(100),
+  company_id INTEGER,  -- LiFFY FK (nullable, no constraint — ADR-014)
+  notes TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+- Basic exhibitor registry per expo
+- `expo_stands.exhibitor_id` FK links stands to exhibitors
+- `company_id` nullable — will link to LiFFY companies when Phase 2 ready
 
 > **⚠️ Gerçek şemayı görmek için her zaman production DB'yi kontrol et, initial.sql'e güvenme.**
 
@@ -740,10 +765,10 @@ Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 patte
 | Gen 3 | #4a6fa5 | Inline CSS + ::before | 256px | reports, reactivation-campaign, badge-templates, checkin-reports, form-builder, conference-sessions |
 | Gen 4 | #4a6fa5 | Inline CSS + ::before + responsive | 260px | login.html, main-panel-v2, dashboard_new |
 
-### Sidebar Status (Updated 30 Mar 2026)
-- ✅ All 16 admin pages sidebar links standardized
+### Sidebar Status (Updated 20 Apr 2026)
+- ✅ All 20 admin pages sidebar links standardized
 - Standard order: Overview → Management → Communication → Settings → Tools
-- 15 links: Dashboard, Visitors, Forms, Check-ins, Terminals, **Conferences**, **Floor Plan**, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
+- 16 links: Dashboard, Visitors, Forms, Check-ins, Terminals, **Conferences**, **Floor Plan**, Email Templates, Send Emails, Email Segments, Badge Templates, Re-activation, Check-in Reports, Reports, Import
 - ✅ CSS `::before` accent bar added to all 15 pages (Gen 2 pages updated 23 Feb 2026)
 - ✅ Active expo indicator added to all 14 admin sidebars (24 Feb 2026) — reads `selectedExpoName` from localStorage, hidden if no expo selected
 - ✅ Expo indicator is now a clickable `<a>` link to `dashboard_new.html` (25 Feb 2026) — allows switching expo from any page. Small `⇄` icon on the right as visual hint.

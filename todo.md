@@ -91,7 +91,8 @@
 
 ### Post-Deploy Tasks
 - [ ] **Run migration on production:** Render Shell → `psql $DATABASE_INTERNAL_URL -f migrations/001_floorplan_tables.sql`
-- [ ] **Add "Floor Plan" sidebar link to existing 15 admin pages** (currently only in floorplan-builder.html)
+- [x] **Add "Floor Plan" sidebar link to all 19 admin pages** ✅ 20 Apr
+- [ ] **Run migration 003:** Render Shell → `psql $DATABASE_INTERNAL_URL -f migrations/003_exhibitors_table.sql`
 - [ ] **Test end-to-end:** Create hall → create version → draw stands → delete stand
 
 ---
