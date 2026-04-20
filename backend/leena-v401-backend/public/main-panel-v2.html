@@ -861,6 +861,7 @@
         }
         
         .kpi-card, .dashboard-card, .form-card { animation: fadeIn 0.3s ease forwards; }
+        .page-info-box{margin:0 0 20px;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:8px;background:#f0f7ff;padding:16px 20px;position:relative;font-size:14px;line-height:1.6}.info-box-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:12px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:12px;border-top:1px solid #dbeafe;padding-top:10px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:13px;padding:4px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:6px 0;padding-left:20px}.page-info-box li{margin-bottom:4px}
     </style>
 </head>
 <body>
@@ -938,6 +939,14 @@
             </header>
             
             <main id="content-area">
+                <div class="page-info-box" id="pageInfoBox" style="display:none;margin:20px 24px 0;">
+                    <button class="info-box-close" onclick="closeInfoBox()" title="Close">&#10005;</button>
+                    <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
+                    <div class="info-box-content" id="infoBoxContent">
+                        <div class="info-en"><strong>Expo Dashboard</strong> — This is your main control panel for the selected expo. You can see visitor statistics, recent registrations, and quick access to all management tools. Select a different expo from the top dropdown to switch context.</div>
+                        <div class="info-tr"><strong>Fuar Kontrol Paneli</strong> — Secili fuarin ana kontrol sayfasidir. Visitor istatistikleri, son kayitlar ve tum yonetim araclarina hizli erisim saglar. Ust menuден farkli bir fuar secerek gecis yapabilirsiniz.</div>
+                    </div>
+                </div>
                 <div class="loading-spinner">
                     <div class="spinner"></div>
                     <span class="loading-text">Loading dashboard...</span>
@@ -1338,6 +1347,7 @@
                 else { const e = await response.json(); alert(e.message || 'Failed'); }
             } catch (e) { alert('Failed'); }
         }
+        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

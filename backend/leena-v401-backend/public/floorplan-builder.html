@@ -132,6 +132,7 @@
             .main-wrapper { margin-left: 0; }
             .left-panel { width: 200px; }
         }
+        .page-info-box{margin:0 0 0;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:0;background:#f0f7ff;padding:10px 20px;position:relative;font-size:13px;line-height:1.5;flex-shrink:0}.info-box-close{position:absolute;top:4px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:8px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:11px;border-top:1px solid #dbeafe;padding-top:6px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:12px;padding:2px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:4px 0;padding-left:18px}.page-info-box li{margin-bottom:2px}
     </style>
 </head>
 <body>
@@ -201,6 +202,14 @@
                 <button class="btn-icon" id="btn-fit-view" title="Fit to View"><i class="bi bi-fullscreen"></i></button>
             </div>
 
+            <div class="page-info-box" id="pageInfoBox" style="display:none;">
+                <button class="info-box-close" onclick="closeInfoBox()" title="Close">&#10005;</button>
+                <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
+                <div class="info-box-content" id="infoBoxContent">
+                    <div class="info-en"><strong>Floor Plan Builder</strong> — Visual tool for creating expo floor plans. Select cells → Create Stand. Each cell = 1m&sup2;.<ul><li><strong>Draw mode</strong>: drag to select cells → Create Stand</li><li><strong>Select mode</strong>: click stand to edit, Shift+click for multi-select, drag to move</li><li>Split, Merge, Clone, and Export available</li><li>Middle-mouse or Space+drag to pan, scroll to zoom</li></ul></div>
+                    <div class="info-tr"><strong>Kat Plani</strong> — Grid hucreleri secerek stand olusturun. Draw: surukle-sec. Select: tikla-duzenle, Shift+tikla coklu secim, surukle-tasi. Orta tus/Space+surukle: kaydir.</div>
+                </div>
+            </div>
             <!-- Body -->
             <div class="body-area">
                 <!-- Left Panel -->
@@ -387,6 +396,7 @@
 
         // Load halls
         loadHalls();
+        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='4px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='10px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>
