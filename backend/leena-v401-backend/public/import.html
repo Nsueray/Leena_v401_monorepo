@@ -241,6 +241,15 @@
                     </h5>
                     <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">These settings apply when an imported email already exists in the selected expo.</p>
 
+                    <div class="form-group" style="margin-bottom:12px;">
+                        <label class="form-label"><i class="bi bi-shield-check"></i> Action for existing visitors / Mevcut visitor'lar için işlem:</label>
+                        <div style="display:flex;gap:16px;">
+                            <label style="font-size:13px;color:#4b5563;cursor:pointer;"><input type="radio" name="existingAction" value="update" checked onchange="toggleExistingOptions()"> Update info (keep QR) <span style="display:block;font-size:11px;color:#9ca3af;font-style:italic;margin-left:18px;">Bilgileri güncelle, QR koru</span></label>
+                            <label style="font-size:13px;color:#4b5563;cursor:pointer;"><input type="radio" name="existingAction" value="skip" onchange="toggleExistingOptions()"> Skip entirely <span style="display:block;font-size:11px;color:#9ca3af;font-style:italic;margin-left:18px;">Tamamen atla, hiçbir şeyi değiştirme</span></label>
+                        </div>
+                    </div>
+
+                    <div id="existingUpdateOptions">
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label"><i class="bi bi-envelope"></i> Email for Updated Visitors</label>
@@ -268,6 +277,7 @@
                         </select>
                         <div class="form-hint">Leave as default to use the template selected above</div>
                     </div>
+                    </div><!-- /existingUpdateOptions -->
                 </div>
                 
                 <div class="results-section" id="resultsSection">
@@ -373,6 +383,11 @@
             document.getElementById('existingTemplateSection').style.display = (val !== 'none') ? 'block' : 'none';
         }
 
+        function toggleExistingOptions() {
+            const action = document.querySelector('input[name="existingAction"]:checked')?.value || 'update';
+            document.getElementById('existingUpdateOptions').style.display = action === 'skip' ? 'none' : '';
+        }
+
         async function startImport() {
             if (!selectedFile) { alert('Please select an Excel file'); return; }
             const expoId = document.getElementById('expoSelect').value;
@@ -394,13 +409,18 @@
                 if (sendEmail) { formData.append('send_email', 'true'); formData.append('template_id', templateId); }
 
                 // Existing visitor options
-                const existingEmailOption = document.getElementById('existingEmailOption').value;
-                formData.append('existing_email_option', existingEmailOption);
-                formData.append('existing_qr_option', document.getElementById('existingQrOption').value);
-                if (existingEmailOption !== 'none') {
-                    const existingTplId = document.getElementById('existingTemplateSelect').value;
-                    if (!existingTplId) { alert('Please select an email template for existing visitors'); return; }
-                    formData.append('existing_template_id', existingTplId);
+                const existingAction = document.querySelector('input[name="existingAction"]:checked')?.value || 'update';
+                if (existingAction === 'skip') {
+                    formData.append('skip_existing', 'true');
+                } else {
+                    const existingEmailOption = document.getElementById('existingEmailOption').value;
+                    formData.append('existing_email_option', existingEmailOption);
+                    formData.append('existing_qr_option', document.getElementById('existingQrOption').value);
+                    if (existingEmailOption !== 'none') {
+                        const existingTplId = document.getElementById('existingTemplateSelect').value;
+                        if (!existingTplId) { alert('Please select an email template for existing visitors'); return; }
+                        formData.append('existing_template_id', existingTplId);
+                    }
                 }
 
                 const response = await fetch(`${API_URL}/visitors/import`, {
@@ -424,8 +444,9 @@
             const emailCount = result.email_sent_count || 0;
             const qrCount = result.qr_regenerated_count || 0;
             const fieldsCount = result.custom_fields_updated_count || 0;
-            let html = `<div class="result-item success"><i class="bi bi-check-circle"></i> Import completed: ${result.success_count || 0} successful, ${result.failed_count || 0} failed</div>`;
-            html += `<div class="result-item" style="background:#f0f4ff;border-left:3px solid #4a6fa5;"><i class="bi bi-bar-chart"></i> <strong>${newCount}</strong> new · <strong>${updatedCount}</strong> updated · <strong>${fieldsCount}</strong> custom fields · <strong>${emailCount}</strong> emails queued · <strong>${qrCount}</strong> QR regen</div>`;
+            const skippedCount = result.skipped_count || 0;
+            let html = `<div class="result-item success"><i class="bi bi-check-circle"></i> Import completed: ${result.success_count || 0} successful, ${result.failed_count || 0} failed${skippedCount ? ', ' + skippedCount + ' skipped' : ''}</div>`;
+            html += `<div class="result-item" style="background:#f0f4ff;border-left:3px solid #4a6fa5;"><i class="bi bi-bar-chart"></i> <strong>${newCount}</strong> new · <strong>${updatedCount}</strong> updated${skippedCount ? ' · <strong>' + skippedCount + '</strong> skipped' : ''} · <strong>${fieldsCount}</strong> custom fields · <strong>${emailCount}</strong> emails queued · <strong>${qrCount}</strong> QR regen</div>`;
             if (result.errors?.length) {
                 result.errors.forEach(e => { html += `<div class="result-item error">Row ${e.row}: ${e.message}</div>`; });
             }

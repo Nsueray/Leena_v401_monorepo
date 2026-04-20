@@ -376,11 +376,12 @@
             emptyState.style.display = 'none';
             document.getElementById('paginationContainer').style.display = 'flex';
             
-            tbody.innerHTML = visitors.map(v => {
+            window._visitorCache = visitors;
+            tbody.innerHTML = visitors.map((v, idx) => {
                 const date = new Date(v.created_at);
                 const vType = v.visitor_type || 'visitor';
                 const topic = v.conference_topic || '';
-                return `<tr>
+                return `<tr style="cursor:pointer;" onclick="openVisitorPanel(${idx})">
                     <td>${v.id}</td>
                     <td><strong>${escapeHtml(v.name || '-')}</strong></td>
                     <td>${escapeHtml(v.last_name || '-')}</td>
@@ -528,7 +529,79 @@
             document.getElementById('toastContainer').appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
         }
+        // === VISITOR DETAIL PANEL ===
+        function openVisitorPanel(idx) {
+            const v = window._visitorCache[idx];
+            if (!v) return;
+            const panel = document.getElementById('visitorDetailPanel');
+            const overlay = document.getElementById('visitorPanelOverlay');
+            document.getElementById('panelVisitorName').textContent = (v.name || '') + ' ' + (v.last_name || '');
+            document.getElementById('panelVisitorInfo').innerHTML = `
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
+                    <div><strong>Email:</strong><br>${v.email || '-'}</div>
+                    <div><strong>Company:</strong><br>${v.company || '-'}</div>
+                    <div><strong>Country:</strong><br>${v.country || '-'}</div>
+                    <div><strong>Job Title:</strong><br>${v.job_title || '-'}</div>
+                    <div><strong>Phone:</strong><br>${v.phone || '-'}</div>
+                    <div><strong>Badge ID:</strong><br>${v.badge_id || '-'}</div>
+                    <div><strong>Source:</strong><br>${v.source || '-'}</div>
+                    <div><strong>Registered:</strong><br>${v.created_at ? new Date(v.created_at).toLocaleDateString() : '-'}</div>
+                    <div><strong>Visitor Type:</strong><br>${v.visitor_type || 'visitor'}</div>
+                    <div><strong>QR Code:</strong><br>${v.qr_code ? '<a href="badge.html?qr='+encodeURIComponent(v.qr_code)+'" target="_blank">View Badge</a>' : '-'}</div>
+                </div>`;
+            loadVisitorEmails(v.id);
+            overlay.style.display = '';
+            panel.style.right = '0';
+        }
+        function closeVisitorPanel() {
+            document.getElementById('visitorDetailPanel').style.right = '-480px';
+            document.getElementById('visitorPanelOverlay').style.display = 'none';
+        }
+        async function loadVisitorEmails(visitorId) {
+            const container = document.getElementById('panelEmailHistory');
+            container.innerHTML = '<p style="color:#9ca3af;font-size:13px;">Loading...</p>';
+            try {
+                const res = await fetch(`/api/visitors/${visitorId}/emails`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await res.json();
+                const all = [
+                    ...(data.queue_history || []).map(e => ({ date: e.sent_at || e.created_at, subject: e.subject || 'Badge Email', status: e.status, error: e.error_message })),
+                    ...(data.log_history || []).map(e => ({ date: e.sent_at, subject: e.message || 'Email', status: e.status }))
+                ].sort((a, b) => new Date(b.date) - new Date(a.date));
+                if (all.length === 0) { container.innerHTML = '<p style="color:#9ca3af;font-size:13px;">No emails sent to this visitor.</p>'; return; }
+                container.innerHTML = all.map(e => {
+                    const sc = e.status === 'sent' ? '#10b981' : e.status === 'failed' ? '#ef4444' : '#f59e0b';
+                    const si = e.status === 'sent' ? '✅' : e.status === 'failed' ? '❌' : '⏳';
+                    return `<div style="padding:10px 12px;background:#f9fafb;border-radius:6px;border-left:3px solid ${sc};margin-bottom:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:13px;font-weight:500;color:#374151;">${si} ${e.subject}</span>
+                            <span style="font-size:11px;color:${sc};font-weight:600;text-transform:uppercase;">${e.status}</span>
+                        </div>
+                        <div style="font-size:11px;color:#9ca3af;margin-top:4px;">${e.date ? new Date(e.date).toLocaleString() : '-'}</div>
+                        ${e.error ? `<div style="font-size:11px;color:#ef4444;margin-top:4px;">Error: ${e.error}</div>` : ''}
+                    </div>`;
+                }).join('');
+            } catch (err) { container.innerHTML = '<p style="color:#ef4444;font-size:13px;">Failed to load email history.</p>'; }
+        }
+
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
+
+    <!-- Visitor Detail Slide Panel -->
+    <div id="visitorPanelOverlay" onclick="closeVisitorPanel()" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.3);z-index:999;display:none;"></div>
+    <div id="visitorDetailPanel" style="position:fixed;top:0;right:-480px;width:480px;height:100vh;background:white;box-shadow:-4px 0 20px rgba(0,0,0,0.15);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="padding:16px 20px;background:#1e293b;color:white;display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="margin:0;font-size:16px;" id="panelVisitorName">Visitor Details</h3>
+            <button onclick="closeVisitorPanel()" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">✕</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;padding:20px;">
+            <div id="panelVisitorInfo" style="margin-bottom:20px;"></div>
+            <div>
+                <h4 style="margin:0 0 12px;font-size:14px;font-weight:600;color:#374151;border-bottom:1px solid #e5e7eb;padding-bottom:8px;">📧 Email History <span style="font-size:11px;color:#9ca3af;font-style:italic;margin-left:8px;">Email Geçmişi</span></h4>
+                <div id="panelEmailHistory"><p style="color:#9ca3af;font-size:13px;">Select a visitor to see details.</p></div>
+            </div>
+        </div>
+    </div>
 </body>
 </html>

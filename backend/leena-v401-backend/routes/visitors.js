@@ -448,7 +448,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
     }
 
     const { expo_id, visitor_type, source_override, send_email, template_id,
-            existing_email_option, existing_qr_option, existing_template_id } = req.body;
+            existing_email_option, existing_qr_option, existing_template_id, skip_existing } = req.body;
     const origin = 'massimport';
     const effectiveExistingEmailOption = existing_email_option || 'none';
     const effectiveExistingQrOption = existing_qr_option || 'keep';
@@ -523,6 +523,7 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
       success_count: 0,
       new_count: 0,
       updated_count: 0,
+      skipped_count: 0,
       failed_count: 0,
       email_sent_count: 0,
       qr_regenerated_count: 0,
@@ -572,6 +573,13 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
         );
 
         if (duplicateCheck.rows.length > 0) {
+          // Skip entirely if requested
+          if (skip_existing === 'true' || skip_existing === true) {
+            results.skipped_count++;
+            console.log(`⏭️ Skipped existing visitor: ${email}`);
+            continue;
+          }
+
           const existing = duplicateCheck.rows[0];
           let currentQrCode = existing.qr_code;
           let currentBadgeId = existing.badge_id;
@@ -1020,6 +1028,47 @@ router.get('/conference-topics', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('❌ Conference topics error:', err);
     res.status(500).json({ success: false, message: 'Failed to load conference topics' });
+  }
+});
+
+// GET /api/visitors/:id/emails — Email history for a specific visitor
+router.get('/:id/emails', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const organizer_id = req.organizer_id;
+
+    const visitor = await pool.query(
+      'SELECT id, email FROM visitors WHERE id = $1 AND organizer_id = $2',
+      [id, organizer_id]
+    );
+    if (visitor.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Visitor not found' });
+    }
+
+    const visitorEmail = visitor.rows[0].email;
+
+    const queueHistory = await pool.query(`
+      SELECT id, status, subject, created_at, sent_at, error_message, recipient_email
+      FROM email_queue
+      WHERE visitor_id = $1 OR recipient_email = $2
+      ORDER BY created_at DESC LIMIT 50
+    `, [id, visitorEmail]);
+
+    const logHistory = await pool.query(`
+      SELECT id, status, message, sent_at, email
+      FROM email_logs
+      WHERE visitor_id = $1 OR email = $2
+      ORDER BY sent_at DESC LIMIT 50
+    `, [id, visitorEmail]);
+
+    res.json({
+      success: true,
+      queue_history: queueHistory.rows,
+      log_history: logHistory.rows
+    });
+  } catch (err) {
+    console.error('Visitor email history error:', err);
+    res.status(500).json({ success: false, message: 'Failed to fetch email history' });
   }
 });
 
