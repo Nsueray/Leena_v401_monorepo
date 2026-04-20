@@ -142,7 +142,7 @@
                     <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
                     <div class="info-box-content" id="infoBoxContent">
                         <div class="info-en"><strong>Terminal Management</strong> — Manage scanner devices for this expo. Each terminal has a unique <strong>Terminal Key</strong> for authentication — no login needed.<ul><li>Create a terminal → Get a unique Terminal Key</li><li>Open scanner page on any device using the terminal URL</li><li>Deactivate a terminal without deleting it</li></ul></div>
-                        <div class="info-tr"><strong>Terminal Yonetimi</strong> — Tarayici cihazlari yonetin. Her terminalin benzersiz bir Terminal Key'i vardir. URL ile herhangi bir cihazda acin.</div>
+                        <div class="info-tr"><strong>Terminal Yönetimi</strong> — Bu fuarın tarayıcı cihazlarını (check-in istasyonları) yönetin. Her terminalin kimlik doğrulama için kullanılan benzersiz bir <strong>Terminal Key</strong>'i vardır — kullanıcı adı/şifre gerekmez.<ul><li>Terminal oluşturun → Benzersiz bir Terminal Key alın</li><li>Herhangi bir cihazda (tablet, telefon, laptop) terminal URL'sini kullanarak tarayıcı sayfasını açın</li><li>Bir terminali silmeden deaktif edebilirsiniz</li></ul></div>
                     </div>
                 </div>
                 <div id="alertMessage" class="alert"></div>
@@ -456,7 +456,7 @@
         }
 
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
-        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

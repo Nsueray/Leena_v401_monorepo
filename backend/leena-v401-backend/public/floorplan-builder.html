@@ -207,7 +207,7 @@
                 <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
                 <div class="info-box-content" id="infoBoxContent">
                     <div class="info-en"><strong>Floor Plan Builder</strong> — Visual tool for creating expo floor plans. Select cells → Create Stand. Each cell = 1m&sup2;.<ul><li><strong>Draw mode</strong>: drag to select cells → Create Stand</li><li><strong>Select mode</strong>: click stand to edit, Shift+click for multi-select, drag to move</li><li>Split, Merge, Clone, and Export available</li><li>Middle-mouse or Space+drag to pan, scroll to zoom</li></ul></div>
-                    <div class="info-tr"><strong>Kat Plani</strong> — Grid hucreleri secerek stand olusturun. Draw: surukle-sec. Select: tikla-duzenle, Shift+tikla coklu secim, surukle-tasi. Orta tus/Space+surukle: kaydir.</div>
+                    <div class="info-tr"><strong>Kat Planı Editörü</strong> — Grid hücrelerine tıklayarak stand oluşturun. Her hücre = 1m².<ul><li><strong>Draw modu</strong>: sürükleyerek hücre seçin → Stand Oluştur</li><li><strong>Select modu</strong>: tıkla-düzenle, Shift+tıkla çoklu seçim, sürükle-taşı</li><li>Split, Merge, Clone ve Export mevcut</li><li>Orta tuş veya Space+sürükle: kaydır, scroll: zoom</li></ul></div>
                 </div>
             </div>
             <!-- Body -->
@@ -396,7 +396,7 @@
 
         // Load halls
         loadHalls();
-        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='4px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='10px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='4px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='10px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

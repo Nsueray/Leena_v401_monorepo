@@ -76,7 +76,7 @@
               <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
               <div class="info-box-content" id="infoBoxContent">
                 <div class="info-en"><strong>Check-in Recovery Import</strong> — Import check-in records from CSV. Use when data was collected offline or from an external system.<ul><li>This is a <strong>recovery tool</strong> — normally check-ins are automatic</li><li>Required: <code>badge_id</code> or <code>email</code></li><li>Optional: <code>checked_in_at</code> timestamp</li></ul></div>
-                <div class="info-tr"><strong>Check-in Kurtarma Import</strong> — CSV'den check-in kay&#305;tlar&#305;n&#305; import edin. Offline toplanan veya harici sistemden gelen veriler i&#231;in kullan&#305;n. Normalde check-in'ler otomatiktir.</div>
+                <div class="info-tr"><strong>Check-in Kurtarma Import</strong> — CSV dosyasından check-in kayıtlarını import edin. Check-in verisi offline toplandığında veya harici bir sistemden geldiğinde kullanın.<ul><li>Bu bir <strong>kurtarma aracıdır</strong> — normalde check-in'ler terminal tarayıcıları tarafından otomatik kaydedilir</li><li>Zorunlu: <code>badge_id</code> veya <code>email</code></li><li>Opsiyonel: <code>checked_in_at</code> zaman damgası</li></ul></div>
               </div>
             </div>
             <div class="row justify-content-center checkin-import-container">
@@ -317,7 +317,7 @@
                 alert('Error during import: ' + error.message);
             }
         });
-    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

@@ -132,7 +132,7 @@
                     <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
                     <div class="info-box-content" id="infoBoxContent">
                         <div class="info-en"><strong>Conference Sessions</strong> — Track conference/seminar topics, attendance, and send targeted emails to registered attendees.<ul><li>Sessions are linked to the expo but independent from exhibition check-in</li><li><strong>Targeted email</strong>: send session-specific info only to registered attendees</li><li>Conference check-in uses a separate scanner terminal</li></ul></div>
-                        <div class="info-tr"><strong>Konferans Oturumlari</strong> — Konferans konularini takip edin, katilimi izleyin, kayitli katilimcilara hedefli email gonderin.</div>
+                        <div class="info-tr"><strong>Konferans Oturumları</strong> — Bu fuarın konferans/seminer konularını yönetin. Oturum oluşturun, konuşmacı atayın ve katılımı takip edin.<ul><li>Oturumlar fuara bağlıdır ancak sergi check-in'inden bağımsızdır</li><li><strong>Hedefli email</strong>: Sadece kayıtlı katılımcılara oturuma özel bilgi gönderin</li><li>Konferans check-in ayrı bir tarayıcı (konferans terminali) kullanır</li></ul></div>
                     </div>
                 </div>
                 <div class="stats-grid">
@@ -276,7 +276,7 @@
         }
 
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
-        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

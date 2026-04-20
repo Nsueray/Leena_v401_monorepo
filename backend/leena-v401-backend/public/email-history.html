@@ -157,7 +157,7 @@
                   <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
                   <div class="info-box-content" id="infoBoxContent">
                     <div class="info-en"><strong>Email History</strong> — Log of all emails sent for this expo. Track delivery status and identify failures.<ul><li><strong>Sent</strong> — delivered to mail server</li><li><strong>Pending</strong> — in queue, processing</li><li><strong>Failed</strong> — delivery failed (check error details)</li></ul></div>
-                    <div class="info-tr"><strong>Email Ge&#231;mi&#351;i</strong> — Bu fuar i&#231;in g&#246;nderilen t&#252;m emaillerin kayd&#305;. Teslim durumunu takip edin. Sent=teslim edildi, Pending=kuyrukta, Failed=ba&#351;ar&#305;s&#305;z.</div>
+                    <div class="info-tr"><strong>Email Geçmişi</strong> — Bu fuar için Leena üzerinden gönderilen tüm emaillerin kaydı. Teslim durumunu takip edin ve başarısız teslimatları tespit edin.<ul><li><strong>Sent</strong> — posta sunucusuna başarıyla teslim edildi</li><li><strong>Pending</strong> — kuyrukta, işlenmeyi bekliyor</li><li><strong>Failed</strong> — teslim başarısız (hata detaylarını kontrol edin)</li></ul></div>
                   </div>
                 </div>
                 <!-- Stats Cards -->
@@ -387,7 +387,7 @@
             if (!str) return '';
             return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
-    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

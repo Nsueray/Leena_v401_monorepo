@@ -944,7 +944,7 @@
                     <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
                     <div class="info-box-content" id="infoBoxContent">
                         <div class="info-en"><strong>Expo Dashboard</strong> — This is your main control panel for the selected expo. You can see visitor statistics, recent registrations, and quick access to all management tools. Select a different expo from the top dropdown to switch context.</div>
-                        <div class="info-tr"><strong>Fuar Kontrol Paneli</strong> — Secili fuarin ana kontrol sayfasidir. Visitor istatistikleri, son kayitlar ve tum yonetim araclarina hizli erisim saglar. Ust menuден farkli bir fuar secerek gecis yapabilirsiniz.</div>
+                        <div class="info-tr"><strong>Fuar Kontrol Paneli</strong> — Seçili fuarın ana kontrol sayfasıdır. Visitor istatistikleri, son kayıtlar ve tüm yönetim araçlarına hızlı erişim sağlar. Üst menüden farklı bir fuar seçerek geçiş yapabilirsiniz. Sidebar'daki tüm sayfalar seçili fuara göre filtrelenir.</div>
                     </div>
                 </div>
                 <div class="loading-spinner">
@@ -1347,7 +1347,7 @@
                 else { const e = await response.json(); alert(e.message || 'Failed'); }
             } catch (e) { alert('Failed'); }
         }
-        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

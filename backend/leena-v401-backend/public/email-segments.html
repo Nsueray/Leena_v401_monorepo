@@ -118,7 +118,7 @@
                   <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
                   <div class="info-box-content" id="infoBoxContent">
                     <div class="info-en"><strong>Email Segments</strong> — Send targeted emails to specific groups of registered visitors.<ul><li><strong>All registered</strong> — every visitor</li><li><strong>Checked in</strong> — only attendees</li><li><strong>No-show</strong> — registered but didn't attend</li><li>Different from Send Emails: segments only target THIS expo's visitors</li></ul></div>
-                    <div class="info-tr"><strong>Email Segmentleri</strong> — Kay&#305;tl&#305; visitor gruplar&#305;na hedefli email g&#246;nderin. T&#252;m kay&#305;tl&#305;lar, check-in yapanlar, no-show'lar. Email G&#246;nder'den fark&#305;: sadece BU fuar&#305;n visitor'lar&#305;n&#305; hedefler.</div>
+                    <div class="info-tr"><strong>Email Segmentleri</strong> — Bu fuara kayıtlı belirli visitor gruplarına hedefli email gönderin.<ul><li><strong>Tüm kayıtlılar</strong> — fuardaki her visitor</li><li><strong>Check-in yapanlar</strong> — sadece katılan visitor'lar</li><li><strong>No-show</strong> — kayıt olup katılmayanlar</li><li>Email Gönder'den farkı: segmentler sadece BU fuarın kayıtlı visitor'larını hedefler</li></ul></div>
                   </div>
                 </div>
                 <div class="card">
@@ -228,7 +228,7 @@
                 btn.innerHTML = '<i class="bi bi-send"></i> Send Emails';
             }
         }
-    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>

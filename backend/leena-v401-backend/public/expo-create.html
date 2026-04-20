@@ -144,7 +144,7 @@
           <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
           <div class="info-box-content" id="infoBoxContent">
             <div class="info-en"><strong>Create New Expo</strong> — Set up a new exhibition/fair event. Required: name, start date, end date. After creation you'll access the full management panel.</div>
-            <div class="info-tr"><strong>Yeni Fuar Olu&#351;tur</strong> — Yeni sergi/fuar kurun. Zorunlu: ad, ba&#351;lang&#305;&#231; ve biti&#351; tarihi. Olu&#351;turulduktan sonra y&#246;netim paneline eri&#351;irsiniz.</div>
+            <div class="info-tr"><strong>Yeni Fuar Oluştur</strong> — Yeni bir sergi/fuar etkinliği kurun. Zorunlu: fuar adı, başlangıç tarihi, bitiş tarihi. Oluşturulduktan sonra form, terminal, visitor import ve email şablonlarını yapılandırabileceğiniz yönetim paneline yönlendirileceksiniz.</div>
           </div>
         </div>
         <div class="header">
@@ -373,7 +373,7 @@
         function goBack() {
             window.location.href = 'dashboard.html';
         }
-    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+    function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
 </html>
