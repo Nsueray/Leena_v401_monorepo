@@ -444,14 +444,16 @@
         // DYNAMIC STYLE FROM config.style
         // ============================================================
         function applyFormStyle(config) {
+            // Handle string (double-stringified) or null
+            if (typeof config === 'string') { try { config = JSON.parse(config); } catch(e) { return; } }
+            if (!config || !config.style) return; // null config → keep hardcoded defaults
+
             const DEFAULT_STYLE = {
                 headerBannerImage: null, headerBannerColor: '#667eea', headerGradientEnd: '#764ba2', headerHeight: '200',
                 footerBannerImage: null, footerBannerColor: '#667eea', footerGradientEnd: '#764ba2', footerHeight: '80',
                 footerText: 'Powered by Leena EMS · © Elan Expo',
                 primaryColor: '#667eea', backgroundColor: '#f5f7fa', fontFamily: 'Poppins', buttonText: 'Register', borderRadius: '12'
             };
-
-            if (!config || !config.style) return; // null config → keep hardcoded defaults
             const s = { ...DEFAULT_STYLE, ...config.style };
 
             // Font

@@ -318,7 +318,7 @@ router.post('/', authMiddleware, async (req, res) => {
             visitor_type || 'visitor',
             source || 'form-builder',
             origin || 'form-builder',
-            config ? JSON.stringify(config) : null
+            config || null
         ];
 
         const result = await pool.query(query, values);
@@ -447,7 +447,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
             visitor_type || 'visitor',
             source,
             origin || 'form-builder',
-            config ? JSON.stringify(config) : null,
+            config || null,
             id,
             organizerId
         ];
