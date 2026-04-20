@@ -1,7 +1,7 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 30 Mart 2026
-> Aktif modül: Floor Plan Builder (ELL Extension)
+> Son güncelleme: 20 Nisan 2026
+> Aktif modül: Form Design + Leena EMS Core
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
 ---
@@ -138,6 +138,24 @@
 
 ---
 
+## ✅ April 2026 — Form Design + UX Improvements
+
+- [x] Form Design Customization — config.style JSONB, banner upload, Design tab in form builder, dynamic styling in form-public.html and reactivate.html
+- [x] Conference Topic Email Fix — formatConferenceTopic() `<ul>` bullet list for multi-topic
+- [x] Import Skip Existing — skip_existing parameter, UI radio buttons, skipped_count in results
+- [x] Visitor Detail Panel — slide-in panel with visitor info + email history timeline
+- [x] GET /api/visitors/:id/emails — email history endpoint (queue + logs)
+- [x] UI Help Info Boxes — all 20 admin pages, bilingual EN+TR, dismissible, localStorage
+- [x] body-parser limit 2mb — for base64 banner data
+- [x] Reactivation form_id migration — links campaigns to form design
+- [x] Banner upload endpoint — POST /api/forms/upload-banner (base64, 500KB limit)
+- [x] JSONB double-stringify fix — removed JSON.stringify for forms.config
+- [x] Info box toggle fix — CSS display:none override solved with display:block
+- [x] Zoom fix — mouse wheel=zoom restored, trackpad pan preserved, +/− buttons
+- [x] Duplicate stand fix — no stand_code → auto S-{id}, no confirm dialog
+
+---
+
 ## 🔴 Floor Plan Builder — Sprint 4 (Next)
 
 - [ ] Background image UX (resize, reposition, alignment)
@@ -156,17 +174,16 @@
 
 ---
 
-## 🟡 Sprint 3 — Email Stabilizasyon (Fuar sonrası, 1 hafta)
-
-Fuar sırasındaki "email gitmiyor" sorununun kök nedeni: 5 yerde direkt SendGrid çağrısı var.
+## 🟡 Email Stabilizasyon (Kısmen Tamamlandı)
 
 - [ ] webhook.js → email_queue üzerinden gönder (direkt sgMail.send kaldır)
-- [ ] visitors.js import → email_queue üzerinden gönder
-- [ ] visitors.js public form → email_queue üzerinden gönder
+- [x] visitors.js import → email_queue Mode 1 kullanıyor ✅
+- [x] visitors.js public form → email_queue Mode 1 kullanıyor ✅
 - [ ] emailSend.js bulk/single → email_queue üzerinden gönder
 - [ ] emailSegments.js → email_queue üzerinden gönder
 - [x] `email_worker.js` — FOR UPDATE transaction fix ✅ 24 Şubat
 - [x] `emailSend.js` — BASE_BADGE_URL fallback ✅ 23 Şubat
+- [ ] email_worker → email_logs sync: worker gönderim sonrası email_logs güncellemiyor (status tutarsızlığı)
 
 ## 🟢 Sprint 4 — Race Condition & Error Handling (Fuar sonrası, 3-5 gün)
 
@@ -194,8 +211,19 @@ Bu büyük refactor. Fuar yokken yapılacak.
 
 ---
 
+## 📋 Yeni Backlog (Nisan 2026+)
+
+- [ ] Form Design: test all form types (conference, exhibitor formlarında tasarım testi)
+- [ ] Central file storage (S3/Cloudinary) — banner images currently base64, migrate when scaling
+- [ ] Visitor detail panel: add edit capability (currently read-only)
+- [ ] Visitor detail panel: add check-in history (all check-in timestamps)
+- [ ] initial.sql sync with production DB (add missing tables/columns)
+
+---
+
 ## 📋 Stratejik Notlar
 
-1. **Sprint 3 en büyük operasyonel iyileştirme** — email güvenilirliğini kökten çözer
-2. **Sprint 5 (UI Unification) diğer tüm UI işlerini kolaylaştırır** — sidebar component yapılınca aynı link güncelleme işi tekrarlanmaz
-3. **CSS nesil birleştirme, sidebar genişliği** — SaaS fazına bırakıldı, fuar öncesi riskli
+1. **Email stabilizasyon** — import ve public form artık email_queue kullanıyor, webhook ve emailSend/Segments hâlâ direkt SendGrid
+2. **UI Unification** — sidebar component yapılınca info box + sidebar + expo indicator güncellemeleri tek yerden olur
+3. **Form Design** — banner storage base64 in JSONB, küçük formlar OK ama büyük organizasyonlar için S3'e geçiş planla
+4. **Floor Plan Builder** — Sprint 1-3.5 tamamlandı, production'da migration çalıştırılmalı

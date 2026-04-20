@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 30 Mart 2026 | Versiyon: v4.0.2+
+> Son güncelleme: 20 Nisan 2026 | Versiyon: v4.0.3
 
 ---
 
@@ -109,7 +109,8 @@ backend/leena-v401-backend/
 ├── index.js                    # Ana giriş noktası (CORS, static serve, route mount)
 ├── initial.sql                 # Temel DB şeması (DİKKAT: production ile tam senkron DEĞİL)
 ├── migrations/
-│   └── 001_floorplan_tables.sql # Floor Plan Builder tables (expo_halls, expo_floorplan_versions, expo_stands, expo_stand_cells)
+│   ├── 001_floorplan_tables.sql # Floor Plan Builder tables (expo_halls, expo_floorplan_versions, expo_stands, expo_stand_cells)
+│   └── 002_reactivation_form_id.sql # Adds form_id to reactivation_tokens for design inheritance
 ├── email_worker.js             # Async email kuyruğu işçisi (Render Background Worker)
 ├── routes/
 │   ├── auth.js                 # Login/Register, JWT
@@ -269,6 +270,21 @@ CREATE TABLE conference_certificates (
 - One certificate per visitor per topic (UNIQUE constraint)
 - `certificate_token` used for public certificate URL
 - Written by `conferenceCertificates.js` on conference check-in
+
+### forms.config JSONB Usage (v403)
+The `config` column stores style configuration for form design customization:
+```
+config.style.headerBannerImage (base64 data URI or null)
+config.style.headerBannerColor, headerGradientEnd, headerHeight
+config.style.footerBannerImage, footerBannerColor, footerGradientEnd, footerHeight, footerText
+config.style.primaryColor, backgroundColor, fontFamily, buttonText, borderRadius
+```
+Default fallback: when config is null, hardcoded CSS defaults apply (backward compatible).
+
+### reactivation_tokens.form_id (v403)
+- `ALTER TABLE reactivation_tokens ADD COLUMN form_id INTEGER REFERENCES forms(id)`
+- Links reactivation campaigns to a form's design (colors, banners)
+- NULL = default yellow theme preserved
 
 > **⚠️ Gerçek şemayı görmek için her zaman production DB'yi kontrol et, initial.sql'e güvenme.**
 
@@ -498,6 +514,7 @@ Hostess opens conference-scanner.html?terminal_key=X
 - `POST /api/visitors/manual` — Manuel kayıt (upsert)
 - `POST /api/visitors/import` — Excel import (upsert: varsa güncelle+QR koru, yoksa oluştur)
 - `GET /api/visitors/import-logs` — Import history logs (paginated, ?page=1&limit=20&expo_id=)
+- `GET /api/visitors/:id/emails` — Visitor email history (email_queue + email_logs, auth required)
 
 ### Forms
 - `GET /api/forms` — Form listesi
@@ -510,6 +527,7 @@ Hostess opens conference-scanner.html?terminal_key=X
 - `PATCH /api/forms/:id/toggle` — Form aktif/pasif toggle
 - `POST /api/forms/clone/:id` — Form klonla (cross-expo clone)
 - `DELETE /api/forms/:id` — Form sil
+- `POST /api/forms/upload-banner` — Banner image upload (base64, max 500KB, authMiddleware)
 
 ### Terminal
 - `GET /api/terminal/visitor-by-qr` — QR ile visitor arama
@@ -607,7 +625,15 @@ Hostess opens conference-scanner.html?terminal_key=X
 - `POST /api/floorplan/halls/:hallId/versions` — Create new draft version (JWT)
 - `GET /api/floorplan/versions/:versionId/stands` — All stands + cells for version (JWT)
 - `POST /api/floorplan/versions/:versionId/stands` — Create stand with cells (JWT, transaction)
+- `PUT /api/floorplan/stands/:id` — Update stand (structural=draft only, commercial=active OK)
+- `PUT /api/floorplan/stands/:id/status` — Change commercial status (allowed on active)
+- `PUT /api/floorplan/stands/:id/move` — Move stand cells (draft-only, transaction)
+- `POST /api/floorplan/stands/:id/split` — Split stand into 2+ stands (draft-only, transaction)
+- `POST /api/floorplan/stands/merge` — Merge 2+ stands into one (draft-only, transaction)
 - `DELETE /api/floorplan/stands/:id` — Delete stand (JWT, draft-only)
+- `POST /api/floorplan/versions/:id/activate` — Activate version (draft→active, archives current)
+- `POST /api/floorplan/versions/:id/clone` — Clone version (deep copy stands+cells)
+- `PUT /api/floorplan/versions/:id` — Update version label/notes
 
 ### Inline Endpoint'ler (index.js)
 - `GET /api/templates` — Form-builder dropdown için email template listesi
@@ -1008,6 +1034,47 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - Grid rulers: meter markers every 5 cells on top and left edges (9px grey text, cached with grid)
 - Selection glow: selected/multi-selected stands get blue shadow rect (4px, opacity 0.3) behind boundary
 - Fit to view: already auto-called on hall/version change (verified)
+
+### v4.0.3 (Nisan 2026)
+
+**Form Design Customization (17-20 April):**
+- `forms.config` JSONB column activated for style configuration (was unused since initial.sql)
+- Style system: headerBanner (image/color/gradient/height), footerBanner (same + text), primaryColor, backgroundColor, fontFamily, buttonText, borderRadius
+- Banner images stored as base64 in JSONB (max 500KB, Render ephemeral disk workaround)
+- form-builder.html: "Design" tab with color pickers, banner upload, font selection, live preview
+- form-public.html: `applyFormStyle(config)` dynamically applies styles. Null config → hardcoded defaults preserved
+- reactivate.html: Same style system. form_config from verify endpoint. Null → yellow theme preserved
+- `POST /api/forms/upload-banner`: multer memoryStorage, returns base64 data URI
+- `migrations/002_reactivation_form_id.sql`: adds `form_id` to `reactivation_tokens`
+- body-parser limit: 100KB → 2MB in index.js (`express.json({ limit: '2mb' })`)
+- Fix: removed JSON.stringify for JSONB config (was double-encoding), added typeof string parse fallback
+
+**Conference Topic Email Fix (7 April):**
+- `formatConferenceTopic()` in utils/email.js — multi-topic → HTML `<ul>` bullet list
+- Applied in visitors.js (public form) and email_worker.js (Mode 2 template)
+- Single topic: plain text unchanged. Null/empty: empty string
+
+**Import Skip Existing (20 April):**
+- `skip_existing` parameter in POST /api/visitors/import
+- When true: existing visitors completely skipped (no update, counted in `skipped_count`)
+- import.html: radio "Update info (keep QR)" vs "Skip entirely", hides email/QR options when skip selected
+- Results display: shows new/updated/skipped/failed/emails counts
+
+**Visitor Detail Panel + Email History (20 April):**
+- `GET /api/visitors/:id/emails` — returns email_queue + email_logs history for visitor
+- visitorlog-paginated.html: click row → slide-in panel (480px, right side)
+- Panel: visitor info grid + email timeline (status icons, subject, date, errors)
+- Queries by both visitor_id AND email address (comprehensive history)
+
+**UI Help Info Boxes (20 April):**
+- All 20 admin pages have contextual bilingual help boxes (EN main + TR translation)
+- Dismissible (X → localStorage per page), re-openable ("ℹ️ Help" toggle)
+- Page-specific content: what it does, key info, tips, differences from similar pages
+
+**Floor Plan Builder Fixes (31 Mar - 7 Apr):**
+- Zoom: mouse wheel=zoom, trackpad two-finger=pan, Ctrl+wheel/pinch=zoom
+- Duplicate: no stand_code → backend auto-assigns S-{id}
+- Zoom buttons (+/−) in top bar
 
 **Floor Plan Builder — Sprint 4 Backlog:**
 - Background image UX (resize, reposition, alignment)
