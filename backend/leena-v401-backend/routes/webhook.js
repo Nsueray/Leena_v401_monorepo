@@ -276,9 +276,9 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
         // NEW CODE: email_queue Mode 2 (email_worker processes template + custom_fields)
         try {
           await pool.query(`
-            INSERT INTO email_queue (visitor_id, template_id, status, created_at)
-            VALUES ($1, $2, 'pending', NOW())
-          `, [visitor.id, emailTplId]);
+            INSERT INTO email_queue (visitor_id, template_id, expo_id, organizer_id, status, created_at)
+            VALUES ($1, $2, $3, $4, 'pending', NOW())
+          `, [visitor.id, emailTplId, expo_id, organizer_id]);
 
           // email_logs with 'queued' status
           try {

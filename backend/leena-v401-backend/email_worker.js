@@ -214,7 +214,7 @@ async function processTask(task) {
     }
   } catch (err) {
     await markAsFailed(task.id, err.message || 'Unknown error');
-    await logToEmailLogs(task, 'failed', recipientEmail, emailSubject);
+    await logToEmailLogs(task, 'failed', task.recipient_email || task.visitor_email, err.message);
   }
 }
 
