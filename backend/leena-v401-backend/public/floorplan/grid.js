@@ -4,7 +4,7 @@
  */
 
 import { state } from './state.js';
-import { moveStand } from './api.js';
+import { moveStand, createStand } from './api.js';
 
 // --- Color maps ---
 const STATUS_COLORS = {
@@ -30,7 +30,7 @@ const SPECIAL_TYPE_COLORS = {
 };
 
 const CELL_SIZE = 24;         // px per cell at zoom 1.0
-const GRID_LINE_COLOR = '#e5e7eb';
+let gridStyle = { thin: { stroke: '#c5ccd6', width: 0.5 }, thick: { stroke: '#94a3b8', width: 1.0 }, ruler: '#64748b' };
 const SELECTED_FILL = '#3b82f6';
 const SELECTED_OPACITY = 0.4;
 const HOVER_FILL = '#60a5fa';
@@ -98,24 +98,21 @@ export function initGrid(containerId) {
   stage.add(interactionLayer);
 
   // Wheel handler:
-  //   ctrlKey (pinch or Ctrl+wheel) → ZOOM
-  //   deltaX !== 0 (trackpad two-finger scroll) → PAN
-  //   deltaX === 0, no Ctrl (mouse wheel) → ZOOM
+  //   Ctrl+wheel or pinch (ctrlKey) → ZOOM
+  //   Plain mouse wheel (no Ctrl) → ZOOM
+  //   Trackpad scroll without Ctrl → NOTHING (prevents accidental pan)
+  //   Pan only via Space+drag or middle-mouse+drag
   stage.on('wheel', (e) => {
     e.evt.preventDefault();
     const evt = e.evt;
-    const isZoom = evt.ctrlKey || evt.metaKey || (Math.abs(evt.deltaX) === 0 && !evt.shiftKey);
 
-    if (isZoom) {
+    // Always zoom — Ctrl/Meta/pinch or plain mouse wheel
+    if (evt.ctrlKey || evt.metaKey || Math.abs(evt.deltaX) === 0) {
       applyZoom(evt.deltaY > 0 ? -1 : 1, stage.getPointerPosition());
-    } else {
-      // PAN (trackpad two-finger or shift+wheel)
-      stage.position({
-        x: stage.x() - evt.deltaX,
-        y: stage.y() - evt.deltaY
-      });
+      stage.batchDraw();
     }
-    stage.batchDraw();
+    // Trackpad two-finger scroll (deltaX !== 0, no Ctrl) → ignore
+    // Pan is handled by Space+drag and middle-mouse+drag only
   });
 
   // --- Pointer → cell helper ---
@@ -345,12 +342,13 @@ export function initGrid(containerId) {
       return;
     }
 
-    // End draw marquee
+    // End draw marquee → auto-create stand (no dialog)
     if (!isDrawing || !drawStartCell) return;
 
     const endCell = pointerToCell(stage.getPointerPosition());
     const occupied = state.getOccupiedCells();
 
+    const cells = [];
     if (endCell && (endCell.x !== drawStartCell.x || endCell.y !== drawStartCell.y)) {
       const minX = Math.min(drawStartCell.x, endCell.x);
       const maxX = Math.max(drawStartCell.x, endCell.x);
@@ -358,24 +356,27 @@ export function initGrid(containerId) {
       const maxY = Math.max(drawStartCell.y, endCell.y);
       for (let y = minY; y <= maxY; y++) {
         for (let x = minX; x <= maxX; x++) {
-          const key = `${x},${y}`;
-          if (!occupied.has(key) && !state.selectedCells.has(key)) {
-            state.selectedCells.add(key);
-          }
+          if (!occupied.has(`${x},${y}`)) cells.push({ x, y });
         }
       }
-      state.emit('selectionChanged', state.selectedCells);
-    } else if (drawStartCell) {
-      const key = `${drawStartCell.x},${drawStartCell.y}`;
-      if (!occupied.has(key)) {
-        state.toggleCell(drawStartCell.x, drawStartCell.y);
-      }
+    } else if (drawStartCell && !occupied.has(`${drawStartCell.x},${drawStartCell.y}`)) {
+      cells.push({ x: drawStartCell.x, y: drawStartCell.y });
     }
 
     if (marqueeRect) { marqueeRect.destroy(); marqueeRect = null; }
     interactionLayer.draw();
     isDrawing = false;
     drawStartCell = null;
+
+    // Auto-create stand if cells were selected
+    if (cells.length > 0 && state.currentVersion) {
+      createStand(state.currentVersion.id, { area_kind: 'stand', cells })
+        .then(stand => {
+          state.addStand(stand);
+          state.selectStand(stand);
+        })
+        .catch(err => console.error('Auto-create stand failed:', err));
+    }
   });
 
   // --- Click: select stand or erase cell (suppressed after drag) ---
@@ -449,19 +450,21 @@ export function drawGrid() {
 
   // Vertical lines
   for (let x = 0; x <= w; x++) {
+    const is5 = x % 5 === 0;
     gridLayer.add(new Konva.Line({
       points: [x * CELL_SIZE, 0, x * CELL_SIZE, h * CELL_SIZE],
-      stroke: GRID_LINE_COLOR,
-      strokeWidth: x % 5 === 0 ? 0.8 : 0.3
+      stroke: is5 ? gridStyle.thick.stroke : gridStyle.thin.stroke,
+      strokeWidth: is5 ? gridStyle.thick.width : gridStyle.thin.width
     }));
   }
 
   // Horizontal lines
   for (let y = 0; y <= h; y++) {
+    const is5 = y % 5 === 0;
     gridLayer.add(new Konva.Line({
       points: [0, y * CELL_SIZE, w * CELL_SIZE, y * CELL_SIZE],
-      stroke: GRID_LINE_COLOR,
-      strokeWidth: y % 5 === 0 ? 0.8 : 0.3
+      stroke: is5 ? gridStyle.thick.stroke : gridStyle.thin.stroke,
+      strokeWidth: is5 ? gridStyle.thick.width : gridStyle.thin.width
     }));
   }
 
@@ -471,9 +474,9 @@ export function drawGrid() {
       x: x * CELL_SIZE - 1,
       y: -14,
       text: `${x}`,
-      fontSize: 9,
+      fontSize: 10,
       fontFamily: 'Inter, sans-serif',
-      fill: '#9ca3af',
+      fill: gridStyle.ruler,
       listening: false
     }));
   }
@@ -482,9 +485,9 @@ export function drawGrid() {
       x: -20,
       y: y * CELL_SIZE - 5,
       text: `${y}`,
-      fontSize: 9,
+      fontSize: 10,
       fontFamily: 'Inter, sans-serif',
-      fill: '#9ca3af',
+      fill: gridStyle.ruler,
       align: 'right',
       width: 16,
       listening: false
@@ -851,6 +854,16 @@ function applyZoom(direction, pointer) {
     y: pointer.y - mousePointTo.y * clampedScale
   });
   stage.batchDraw();
+}
+
+export function setGridVisibility(level) {
+  const presets = {
+    light:  { thin: { stroke: '#e5e7eb', width: 0.3 }, thick: { stroke: '#d1d5db', width: 0.6 }, ruler: '#9ca3af' },
+    normal: { thin: { stroke: '#c5ccd6', width: 0.5 }, thick: { stroke: '#94a3b8', width: 1.0 }, ruler: '#64748b' },
+    strong: { thin: { stroke: '#94a3b8', width: 0.8 }, thick: { stroke: '#475569', width: 1.5 }, ruler: '#334155' }
+  };
+  gridStyle = presets[level] || presets.normal;
+  drawGrid();
 }
 
 export function zoomIn() { applyZoom(1); }

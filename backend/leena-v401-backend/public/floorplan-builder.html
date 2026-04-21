@@ -203,6 +203,7 @@
                 <button class="btn-icon" id="btn-bg-fit" title="Fit Background to Grid" style="display:none;font-size:11px;font-weight:600;">FIT</button>
                 <button class="btn-icon" id="btn-remove-bg" title="Remove Background" style="display:none;"><i class="bi bi-x-circle"></i></button>
                 <input type="range" id="bg-opacity" min="5" max="100" value="30" step="5" title="Background Opacity" style="display:none;width:80px;cursor:pointer;">
+                <select id="grid-visibility" title="Grid Visibility" style="padding:4px 6px;border:1px solid var(--border-color);border-radius:var(--radius-md);font-size:11px;background:#fff;cursor:pointer;"><option value="light">Grid: Light</option><option value="normal" selected>Grid: Normal</option><option value="strong">Grid: Strong</option></select>
                 <button class="btn-icon" id="btn-zoom-in" title="Zoom In" style="font-size:18px;font-weight:700;">+</button>
                 <button class="btn-icon" id="btn-zoom-out" title="Zoom Out" style="font-size:18px;font-weight:700;">&minus;</button>
                 <button class="btn-icon" id="btn-fit-view" title="Fit to View"><i class="bi bi-fullscreen"></i></button>
@@ -219,7 +220,10 @@
             <!-- Body -->
             <div class="body-area">
                 <!-- Left Panel -->
-                <div class="left-panel">
+                <div class="left-panel" style="transition:width 0.2s;">
+                    <div style="display:flex;justify-content:flex-end;padding:4px 8px;border-bottom:1px solid var(--border-color);">
+                        <button id="btn-toggle-panel" onclick="toggleLeftPanel()" style="background:none;border:none;cursor:pointer;font-size:14px;color:var(--text-muted);padding:2px 4px;" title="Collapse/Expand"><i class="bi bi-chevron-left"></i></button>
+                    </div>
                     <div class="panel-section">
                         <div class="panel-section-title">Tools</div>
                         <div class="tool-grid">
@@ -405,7 +409,8 @@
         loadExhibitorsList();
     </script>
     <script>
-        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='4px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='10px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+        function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='4px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='10px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+        function toggleLeftPanel(){var p=document.querySelector('.left-panel'),b=document.getElementById('btn-toggle-panel');if(!p)return;var collapsed=p.style.width==='48px';p.style.width=collapsed?'240px':'48px';p.style.overflow=collapsed?'':'hidden';p.querySelectorAll('.panel-section-title,.detail-row,.detail-empty,.detail-input,.detail-select,.color-palette,.btn-block,#stand-detail,#btn-create-stand,.exh-dd-item').forEach(function(el){el.style.display=collapsed?'':'none';});if(b)b.innerHTML=collapsed?'<i class="bi bi-chevron-left"></i>':'<i class="bi bi-chevron-right"></i>';}
     </script>
 </body>
 </html>

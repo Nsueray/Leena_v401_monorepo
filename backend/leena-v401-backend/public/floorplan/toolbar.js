@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import { fetchHalls, createHall, updateHall, fetchVersions, createVersion, fetchStands, activateVersion, cloneVersion } from './api.js';
-import { fitToView, zoomIn, zoomOut, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground, toggleBgLock, isBgLocked, fitBgToGrid } from './grid.js';
+import { fitToView, zoomIn, zoomOut, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground, toggleBgLock, isBgLocked, fitBgToGrid, setGridVisibility } from './grid.js';
 import { updateStats } from './stands.js';
 
 export function initToolbar() {
@@ -165,6 +165,10 @@ export function initToolbar() {
   if (activateBtn) {
     activateBtn.addEventListener('click', handleActivateVersion);
   }
+
+  // Grid visibility
+  const gridVis = document.getElementById('grid-visibility');
+  if (gridVis) gridVis.addEventListener('change', () => setGridVisibility(gridVis.value));
 
   // Zoom buttons
   const zoomInBtn = document.getElementById('btn-zoom-in');
