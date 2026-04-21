@@ -4,7 +4,7 @@
  */
 
 import { state } from './state.js';
-import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion, cloneVersion } from './api.js';
+import { fetchHalls, createHall, updateHall, fetchVersions, createVersion, fetchStands, activateVersion, cloneVersion } from './api.js';
 import { fitToView, zoomIn, zoomOut, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground, toggleBgLock, isBgLocked, fitBgToGrid } from './grid.js';
 import { updateStats } from './stands.js';
 
@@ -57,6 +57,12 @@ export function initToolbar() {
     createHallBtn.addEventListener('click', showHallDialog);
   }
 
+  // Edit hall dimensions button
+  const editHallBtn = document.getElementById('btn-edit-hall');
+  if (editHallBtn) {
+    editHallBtn.addEventListener('click', handleEditHall);
+  }
+
   // Create version button
   const createVersionBtn = document.getElementById('btn-create-version');
   if (createVersionBtn) {
@@ -90,15 +96,37 @@ export function initToolbar() {
 
   if (uploadBgBtn && bgFileInput) {
     uploadBgBtn.addEventListener('click', () => bgFileInput.click());
-    bgFileInput.addEventListener('change', (e) => {
+    bgFileInput.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        setBackgroundImage(ev.target.result);
-        showBgControls(true);
-      };
-      reader.readAsDataURL(file);
+
+      if (file.type === 'application/pdf' && typeof pdfjsLib !== 'undefined') {
+        // PDF → PNG client-side rendering
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+          const page = await pdf.getPage(1);
+          const viewport = page.getViewport({ scale: 2 });
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+          setBackgroundImage(canvas.toDataURL('image/png'));
+          showBgControls(true);
+        } catch (err) {
+          console.error('PDF render error:', err);
+          alert('Failed to render PDF. Try converting to PNG first.');
+        }
+      } else {
+        // Normal image
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          setBackgroundImage(ev.target.result);
+          showBgControls(true);
+        };
+        reader.readAsDataURL(file);
+      }
       bgFileInput.value = '';
     });
   }
@@ -302,6 +330,24 @@ async function handleCloneVersion() {
 }
 
 // --- Hall Creation Dialog ---
+
+async function handleEditHall() {
+  if (!state.currentHall) { alert('Select a hall first'); return; }
+  const hall = state.currentHall;
+  const newWidth = prompt(`Grid width in meters (current: ${hall.grid_width}):`, hall.grid_width);
+  if (!newWidth) return;
+  const newHeight = prompt(`Grid height in meters (current: ${hall.grid_height}):`, hall.grid_height);
+  if (!newHeight) return;
+  const w = parseInt(newWidth), h = parseInt(newHeight);
+  if (isNaN(w) || isNaN(h) || w < 5 || h < 5 || w > 200 || h > 200) {
+    alert('Invalid dimensions. Min 5, max 200.'); return;
+  }
+  if (w === hall.grid_width && h === hall.grid_height) return;
+  try {
+    await updateHall(hall.id, { grid_width: w, grid_height: h });
+    location.reload();
+  } catch (err) { alert(err.message); }
+}
 
 function showHallDialog() {
   const dialog = document.getElementById('create-hall-dialog');

@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/konva@9.3.15/konva.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <style>
         :root {
             --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
@@ -188,6 +189,7 @@
                 <h1><i class="bi bi-grid-3x3"></i> Floor Plan</h1>
                 <select id="hall-select"><option value="">-- Select Hall --</option></select>
                 <button class="btn-icon" id="btn-create-hall" title="New Hall"><i class="bi bi-plus-lg"></i></button>
+                <button class="btn-icon" id="btn-edit-hall" title="Edit Hall Dimensions" style="font-size:14px;"><i class="bi bi-pencil"></i></button>
                 <select id="version-select"><option value="">-- Select Version --</option></select>
                 <button class="btn-icon" id="btn-create-version" title="New Version"><i class="bi bi-plus-circle"></i></button>
                 <span id="draft-indicator" class="version-status"></span>
@@ -195,7 +197,7 @@
                 <button class="btn-icon" id="btn-clone-version" title="Clone Version"><i class="bi bi-files"></i></button>
                 <div class="spacer"></div>
                 <button class="btn-icon" id="btn-export-png" title="Export PNG"><i class="bi bi-download"></i></button>
-                <input type="file" id="bg-file-input" accept="image/png,image/jpeg" style="display:none;">
+                <input type="file" id="bg-file-input" accept="image/png,image/jpeg,image/webp,application/pdf" style="display:none;">
                 <button class="btn-icon" id="btn-upload-bg" title="Upload Background Image"><i class="bi bi-image"></i></button>
                 <button class="btn-icon" id="btn-bg-lock" title="Lock/Unlock Background" style="display:none;"><i class="bi bi-lock"></i></button>
                 <button class="btn-icon" id="btn-bg-fit" title="Fit Background to Grid" style="display:none;font-size:11px;font-weight:600;">FIT</button>
@@ -401,6 +403,8 @@
         // Load halls + exhibitors
         loadHalls();
         loadExhibitorsList();
+    </script>
+    <script>
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='4px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='10px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>
