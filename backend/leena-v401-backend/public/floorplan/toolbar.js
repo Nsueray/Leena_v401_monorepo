@@ -5,7 +5,7 @@
 
 import { state } from './state.js';
 import { fetchHalls, createHall, fetchVersions, createVersion, fetchStands, activateVersion, cloneVersion } from './api.js';
-import { fitToView, zoomIn, zoomOut, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground } from './grid.js';
+import { fitToView, zoomIn, zoomOut, exportPNG, setBackgroundImage, removeBackgroundImage, setBackgroundOpacity, loadSavedBackground, toggleBgLock, isBgLocked, fitBgToGrid } from './grid.js';
 import { updateStats } from './stands.js';
 
 export function initToolbar() {
@@ -68,6 +68,25 @@ export function initToolbar() {
   const uploadBgBtn = document.getElementById('btn-upload-bg');
   const removeBgBtn = document.getElementById('btn-remove-bg');
   const bgOpacity = document.getElementById('bg-opacity');
+  const bgLockBtn = document.getElementById('btn-bg-lock');
+  const bgFitBtn = document.getElementById('btn-bg-fit');
+
+  function showBgControls(show) {
+    if (removeBgBtn) removeBgBtn.style.display = show ? 'flex' : 'none';
+    if (bgOpacity) bgOpacity.style.display = show ? 'block' : 'none';
+    if (bgLockBtn) bgLockBtn.style.display = show ? 'flex' : 'none';
+    if (bgFitBtn) bgFitBtn.style.display = show ? 'flex' : 'none';
+    updateBgLockBtn();
+  }
+
+  function updateBgLockBtn() {
+    if (bgLockBtn) {
+      const locked = isBgLocked();
+      bgLockBtn.innerHTML = locked ? '<i class="bi bi-lock"></i>' : '<i class="bi bi-unlock"></i>';
+      bgLockBtn.title = locked ? 'Unlock Background (drag/resize)' : 'Lock Background';
+      bgLockBtn.style.color = locked ? 'var(--text-secondary)' : 'var(--warning)';
+    }
+  }
 
   if (uploadBgBtn && bgFileInput) {
     uploadBgBtn.addEventListener('click', () => bgFileInput.click());
@@ -77,8 +96,7 @@ export function initToolbar() {
       const reader = new FileReader();
       reader.onload = (ev) => {
         setBackgroundImage(ev.target.result);
-        if (removeBgBtn) removeBgBtn.style.display = 'flex';
-        if (bgOpacity) bgOpacity.style.display = 'block';
+        showBgControls(true);
       };
       reader.readAsDataURL(file);
       bgFileInput.value = '';
@@ -87,14 +105,19 @@ export function initToolbar() {
   if (removeBgBtn) {
     removeBgBtn.addEventListener('click', () => {
       removeBackgroundImage();
-      removeBgBtn.style.display = 'none';
-      if (bgOpacity) bgOpacity.style.display = 'none';
+      showBgControls(false);
     });
   }
   if (bgOpacity) {
     bgOpacity.addEventListener('input', () => {
       setBackgroundOpacity(parseInt(bgOpacity.value) / 100);
     });
+  }
+  if (bgLockBtn) {
+    bgLockBtn.addEventListener('click', () => { toggleBgLock(); updateBgLockBtn(); });
+  }
+  if (bgFitBtn) {
+    bgFitBtn.addEventListener('click', fitBgToGrid);
   }
 
   // Export PNG button
@@ -172,13 +195,8 @@ async function loadStands(versionId) {
     setTimeout(() => {
       fitToView();
       loadSavedBackground();
-      // Show/hide bg controls if saved background exists
       const key = `fp_bg_${state.expoId}_${state.currentHall?.id}`;
-      const hasBg = !!localStorage.getItem(key);
-      const removeBgBtn = document.getElementById('btn-remove-bg');
-      const bgOpacity = document.getElementById('bg-opacity');
-      if (removeBgBtn) removeBgBtn.style.display = hasBg ? 'flex' : 'none';
-      if (bgOpacity) bgOpacity.style.display = hasBg ? 'block' : 'none';
+      showBgControls(!!localStorage.getItem(key));
     }, 50);
   } catch (err) {
     console.error('Failed to load stands:', err);

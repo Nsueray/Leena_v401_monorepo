@@ -117,3 +117,23 @@ export async function splitStand(standId, newStands) {
 export async function deleteStand(standId) {
   return apiCall('DELETE', `/stands/${standId}`);
 }
+
+// --- Exhibitors ---
+
+const EXHIBITOR_BASE = '/api/exhibitors';
+
+export async function fetchExhibitors(expoId) {
+  const res = await fetch(`${EXHIBITOR_BASE}?expo_id=${expoId}`, { headers: getHeaders() });
+  const data = await res.json();
+  return data.exhibitors || [];
+}
+
+export async function createExhibitor(expoId, fields) {
+  const res = await fetch(EXHIBITOR_BASE, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ expo_id: parseInt(expoId), ...fields })
+  });
+  const data = await res.json();
+  return data.exhibitor;
+}

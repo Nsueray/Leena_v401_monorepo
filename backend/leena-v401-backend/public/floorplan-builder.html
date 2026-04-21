@@ -89,6 +89,8 @@
         .color-swatch { width: 20px; height: 20px; border-radius: 4px; border: 2px solid #e2e8f0; cursor: pointer; transition: border-color 0.15s; }
         .color-swatch:hover { border-color: var(--primary); }
         .color-swatch-active { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(74,111,165,0.3); }
+        .exh-dd-item { padding:8px 10px; cursor:pointer; font-size:12px; }
+        .exh-dd-item:hover { background: var(--primary-light); }
 
         .status-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
         .status-available { background: #f3f4f6; color: #374151; }
@@ -195,6 +197,8 @@
                 <button class="btn-icon" id="btn-export-png" title="Export PNG"><i class="bi bi-download"></i></button>
                 <input type="file" id="bg-file-input" accept="image/png,image/jpeg" style="display:none;">
                 <button class="btn-icon" id="btn-upload-bg" title="Upload Background Image"><i class="bi bi-image"></i></button>
+                <button class="btn-icon" id="btn-bg-lock" title="Lock/Unlock Background" style="display:none;"><i class="bi bi-lock"></i></button>
+                <button class="btn-icon" id="btn-bg-fit" title="Fit Background to Grid" style="display:none;font-size:11px;font-weight:600;">FIT</button>
                 <button class="btn-icon" id="btn-remove-bg" title="Remove Background" style="display:none;"><i class="bi bi-x-circle"></i></button>
                 <input type="range" id="bg-opacity" min="5" max="100" value="30" step="5" title="Background Opacity" style="display:none;width:80px;cursor:pointer;">
                 <button class="btn-icon" id="btn-zoom-in" title="Zoom In" style="font-size:18px;font-weight:700;">+</button>
@@ -364,7 +368,7 @@
     <script type="module">
         import { state } from './floorplan/state.js';
         import { initGrid, drawGrid } from './floorplan/grid.js';
-        import { initStandActions, handleCreateStand, hideCreateDialog } from './floorplan/stands.js';
+        import { initStandActions, handleCreateStand, hideCreateDialog, loadExhibitorsList } from './floorplan/stands.js';
         import { initToolbar, loadHalls, handleCreateHall, hideHallDialog } from './floorplan/toolbar.js';
 
         // Auth check
@@ -394,8 +398,9 @@
         document.getElementById('hall-form').addEventListener('submit', handleCreateHall);
         document.getElementById('stand-form').addEventListener('submit', handleCreateStand);
 
-        // Load halls
+        // Load halls + exhibitors
         loadHalls();
+        loadExhibitorsList();
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='4px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='10px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
 </body>

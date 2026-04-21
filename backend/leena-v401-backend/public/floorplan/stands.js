@@ -4,7 +4,7 @@
  */
 
 import { state } from './state.js';
-import { createStand, deleteStand, updateStand, updateStandStatus, splitStand, mergeStands } from './api.js';
+import { createStand, deleteStand, updateStand, updateStandStatus, splitStand, mergeStands, fetchExhibitors, createExhibitor } from './api.js';
 import { drawStands, drawSelection } from './grid.js';
 
 export function initStandActions() {
@@ -136,8 +136,12 @@ function updateDetailPanel(stand) {
     <div class="detail-row"><span class="detail-label">Status</span><span class="detail-value">${statusHtml}</span></div>
     ${colorHtml}
     <div class="detail-row detail-edit-row">
-      <span class="detail-label">Company</span>
-      <input class="detail-input" id="detail-company" type="text" value="${escapeHtml(companyVal)}" placeholder="Company name">
+      <span class="detail-label">Company / Exhibitor</span>
+      <div style="position:relative;">
+        <input class="detail-input" id="detail-company" type="text" value="${escapeHtml(companyVal)}" placeholder="Search or type company..." autocomplete="off">
+        <div id="exhibitorDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;max-height:180px;overflow-y:auto;background:#fff;border:1px solid var(--border-color);border-radius:0 0 6px 6px;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.1);"></div>
+      </div>
+      ${stand.exhibitor_name ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${[stand.exhibitor_contact, stand.exhibitor_country, stand.exhibitor_sector].filter(Boolean).join(' · ')}</div>` : ''}
     </div>
     <div class="detail-row detail-edit-row">
       <span class="detail-label">Label</span>
@@ -178,6 +182,15 @@ function updateDetailPanel(stand) {
       }
     });
   });
+
+  // Bind exhibitor dropdown on company input
+  const companyInput = document.getElementById('detail-company');
+  const dropdown = document.getElementById('exhibitorDropdown');
+  if (companyInput && dropdown) {
+    companyInput.addEventListener('focus', () => renderExhibitorDropdown(companyInput.value, stand, dropdown));
+    companyInput.addEventListener('input', () => renderExhibitorDropdown(companyInput.value, stand, dropdown));
+    companyInput.addEventListener('blur', () => setTimeout(() => { dropdown.style.display = 'none'; }, 200));
+  }
 
   // Bind save button for text fields
   const saveBtn = document.getElementById('btn-save-stand');
@@ -583,3 +596,73 @@ function showSplitDialog(stand) {
   if (hBtn) hBtn.onclick = () => doSplit('horizontal');
   if (vBtn) vBtn.onclick = () => doSplit('vertical');
 }
+
+// ============================================================
+// EXHIBITOR DROPDOWN
+// ============================================================
+
+let _exhibitorsCache = null;
+
+export async function loadExhibitorsList() {
+  if (!state.expoId) return;
+  try {
+    _exhibitorsCache = await fetchExhibitors(state.expoId);
+  } catch (e) {
+    console.error('Failed to load exhibitors:', e);
+    _exhibitorsCache = [];
+  }
+}
+
+function renderExhibitorDropdown(query, stand, dropdown) {
+  if (!_exhibitorsCache) { loadExhibitorsList(); dropdown.style.display = 'none'; return; }
+
+  const q = (query || '').toLowerCase().trim();
+  let filtered = _exhibitorsCache;
+  if (q) filtered = _exhibitorsCache.filter(e => e.name.toLowerCase().includes(q) || (e.country && e.country.toLowerCase().includes(q)));
+
+  let html = '';
+
+  // "Add new" option
+  if (q && !filtered.find(e => e.name.toLowerCase() === q)) {
+    html += `<div class="exh-dd-item" style="color:var(--primary);border-bottom:1px solid #f1f5f9;" onmousedown="event.preventDefault()" onclick="window._fpCreateExhibitor('${q.replace(/'/g,"\\'")}', ${stand.id})">+ Add new: "${query}"</div>`;
+  }
+
+  filtered.slice(0, 15).forEach(e => {
+    const sub = [e.country, e.sector].filter(Boolean).join(' · ');
+    html += `<div class="exh-dd-item" onmousedown="event.preventDefault()" onclick="window._fpAssignExhibitor(${e.id}, '${e.name.replace(/'/g,"\\'")}', ${stand.id})"><div style="font-weight:500;">${e.name}</div>${sub ? `<div style="font-size:10px;color:var(--text-muted);">${sub}</div>` : ''}</div>`;
+  });
+
+  if (stand.assigned_company_name || stand.exhibitor_id) {
+    html += `<div class="exh-dd-item" style="color:var(--danger);border-top:1px solid #f1f5f9;" onmousedown="event.preventDefault()" onclick="window._fpClearExhibitor(${stand.id})">✕ Remove company</div>`;
+  }
+
+  if (!html) html = '<div style="padding:8px 10px;font-size:12px;color:var(--text-muted);">No exhibitors found</div>';
+
+  dropdown.innerHTML = html;
+  dropdown.style.display = '';
+}
+
+// Global handlers (called from onclick in dynamic HTML)
+window._fpAssignExhibitor = async (exhibitorId, name, standId) => {
+  try {
+    const updated = await updateStand(standId, { assigned_company_name: name, exhibitor_id: exhibitorId });
+    state.updateStand(updated);
+  } catch (err) { alert(err.message); }
+};
+
+window._fpCreateExhibitor = async (name, standId) => {
+  try {
+    const exhibitor = await createExhibitor(state.expoId, { name });
+    if (!exhibitor) return;
+    _exhibitorsCache.push(exhibitor);
+    const updated = await updateStand(standId, { assigned_company_name: exhibitor.name, exhibitor_id: exhibitor.id });
+    state.updateStand(updated);
+  } catch (err) { alert(err.message); }
+};
+
+window._fpClearExhibitor = async (standId) => {
+  try {
+    const updated = await updateStand(standId, { assigned_company_name: null, exhibitor_id: null });
+    state.updateStand(updated);
+  } catch (err) { alert(err.message); }
+};

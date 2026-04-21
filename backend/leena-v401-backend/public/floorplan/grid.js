@@ -879,6 +879,9 @@ export function fitToView() {
 // BACKGROUND IMAGE
 // ============================================================
 
+let bgTransformer = null;
+let bgLocked = true; // locked by default — unlock to reposition
+
 export function setBackgroundImage(dataUrl) {
   removeBackgroundImage();
   if (!dataUrl || !bgLayer) return;
@@ -889,19 +892,36 @@ export function setBackgroundImage(dataUrl) {
     const gridH = state.gridHeight * CELL_SIZE;
     console.log(`[floorplan] Background loaded, image: ${img.naturalWidth}x${img.naturalHeight}, grid: ${gridW}x${gridH}`);
 
+    // Scale to fit grid (aspect ratio preserved)
+    const imgRatio = img.naturalWidth / img.naturalHeight;
+    const gridRatio = gridW / gridH;
+    let w, h;
+    if (imgRatio > gridRatio) { w = gridW; h = gridW / imgRatio; }
+    else { h = gridH; w = gridH * imgRatio; }
+
     bgImage = new Konva.Image({
       image: img,
-      x: 0,
-      y: 0,
-      width: gridW,
-      height: gridH,
+      x: 0, y: 0,
+      width: w, height: h,
       opacity: 0.3,
-      listening: false
+      draggable: false, // locked by default
+      name: 'backgroundImage'
     });
     bgLayer.add(bgImage);
+
+    // Transformer for resize (hidden when locked)
+    bgTransformer = new Konva.Transformer({
+      nodes: [bgImage],
+      keepRatio: true,
+      enabledAnchors: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+      rotateEnabled: false,
+      visible: false,
+      name: 'bgTransformer'
+    });
+    bgLayer.add(bgTransformer);
     bgLayer.draw();
 
-    // Redraw grid with transparent background so bgImage shows through
+    bgLocked = true;
     drawGrid();
 
     // Save to localStorage
@@ -912,22 +932,43 @@ export function setBackgroundImage(dataUrl) {
 }
 
 export function removeBackgroundImage() {
-  if (bgImage) {
-    bgImage.destroy();
-    bgImage = null;
-    if (bgLayer) bgLayer.draw();
-    // Redraw grid to restore opaque background
-    drawGrid();
-  }
+  if (bgTransformer) { bgTransformer.destroy(); bgTransformer = null; }
+  if (bgImage) { bgImage.destroy(); bgImage = null; }
+  if (bgLayer) { bgLayer.destroyChildren(); bgLayer.draw(); }
+  drawGrid();
   const key = `fp_bg_${state.expoId}_${state.currentHall?.id}`;
   localStorage.removeItem(key);
 }
 
 export function setBackgroundOpacity(opacity) {
-  if (bgImage) {
-    bgImage.opacity(opacity);
-    bgLayer.draw();
-  }
+  if (bgImage) { bgImage.opacity(opacity); bgLayer.draw(); }
+}
+
+export function toggleBgLock() {
+  if (!bgImage) return;
+  bgLocked = !bgLocked;
+  bgImage.draggable(!bgLocked);
+  if (bgTransformer) bgTransformer.visible(!bgLocked);
+  bgLayer.draw();
+  return bgLocked;
+}
+
+export function isBgLocked() { return bgLocked; }
+
+export function fitBgToGrid() {
+  if (!bgImage || !bgImage.image()) return;
+  const gridW = state.gridWidth * CELL_SIZE;
+  const gridH = state.gridHeight * CELL_SIZE;
+  const imgRatio = bgImage.image().naturalWidth / bgImage.image().naturalHeight;
+  const gridRatio = gridW / gridH;
+  let w, h;
+  if (imgRatio > gridRatio) { w = gridW; h = gridW / imgRatio; }
+  else { h = gridH; w = gridH * imgRatio; }
+  bgImage.position({ x: 0, y: 0 });
+  bgImage.size({ width: w, height: h });
+  bgImage.scaleX(1); bgImage.scaleY(1);
+  if (bgTransformer) bgTransformer.forceUpdate();
+  bgLayer.draw();
 }
 
 export function loadSavedBackground() {

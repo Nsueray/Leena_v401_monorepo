@@ -436,10 +436,14 @@ router.get('/versions/:versionId/stands', authMiddleware, async (req, res) => {
 
     const versionInfo = versionCheck.rows[0];
 
-    // Fetch all stands
+    // Fetch all stands with exhibitor info
     const stands = await pool.query(
-      `SELECT s.*
+      `SELECT s.*,
+              ex.name AS exhibitor_name, ex.contact_person AS exhibitor_contact,
+              ex.email AS exhibitor_email, ex.phone AS exhibitor_phone,
+              ex.country AS exhibitor_country, ex.sector AS exhibitor_sector
        FROM expo_stands s
+       LEFT JOIN expo_exhibitors ex ON s.exhibitor_id = ex.id
        WHERE s.floorplan_version_id = $1
        ORDER BY s.stand_code ASC`,
       [versionId]
@@ -634,7 +638,7 @@ router.put('/stands/:id', authMiddleware, async (req, res) => {
     const standId = req.params.id;
     const organizer_id = req.organizer_id;
     const { stand_code, zone, display_label, area_kind, special_area_type,
-            commercial_status, stand_type, assigned_company_name, notes, metadata } = req.body;
+            commercial_status, stand_type, assigned_company_name, exhibitor_id, notes, metadata } = req.body;
 
     // Verify ownership and get version status
     const standCheck = await pool.query(
@@ -671,6 +675,7 @@ router.put('/stands/:id', authMiddleware, async (req, res) => {
     if (commercial_status !== undefined) { updates.push(`commercial_status = $${idx++}`); values.push(commercial_status); }
     if (stand_type !== undefined) { updates.push(`stand_type = $${idx++}`); values.push(stand_type); }
     if (assigned_company_name !== undefined) { updates.push(`assigned_company_name = $${idx++}`); values.push(assigned_company_name); }
+    if (exhibitor_id !== undefined) { updates.push(`exhibitor_id = $${idx++}`); values.push(exhibitor_id); }
     if (notes !== undefined) { updates.push(`notes = $${idx++}`); values.push(notes); }
     if (metadata !== undefined) { updates.push(`metadata = $${idx++}`); values.push(JSON.stringify(metadata)); }
 

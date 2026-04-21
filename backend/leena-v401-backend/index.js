@@ -86,6 +86,8 @@ let conferenceCertRoutes;
 try { conferenceCertRoutes = require('./routes/conferenceCertificates'); console.log('✓ Conference Certificate routes loaded'); } catch (err) { console.error('✗ Failed to load conferenceCertificates routes:', err.message); }
 let floorplanRoutes;
 try { floorplanRoutes = require('./routes/floorplan'); console.log('✓ Floor Plan routes loaded'); } catch (err) { console.error('✗ Failed to load floorplan routes:', err.message); }
+let exhibitorRoutes;
+try { exhibitorRoutes = require('./routes/exhibitors'); console.log('✓ Exhibitor routes loaded'); } catch (err) { console.error('✗ Failed to load exhibitor routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -109,6 +111,7 @@ if (reactivationRoutes) app.use('/api/reactivation', reactivationRoutes); // ✅
 if (badgeTemplateRoutes) app.use('/api/badge-templates', badgeTemplateRoutes); // ✅ Badge Templates
 if (conferenceCertRoutes) app.use('/api/conference-certificates', conferenceCertRoutes); // ✅ Conference Certificates
 if (floorplanRoutes) app.use('/api/floorplan', floorplanRoutes); // ✅ Floor Plan Builder
+if (exhibitorRoutes) app.use('/api/exhibitors', exhibitorRoutes); // ✅ Exhibitor Management
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
