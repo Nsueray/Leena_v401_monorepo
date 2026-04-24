@@ -85,9 +85,22 @@ function verifyUnsubscribeToken(token) {
     return null;
   }
 
-  // Verify HMAC
+  // Verify HMAC (safe: length check before timingSafeEqual, base64url decode)
   const expectedSig = crypto.createHmac('sha256', UNSUBSCRIBE_SECRET).update(payload).digest('base64url');
-  if (!crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSig))) {
+
+  let sigBuf, expectedBuf;
+  try {
+    sigBuf = Buffer.from(signature, 'base64url');
+    expectedBuf = Buffer.from(expectedSig, 'base64url');
+  } catch (e) {
+    return null;
+  }
+
+  if (sigBuf.length !== expectedBuf.length) {
+    return null;
+  }
+
+  if (!crypto.timingSafeEqual(sigBuf, expectedBuf)) {
     return null;
   }
 
