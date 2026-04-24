@@ -6,6 +6,7 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('./utils/email');
+const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken } = require('./utils/trackingPixel');
 
 // --- Database pool (ENV-based SSL handling) ---
 const pool = new Pool({
@@ -228,12 +229,350 @@ async function processTask(task) {
 }
 
 // ============================================================
+// CAMPAIGN SCHEDULER (v403)
+// Runs every 60 seconds alongside the 2-second queue processor.
+// Scans active campaigns, evaluates step conditions, enqueues emails.
+// Does NOT send — just writes to email_queue for processQueueLoop to handle.
+// ============================================================
+
+const SCHEDULER_INTERVAL = 60 * 1000;
+let isSchedulerRunning = false;
+
+async function runCampaignScheduler() {
+  if (isSchedulerRunning) return; // Prevent re-entrancy
+  isSchedulerRunning = true;
+  const cycleStart = Date.now();
+  let totalEnqueued = 0;
+  let totalCampaigns = 0;
+
+  try {
+    // Find active campaigns
+    const campaignsRes = await pool.query(
+      `SELECT id, organizer_id, expo_id FROM email_campaigns WHERE status = 'active'`
+    );
+
+    if (campaignsRes.rows.length === 0) {
+      return; // No active campaigns, skip silently
+    }
+
+    console.log(`[CAMPAIGN SCHEDULER] Cycle start: ${campaignsRes.rows.length} active campaign(s)`);
+
+    for (const campaign of campaignsRes.rows) {
+      try {
+        const enqueued = await processCampaign(campaign);
+        totalEnqueued += enqueued;
+        totalCampaigns++;
+      } catch (err) {
+        console.error(`[CAMPAIGN SCHEDULER] Campaign ${campaign.id} error: ${err.message}`);
+      }
+    }
+
+    const elapsed = Date.now() - cycleStart;
+    if (totalEnqueued > 0 || totalCampaigns > 0) {
+      console.log(`[CAMPAIGN SCHEDULER] Cycle end: ${totalEnqueued} emails enqueued across ${totalCampaigns} campaigns in ${elapsed}ms`);
+    }
+  } catch (err) {
+    console.error(`[CAMPAIGN SCHEDULER] Fatal cycle error: ${err.message}`);
+  } finally {
+    isSchedulerRunning = false;
+  }
+}
+
+async function processCampaign(campaign) {
+  let enqueued = 0;
+
+  // Cache organizer name for unsubscribe link (one query per campaign per cycle)
+  let organizerName = 'Organizer';
+  try {
+    const orgRes = await pool.query('SELECT name FROM organizers WHERE id = $1', [campaign.organizer_id]);
+    if (orgRes.rows.length > 0) organizerName = orgRes.rows[0].name;
+  } catch (e) { /* non-critical */ }
+
+  // Pre-fetch all steps for this campaign (small set, cached for the loop)
+  const stepsRes = await pool.query(
+    'SELECT * FROM campaign_steps WHERE campaign_id = $1 ORDER BY step_number ASC',
+    [campaign.id]
+  );
+  const steps = stepsRes.rows;
+  if (steps.length === 0) return 0;
+
+  const stepsMap = {};
+  for (const s of steps) stepsMap[s.step_number] = s;
+
+  // Process recipients in batches with lock+clear pattern
+  // Lock → clear next_step_due_at (marks "in progress") → release lock → process
+  // This prevents double-pickup during Render deploy overlaps
+  while (true) {
+    const client = await pool.connect();
+    let recipients = [];
+    try {
+      await client.query('BEGIN');
+
+      const recipientsRes = await client.query(`
+        SELECT * FROM campaign_recipients
+        WHERE campaign_id = $1 AND status = 'active' AND next_step_due_at IS NOT NULL AND next_step_due_at <= NOW()
+        ORDER BY next_step_due_at ASC
+        LIMIT 500
+        FOR UPDATE SKIP LOCKED
+      `, [campaign.id]);
+
+      recipients = recipientsRes.rows;
+
+      if (recipients.length === 0) {
+        await client.query('COMMIT');
+        break; // No more eligible recipients in this batch
+      }
+
+      // Clear next_step_due_at to mark as "in progress" BEFORE releasing lock
+      const ids = recipients.map(r => r.id);
+      await client.query(
+        `UPDATE campaign_recipients SET next_step_due_at = NULL WHERE id = ANY($1::int[])`,
+        [ids]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      client.release();
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Process outside the lock — rows are safe (next_step_due_at=NULL, won't be re-picked)
+    console.log(`[CAMPAIGN SCHEDULER] Campaign ${campaign.id}: found ${recipients.length} eligible recipients`);
+
+    for (const recipient of recipients) {
+      try {
+        const result = await processRecipient(campaign, recipient, stepsMap, organizerName);
+        if (result === 'enqueued') enqueued++;
+      } catch (err) {
+        console.error(`[CAMPAIGN SCHEDULER] Recipient ${recipient.email} error: ${err.message}`);
+        // Restore next_step_due_at so recipient can be retried on next cycle
+        try {
+          await pool.query(
+            `UPDATE campaign_recipients SET next_step_due_at = NOW() WHERE id = $1 AND status = 'active'`,
+            [recipient.id]
+          );
+        } catch (restoreErr) {
+          console.error(`[CAMPAIGN SCHEDULER] Failed to restore recipient ${recipient.id}: ${restoreErr.message}`);
+        }
+      }
+    }
+  }
+
+  // Check completion after all batches processed
+  await checkCampaignCompletion(campaign.id);
+
+  return enqueued;
+}
+
+async function processRecipient(campaign, recipient, stepsMap, organizerName) {
+  const nextStepNum = recipient.current_step + 1;
+  const step = stepsMap[nextStepNum];
+
+  // No more steps → mark completed
+  if (!step) {
+    await pool.query(
+      `UPDATE campaign_recipients SET status = 'completed', next_step_due_at = NULL, updated_at = NOW() WHERE id = $1`,
+      [recipient.id]
+    );
+    return 'completed';
+  }
+
+  // Evaluate condition
+  const conditionPassed = await evaluateCondition(step.condition, recipient, stepsMap);
+
+  if (!conditionPassed) {
+    // Condition failed → skip this step, advance, compute next due
+    console.log(`[CAMPAIGN SCHEDULER] Skipped step ${nextStepNum} for ${recipient.email} (condition '${step.condition}' failed)`);
+    await advanceRecipient(campaign.id, recipient.id, nextStepNum, stepsMap);
+    return 'skipped';
+  }
+
+  // Condition passed → enqueue email
+  await enqueueStepEmail(campaign, recipient, step, organizerName);
+  console.log(`[CAMPAIGN SCHEDULER] Enqueued step ${nextStepNum} for ${recipient.email} (campaign ${campaign.id})`);
+
+  // Compute next_step_due_at for step after this one
+  await computeNextDue(campaign.id, recipient.id, nextStepNum, stepsMap);
+
+  return 'enqueued';
+}
+
+async function evaluateCondition(condition, recipient, stepsMap) {
+  if (condition === 'all') return true;
+
+  // Find the previous step's ID to check events
+  const prevStepNum = recipient.current_step; // The step that was already sent
+  const prevStep = stepsMap[prevStepNum];
+  if (!prevStep) return true; // No previous step (shouldn't happen for step 2+, but safety)
+
+  // Check if opened event exists for previous step + this recipient
+  const openRes = await pool.query(
+    `SELECT id FROM email_events
+     WHERE recipient_id = $1 AND step_id = $2 AND event_type = 'opened'
+     LIMIT 1`,
+    [recipient.id, prevStep.id]
+  );
+  const wasOpened = openRes.rows.length > 0;
+
+  if (condition === 'not_opened') return !wasOpened;
+  if (condition === 'opened') return wasOpened;
+
+  return true; // Unknown condition → proceed
+}
+
+async function enqueueStepEmail(campaign, recipient, step, organizerName) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Check unsubscribe list before enqueuing (defensive — may have unsubscribed between pickup and now)
+    const unsubCheck = await client.query(
+      'SELECT 1 FROM email_unsubscribes WHERE email = $1 AND organizer_id = $2 LIMIT 1',
+      [recipient.email, campaign.organizer_id]
+    );
+    if (unsubCheck.rows.length > 0) {
+      await client.query(
+        `UPDATE campaign_recipients SET status = 'unsubscribed', next_step_due_at = NULL, updated_at = NOW() WHERE id = $1`,
+        [recipient.id]
+      );
+      await client.query('COMMIT');
+      console.log(`[CAMPAIGN SCHEDULER] Skipped ${recipient.email} (unsubscribed)`);
+      return;
+    }
+
+    // Fetch template
+    const tplRes = await client.query(
+      'SELECT subject, html_content FROM email_templates WHERE id = $1',
+      [step.template_id]
+    );
+    if (tplRes.rows.length === 0) throw new Error(`Template ${step.template_id} not found`);
+    const template = tplRes.rows[0];
+
+    // Parse extra_fields
+    let extraFields = {};
+    try {
+      if (recipient.extra_fields) {
+        extraFields = typeof recipient.extra_fields === 'string'
+          ? JSON.parse(recipient.extra_fields) : recipient.extra_fields;
+      }
+    } catch (e) { /* ignore parse errors */ }
+
+    // Build template data
+    const data = {
+      name: recipient.first_name || 'Guest',
+      first_name: recipient.first_name || '',
+      last_name: recipient.last_name || '',
+      email: recipient.email,
+      company: recipient.company || '',
+      date: new Date().toLocaleDateString(),
+      ...extraFields
+    };
+
+    // Process template
+    const subject = processEmailTemplate(template.subject || 'Notification', data);
+    let html = processEmailTemplate(template.html_content || '', data);
+
+    // INSERT sent event FIRST (we need the event_id for the tracking pixel)
+    const eventRes = await client.query(
+      `INSERT INTO email_events (campaign_id, recipient_id, step_id, email, event_type, metadata)
+       VALUES ($1, $2, $3, $4, 'sent', '{}') RETURNING id`,
+      [campaign.id, recipient.id, step.id, recipient.email]
+    );
+    const emailEventId = eventRes.rows[0].id;
+
+    // Inject tracking pixel
+    html = injectTrackingPixel(html, emailEventId);
+
+    // Inject unsubscribe link
+    const unsubToken = generateUnsubscribeToken(campaign.id, recipient.id, recipient.email);
+    html = injectUnsubscribeLink(html, unsubToken, organizerName);
+
+    // INSERT into email_queue (Mode 1 — pre-processed HTML)
+    await client.query(
+      `INSERT INTO email_queue (
+        recipient_email, subject, html_content,
+        campaign_id, campaign_step_id, campaign_recipient_id, email_event_id,
+        status, try_count, created_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', 0, NOW())`,
+      [recipient.email, subject, html, campaign.id, step.id, recipient.id, emailEventId]
+    );
+
+    // Update recipient
+    await client.query(
+      `UPDATE campaign_recipients
+       SET current_step = $1, last_step_sent_at = NOW(), next_step_due_at = NULL, updated_at = NOW()
+       WHERE id = $2`,
+      [step.step_number, recipient.id]
+    );
+
+    // Update campaign total_sent counter
+    await client.query(
+      `UPDATE email_campaigns SET total_sent = total_sent + 1, updated_at = NOW() WHERE id = $1`,
+      [campaign.id]
+    );
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function advanceRecipient(campaignId, recipientId, skippedStepNum, stepsMap) {
+  // Advance current_step to the skipped step, then compute due for step after that
+  await pool.query(
+    `UPDATE campaign_recipients SET current_step = $1, updated_at = NOW() WHERE id = $2`,
+    [skippedStepNum, recipientId]
+  );
+  await computeNextDue(campaignId, recipientId, skippedStepNum, stepsMap);
+}
+
+async function computeNextDue(campaignId, recipientId, currentStepNum, stepsMap) {
+  const nextStep = stepsMap[currentStepNum + 1];
+
+  if (!nextStep) {
+    // No more steps — set null, scheduler will mark completed next cycle
+    await pool.query(
+      `UPDATE campaign_recipients SET next_step_due_at = NULL, updated_at = NOW() WHERE id = $1`,
+      [recipientId]
+    );
+    return;
+  }
+
+  // Compute due time based on next step's delay_hours
+  const delayHours = parseInt(nextStep.delay_hours) || 0;
+  await pool.query(
+    `UPDATE campaign_recipients SET next_step_due_at = NOW() + $1 * INTERVAL '1 hour', updated_at = NOW() WHERE id = $2`,
+    [delayHours, recipientId]
+  );
+}
+
+async function checkCampaignCompletion(campaignId) {
+  const result = await pool.query(
+    `UPDATE email_campaigns SET status = 'completed', completed_at = NOW(), updated_at = NOW()
+     WHERE id = $1 AND status = 'active'
+       AND NOT EXISTS (SELECT 1 FROM campaign_recipients WHERE campaign_id = $1 AND status = 'active')
+     RETURNING id`,
+    [campaignId]
+  );
+  if (result.rows.length > 0) {
+    console.log(`[CAMPAIGN SCHEDULER] Campaign ${campaignId} completed (all recipients done)`);
+  }
+}
+
+// ============================================================
 // MAIN LOOP
 // ============================================================
 
 async function runWorker() {
   console.log(`🚀 Email worker started (v403). Polling every ${PROCESS_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
   console.log('📧 Supports: visitor+template mode AND direct html_content mode');
+  console.log(`📋 Campaign scheduler: every ${SCHEDULER_INTERVAL / 1000}s`);
 
   try {
     await pool.query('SELECT 1');
@@ -242,6 +581,10 @@ async function runWorker() {
     console.error('❌ DB connection failed:', err.message);
     process.exit(1);
   }
+
+  // Start campaign scheduler (independent from queue processor)
+  setInterval(runCampaignScheduler, SCHEDULER_INTERVAL);
+  runCampaignScheduler(); // Run once immediately on startup
 
   while (true) {
     if (!isProcessing) {

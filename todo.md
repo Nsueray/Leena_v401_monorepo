@@ -227,6 +227,7 @@ Bu büyük refactor. Fuar yokken yapılacak.
 - [ ] email_logs production schema has columns not in initial.sql (recipient, recipient_email, recipient_name, subject, created_at)
 - [ ] Shared sidebar component (stop duplicating across HTML files)
 - [ ] email_queue.campaign_id FK needs ON DELETE SET NULL (currently no cascade behavior defined)
+- [ ] email_campaigns.total_sent currently counts enqueued, not delivered. Consider adding total_delivered updated by email_worker on SendGrid success.
 
 ---
 
