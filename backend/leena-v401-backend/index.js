@@ -90,6 +90,8 @@ let exhibitorRoutes;
 try { exhibitorRoutes = require('./routes/exhibitors'); console.log('✓ Exhibitor routes loaded'); } catch (err) { console.error('✗ Failed to load exhibitor routes:', err.message); }
 let campaignRoutes;
 try { campaignRoutes = require('./routes/campaigns'); console.log('✓ Campaign routes loaded (v403)'); } catch (err) { console.error('✗ Failed to load campaign routes:', err.message); }
+let emailTrackingRoutes;
+try { emailTrackingRoutes = require('./routes/emailTracking'); console.log('✓ Email tracking routes loaded (v403)'); } catch (err) { console.error('✗ Failed to load email tracking routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -115,6 +117,7 @@ if (conferenceCertRoutes) app.use('/api/conference-certificates', conferenceCert
 if (floorplanRoutes) app.use('/api/floorplan', floorplanRoutes); // ✅ Floor Plan Builder
 if (exhibitorRoutes) app.use('/api/exhibitors', exhibitorRoutes); // ✅ Exhibitor Management
 if (campaignRoutes) app.use('/api/campaigns', campaignRoutes); // ✅ v403 Email Campaigns
+if (emailTrackingRoutes) app.use('/api/email-track', emailTrackingRoutes); // ✅ v403 Email Tracking (public)
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
