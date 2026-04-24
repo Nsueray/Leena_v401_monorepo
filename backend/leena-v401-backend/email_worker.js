@@ -1,6 +1,7 @@
 // email_worker.js
-// Leena EMS v402 - Email Queue Worker
+// Leena EMS v403 - Email Queue Worker
 // Supports both visitor+template mode and direct html_content mode
+// v403: Batch processing support via EMAIL_WORKER_BATCH_SIZE env var
 
 const { Pool } = require('pg');
 require('dotenv').config();
@@ -18,34 +19,40 @@ const pool = new Pool({
 
 const PROCESS_INTERVAL = 2000;
 const MAX_RETRIES = 5;
+const BATCH_SIZE = Math.max(1, parseInt(process.env.EMAIL_WORKER_BATCH_SIZE || '1', 10));
 let isProcessing = false;
 
-async function fetchNextTask() {
+// ============================================================
+// FETCH: Lock up to BATCH_SIZE pending rows atomically
+// ============================================================
+
+async function fetchNextBatch() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
-    // Atomically lock + mark as processing in one statement
+    // Lock up to BATCH_SIZE rows atomically
     const lockRes = await client.query(`
       UPDATE email_queue SET status = 'processing'
-      WHERE id = (
+      WHERE id IN (
         SELECT id FROM email_queue
         WHERE status = 'pending' AND try_count < $1
         ORDER BY created_at ASC
-        LIMIT 1
+        LIMIT $2
         FOR UPDATE SKIP LOCKED
       )
       RETURNING id
-    `, [MAX_RETRIES]);
+    `, [MAX_RETRIES, BATCH_SIZE]);
 
     if (lockRes.rows.length === 0) {
       await client.query('COMMIT');
-      return null;
+      return [];
     }
 
-    const taskId = lockRes.rows[0].id;
+    const taskIds = lockRes.rows.map(r => r.id);
 
-    // Fetch full details with JOINs (same transaction, row is locked)
+    // Fetch full details for all locked rows
+    const placeholders = taskIds.map((_, i) => `$${i + 1}`).join(',');
     const res = await client.query(`
       SELECT
         eq.*,
@@ -67,32 +74,34 @@ async function fetchNextTask() {
       LEFT JOIN visitors v ON v.id = eq.visitor_id
       LEFT JOIN email_templates et ON et.id = eq.template_id
       LEFT JOIN expos e ON e.id = eq.expo_id
-      WHERE eq.id = $1
-    `, [taskId]);
+      WHERE eq.id IN (${placeholders})
+    `, taskIds);
 
     await client.query('COMMIT');
-    return res.rows[0] || null;
+    return res.rows;
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error('[EMAIL_WORKER] fetchNextTask error:', err.message);
-    return null;
+    console.error('[EMAIL_WORKER] fetchNextBatch error:', err.message);
+    return [];
   } finally {
     client.release();
   }
 }
 
+// ============================================================
+// STATUS UPDATES (per-email, not batched)
+// ============================================================
+
 async function markAsSent(id) {
   await pool.query(`UPDATE email_queue SET status='sent', sent_at=NOW() WHERE id=$1`, [id]);
-  console.log(`[EMAIL_WORKER] ✅ Email sent (task ${id})`);
 }
 
 async function markAsFailed(id, message) {
   await pool.query(`
-    UPDATE email_queue 
+    UPDATE email_queue
     SET status='failed', try_count = try_count + 1, last_try=NOW(), error_message=$2
     WHERE id=$1
   `, [id, message]);
-  console.error(`[EMAIL_WORKER] ❌ Failed task ${id}: ${message}`);
 }
 
 // Log send result to email_logs (non-fatal)
@@ -112,6 +121,10 @@ async function logToEmailLogs(task, status, recipientEmail, emailSubject) {
   }
 }
 
+// ============================================================
+// PROCESS: Single email task (unchanged logic, extracted for batch use)
+// ============================================================
+
 async function processTask(task) {
   try {
     let recipientEmail, emailSubject, emailHtml;
@@ -121,13 +134,11 @@ async function processTask(task) {
       recipientEmail = task.recipient_email;
       emailSubject = task.subject || 'Notification';
       emailHtml = task.html_content;
-      
-      console.log(`[EMAIL_WORKER] Processing direct email to: ${recipientEmail}`);
     }
     // MODE 2: Visitor + Template (traditional mode)
     else if (task.visitor_id && task.template_id) {
       recipientEmail = task.visitor_email;
-      
+
       if (!recipientEmail) {
         throw new Error('No visitor email found');
       }
@@ -146,7 +157,7 @@ async function processTask(task) {
 
       // Build QR code image tag
       const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
-      const qrImageTag = task.qr_code 
+      const qrImageTag = task.qr_code
         ? `<img src="${baseUrl}/api/qr-image/${task.qr_code}" alt="QR Code" style="max-width:200px;">`
         : '';
 
@@ -173,14 +184,11 @@ async function processTask(task) {
 
       emailSubject = processEmailTemplate(task.template_subject || 'Your Badge', data);
       emailHtml = processEmailTemplate(task.template_html || '', data);
-      
-      console.log(`[EMAIL_WORKER] Processing template email to: ${recipientEmail}`);
     }
     // MODE 3: Fallback - just recipient_email without html_content
     else if (task.recipient_email && task.template_id) {
       recipientEmail = task.recipient_email;
-      
-      // Need to process template without visitor data
+
       const data = {
         name: 'Guest',
         email: task.recipient_email,
@@ -190,8 +198,6 @@ async function processTask(task) {
 
       emailSubject = processEmailTemplate(task.template_subject || 'Notification', data);
       emailHtml = processEmailTemplate(task.template_html || '', data);
-      
-      console.log(`[EMAIL_WORKER] Processing template email (no visitor) to: ${recipientEmail}`);
     }
     else {
       throw new Error('Invalid task: missing required fields (need html_content+recipient_email OR visitor_id+template_id)');
@@ -199,8 +205,8 @@ async function processTask(task) {
 
     // Send email
     const sent = await sendEmailWithReplyTo(
-      recipientEmail, 
-      emailSubject, 
+      recipientEmail,
+      emailSubject,
       emailHtml,
       'reply@replies.leena.app'
     );
@@ -208,18 +214,25 @@ async function processTask(task) {
     if (sent) {
       await markAsSent(task.id);
       await logToEmailLogs(task, 'sent', recipientEmail, emailSubject);
+      return { id: task.id, status: 'sent' };
     } else {
       await markAsFailed(task.id, 'sendEmail returned false');
       await logToEmailLogs(task, 'failed', recipientEmail, emailSubject);
+      return { id: task.id, status: 'failed' };
     }
   } catch (err) {
     await markAsFailed(task.id, err.message || 'Unknown error');
     await logToEmailLogs(task, 'failed', task.recipient_email || task.visitor_email, err.message);
+    return { id: task.id, status: 'failed', error: err.message };
   }
 }
 
+// ============================================================
+// MAIN LOOP
+// ============================================================
+
 async function runWorker() {
-  console.log('🚀 Email worker started (v402). Polling every', PROCESS_INTERVAL, 'ms');
+  console.log(`🚀 Email worker started (v403). Polling every ${PROCESS_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
   console.log('📧 Supports: visitor+template mode AND direct html_content mode');
 
   try {
@@ -233,10 +246,27 @@ async function runWorker() {
   while (true) {
     if (!isProcessing) {
       isProcessing = true;
+      const cycleStart = Date.now();
       try {
-        const task = await fetchNextTask();
-        if (task) {
-          await processTask(task);
+        const tasks = await fetchNextBatch();
+        if (tasks.length > 0) {
+          // Process all tasks in parallel — each has its own error handling
+          const results = await Promise.allSettled(tasks.map(t => processTask(t)));
+
+          const sent = results.filter(r => r.status === 'fulfilled' && r.value?.status === 'sent').length;
+          const failed = results.filter(r => r.status === 'fulfilled' && r.value?.status === 'failed').length;
+          const errors = results.filter(r => r.status === 'rejected').length;
+          const elapsed = Date.now() - cycleStart;
+
+          if (tasks.length > 1) {
+            console.log(`[CYCLE] Processed ${tasks.length} emails (${sent} sent, ${failed + errors} failed) in ${elapsed}ms`);
+          } else {
+            // Single email — keep original log style
+            const r = results[0];
+            if (r.status === 'fulfilled') {
+              console.log(`[EMAIL_WORKER] ${r.value?.status === 'sent' ? '✅' : '❌'} Task ${tasks[0].id} ${r.value?.status}`);
+            }
+          }
         }
       } catch (e) {
         console.error('[EMAIL_WORKER] loop error:', e.message);

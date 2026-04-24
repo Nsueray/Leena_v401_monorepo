@@ -220,6 +220,13 @@ Bu büyük refactor. Fuar yokken yapılacak.
 - [ ] Visitor detail panel: add check-in history (all check-in timestamps)
 - [ ] initial.sql sync with production DB (add missing tables/columns)
 
+## 🔧 Tech Debt
+
+- [ ] Mode 3 in email_worker.js is dead code (no producer). Remove in a future refactor after confirming no plans to use it.
+- [ ] visitor_event_status table exists in production but not in initial.sql
+- [ ] email_logs production schema has columns not in initial.sql (recipient, recipient_email, recipient_name, subject, created_at)
+- [ ] Shared sidebar component (stop duplicating across HTML files)
+
 ---
 
 ## 📋 Stratejik Notlar
