@@ -226,6 +226,7 @@ Bu büyük refactor. Fuar yokken yapılacak.
 - [ ] visitor_event_status table exists in production but not in initial.sql
 - [ ] email_logs production schema has columns not in initial.sql (recipient, recipient_email, recipient_name, subject, created_at)
 - [ ] Shared sidebar component (stop duplicating across HTML files)
+- [ ] email_queue.campaign_id FK needs ON DELETE SET NULL (currently no cascade behavior defined)
 
 ---
 
