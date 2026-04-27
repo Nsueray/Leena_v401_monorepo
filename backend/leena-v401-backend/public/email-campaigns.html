@@ -227,8 +227,12 @@
                 <label class="form-label">Condition</label>
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="all" checked> All recipients</label>
-                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="not_opened"> Only if previous step was NOT opened</label>
-                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="opened"> Only if previous step WAS opened</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="not_opened"> Only if NOT opened</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="opened"> Only if opened</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="not_clicked"> Only if NOT clicked</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="clicked"> Only if clicked</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="not_registered"> Only if NOT registered</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="registered"> Only if registered</label>
                 </div>
             </div>
             <div class="modal-actions">
@@ -506,12 +510,14 @@
         } else {
             for (const s of steps) {
                 const delayText = s.step_number === 1 ? 'Sent immediately' : `After ${s.delay_hours}h`;
-                const condText = s.condition === 'all' ? 'To all recipients' : s.condition === 'not_opened' ? 'Only if not opened' : 'Only if opened';
+                const condLabels = { all:'To all', not_opened:'If not opened', opened:'If opened', not_clicked:'If not clicked', clicked:'If clicked', not_registered:'If not registered', registered:'If registered' };
+                const condText = condLabels[s.condition] || s.condition;
+                const st = s.stats || { sent:0, opened:0, clicked:0 };
                 html += `<div class="step-card">
                     <div class="step-num">${s.step_number}</div>
                     <div class="step-info">
                         <h5>${esc(s.template_name || 'No template')} ${!s.template_id ? '<span style="color:var(--danger);">(missing)</span>' : ''}</h5>
-                        <p>${delayText} &middot; ${condText}${s.stats ? ` &middot; Sent: ${s.stats.sent}, Opened: ${s.stats.opened}` : ''}</p>
+                        <p>${delayText} &middot; ${condText} &middot; Sent: ${st.sent}, Opened: ${st.opened}, Clicked: ${st.clicked}</p>
                     </div>
                     ${isDraft ? `<div class="step-actions">
                         <button class="btn btn-sm btn-secondary" onclick="editStep(${s.id}, ${s.step_number})"><i class="bi bi-pencil"></i></button>
@@ -738,10 +744,13 @@
         const completed = parseInt(stats.completed_count) || 0;
         const unsub = parseInt(stats.unsubscribed_count) || 0;
 
-        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+        const registered = currentCampaign.campaign.registered_count || 0;
+
+        let html = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
             <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Recipients</div></div>
             <div class="stat-card"><div class="stat-value" style="color:var(--success);">${active}</div><div class="stat-label">Active</div></div>
             <div class="stat-card"><div class="stat-value" style="color:var(--info);">${completed}</div><div class="stat-label">Completed</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:#7c3aed;">${registered}</div><div class="stat-label">Registered</div></div>
             <div class="stat-card"><div class="stat-value" style="color:var(--text-muted);">${unsub}</div><div class="stat-label">Unsubscribed</div></div>
         </div>`;
 
@@ -749,13 +758,14 @@
             html += '<div class="empty-state"><p>No steps to show stats for.</p></div>';
         } else {
             for (const s of steps) {
-                const st = s.stats || { sent: 0, opened: 0 };
+                const st = s.stats || { sent: 0, opened: 0, clicked: 0 };
                 const openRate = st.sent > 0 ? Math.round((st.opened / st.sent) * 100) : 0;
+                const clickRate = st.sent > 0 ? Math.round((st.clicked / st.sent) * 100) : 0;
                 html += `<div class="step-card">
                     <div class="step-num">${s.step_number}</div>
                     <div class="step-info">
                         <h5>${esc(s.template_name || 'Step ' + s.step_number)}</h5>
-                        <p>Sent: <strong>${st.sent}</strong> &middot; Opened: <strong>${st.opened}</strong> (${openRate}%)</p>
+                        <p>Sent: <strong>${st.sent}</strong> &middot; Opened: <strong>${st.opened}</strong> (${openRate}%) &middot; Clicked: <strong>${st.clicked}</strong> (${clickRate}%)</p>
                     </div>
                 </div>`;
             }

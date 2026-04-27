@@ -347,6 +347,26 @@ router.post('/public', async (req, res) => {
     }
     // ========== END EMAIL QUEUE MIGRATION ==========
 
+    // Campaign registration tracking: if _lc token present, log 'registered' event
+    try {
+      const lcToken = req.body._lc;
+      if (lcToken) {
+        const { verifyUnsubscribeToken } = require('../utils/trackingPixel');
+        const parsed = verifyUnsubscribeToken(lcToken);
+        if (parsed) {
+          await pool.query(
+            `INSERT INTO email_events (campaign_id, recipient_id, email, event_type, metadata)
+             VALUES ($1, $2, $3, 'registered', $4)`,
+            [parsed.campaignId, parsed.recipientId, parsed.email,
+             JSON.stringify({ form_id: form_id, visitor_id: visitor?.id, via: 'public_form_submission' })]
+          );
+          console.log(`[TRACKING] Registration recorded: campaign=${parsed.campaignId}, email=${parsed.email}`);
+        }
+      }
+    } catch (trackErr) {
+      console.warn(`[TRACKING] Registration tracking failed (non-fatal): ${trackErr.message}`);
+    }
+
     res.json({
       success: true,
       message: isExisting

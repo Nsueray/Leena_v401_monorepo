@@ -117,10 +117,51 @@ function verifyUnsubscribeToken(token) {
   return { campaignId, recipientId, email };
 }
 
+/**
+ * Wrap all eligible <a href> links in HTML for click tracking.
+ * Rewrites: <a href="URL"> → <a href="BASE_URL/api/email-track/click/EVENT_ID?url=BASE64(URL)">
+ * Skips: mailto:, tel:, #, javascript:, links to /api/email-track/*, empty/missing href
+ */
+function wrapClickLinks(html, eventId) {
+  if (!html || !eventId) return html || '';
+
+  const trackBase = `${BASE_URL}/api/email-track/`;
+
+  return html.replace(/<a\s([^>]*?)href=["']([^"']+)["']/gi, (match, before, url) => {
+    const trimmed = url.trim();
+    // Skip non-http, tracking endpoints, and anchors
+    if (!trimmed || trimmed.startsWith('mailto:') || trimmed.startsWith('tel:') ||
+        trimmed.startsWith('#') || trimmed.startsWith('javascript:') ||
+        trimmed.startsWith(trackBase)) {
+      return match;
+    }
+    const encoded = Buffer.from(trimmed).toString('base64url');
+    return `<a ${before}href="${BASE_URL}/api/email-track/click/${eventId}?url=${encoded}"`;
+  });
+}
+
+/**
+ * Append _lc campaign token to links pointing to Leena form pages.
+ * Detects: URLs containing 'form-public.html' or '/form/' on the same domain.
+ */
+function appendCampaignTokenToFormLinks(html, campaignToken) {
+  if (!html || !campaignToken) return html || '';
+
+  return html.replace(/<a\s([^>]*?)href=["']([^"']+)["']/gi, (match, before, url) => {
+    if (url.includes('form-public.html') || url.includes('/form/')) {
+      const separator = url.includes('?') ? '&' : '?';
+      return `<a ${before}href="${url}${separator}_lc=${campaignToken}"`;
+    }
+    return match;
+  });
+}
+
 module.exports = {
   TRANSPARENT_PIXEL,
   injectTrackingPixel,
   injectUnsubscribeLink,
   generateUnsubscribeToken,
-  verifyUnsubscribeToken
+  verifyUnsubscribeToken,
+  wrapClickLinks,
+  appendCampaignTokenToFormLinks
 };

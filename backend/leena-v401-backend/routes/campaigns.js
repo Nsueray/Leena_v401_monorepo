@@ -44,7 +44,7 @@ router.use(authMiddleware);
 // HELPERS
 // ============================================================
 
-const VALID_CONDITIONS = ['all', 'not_opened', 'opened'];
+const VALID_CONDITIONS = ['all', 'not_opened', 'opened', 'not_clicked', 'clicked', 'not_registered', 'registered'];
 const VALID_STATUSES = ['draft', 'active', 'paused', 'completed', 'archived'];
 
 async function getCampaign(campaignId, organizerId) {
@@ -166,7 +166,8 @@ router.get('/:id', async (req, res) => {
       SELECT
         ee.step_id,
         COUNT(*) FILTER (WHERE ee.event_type = 'sent') AS sent_count,
-        COUNT(*) FILTER (WHERE ee.event_type = 'opened') AS opened_count
+        COUNT(*) FILTER (WHERE ee.event_type = 'opened') AS opened_count,
+        COUNT(*) FILTER (WHERE ee.event_type = 'clicked') AS clicked_count
       FROM email_events ee
       WHERE ee.campaign_id = $1
       GROUP BY ee.step_id
@@ -174,17 +175,23 @@ router.get('/:id', async (req, res) => {
 
     const stepStatsMap = {};
     for (const s of stepStatsRes.rows) {
-      stepStatsMap[s.step_id] = { sent: parseInt(s.sent_count), opened: parseInt(s.opened_count) };
+      stepStatsMap[s.step_id] = { sent: parseInt(s.sent_count), opened: parseInt(s.opened_count), clicked: parseInt(s.clicked_count) };
     }
+
+    // Campaign-level registration count (not per-step)
+    const regCountRes = await pool.query(
+      `SELECT COUNT(DISTINCT recipient_id) AS registered_count FROM email_events WHERE campaign_id = $1 AND event_type = 'registered'`,
+      [campaign.id]
+    );
 
     const steps = stepsRes.rows.map(step => ({
       ...step,
-      stats: stepStatsMap[step.id] || { sent: 0, opened: 0 }
+      stats: stepStatsMap[step.id] || { sent: 0, opened: 0, clicked: 0 }
     }));
 
     res.json({
       success: true,
-      campaign,
+      campaign: { ...campaign, registered_count: parseInt(regCountRes.rows[0].registered_count) || 0 },
       steps,
       stats: statsRes.rows[0]
     });

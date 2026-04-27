@@ -6,7 +6,7 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('./utils/email');
-const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken } = require('./utils/trackingPixel');
+const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken, wrapClickLinks, appendCampaignTokenToFormLinks } = require('./utils/trackingPixel');
 
 // --- Database pool (ENV-based SSL handling) ---
 const pool = new Pool({
@@ -404,21 +404,43 @@ async function evaluateCondition(condition, recipient, stepsMap) {
   if (condition === 'all') return true;
 
   // Find the previous step's ID to check events
-  const prevStepNum = recipient.current_step; // The step that was already sent
+  const prevStepNum = recipient.current_step;
   const prevStep = stepsMap[prevStepNum];
-  if (!prevStep) return true; // No previous step (shouldn't happen for step 2+, but safety)
+  if (!prevStep) return true;
 
-  // Check if opened event exists for previous step + this recipient
-  const openRes = await pool.query(
-    `SELECT id FROM email_events
-     WHERE recipient_id = $1 AND step_id = $2 AND event_type = 'opened'
-     LIMIT 1`,
-    [recipient.id, prevStep.id]
-  );
-  const wasOpened = openRes.rows.length > 0;
+  // Check open events
+  if (condition === 'not_opened' || condition === 'opened') {
+    const openRes = await pool.query(
+      `SELECT id FROM email_events WHERE recipient_id = $1 AND step_id = $2 AND event_type = 'opened' LIMIT 1`,
+      [recipient.id, prevStep.id]
+    );
+    const wasOpened = openRes.rows.length > 0;
+    if (condition === 'not_opened') return !wasOpened;
+    if (condition === 'opened') return wasOpened;
+  }
 
-  if (condition === 'not_opened') return !wasOpened;
-  if (condition === 'opened') return wasOpened;
+  // Check click events
+  if (condition === 'not_clicked' || condition === 'clicked') {
+    const clickRes = await pool.query(
+      `SELECT id FROM email_events WHERE recipient_id = $1 AND step_id = $2 AND event_type = 'clicked' LIMIT 1`,
+      [recipient.id, prevStep.id]
+    );
+    const wasClicked = clickRes.rows.length > 0;
+    if (condition === 'not_clicked') return !wasClicked;
+    if (condition === 'clicked') return wasClicked;
+  }
+
+  // Check registration events (any registration AFTER previous step was sent)
+  if (condition === 'not_registered' || condition === 'registered') {
+    const regRes = await pool.query(
+      `SELECT id FROM email_events WHERE recipient_id = $1 AND event_type = 'registered'
+       AND created_at >= $2 LIMIT 1`,
+      [recipient.id, recipient.last_step_sent_at || new Date(0)]
+    );
+    const wasRegistered = regRes.rows.length > 0;
+    if (condition === 'not_registered') return !wasRegistered;
+    if (condition === 'registered') return wasRegistered;
+  }
 
   return true; // Unknown condition → proceed
 }
@@ -489,6 +511,12 @@ async function enqueueStepEmail(campaign, recipient, step, organizerName) {
     // Inject unsubscribe link
     const unsubToken = generateUnsubscribeToken(campaign.id, recipient.id, recipient.email);
     html = injectUnsubscribeLink(html, unsubToken, organizerName);
+
+    // Append _lc campaign token to Leena form links FIRST (before click wrap)
+    html = appendCampaignTokenToFormLinks(html, unsubToken);
+
+    // Wrap <a href> links for click tracking LAST (so wrap engulfs the _lc URL)
+    html = wrapClickLinks(html, emailEventId);
 
     // INSERT into email_queue (Mode 1 — pre-processed HTML)
     await client.query(

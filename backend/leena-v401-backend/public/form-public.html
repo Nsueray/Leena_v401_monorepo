@@ -370,6 +370,11 @@
                     }
                 }
                 
+                // Forward campaign tracking token if present
+                const urlParams = new URLSearchParams(window.location.search);
+                const lcToken = urlParams.get('_lc');
+                if (lcToken) visitorData._lc = lcToken;
+
                 // Submit to visitors endpoint
                 const response = await fetch(`${API_URL}/visitors/public`, {
                     method: 'POST',

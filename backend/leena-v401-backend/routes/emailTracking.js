@@ -90,6 +90,63 @@ router.get('/open/:eventId', async (req, res) => {
 });
 
 // ============================================================
+// GET /click/:eventId — Click redirect
+// ============================================================
+
+router.get('/click/:eventId', async (req, res) => {
+  const eventId = parseInt(req.params.eventId);
+  let targetUrl = 'https://leena.app/';
+
+  // Decode the original URL
+  try {
+    const encoded = req.query.url;
+    if (encoded) {
+      const decoded = Buffer.from(encoded, 'base64url').toString('utf8');
+      if (decoded.startsWith('http://') || decoded.startsWith('https://')) {
+        targetUrl = decoded;
+      }
+    }
+  } catch (e) { /* keep default */ }
+
+  // Always redirect first — don't block on logging
+  res.redirect(302, targetUrl);
+
+  // Async: log click event
+  if (isNaN(eventId)) return;
+
+  try {
+    const eventRes = await pool.query(
+      `SELECT campaign_id, recipient_id, step_id, email FROM email_events WHERE id = $1 AND event_type = 'sent'`,
+      [eventId]
+    );
+    if (eventRes.rows.length === 0) return;
+
+    const sentEvent = eventRes.rows[0];
+    const userAgent = (req.headers['user-agent'] || '').substring(0, 500);
+    const ipAddress = (req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || '').substring(0, 64);
+
+    const existingClick = await pool.query(
+      `SELECT id FROM email_events WHERE recipient_id = $1 AND step_id = $2 AND event_type = 'clicked' LIMIT 1`,
+      [sentEvent.recipient_id, sentEvent.step_id]
+    );
+    const isDuplicate = existingClick.rows.length > 0;
+
+    await pool.query(
+      `INSERT INTO email_events (campaign_id, recipient_id, step_id, email, event_type, user_agent, ip_address, metadata)
+       VALUES ($1, $2, $3, $4, 'clicked', $5, $6, $7)`,
+      [sentEvent.campaign_id, sentEvent.recipient_id, sentEvent.step_id, sentEvent.email,
+       userAgent, ipAddress, JSON.stringify({ source_event_id: eventId, original_url: targetUrl, duplicate: isDuplicate })]
+    );
+
+    if (!isDuplicate) {
+      console.log(`[TRACKING] Click recorded: event=${eventId}, email=${sentEvent.email}, url=${targetUrl.substring(0, 80)}`);
+    }
+  } catch (err) {
+    console.warn(`[TRACKING] Click log error (non-fatal): ${err.message}`);
+  }
+});
+
+// ============================================================
 // GET /unsubscribe/:token — Landing page
 // ============================================================
 
