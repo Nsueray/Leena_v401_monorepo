@@ -161,13 +161,16 @@ router.get('/:id', async (req, res) => {
       FROM campaign_recipients WHERE campaign_id = $1
     `, [campaign.id]);
 
-    // Per-step stats
+    // Per-step stats (unique + raw event counts)
     const stepStatsRes = await pool.query(`
       SELECT
         ee.step_id,
-        COUNT(*) FILTER (WHERE ee.event_type = 'sent') AS sent_count,
-        COUNT(*) FILTER (WHERE ee.event_type = 'opened') AS opened_count,
-        COUNT(*) FILTER (WHERE ee.event_type = 'clicked') AS clicked_count
+        COUNT(*) FILTER (WHERE ee.event_type = 'sent') AS sent_events,
+        COUNT(DISTINCT ee.recipient_id) FILTER (WHERE ee.event_type = 'sent') AS sent_unique,
+        COUNT(*) FILTER (WHERE ee.event_type = 'opened') AS opened_events,
+        COUNT(DISTINCT ee.recipient_id) FILTER (WHERE ee.event_type = 'opened') AS opened_unique,
+        COUNT(*) FILTER (WHERE ee.event_type = 'clicked') AS clicked_events,
+        COUNT(DISTINCT ee.recipient_id) FILTER (WHERE ee.event_type = 'clicked') AS clicked_unique
       FROM email_events ee
       WHERE ee.campaign_id = $1
       GROUP BY ee.step_id
@@ -175,7 +178,10 @@ router.get('/:id', async (req, res) => {
 
     const stepStatsMap = {};
     for (const s of stepStatsRes.rows) {
-      stepStatsMap[s.step_id] = { sent: parseInt(s.sent_count), opened: parseInt(s.opened_count), clicked: parseInt(s.clicked_count) };
+      stepStatsMap[s.step_id] = {
+        sent: parseInt(s.sent_unique), opened: parseInt(s.opened_unique), clicked: parseInt(s.clicked_unique),
+        sent_events: parseInt(s.sent_events), opened_events: parseInt(s.opened_events), clicked_events: parseInt(s.clicked_events)
+      };
     }
 
     // Campaign-level registration count (not per-step)
@@ -186,7 +192,7 @@ router.get('/:id', async (req, res) => {
 
     const steps = stepsRes.rows.map(step => ({
       ...step,
-      stats: stepStatsMap[step.id] || { sent: 0, opened: 0, clicked: 0 }
+      stats: stepStatsMap[step.id] || { sent: 0, opened: 0, clicked: 0, sent_events: 0, opened_events: 0, clicked_events: 0 }
     }));
 
     res.json({
@@ -387,6 +393,41 @@ router.delete('/:id/steps/:stepId', async (req, res) => {
   } catch (err) {
     console.error('[campaigns] Delete step error:', err);
     res.status(500).json({ success: false, message: 'Failed to delete step' });
+  }
+});
+
+// GET /api/campaigns/:id/steps/:stepId/recipients — Per-step recipient drill-down
+router.get('/:id/steps/:stepId/recipients', async (req, res) => {
+  try {
+    const campaign = await getCampaign(req.params.id, req.organizer_id);
+    if (!campaign) return res.status(404).json({ success: false, message: 'Campaign not found' });
+
+    const stepRes = await pool.query(
+      `SELECT cs.*, et.name AS template_name FROM campaign_steps cs LEFT JOIN email_templates et ON cs.template_id = et.id WHERE cs.id = $1 AND cs.campaign_id = $2`,
+      [req.params.stepId, campaign.id]
+    );
+    if (stepRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Step not found' });
+
+    const result = await pool.query(`
+      SELECT
+        cr.id AS recipient_id, cr.email, cr.first_name, cr.last_name, cr.company, cr.status AS overall_status,
+        EXISTS(SELECT 1 FROM email_events WHERE recipient_id = cr.id AND step_id = $2 AND event_type = 'sent') AS was_sent,
+        EXISTS(SELECT 1 FROM email_events WHERE recipient_id = cr.id AND step_id = $2 AND event_type = 'opened') AS opened,
+        EXISTS(SELECT 1 FROM email_events WHERE recipient_id = cr.id AND step_id = $2 AND event_type = 'clicked') AS clicked,
+        EXISTS(SELECT 1 FROM email_events WHERE recipient_id = cr.id AND event_type = 'registered') AS registered,
+        (SELECT MAX(created_at) FROM email_events WHERE recipient_id = cr.id AND step_id = $2 AND event_type = 'sent') AS sent_at,
+        (SELECT MAX(created_at) FROM email_events WHERE recipient_id = cr.id AND step_id = $2 AND event_type = 'opened') AS first_opened_at,
+        (SELECT MAX(created_at) FROM email_events WHERE recipient_id = cr.id AND step_id = $2 AND event_type = 'clicked') AS first_clicked_at
+      FROM campaign_recipients cr
+      WHERE cr.campaign_id = $1
+        AND EXISTS(SELECT 1 FROM email_events WHERE recipient_id = cr.id AND step_id = $2)
+      ORDER BY cr.email
+    `, [campaign.id, req.params.stepId]);
+
+    res.json({ success: true, step: stepRes.rows[0], recipients: result.rows });
+  } catch (err) {
+    console.error('[campaigns] Step recipients error:', err);
+    res.status(500).json({ success: false, message: 'Failed to get step recipients' });
   }
 });
 
@@ -643,9 +684,15 @@ router.get('/:id/recipients', async (req, res) => {
     const offset = (page - 1) * limit;
 
     const result = await pool.query(
-      `SELECT * FROM campaign_recipients
-       WHERE campaign_id = $1
-       ORDER BY created_at ASC
+      `SELECT cr.*,
+        (SELECT COUNT(DISTINCT step_id) FROM email_events WHERE recipient_id = cr.id AND event_type = 'opened') AS steps_opened,
+        (SELECT COUNT(DISTINCT step_id) FROM email_events WHERE recipient_id = cr.id AND event_type = 'clicked') AS steps_clicked,
+        EXISTS(SELECT 1 FROM email_events WHERE recipient_id = cr.id AND event_type = 'registered') AS has_registered,
+        (SELECT MAX(created_at) FROM email_events WHERE recipient_id = cr.id AND event_type = 'sent') AS last_sent_at,
+        (SELECT MAX(created_at) FROM email_events WHERE recipient_id = cr.id AND event_type = 'opened') AS last_opened_at
+       FROM campaign_recipients cr
+       WHERE cr.campaign_id = $1
+       ORDER BY cr.created_at ASC
        LIMIT $2 OFFSET $3`,
       [campaign.id, limit, offset]
     );

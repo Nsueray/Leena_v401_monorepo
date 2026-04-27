@@ -254,6 +254,16 @@
         </div>
     </div>
 
+    <!-- Step Drill-down Modal -->
+    <div class="modal-overlay" id="modalDrilldown">
+        <div class="modal-box" style="width:700px;max-width:95vw;">
+            <h3 id="drilldownTitle">Step Recipients</h3>
+            <div id="drilldownFilter" style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;"></div>
+            <div id="drilldownBody" style="max-height:50vh;overflow-y:auto;"></div>
+            <div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('modalDrilldown')">Close</button></div>
+        </div>
+    </div>
+
     <div class="toast-container" id="toasts"></div>
 
     <script>
@@ -517,7 +527,7 @@
                     <div class="step-num">${s.step_number}</div>
                     <div class="step-info">
                         <h5>${esc(s.template_name || 'No template')} ${!s.template_id ? '<span style="color:var(--danger);">(missing)</span>' : ''}</h5>
-                        <p>${delayText} &middot; ${condText} &middot; Sent: ${st.sent}, Opened: ${st.opened}, Clicked: ${st.clicked}</p>
+                        <p>${delayText} &middot; ${condText}${st.sent > 0 ? ` &middot; ${st.sent} sent, ${st.opened} opened, ${st.clicked} clicked` : ''}</p>
                     </div>
                     ${isDraft ? `<div class="step-actions">
                         <button class="btn btn-sm btn-secondary" onclick="editStep(${s.id}, ${s.step_number})"><i class="bi bi-pencil"></i></button>
@@ -662,13 +672,23 @@
             if (recipients.length === 0) {
                 html += '<div class="empty-state"><i class="bi bi-people"></i><p>No recipients yet.</p></div>';
             } else {
-                html += '<table><thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Status</th>' + (isDraft ? '<th></th>' : '') + '</tr></thead><tbody>';
+                html += '<table><thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Status</th><th>Engagement</th><th>Last Activity</th>' + (isDraft ? '<th></th>' : '') + '</tr></thead><tbody>';
                 for (const r of recipients) {
+                    const so = parseInt(r.steps_opened) || 0;
+                    const sc = parseInt(r.steps_clicked) || 0;
+                    const reg = r.has_registered;
+                    const lastAct = r.last_opened_at || r.last_sent_at;
                     html += `<tr>
                         <td>${esc(r.email)}</td>
                         <td>${esc([r.first_name, r.last_name].filter(Boolean).join(' ') || '-')}</td>
                         <td>${esc(r.company || '-')}</td>
                         <td>${statusBadge(r.status)}</td>
+                        <td style="font-size:12px;">
+                            <span title="Opened ${so} step(s)" style="color:${so > 0 ? 'var(--success)' : '#d1d5db'};">📧${so > 0 ? so : ''}</span>
+                            <span title="Clicked ${sc} step(s)" style="color:${sc > 0 ? 'var(--primary)' : '#d1d5db'};margin-left:4px;">🖱${sc > 0 ? sc : ''}</span>
+                            ${reg ? '<span title="Registered" style="color:#7c3aed;margin-left:4px;">✅</span>' : ''}
+                        </td>
+                        <td style="font-size:11px;color:var(--text-muted);">${formatRelativeTime(lastAct)}</td>
                         ${isDraft ? `<td><button class="btn btn-sm" style="color:var(--danger);" onclick="removeRecipient(${r.id})"><i class="bi bi-x"></i></button></td>` : ''}
                     </tr>`;
                 }
@@ -758,15 +778,20 @@
             html += '<div class="empty-state"><p>No steps to show stats for.</p></div>';
         } else {
             for (const s of steps) {
-                const st = s.stats || { sent: 0, opened: 0, clicked: 0 };
+                const st = s.stats || { sent: 0, opened: 0, clicked: 0, sent_events: 0, opened_events: 0, clicked_events: 0 };
                 const openRate = st.sent > 0 ? Math.round((st.opened / st.sent) * 100) : 0;
                 const clickRate = st.sent > 0 ? Math.round((st.clicked / st.sent) * 100) : 0;
-                html += `<div class="step-card">
+                html += `<div class="step-card" style="cursor:pointer;" onclick="openStepDrilldown(${s.id}, ${s.step_number})">
                     <div class="step-num">${s.step_number}</div>
                     <div class="step-info">
                         <h5>${esc(s.template_name || 'Step ' + s.step_number)}</h5>
-                        <p>Sent: <strong>${st.sent}</strong> &middot; Opened: <strong>${st.opened}</strong> (${openRate}%) &middot; Clicked: <strong>${st.clicked}</strong> (${clickRate}%)</p>
+                        <p>Sent: <strong>${st.sent}</strong> &middot;
+                           Opened: <strong>${st.opened}/${st.sent}</strong> (${openRate}%)
+                           <small style="color:var(--text-muted);">(${st.opened_events} events)</small> &middot;
+                           Clicked: <strong>${st.clicked}/${st.sent}</strong> (${clickRate}%)
+                           <small style="color:var(--text-muted);">(${st.clicked_events} events)</small></p>
                     </div>
+                    <div style="font-size:11px;color:var(--primary);"><i class="bi bi-chevron-right"></i></div>
                 </div>`;
             }
         }
@@ -784,6 +809,78 @@
     // ============================================================
 
     function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    function formatRelativeTime(iso) {
+        if (!iso) return '—';
+        const ms = Date.now() - new Date(iso).getTime();
+        if (ms < 60000) return 'just now';
+        if (ms < 3600000) return `${Math.floor(ms/60000)}m ago`;
+        if (ms < 86400000) return `${Math.floor(ms/3600000)}h ago`;
+        if (ms < 604800000) return `${Math.floor(ms/86400000)}d ago`;
+        return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // Step drill-down
+    let drilldownData = [];
+    let drilldownFilter = 'all';
+
+    async function openStepDrilldown(stepId, stepNum) {
+        document.getElementById('drilldownTitle').textContent = `Step ${stepNum} — Recipients`;
+        document.getElementById('drilldownBody').innerHTML = '<p style="color:var(--text-muted);">Loading...</p>';
+        openModal('modalDrilldown');
+
+        try {
+            const data = await api('GET', `/campaigns/${currentCampaign.campaign.id}/steps/${stepId}/recipients`);
+            drilldownData = data.recipients || [];
+            document.getElementById('drilldownTitle').textContent = `Step ${stepNum} — ${esc(data.step?.template_name || '')} (${drilldownData.length} recipients)`;
+            drilldownFilter = 'all';
+            renderDrilldownFilters();
+            renderDrilldownTable();
+        } catch (err) {
+            document.getElementById('drilldownBody').innerHTML = `<p style="color:var(--danger);">${err.message}</p>`;
+        }
+    }
+
+    function renderDrilldownFilters() {
+        const counts = { all: drilldownData.length, opened: drilldownData.filter(r => r.opened).length, clicked: drilldownData.filter(r => r.clicked).length, not_opened: drilldownData.filter(r => !r.opened).length, not_clicked: drilldownData.filter(r => !r.clicked).length };
+        const labels = { all: 'All', opened: 'Opened', clicked: 'Clicked', not_opened: 'Not opened', not_clicked: 'Not clicked' };
+        let html = '';
+        for (const [key, label] of Object.entries(labels)) {
+            html += `<button class="filter-btn ${drilldownFilter === key ? 'active' : ''}" onclick="drilldownFilter='${key}';renderDrilldownFilters();renderDrilldownTable();">${label} (${counts[key]})</button>`;
+        }
+        document.getElementById('drilldownFilter').innerHTML = html;
+    }
+
+    function renderDrilldownTable() {
+        let filtered = drilldownData;
+        if (drilldownFilter === 'opened') filtered = drilldownData.filter(r => r.opened);
+        if (drilldownFilter === 'clicked') filtered = drilldownData.filter(r => r.clicked);
+        if (drilldownFilter === 'not_opened') filtered = drilldownData.filter(r => !r.opened);
+        if (drilldownFilter === 'not_clicked') filtered = drilldownData.filter(r => !r.clicked);
+
+        if (filtered.length === 0) {
+            document.getElementById('drilldownBody').innerHTML = '<div class="empty-state"><p>No recipients match this filter.</p></div>';
+            return;
+        }
+
+        let html = '<table><thead><tr><th>Email</th><th>Name</th><th>Sent</th><th>Opened</th><th>Clicked</th><th>Registered</th><th>When</th></tr></thead><tbody>';
+        for (const r of filtered) {
+            const check = '<span style="color:var(--success);">✓</span>';
+            const dash = '<span style="color:#d1d5db;">—</span>';
+            const when = r.first_clicked_at || r.first_opened_at || r.sent_at;
+            html += `<tr>
+                <td style="font-size:12px;">${esc(r.email)}</td>
+                <td style="font-size:12px;">${esc([r.first_name, r.last_name].filter(Boolean).join(' ') || '-')}</td>
+                <td style="text-align:center;">${r.was_sent ? check : dash}</td>
+                <td style="text-align:center;">${r.opened ? check : dash}</td>
+                <td style="text-align:center;">${r.clicked ? check : dash}</td>
+                <td style="text-align:center;">${r.registered ? check : dash}</td>
+                <td style="font-size:11px;color:var(--text-muted);">${formatRelativeTime(when)}</td>
+            </tr>`;
+        }
+        html += '</tbody></table>';
+        document.getElementById('drilldownBody').innerHTML = html;
+    }
 
     // ============================================================
     // INIT
