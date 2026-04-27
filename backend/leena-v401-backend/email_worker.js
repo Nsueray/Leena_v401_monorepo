@@ -6,7 +6,7 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('./utils/email');
-const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken, wrapClickLinks, appendCampaignTokenToFormLinks } = require('./utils/trackingPixel');
+const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken, wrapClickLinks, appendCampaignTokenToFormLinks, getListUnsubscribeHeaders } = require('./utils/trackingPixel');
 
 // --- Database pool (ENV-based SSL handling) ---
 const pool = new Pool({
@@ -204,12 +204,18 @@ async function processTask(task) {
       throw new Error('Invalid task: missing required fields (need html_content+recipient_email OR visitor_id+template_id)');
     }
 
+    // Build List-Unsubscribe headers for campaign emails (RFC 8058)
+    const extraHeaders = (task.campaign_id && task.campaign_recipient_id)
+      ? getListUnsubscribeHeaders(task.campaign_id, task.campaign_recipient_id, recipientEmail)
+      : undefined;
+
     // Send email
     const sent = await sendEmailWithReplyTo(
       recipientEmail,
       emailSubject,
       emailHtml,
-      'reply@replies.leena.app'
+      'reply@replies.leena.app',
+      extraHeaders
     );
 
     if (sent) {
@@ -235,7 +241,8 @@ async function processTask(task) {
 // Does NOT send — just writes to email_queue for processQueueLoop to handle.
 // ============================================================
 
-const SCHEDULER_INTERVAL = 60 * 1000;
+const CAMPAIGN_SCHEDULER_INTERVAL_MS = Math.max(10, parseInt(process.env.CAMPAIGN_SCHEDULER_INTERVAL_SECONDS || '60', 10)) * 1000;
+const CAMPAIGN_SCHEDULER_BATCH_LIMIT = Math.max(1, parseInt(process.env.CAMPAIGN_SCHEDULER_BATCH_LIMIT || '500', 10));
 let isSchedulerRunning = false;
 
 async function runCampaignScheduler() {
@@ -312,9 +319,9 @@ async function processCampaign(campaign) {
         SELECT * FROM campaign_recipients
         WHERE campaign_id = $1 AND status = 'active' AND next_step_due_at IS NOT NULL AND next_step_due_at <= NOW()
         ORDER BY next_step_due_at ASC
-        LIMIT 500
+        LIMIT $2
         FOR UPDATE SKIP LOCKED
-      `, [campaign.id]);
+      `, [campaign.id, CAMPAIGN_SCHEDULER_BATCH_LIMIT]);
 
       recipients = recipientsRes.rows;
 
@@ -590,6 +597,19 @@ async function checkCampaignCompletion(campaignId) {
   );
   if (result.rows.length > 0) {
     console.log(`[CAMPAIGN SCHEDULER] Campaign ${campaignId} completed (all recipients done)`);
+
+    // Clean up sent queue rows to prevent email_queue bloat (55K+ rows per step)
+    try {
+      const delRes = await pool.query(
+        `DELETE FROM email_queue WHERE campaign_id = $1 AND status = 'sent' AND sent_at < NOW() - INTERVAL '1 hour'`,
+        [campaignId]
+      );
+      if (delRes.rowCount > 0) {
+        console.log(`[CAMPAIGN SCHEDULER] Cleaned up ${delRes.rowCount} sent queue rows for campaign ${campaignId}`);
+      }
+    } catch (err) {
+      console.warn(`[CAMPAIGN SCHEDULER] Queue cleanup error (non-fatal): ${err.message}`);
+    }
   }
 }
 
@@ -600,7 +620,7 @@ async function checkCampaignCompletion(campaignId) {
 async function runWorker() {
   console.log(`🚀 Email worker started (v403). Polling every ${PROCESS_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
   console.log('📧 Supports: visitor+template mode AND direct html_content mode');
-  console.log(`📋 Campaign scheduler: every ${SCHEDULER_INTERVAL / 1000}s`);
+  console.log(`📋 Campaign scheduler: every ${CAMPAIGN_SCHEDULER_INTERVAL_MS / 1000}s, batch limit: ${CAMPAIGN_SCHEDULER_BATCH_LIMIT}`);
 
   try {
     await pool.query('SELECT 1');
@@ -611,7 +631,7 @@ async function runWorker() {
   }
 
   // Start campaign scheduler (independent from queue processor)
-  setInterval(runCampaignScheduler, SCHEDULER_INTERVAL);
+  setInterval(runCampaignScheduler, CAMPAIGN_SCHEDULER_INTERVAL_MS);
   runCampaignScheduler(); // Run once immediately on startup
 
   while (true) {

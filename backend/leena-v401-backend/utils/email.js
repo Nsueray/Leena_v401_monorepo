@@ -58,9 +58,10 @@ async function sendEmail(to, subject, html) {
  * @param {string} subject - Email subject
  * @param {string} html - HTML body
  * @param {string} replyToEmail - Reply-To address
+ * @param {object} [extraHeaders] - Optional additional headers (e.g. List-Unsubscribe)
  * @returns {Promise<boolean>}
  */
-async function sendEmailWithReplyTo(to, subject, html, replyToEmail) {
+async function sendEmailWithReplyTo(to, subject, html, replyToEmail, extraHeaders) {
     try {
         if (!process.env.SENDGRID_API_KEY) {
             console.log('SendGrid not configured. Skipping send.');
@@ -70,9 +71,10 @@ async function sendEmailWithReplyTo(to, subject, html, replyToEmail) {
         const msg = {
             to,
             from: process.env.SENDER_EMAIL || 'noreply@leena.app',
-            replyTo: replyToEmail,  // Correct SendGrid format - direct property
+            replyTo: replyToEmail,
             subject,
-            html
+            html,
+            ...(extraHeaders && Object.keys(extraHeaders).length > 0 ? { headers: extraHeaders } : {})
         };
 
         await sgMail.send(msg);

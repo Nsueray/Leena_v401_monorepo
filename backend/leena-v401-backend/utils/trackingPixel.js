@@ -156,6 +156,23 @@ function appendCampaignTokenToFormLinks(html, campaignToken) {
   });
 }
 
+/**
+ * Generate RFC 8058 List-Unsubscribe headers for Gmail/Outlook native unsubscribe.
+ * Returns an object with List-Unsubscribe and List-Unsubscribe-Post headers.
+ * Requires UNSUBSCRIBE_SECRET to be set.
+ */
+function getListUnsubscribeHeaders(campaignId, recipientId, email) {
+  if (!UNSUBSCRIBE_SECRET) return {};
+
+  const token = generateUnsubscribeToken(campaignId, recipientId, email);
+  const unsubUrl = `${BASE_URL}/api/email-track/unsubscribe/${token}`;
+
+  return {
+    'List-Unsubscribe': `<${unsubUrl}>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+  };
+}
+
 module.exports = {
   TRANSPARENT_PIXEL,
   injectTrackingPixel,
@@ -163,5 +180,6 @@ module.exports = {
   generateUnsubscribeToken,
   verifyUnsubscribeToken,
   wrapClickLinks,
-  appendCampaignTokenToFormLinks
+  appendCampaignTokenToFormLinks,
+  getListUnsubscribeHeaders
 };
