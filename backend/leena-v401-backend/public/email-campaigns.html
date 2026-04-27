@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Email Campaigns - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --success-bg: #d1fae5; --warning: #f59e0b; --warning-bg: #fef3c7;
+            --danger: #ef4444; --danger-bg: #fee2e2; --info: #3b82f6; --info-bg: #dbeafe;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:'Inter',sans-serif; background:var(--bg-main); color:var(--text-primary); font-size:14px; }
+        .app-shell { display:flex; min-height:100vh; }
+        .sidebar { width:256px; background:var(--sidebar-bg); position:fixed; top:0; left:0; bottom:0; display:flex; flex-direction:column; z-index:100; }
+        .sidebar-header { padding:20px; border-bottom:1px solid #252542; }
+        .sidebar-logo { height:80px; }
+        .sidebar-nav { flex:1; padding:16px 12px; overflow-y:auto; }
+        .nav-section { margin-bottom:24px; }
+        .nav-section-title { font-size:11px; font-weight:600; text-transform:uppercase; color:var(--sidebar-text); padding:0 12px 8px; }
+        .nav-item { display:flex; align-items:center; gap:12px; padding:10px 12px; color:var(--sidebar-text); text-decoration:none; border-radius:var(--radius-md); margin-bottom:2px; transition:all 0.15s; position:relative; }
+        .nav-item:hover { background:var(--sidebar-hover); color:var(--sidebar-text-active); }
+        .nav-item.active { background:#2d2d4a; color:var(--sidebar-text-active); }
+        .nav-item.active::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:3px; height:24px; background:var(--primary); border-radius:0 3px 3px 0; }
+        .nav-item i { font-size:18px; width:20px; }
+        .nav-item span { font-size:13px; font-weight:500; }
+        .nav-divider { height:1px; background:#252542; margin:16px 12px; }
+        .main-wrapper { flex:1; margin-left:256px; display:flex; flex-direction:column; }
+        .main-header { height:64px; background:var(--bg-card); border-bottom:1px solid var(--border-color); display:flex; align-items:center; justify-content:space-between; padding:0 24px; position:sticky; top:0; z-index:50; }
+        .main-header h1 { font-size:16px; font-weight:600; display:flex; align-items:center; gap:10px; }
+        .main-header h1 i { color:var(--primary); }
+        .header-actions { display:flex; gap:10px; }
+        .main-content { flex:1; padding:24px; max-width:1100px; margin:0 auto; width:100%; }
+        .btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; font-size:13px; font-weight:500; border-radius:var(--radius-md); border:1px solid transparent; cursor:pointer; transition:all 0.15s; text-decoration:none; font-family:inherit; }
+        .btn-primary { background:var(--primary); color:white; border-color:var(--primary); }
+        .btn-primary:hover { background:var(--primary-hover); }
+        .btn-primary:disabled { opacity:0.6; cursor:not-allowed; }
+        .btn-secondary { background:var(--bg-card); color:var(--text-primary); border-color:var(--border-color); }
+        .btn-danger { background:white; color:var(--danger); border-color:var(--danger); }
+        .btn-danger:hover { background:var(--danger-bg); }
+        .btn-success { background:var(--success); color:white; border-color:var(--success); }
+        .btn-warning { background:var(--warning); color:white; border-color:var(--warning); }
+        .btn-sm { padding:6px 12px; font-size:12px; }
+        .card { background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-lg); padding:24px; margin-bottom:24px; }
+        .form-group { margin-bottom:16px; }
+        .form-label { display:block; font-size:13px; font-weight:500; margin-bottom:6px; }
+        .form-control,.form-select { width:100%; padding:10px 12px; border:1px solid var(--border-color); border-radius:var(--radius-md); font-size:13px; font-family:inherit; }
+        .form-control:focus,.form-select:focus { outline:none; border-color:var(--primary); box-shadow:0 0 0 3px rgba(74,111,165,0.1); }
+        table { width:100%; border-collapse:collapse; }
+        th { background:var(--bg-main); padding:10px 16px; text-align:left; font-weight:600; color:var(--text-secondary); font-size:11px; text-transform:uppercase; border-bottom:1px solid var(--border-color); }
+        td { padding:12px 16px; border-bottom:1px solid #f1f5f9; font-size:13px; }
+        tr:hover td { background:#f8fafc; }
+        .badge-status { display:inline-block; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+        .badge-draft { background:#f3f4f6; color:#374151; }
+        .badge-active { background:var(--success-bg); color:#065f46; }
+        .badge-paused { background:var(--warning-bg); color:#92400e; }
+        .badge-completed { background:var(--info-bg); color:#1e40af; }
+        .tabs { display:flex; gap:4px; border-bottom:2px solid var(--border-color); margin-bottom:20px; }
+        .tab { padding:10px 20px; font-size:13px; font-weight:500; cursor:pointer; border:none; background:none; color:var(--text-muted); border-bottom:2px solid transparent; margin-bottom:-2px; font-family:inherit; }
+        .tab.active { color:var(--primary); border-bottom-color:var(--primary); font-weight:600; }
+        .tab:hover { color:var(--text-primary); }
+        .filter-bar { display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; }
+        .filter-btn { padding:6px 14px; border:1px solid var(--border-color); border-radius:20px; background:white; font-size:12px; cursor:pointer; font-family:inherit; color:var(--text-secondary); }
+        .filter-btn.active { background:var(--primary); color:white; border-color:var(--primary); }
+        .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:200; align-items:center; justify-content:center; }
+        .modal-overlay.show { display:flex; }
+        .modal-box { background:white; border-radius:var(--radius-lg); padding:24px; width:500px; max-width:90vw; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.15); }
+        .modal-box h3 { font-size:16px; font-weight:600; margin-bottom:16px; }
+        .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:20px; }
+        .upload-zone { border:2px dashed var(--border-color); border-radius:var(--radius-lg); padding:32px 24px; text-align:center; cursor:pointer; transition:all 0.2s; }
+        .upload-zone:hover { border-color:var(--primary); background:var(--primary-light); }
+        .upload-zone i { font-size:36px; color:var(--primary); margin-bottom:8px; }
+        .step-card { background:var(--bg-main); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:16px; margin-bottom:10px; display:flex; align-items:center; gap:16px; }
+        .step-num { width:32px; height:32px; background:var(--primary); color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:14px; flex-shrink:0; }
+        .step-info { flex:1; }
+        .step-info h5 { font-size:13px; font-weight:600; margin:0 0 4px; }
+        .step-info p { font-size:12px; color:var(--text-muted); margin:0; }
+        .step-actions { display:flex; gap:6px; }
+        .stat-card { background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:16px; text-align:center; }
+        .stat-value { font-size:24px; font-weight:700; color:var(--primary); }
+        .stat-label { font-size:11px; color:var(--text-muted); margin-top:4px; }
+        .delay-presets { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+        .delay-preset { padding:4px 10px; border:1px solid var(--border-color); border-radius:4px; font-size:11px; cursor:pointer; background:white; font-family:inherit; }
+        .delay-preset:hover,.delay-preset.active { background:var(--primary); color:white; border-color:var(--primary); }
+        .toast-container { position:fixed; top:20px; right:20px; z-index:300; display:flex; flex-direction:column; gap:8px; }
+        .toast { padding:12px 20px; border-radius:var(--radius-md); font-size:13px; animation:slideIn 0.3s ease; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
+        .toast-success { background:var(--success-bg); color:#065f46; border:1px solid var(--success); }
+        .toast-error { background:var(--danger-bg); color:#991b1b; border:1px solid var(--danger); }
+        @keyframes slideIn { from{opacity:0;transform:translateX(20px);} to{opacity:1;transform:translateX(0);} }
+        .empty-state { text-align:center; padding:60px 24px; color:var(--text-muted); }
+        .empty-state i { font-size:48px; opacity:0.3; margin-bottom:12px; display:block; }
+        .pagination { display:flex; align-items:center; gap:8px; justify-content:center; margin-top:16px; font-size:13px; }
+        @media (max-width:768px) { .sidebar{display:none;} .main-wrapper{margin-left:0;} }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <a id="sidebarExpo" href="dashboard_new.html" title="Switch Expo" style="padding:8px 20px;font-size:11px;color:#9ca3af;border-bottom:1px solid #252542;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;text-decoration:none;cursor:pointer;"><i class="bi bi-geo-alt" style="margin-right:4px;color:#4a6fa5;"></i><span id="expoNameDisplay"></span> <i class="bi bi-arrow-left-right" style="float:right;font-size:9px;opacity:0.5;margin-top:2px;"></i></a>
+            <script>(function(){var n=localStorage.getItem('selectedExpoName'),el=document.getElementById('sidebarExpo');if(n&&el){document.getElementById('expoNameDisplay').textContent=n;el.style.display='block';}})();</script>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                    <a class="nav-item" href="conference-sessions.html"><i class="bi bi-mortarboard"></i><span>Conferences</span></a>
+                    <a class="nav-item" href="floorplan-builder.html"><i class="bi bi-grid-3x3"></i><span>Floor Plan</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-send.html"><i class="bi bi-send"></i><span>Send Emails</span></a>
+                    <a class="nav-item active" href="email-campaigns.html"><i class="bi bi-envelope-paper"></i><span>Email Campaigns</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                    <a class="nav-item" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="checkin-reports.html"><i class="bi bi-clipboard-data"></i><span>Check-in Reports</span></a>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1 id="pageTitle"><i class="bi bi-envelope-paper"></i> Email Campaigns</h1>
+                <div class="header-actions" id="headerActions"></div>
+            </header>
+            <main class="main-content">
+                <!-- VIEW: Campaign List -->
+                <div id="viewList">
+                    <div class="filter-bar">
+                        <button class="filter-btn active" onclick="filterCampaigns('')">All</button>
+                        <button class="filter-btn" onclick="filterCampaigns('draft')">Draft</button>
+                        <button class="filter-btn" onclick="filterCampaigns('active')">Active</button>
+                        <button class="filter-btn" onclick="filterCampaigns('paused')">Paused</button>
+                        <button class="filter-btn" onclick="filterCampaigns('completed')">Completed</button>
+                    </div>
+                    <div id="campaignListBody"></div>
+                </div>
+
+                <!-- VIEW: Campaign Detail -->
+                <div id="viewDetail" style="display:none;">
+                    <div id="detailHeader" style="margin-bottom:20px;"></div>
+                    <div class="tabs" id="detailTabs">
+                        <button class="tab active" onclick="switchTab('steps')">Steps</button>
+                        <button class="tab" onclick="switchTab('recipients')">Recipients</button>
+                        <button class="tab" onclick="switchTab('stats')">Stats</button>
+                    </div>
+                    <div id="tabSteps"></div>
+                    <div id="tabRecipients" style="display:none;"></div>
+                    <div id="tabStats" style="display:none;"></div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Create Campaign Modal -->
+    <div class="modal-overlay" id="modalCreate">
+        <div class="modal-box">
+            <h3><i class="bi bi-plus-circle" style="color:var(--primary);margin-right:8px;"></i>New Campaign</h3>
+            <div class="form-group">
+                <label class="form-label">Campaign Name *</label>
+                <input type="text" class="form-control" id="createName" placeholder="e.g., Conference Invitation Q2">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Expo</label>
+                <select class="form-select" id="createExpo"></select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-control" id="createDesc" rows="2" placeholder="Optional description"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('modalCreate')">Cancel</button>
+                <button class="btn btn-primary" onclick="createCampaign()"><i class="bi bi-plus"></i> Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Step Edit Modal -->
+    <div class="modal-overlay" id="modalStep">
+        <div class="modal-box">
+            <h3 id="stepModalTitle">Add Step</h3>
+            <input type="hidden" id="editStepId">
+            <div class="form-group">
+                <label class="form-label">Email Template *</label>
+                <select class="form-select" id="stepTemplate"><option value="">Select template...</option></select>
+            </div>
+            <div class="form-group" id="delayGroup">
+                <label class="form-label">Delay (hours after previous step)</label>
+                <input type="number" class="form-control" id="stepDelay" min="0" value="24" style="margin-bottom:6px;">
+                <div class="delay-presets">
+                    <button class="delay-preset" onclick="setDelay(1)">1h</button>
+                    <button class="delay-preset" onclick="setDelay(24)">24h</button>
+                    <button class="delay-preset active" onclick="setDelay(48)">48h</button>
+                    <button class="delay-preset" onclick="setDelay(72)">72h</button>
+                    <button class="delay-preset" onclick="setDelay(168)">7d</button>
+                </div>
+            </div>
+            <div class="form-group" id="conditionGroup">
+                <label class="form-label">Condition</label>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="all" checked> All recipients</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="not_opened"> Only if previous step was NOT opened</label>
+                    <label style="font-size:13px;cursor:pointer;"><input type="radio" name="stepCondition" value="opened"> Only if previous step WAS opened</label>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('modalStep')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveStep()"><i class="bi bi-check"></i> Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Activate Confirmation Modal -->
+    <div class="modal-overlay" id="modalActivate">
+        <div class="modal-box">
+            <h3><i class="bi bi-play-circle" style="color:var(--success);margin-right:8px;"></i>Activate Campaign</h3>
+            <div id="activateBody"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeModal('modalActivate')">Cancel</button>
+                <button class="btn btn-success" onclick="confirmActivate()"><i class="bi bi-check-circle"></i> Activate Campaign</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toasts"></div>
+
+    <script>
+    const API = '/api';
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = 'login.html';
+    const expoId = localStorage.getItem('selectedExpoId');
+    if (!expoId) window.location.href = 'dashboard_new.html';
+
+    let currentCampaign = null;
+    let currentFilter = '';
+    let recipientPage = 1;
+    let templates = [];
+
+    // ============================================================
+    // API HELPERS
+    // ============================================================
+
+    async function api(method, path, body) {
+        const opts = { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } };
+        if (body && method !== 'GET') opts.body = JSON.stringify(body);
+        const res = await fetch(`${API}${path}`, opts);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
+        return data;
+    }
+
+    async function apiUpload(path, file) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(`${API}${path}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
+        return data;
+    }
+
+    function toast(msg, type = 'success') {
+        const el = document.createElement('div');
+        el.className = `toast toast-${type}`;
+        el.textContent = msg;
+        document.getElementById('toasts').appendChild(el);
+        setTimeout(() => el.remove(), 4000);
+    }
+
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+    function openModal(id) { document.getElementById(id).classList.add('show'); }
+
+    function statusBadge(status) {
+        const cls = { draft:'badge-draft', active:'badge-active', paused:'badge-paused', completed:'badge-completed' };
+        return `<span class="badge-status ${cls[status] || 'badge-draft'}">${status}</span>`;
+    }
+
+    // ============================================================
+    // VIEW: CAMPAIGN LIST
+    // ============================================================
+
+    async function loadCampaigns() {
+        document.getElementById('headerActions').innerHTML = '<button class="btn btn-primary" onclick="showCreateModal()"><i class="bi bi-plus"></i> New Campaign</button>';
+        document.getElementById('pageTitle').innerHTML = '<i class="bi bi-envelope-paper"></i> Email Campaigns';
+
+        try {
+            let url = `/campaigns?expo_id=${expoId}`;
+            if (currentFilter) url += `&status=${currentFilter}`;
+            const data = await api('GET', url);
+            const campaigns = data.campaigns || [];
+
+            if (campaigns.length === 0) {
+                document.getElementById('campaignListBody').innerHTML = `<div class="empty-state"><i class="bi bi-envelope-paper"></i><p>No campaigns yet. Click <strong>+ New Campaign</strong> to create one.</p></div>`;
+                return;
+            }
+
+            let html = '<table><thead><tr><th>Name</th><th>Status</th><th>Recipients</th><th>Steps</th><th>Sent</th><th>Created</th></tr></thead><tbody>';
+            for (const c of campaigns) {
+                html += `<tr style="cursor:pointer;" onclick="openDetail(${c.id})">
+                    <td><strong>${esc(c.name)}</strong>${c.expo_name ? `<br><small style="color:var(--text-muted);">${esc(c.expo_name)}</small>` : ''}</td>
+                    <td>${statusBadge(c.status)}</td>
+                    <td>${c.recipient_count || 0}</td>
+                    <td>${c.step_count || 0}</td>
+                    <td>${c.total_sent || 0}</td>
+                    <td><small>${new Date(c.created_at).toLocaleDateString()}</small></td>
+                </tr>`;
+            }
+            html += '</tbody></table>';
+            document.getElementById('campaignListBody').innerHTML = html;
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    function filterCampaigns(status) {
+        currentFilter = status;
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase() === (status || 'all')));
+        loadCampaigns();
+    }
+
+    function showView(name) {
+        document.getElementById('viewList').style.display = name === 'list' ? '' : 'none';
+        document.getElementById('viewDetail').style.display = name === 'detail' ? '' : 'none';
+    }
+
+    // ============================================================
+    // CREATE CAMPAIGN
+    // ============================================================
+
+    async function showCreateModal() {
+        document.getElementById('createName').value = '';
+        document.getElementById('createDesc').value = '';
+        // Load expos
+        try {
+            const data = await api('GET', '/expos');
+            const expos = data.expos || data || [];
+            const sel = document.getElementById('createExpo');
+            sel.innerHTML = '<option value="">Select expo...</option>';
+            (Array.isArray(expos) ? expos : []).forEach(e => {
+                sel.innerHTML += `<option value="${e.id}" ${e.id == expoId ? 'selected' : ''}>${esc(e.name)}</option>`;
+            });
+        } catch (e) { console.error('Load expos:', e); }
+        openModal('modalCreate');
+    }
+
+    async function createCampaign() {
+        const name = document.getElementById('createName').value.trim();
+        if (!name) { toast('Campaign name is required', 'error'); return; }
+        try {
+            const data = await api('POST', '/campaigns', {
+                name,
+                expo_id: parseInt(document.getElementById('createExpo').value) || null,
+                description: document.getElementById('createDesc').value.trim() || null
+            });
+            closeModal('modalCreate');
+            toast('Campaign created');
+            openDetail(data.campaign.id);
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    // ============================================================
+    // VIEW: CAMPAIGN DETAIL
+    // ============================================================
+
+    async function openDetail(id) {
+        try {
+            const data = await api('GET', `/campaigns/${id}`);
+            currentCampaign = data;
+            showView('detail');
+            renderDetailHeader();
+            await loadTemplates();
+            switchTab('steps');
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    function renderDetailHeader() {
+        const c = currentCampaign.campaign;
+        const isDraft = c.status === 'draft';
+        const isActive = c.status === 'active';
+        const isPaused = c.status === 'paused';
+        const stats = currentCampaign.stats || {};
+        const steps = currentCampaign.steps || [];
+
+        let actions = '';
+        if (isDraft) {
+            const canActivate = steps.length > 0 && parseInt(stats.total_count) > 0 && steps.every(s => s.template_id);
+            actions += `<button class="btn btn-success" ${canActivate ? `onclick="showActivateModal()"` : 'disabled title="Add steps and recipients first"'}><i class="bi bi-play-circle"></i> Activate</button>`;
+            actions += ` <button class="btn btn-danger btn-sm" onclick="deleteCampaign()"><i class="bi bi-trash"></i></button>`;
+        }
+        if (isActive) actions += `<button class="btn btn-warning" onclick="pauseCampaign()"><i class="bi bi-pause-circle"></i> Pause</button>`;
+        if (isPaused) actions += `<button class="btn btn-success" onclick="resumeCampaign()"><i class="bi bi-play-circle"></i> Resume</button>`;
+
+        document.getElementById('pageTitle').innerHTML = `<i class="bi bi-arrow-left" style="cursor:pointer;margin-right:8px;" onclick="backToList()"></i> ${esc(c.name)} ${statusBadge(c.status)}`;
+        document.getElementById('headerActions').innerHTML = actions;
+    }
+
+    function backToList() { showView('list'); loadCampaigns(); currentCampaign = null; }
+
+    async function deleteCampaign() {
+        if (!confirm('Delete this campaign? This cannot be undone.')) return;
+        try {
+            await api('DELETE', `/campaigns/${currentCampaign.campaign.id}`);
+            toast('Campaign deleted');
+            backToList();
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    async function pauseCampaign() {
+        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/pause`); toast('Campaign paused'); openDetail(currentCampaign.campaign.id); } catch (err) { toast(err.message, 'error'); }
+    }
+
+    async function resumeCampaign() {
+        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/resume`); toast('Campaign resumed'); openDetail(currentCampaign.campaign.id); } catch (err) { toast(err.message, 'error'); }
+    }
+
+    // ============================================================
+    // ACTIVATION
+    // ============================================================
+
+    function showActivateModal() {
+        const c = currentCampaign.campaign;
+        const stats = currentCampaign.stats || {};
+        const total = parseInt(stats.total_count) || 0;
+        const unsub = parseInt(stats.unsubscribed_count) || 0;
+        const steps = currentCampaign.steps || [];
+
+        document.getElementById('activateBody').innerHTML = `
+            <p style="margin-bottom:16px;">Activate campaign "<strong>${esc(c.name)}</strong>"?</p>
+            <ul style="font-size:13px;color:var(--text-secondary);padding-left:20px;margin-bottom:16px;">
+                <li><strong>${total}</strong> recipients will receive Step 1 immediately</li>
+                <li>Steps and recipient list will be <strong>locked</strong> (cannot modify)</li>
+                <li>${steps.length} step(s) in the sequence</li>
+                ${unsub > 0 ? `<li>${unsub} unsubscribed recipients will be skipped</li>` : ''}
+            </ul>
+        `;
+        openModal('modalActivate');
+    }
+
+    async function confirmActivate() {
+        try {
+            await api('POST', `/campaigns/${currentCampaign.campaign.id}/activate`);
+            closeModal('modalActivate');
+            toast('Campaign activated! Step 1 is being sent.');
+            openDetail(currentCampaign.campaign.id);
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    // ============================================================
+    // TABS
+    // ============================================================
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelector(`.tab[onclick*="${tab}"]`).classList.add('active');
+        document.getElementById('tabSteps').style.display = tab === 'steps' ? '' : 'none';
+        document.getElementById('tabRecipients').style.display = tab === 'recipients' ? '' : 'none';
+        document.getElementById('tabStats').style.display = tab === 'stats' ? '' : 'none';
+        if (tab === 'steps') renderSteps();
+        if (tab === 'recipients') { recipientPage = 1; renderRecipients(); }
+        if (tab === 'stats') renderStats();
+    }
+
+    // ============================================================
+    // STEPS TAB
+    // ============================================================
+
+    async function loadTemplates() {
+        try {
+            const data = await api('GET', '/email-templates');
+            templates = (data.templates || []).filter(t => t.is_active);
+        } catch (e) { templates = []; }
+    }
+
+    function renderSteps() {
+        const steps = currentCampaign.steps || [];
+        const isDraft = currentCampaign.campaign.status === 'draft';
+        let html = '';
+
+        if (steps.length === 0) {
+            html = '<div class="empty-state"><i class="bi bi-list-ol"></i><p>No steps yet. Add your first email step.</p></div>';
+        } else {
+            for (const s of steps) {
+                const delayText = s.step_number === 1 ? 'Sent immediately' : `After ${s.delay_hours}h`;
+                const condText = s.condition === 'all' ? 'To all recipients' : s.condition === 'not_opened' ? 'Only if not opened' : 'Only if opened';
+                html += `<div class="step-card">
+                    <div class="step-num">${s.step_number}</div>
+                    <div class="step-info">
+                        <h5>${esc(s.template_name || 'No template')} ${!s.template_id ? '<span style="color:var(--danger);">(missing)</span>' : ''}</h5>
+                        <p>${delayText} &middot; ${condText}${s.stats ? ` &middot; Sent: ${s.stats.sent}, Opened: ${s.stats.opened}` : ''}</p>
+                    </div>
+                    ${isDraft ? `<div class="step-actions">
+                        <button class="btn btn-sm btn-secondary" onclick="editStep(${s.id}, ${s.step_number})"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteStep(${s.id})"><i class="bi bi-trash"></i></button>
+                    </div>` : ''}
+                </div>`;
+            }
+        }
+
+        if (isDraft) {
+            html += `<button class="btn btn-primary" onclick="addStep()" style="margin-top:12px;"><i class="bi bi-plus"></i> Add Step</button>`;
+        }
+
+        document.getElementById('tabSteps').innerHTML = html;
+    }
+
+    function addStep() {
+        document.getElementById('stepModalTitle').textContent = 'Add Step';
+        document.getElementById('editStepId').value = '';
+        document.getElementById('stepTemplate').innerHTML = '<option value="">Select template...</option>' + templates.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+        document.getElementById('stepDelay').value = 24;
+        document.querySelector('input[name="stepCondition"][value="all"]').checked = true;
+
+        const isStep1 = (currentCampaign.steps || []).length === 0;
+        document.getElementById('delayGroup').style.display = isStep1 ? 'none' : '';
+        document.getElementById('conditionGroup').style.display = isStep1 ? 'none' : '';
+        if (isStep1) { document.getElementById('stepDelay').value = 0; }
+
+        openModal('modalStep');
+    }
+
+    function editStep(stepId, stepNum) {
+        const step = currentCampaign.steps.find(s => s.id === stepId);
+        if (!step) return;
+        document.getElementById('stepModalTitle').textContent = `Edit Step ${stepNum}`;
+        document.getElementById('editStepId').value = stepId;
+        document.getElementById('stepTemplate').innerHTML = '<option value="">Select template...</option>' + templates.map(t => `<option value="${t.id}" ${t.id === step.template_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('');
+        const isStep1 = stepNum === 1;
+
+        if (isStep1) {
+            document.getElementById('stepDelay').value = 0;
+            document.querySelector('input[name="stepCondition"][value="all"]').checked = true;
+        } else {
+            setDelay(step.delay_hours);
+            const condRadio = document.querySelector(`input[name="stepCondition"][value="${step.condition}"]`);
+            if (condRadio) condRadio.checked = true;
+        }
+
+        document.getElementById('delayGroup').style.display = isStep1 ? 'none' : '';
+        document.getElementById('conditionGroup').style.display = isStep1 ? 'none' : '';
+
+        openModal('modalStep');
+    }
+
+    function setDelay(hours) {
+        document.getElementById('stepDelay').value = hours;
+        document.querySelectorAll('.delay-preset').forEach(b => b.classList.toggle('active', parseInt(b.textContent) === hours || b.textContent === hours + 'h' || (b.textContent === '7d' && hours === 168)));
+    }
+
+    async function saveStep() {
+        const templateId = parseInt(document.getElementById('stepTemplate').value);
+        if (!templateId) { toast('Select a template', 'error'); return; }
+
+        const body = {
+            template_id: templateId,
+            delay_hours: parseInt(document.getElementById('stepDelay').value) || 0,
+            condition: document.querySelector('input[name="stepCondition"]:checked')?.value || 'all'
+        };
+
+        const editId = document.getElementById('editStepId').value;
+        try {
+            if (editId) {
+                await api('PUT', `/campaigns/${currentCampaign.campaign.id}/steps/${editId}`, body);
+                toast('Step updated');
+            } else {
+                await api('POST', `/campaigns/${currentCampaign.campaign.id}/steps`, body);
+                toast('Step added');
+            }
+            closeModal('modalStep');
+            await openDetail(currentCampaign.campaign.id);
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    async function deleteStep(stepId) {
+        if (!confirm('Delete this step?')) return;
+        try {
+            await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/steps/${stepId}`);
+            toast('Step deleted');
+            await openDetail(currentCampaign.campaign.id);
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    // ============================================================
+    // RECIPIENTS TAB
+    // ============================================================
+
+    async function renderRecipients() {
+        const isDraft = currentCampaign.campaign.status === 'draft';
+        const cid = currentCampaign.campaign.id;
+        let html = '';
+
+        if (isDraft) {
+            html += `<div class="card">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                    <div>
+                        <h5 style="font-size:14px;font-weight:600;margin-bottom:12px;"><i class="bi bi-file-earmark-spreadsheet" style="color:var(--primary);"></i> Upload CSV/Excel</h5>
+                        <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click();">
+                            <i class="bi bi-cloud-upload"></i>
+                            <p style="font-size:13px;color:var(--text-muted);margin:0;">Click to select or drag a file<br><small>Required column: email</small></p>
+                        </div>
+                        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" style="display:none;" onchange="uploadRecipients(this)">
+                        <div id="uploadResult" style="margin-top:8px;font-size:12px;"></div>
+                    </div>
+                    <div>
+                        <h5 style="font-size:14px;font-weight:600;margin-bottom:12px;"><i class="bi bi-people" style="color:var(--primary);"></i> From Expo Visitors</h5>
+                        <div class="form-group">
+                            <select class="form-select" id="fromExpoFilter">
+                                <option value="all">All registered visitors</option>
+                                <option value="checked_in">Checked-in only</option>
+                                <option value="not_checked_in">Not checked-in only</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="addFromExpo()"><i class="bi bi-plus"></i> Add Visitors from Expo</button>
+                        <div id="expoResult" style="margin-top:8px;font-size:12px;"></div>
+                    </div>
+                </div>
+            </div>`;
+        }
+
+        // Paginated list
+        try {
+            const data = await api('GET', `/campaigns/${cid}/recipients?page=${recipientPage}&limit=50`);
+            const recipients = data.recipients || [];
+            const total = data.total || 0;
+            const totalPages = Math.ceil(total / 50);
+
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <span style="font-size:13px;color:var(--text-muted);"><strong>${total}</strong> recipients total</span>
+                ${isDraft && total > 0 ? `<button class="btn btn-danger btn-sm" onclick="clearRecipients()"><i class="bi bi-trash"></i> Clear All</button>` : ''}
+            </div>`;
+
+            if (recipients.length === 0) {
+                html += '<div class="empty-state"><i class="bi bi-people"></i><p>No recipients yet.</p></div>';
+            } else {
+                html += '<table><thead><tr><th>Email</th><th>Name</th><th>Company</th><th>Status</th>' + (isDraft ? '<th></th>' : '') + '</tr></thead><tbody>';
+                for (const r of recipients) {
+                    html += `<tr>
+                        <td>${esc(r.email)}</td>
+                        <td>${esc([r.first_name, r.last_name].filter(Boolean).join(' ') || '-')}</td>
+                        <td>${esc(r.company || '-')}</td>
+                        <td>${statusBadge(r.status)}</td>
+                        ${isDraft ? `<td><button class="btn btn-sm" style="color:var(--danger);" onclick="removeRecipient(${r.id})"><i class="bi bi-x"></i></button></td>` : ''}
+                    </tr>`;
+                }
+                html += '</tbody></table>';
+
+                if (totalPages > 1) {
+                    html += `<div class="pagination">
+                        <button class="btn btn-sm btn-secondary" onclick="recipientPage--;renderRecipients();" ${recipientPage <= 1 ? 'disabled' : ''}>Prev</button>
+                        <span>Page ${recipientPage} of ${totalPages}</span>
+                        <button class="btn btn-sm btn-secondary" onclick="recipientPage++;renderRecipients();" ${recipientPage >= totalPages ? 'disabled' : ''}>Next</button>
+                    </div>`;
+                }
+            }
+        } catch (err) { html += `<p style="color:var(--danger);">Failed to load recipients</p>`; }
+
+        document.getElementById('tabRecipients').innerHTML = html;
+    }
+
+    async function uploadRecipients(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const resultEl = document.getElementById('uploadResult');
+        resultEl.innerHTML = '<span style="color:var(--primary);">Uploading...</span>';
+        try {
+            const data = await apiUpload(`/campaigns/${currentCampaign.campaign.id}/recipients/upload`, file);
+            resultEl.innerHTML = `<span style="color:var(--success);">Added: ${data.added}, Skipped: ${data.skipped_duplicates} dup, ${data.skipped_unsubscribed} unsub, ${data.invalid} invalid. Total: ${data.total_recipients}</span>`;
+            await openDetail(currentCampaign.campaign.id);
+            switchTab('recipients');
+        } catch (err) { resultEl.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`; }
+        input.value = '';
+    }
+
+    async function addFromExpo() {
+        const resultEl = document.getElementById('expoResult');
+        resultEl.innerHTML = '<span style="color:var(--primary);">Adding...</span>';
+        try {
+            const data = await api('POST', `/campaigns/${currentCampaign.campaign.id}/recipients/from-expo`, {
+                expo_id: parseInt(expoId),
+                filter: document.getElementById('fromExpoFilter').value
+            });
+            resultEl.innerHTML = `<span style="color:var(--success);">Added: ${data.added} from ${data.total_visitors_found} visitors. Skipped: ${data.skipped_duplicates} dup, ${data.skipped_unsubscribed} unsub. Total: ${data.total_recipients}</span>`;
+            await openDetail(currentCampaign.campaign.id);
+            switchTab('recipients');
+        } catch (err) { resultEl.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`; }
+    }
+
+    async function removeRecipient(recId) {
+        try {
+            await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/recipients/${recId}`);
+            renderRecipients();
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    async function clearRecipients() {
+        if (!confirm('Remove ALL recipients? This cannot be undone.')) return;
+        try {
+            await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/recipients`);
+            toast('All recipients cleared');
+            await openDetail(currentCampaign.campaign.id);
+            switchTab('recipients');
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    // ============================================================
+    // STATS TAB
+    // ============================================================
+
+    function renderStats() {
+        const steps = currentCampaign.steps || [];
+        const stats = currentCampaign.stats || {};
+        const total = parseInt(stats.total_count) || 0;
+        const active = parseInt(stats.active_count) || 0;
+        const completed = parseInt(stats.completed_count) || 0;
+        const unsub = parseInt(stats.unsubscribed_count) || 0;
+
+        let html = `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;">
+            <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Recipients</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:var(--success);">${active}</div><div class="stat-label">Active</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:var(--info);">${completed}</div><div class="stat-label">Completed</div></div>
+            <div class="stat-card"><div class="stat-value" style="color:var(--text-muted);">${unsub}</div><div class="stat-label">Unsubscribed</div></div>
+        </div>`;
+
+        if (steps.length === 0) {
+            html += '<div class="empty-state"><p>No steps to show stats for.</p></div>';
+        } else {
+            for (const s of steps) {
+                const st = s.stats || { sent: 0, opened: 0 };
+                const openRate = st.sent > 0 ? Math.round((st.opened / st.sent) * 100) : 0;
+                html += `<div class="step-card">
+                    <div class="step-num">${s.step_number}</div>
+                    <div class="step-info">
+                        <h5>${esc(s.template_name || 'Step ' + s.step_number)}</h5>
+                        <p>Sent: <strong>${st.sent}</strong> &middot; Opened: <strong>${st.opened}</strong> (${openRate}%)</p>
+                    </div>
+                </div>`;
+            }
+        }
+
+        html += `<div style="text-align:center;margin-top:16px;">
+            <button class="btn btn-secondary btn-sm" onclick="openDetail(${currentCampaign.campaign.id})"><i class="bi bi-arrow-clockwise"></i> Refresh Stats</button>
+            <small style="display:block;color:var(--text-muted);margin-top:6px;">Last updated: ${new Date().toLocaleTimeString()}</small>
+        </div>`;
+
+        document.getElementById('tabStats').innerHTML = html;
+    }
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    function esc(s) { return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+    // ============================================================
+    // INIT
+    // ============================================================
+
+    loadCampaigns();
+    </script>
+</body>
+</html>
