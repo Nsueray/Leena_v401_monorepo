@@ -310,11 +310,17 @@ async function runCampaignScheduler() {
 async function processCampaign(campaign) {
   let enqueued = 0;
 
-  // Cache organizer name for unsubscribe link (one query per campaign per cycle)
+  // Cache sender display name for unsubscribe link (expo name > organizer name)
   let organizerName = 'Organizer';
   try {
-    const orgRes = await pool.query('SELECT name FROM organizers WHERE id = $1', [campaign.organizer_id]);
-    if (orgRes.rows.length > 0) organizerName = orgRes.rows[0].name;
+    if (campaign.expo_id) {
+      const expoRes = await pool.query('SELECT name FROM expos WHERE id = $1', [campaign.expo_id]);
+      if (expoRes.rows.length > 0 && expoRes.rows[0].name) organizerName = expoRes.rows[0].name;
+    }
+    if (organizerName === 'Organizer') {
+      const orgRes = await pool.query('SELECT name FROM organizers WHERE id = $1', [campaign.organizer_id]);
+      if (orgRes.rows.length > 0) organizerName = orgRes.rows[0].name;
+    }
   } catch (e) { /* non-critical */ }
 
   // Pre-fetch all steps for this campaign (small set, cached for the loop)

@@ -158,14 +158,20 @@ router.get('/unsubscribe/:token', async (req, res) => {
       '<p>This unsubscribe link is invalid or has expired.</p>'));
   }
 
-  // Look up organizer name for display
+  // Look up display name for unsubscribe page (expo name > organizer name)
   let organizerName = 'this organizer';
   try {
-    const orgRes = await pool.query(
-      `SELECT o.name FROM email_campaigns c JOIN organizers o ON c.organizer_id = o.id WHERE c.id = $1`,
+    const nameRes = await pool.query(
+      `SELECT e.name as expo_name, o.name as org_name
+       FROM email_campaigns c
+       JOIN organizers o ON c.organizer_id = o.id
+       LEFT JOIN expos e ON c.expo_id = e.id
+       WHERE c.id = $1`,
       [parsed.campaignId]
     );
-    if (orgRes.rows.length > 0) organizerName = orgRes.rows[0].name;
+    if (nameRes.rows.length > 0) {
+      organizerName = nameRes.rows[0].expo_name || nameRes.rows[0].org_name;
+    }
   } catch (e) { /* non-critical */ }
 
   res.send(renderPage('Unsubscribe', `
