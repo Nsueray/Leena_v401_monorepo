@@ -21,10 +21,14 @@ const pool = new Pool({
 const PROCESS_INTERVAL = 2000;
 const MAX_RETRIES = 5;
 const BATCH_SIZE = Math.max(1, parseInt(process.env.EMAIL_WORKER_BATCH_SIZE || '1', 10));
+const TRANSACTIONAL_BATCH_SIZE = 10;
 let isProcessing = false;
 
 // ============================================================
-// FETCH: Lock up to BATCH_SIZE pending rows atomically
+// FETCH: Two-tier priority queue
+// Priority 1: Transactional emails (campaign_id IS NULL) — up to 10
+// Priority 2: Campaign emails (campaign_id IS NOT NULL) — up to BATCH_SIZE
+// Each cycle picks ONE category, never mixes.
 // ============================================================
 
 async function fetchNextBatch() {
@@ -32,22 +36,40 @@ async function fetchNextBatch() {
   try {
     await client.query('BEGIN');
 
-    // Lock up to BATCH_SIZE rows atomically
-    const lockRes = await client.query(`
+    // Priority 1: Transactional emails (registration, badge, reactivation, etc.)
+    let lockRes = await client.query(`
       UPDATE email_queue SET status = 'processing'
       WHERE id IN (
         SELECT id FROM email_queue
-        WHERE status = 'pending' AND try_count < $1
+        WHERE status = 'pending' AND try_count < $1 AND campaign_id IS NULL
         ORDER BY created_at ASC
         LIMIT $2
         FOR UPDATE SKIP LOCKED
       )
       RETURNING id
-    `, [MAX_RETRIES, BATCH_SIZE]);
+    `, [MAX_RETRIES, TRANSACTIONAL_BATCH_SIZE]);
+
+    let batchType = 'transactional';
+
+    // Priority 2: Campaign emails (only if no transactional pending)
+    if (lockRes.rows.length === 0) {
+      lockRes = await client.query(`
+        UPDATE email_queue SET status = 'processing'
+        WHERE id IN (
+          SELECT id FROM email_queue
+          WHERE status = 'pending' AND try_count < $1 AND campaign_id IS NOT NULL
+          ORDER BY created_at ASC
+          LIMIT $2
+          FOR UPDATE SKIP LOCKED
+        )
+        RETURNING id
+      `, [MAX_RETRIES, BATCH_SIZE]);
+      batchType = 'campaign';
+    }
 
     if (lockRes.rows.length === 0) {
       await client.query('COMMIT');
-      return [];
+      return { tasks: [], type: 'none' };
     }
 
     const taskIds = lockRes.rows.map(r => r.id);
@@ -79,11 +101,11 @@ async function fetchNextBatch() {
     `, taskIds);
 
     await client.query('COMMIT');
-    return res.rows;
+    return { tasks: res.rows, type: batchType };
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[EMAIL_WORKER] fetchNextBatch error:', err.message);
-    return [];
+    return { tasks: [], type: 'none' };
   } finally {
     client.release();
   }
@@ -618,7 +640,7 @@ async function checkCampaignCompletion(campaignId) {
 // ============================================================
 
 async function runWorker() {
-  console.log(`🚀 Email worker started (v403). Polling every ${PROCESS_INTERVAL}ms, batch size: ${BATCH_SIZE}`);
+  console.log(`🚀 Email worker started (v403). Polling every ${PROCESS_INTERVAL}ms, campaign batch: ${BATCH_SIZE}, transactional batch: ${TRANSACTIONAL_BATCH_SIZE}`);
   console.log('📧 Supports: visitor+template mode AND direct html_content mode');
   console.log(`📋 Campaign scheduler: every ${CAMPAIGN_SCHEDULER_INTERVAL_MS / 1000}s, batch limit: ${CAMPAIGN_SCHEDULER_BATCH_LIMIT}`);
 
@@ -639,7 +661,7 @@ async function runWorker() {
       isProcessing = true;
       const cycleStart = Date.now();
       try {
-        const tasks = await fetchNextBatch();
+        const { tasks, type } = await fetchNextBatch();
         if (tasks.length > 0) {
           // Process all tasks in parallel — each has its own error handling
           const results = await Promise.allSettled(tasks.map(t => processTask(t)));
@@ -650,12 +672,12 @@ async function runWorker() {
           const elapsed = Date.now() - cycleStart;
 
           if (tasks.length > 1) {
-            console.log(`[CYCLE] Processed ${tasks.length} emails (${sent} sent, ${failed + errors} failed) in ${elapsed}ms`);
+            console.log(`[CYCLE] Processed ${tasks.length} ${type} emails (${sent} sent, ${failed + errors} failed) in ${elapsed}ms`);
           } else {
             // Single email — keep original log style
             const r = results[0];
             if (r.status === 'fulfilled') {
-              console.log(`[EMAIL_WORKER] ${r.value?.status === 'sent' ? '✅' : '❌'} Task ${tasks[0].id} ${r.value?.status}`);
+              console.log(`[EMAIL_WORKER] ${r.value?.status === 'sent' ? '✅' : '❌'} Task ${tasks[0].id} ${r.value?.status} (${type})`);
             }
           }
         }
