@@ -11,15 +11,15 @@ sgMail.setApiKey(process.env.SENDGRID_API_KEY);
  */
 function processEmailTemplate(template, data) {
     if (!template) return '';
-    let result = template;
 
-    Object.keys(data).forEach(key => {
-        const regex = new RegExp(`{{${key}}}`, 'g');
-        result = result.replace(regex, data[key] || '');
+    return template.replace(/\{\{([^}]+)\}\}/g, (match, expr) => {
+        const parts = expr.split('|').map(p => p.trim());
+        for (const part of parts) {
+            if (/^".*"$/.test(part)) return part.slice(1, -1);
+            if (data[part]) return data[part];
+        }
+        return '';
     });
-
-    result = result.replace(/{{[^}]+}}/g, ''); // Remove unused
-    return result;
 }
 
 /**
