@@ -424,10 +424,10 @@
         if (isDraft) {
             const canActivate = steps.length > 0 && parseInt(stats.total_count) > 0 && steps.every(s => s.template_id);
             actions += `<button class="btn btn-success" ${canActivate ? `onclick="showActivateModal()"` : 'disabled title="Add steps and recipients first"'}><i class="bi bi-play-circle"></i> Activate</button>`;
-            actions += ` <button class="btn btn-danger btn-sm" onclick="deleteCampaign()"><i class="bi bi-trash"></i></button>`;
         }
         if (isActive) actions += `<button class="btn btn-warning" onclick="pauseCampaign()"><i class="bi bi-pause-circle"></i> Pause</button>`;
         if (isPaused) actions += `<button class="btn btn-success" onclick="resumeCampaign()"><i class="bi bi-play-circle"></i> Resume</button>`;
+        if (!isActive) actions += ` <button class="btn btn-danger btn-sm" onclick="deleteCampaign()"><i class="bi bi-trash"></i> Delete</button>`;
 
         document.getElementById('pageTitle').innerHTML = `<i class="bi bi-arrow-left" style="cursor:pointer;margin-right:8px;" onclick="backToList()"></i> ${esc(c.name)} ${statusBadge(c.status)}`;
         document.getElementById('headerActions').innerHTML = actions;

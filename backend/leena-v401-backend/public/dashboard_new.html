@@ -646,8 +646,8 @@
                 let status = 'Ended', statusClass = 'ended';
                 if (now < start) { status = 'Upcoming'; statusClass = 'upcoming'; }
                 else if (now <= end) { status = 'Active'; statusClass = 'active'; activeCount++; }
-                totalVisitors += expo.visitor_count || 0;
-                totalCheckins += expo.checkin_count || 0;
+                totalVisitors += parseInt(expo.visitor_count) || 0;
+                totalCheckins += parseInt(expo.checkin_count) || 0;
                 
                 html += `<div class="expo-card" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')">
                     <div class="expo-card-header">

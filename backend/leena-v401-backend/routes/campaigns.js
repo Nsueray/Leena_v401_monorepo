@@ -62,6 +62,14 @@ async function requireDraft(campaignId, organizerId) {
   return { campaign };
 }
 
+async function requireDeletable(campaignId, organizerId) {
+  const campaign = await getCampaign(campaignId, organizerId);
+  if (!campaign) return { error: 'Campaign not found', status: 404 };
+  const deletable = ['draft', 'completed', 'paused'];
+  if (!deletable.includes(campaign.status)) return { error: 'Active campaigns cannot be deleted. Pause first.', status: 400 };
+  return { campaign };
+}
+
 function normalizeEmail(email) {
   return (email || '').toString().trim().toLowerCase();
 }
@@ -242,11 +250,14 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// DELETE /api/campaigns/:id — Delete (draft only)
+// DELETE /api/campaigns/:id — Delete (draft, completed, paused)
 router.delete('/:id', async (req, res) => {
   try {
-    const { error, status } = await requireDraft(req.params.id, req.organizer_id);
+    const { error, status } = await requireDeletable(req.params.id, req.organizer_id);
     if (error) return res.status(status).json({ success: false, message: error });
+
+    // Clean up email_queue references first (no ON DELETE CASCADE on this FK)
+    await pool.query('DELETE FROM email_queue WHERE campaign_id = $1', [req.params.id]);
 
     await pool.query(
       'DELETE FROM email_campaigns WHERE id = $1 AND organizer_id = $2',

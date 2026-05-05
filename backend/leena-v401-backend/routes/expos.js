@@ -52,11 +52,12 @@ async function generateUniqueSlug(baseName, organizerId) {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, organizer_id, name, slug, location, start_date, end_date, 
+      `SELECT id, organizer_id, name, slug, location, start_date, end_date,
               logo_url, created_at, updated_at,
-              (SELECT COUNT(*) FROM visitors WHERE expo_id = expos.id) as visitor_count
-       FROM expos 
-       WHERE organizer_id = $1 
+              (SELECT COUNT(*)::int FROM visitors WHERE expo_id = expos.id) as visitor_count,
+              (SELECT COUNT(*)::int FROM checkins WHERE expo_id = expos.id) as checkin_count
+       FROM expos
+       WHERE organizer_id = $1
        ORDER BY start_date DESC, id DESC`,
       [req.organizer_id]
     );
@@ -77,9 +78,9 @@ router.get('/:id', authenticateToken, async (req, res) => {
   
   try {
     const result = await pool.query(
-      `SELECT e.*, 
-              (SELECT COUNT(*) FROM visitors WHERE expo_id = e.id) as visitor_count,
-              (SELECT COUNT(*) FROM checkins WHERE expo_id = e.id) as checkin_count
+      `SELECT e.*,
+              (SELECT COUNT(*)::int FROM visitors WHERE expo_id = e.id) as visitor_count,
+              (SELECT COUNT(*)::int FROM checkins WHERE expo_id = e.id) as checkin_count
        FROM expos e
        WHERE e.id = $1 AND e.organizer_id = $2`,
       [id, req.organizer_id]
@@ -399,13 +400,13 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
 
     // Get comprehensive statistics
     const stats = await pool.query(`
-      SELECT 
-        (SELECT COUNT(*) FROM visitors WHERE expo_id = $1) as total_visitors,
-        (SELECT COUNT(*) FROM visitors WHERE expo_id = $1 AND created_at >= CURRENT_DATE) as visitors_today,
-        (SELECT COUNT(*) FROM checkins WHERE expo_id = $1) as total_checkins,
-        (SELECT COUNT(DISTINCT visitor_id) FROM checkins WHERE expo_id = $1) as unique_checkins,
-        (SELECT COUNT(*) FROM checkins WHERE expo_id = $1 AND checkin_time >= CURRENT_DATE) as checkins_today,
-        (SELECT COUNT(*) FROM visitors WHERE expo_id = $1 AND custom_fields->>'country' IS NOT NULL) as visitors_with_country,
+      SELECT
+        (SELECT COUNT(*)::int FROM visitors WHERE expo_id = $1) as total_visitors,
+        (SELECT COUNT(*)::int FROM visitors WHERE expo_id = $1 AND created_at >= CURRENT_DATE) as visitors_today,
+        (SELECT COUNT(*)::int FROM checkins WHERE expo_id = $1) as total_checkins,
+        (SELECT COUNT(DISTINCT visitor_id)::int FROM checkins WHERE expo_id = $1) as unique_checkins,
+        (SELECT COUNT(*)::int FROM checkins WHERE expo_id = $1 AND checkin_time >= CURRENT_DATE) as checkins_today,
+        (SELECT COUNT(*)::int FROM visitors WHERE expo_id = $1 AND custom_fields->>'country' IS NOT NULL) as visitors_with_country,
         (SELECT json_agg(DISTINCT custom_fields->>'country') FROM visitors WHERE expo_id = $1 AND custom_fields->>'country' IS NOT NULL) as countries
     `, [id]);
 
