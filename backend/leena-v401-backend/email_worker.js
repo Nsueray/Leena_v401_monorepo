@@ -599,9 +599,13 @@ async function computeNextDue(campaignId, recipientId, currentStepNum, stepsMap)
   const nextStep = stepsMap[currentStepNum + 1];
 
   if (!nextStep) {
-    // No more steps — set null, scheduler will mark completed next cycle
+    // No more steps — mark recipient completed
     await pool.query(
-      `UPDATE campaign_recipients SET next_step_due_at = NULL, updated_at = NOW() WHERE id = $1`,
+      `UPDATE campaign_recipients
+       SET status = 'completed',
+           next_step_due_at = NULL,
+           updated_at = NOW()
+       WHERE id = $1`,
       [recipientId]
     );
     return;

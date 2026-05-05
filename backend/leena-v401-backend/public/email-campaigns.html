@@ -335,7 +335,7 @@
                 return;
             }
 
-            let html = '<table><thead><tr><th>Name</th><th>Status</th><th>Recipients</th><th>Steps</th><th>Sent</th><th>Created</th></tr></thead><tbody>';
+            let html = '<table><thead><tr><th>Name</th><th>Status</th><th>Recipients</th><th>Steps</th><th>Sent</th><th>Created</th><th></th></tr></thead><tbody>';
             for (const c of campaigns) {
                 html += `<tr style="cursor:pointer;" onclick="openDetail(${c.id})">
                     <td><strong>${esc(c.name)}</strong>${c.expo_name ? `<br><small style="color:var(--text-muted);">${esc(c.expo_name)}</small>` : ''}</td>
@@ -344,6 +344,7 @@
                     <td>${c.step_count || 0}</td>
                     <td>${c.total_sent || 0}</td>
                     <td><small>${new Date(c.created_at).toLocaleDateString()}</small></td>
+                    <td onclick="event.stopPropagation()">${c.status !== 'active' ? `<button class="btn btn-danger btn-sm" onclick="quickDelete(${c.id})"><i class="bi bi-trash"></i></button>` : ''}</td>
                 </tr>`;
             }
             html += '</tbody></table>';
@@ -441,6 +442,15 @@
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}`);
             toast('Campaign deleted');
             backToList();
+        } catch (err) { toast(err.message, 'error'); }
+    }
+
+    async function quickDelete(id) {
+        if (!confirm('Delete this campaign? This cannot be undone.')) return;
+        try {
+            await api('DELETE', `/campaigns/${id}`);
+            toast('Campaign deleted');
+            loadCampaigns();
         } catch (err) { toast(err.message, 'error'); }
     }
 
