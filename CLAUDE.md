@@ -5,6 +5,12 @@
 
 ---
 
+## ELL Cross-System Rules
+Before making architectural decisions, read: `docs/ELL_RULES.md`
+If in doubt, mark with 🔶 ELL onayı gerek and ask the user to check with ELIZA chat.
+
+---
+
 ## 🔴 ANA KURALLAR (HER ZAMAN GEÇERLİ, İSTİSNASIZ)
 
 ### KURAL 1: TAHMİN YÜRÜTME YASAĞI
