@@ -81,7 +81,7 @@ router.get('/paginated', authMiddleware, async (req, res) => {
     const dataResult = await pool.query(
       `
       SELECT id, name, last_name, company, country, email, source, origin, visitor_type,
-             booth_number, phone, job_title, created_at, qr_code,
+             booth_number, phone, job_title, created_at, qr_code, badge_id,
              custom_fields->>'conference_topic' as conference_topic
       FROM visitors
       ${whereClause}
@@ -123,6 +123,58 @@ router.get('/badge/:qr_code', async (req, res) => {
   } catch (err) {
     console.error('❌ QR Code lookup error:', err);
     return res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ✅ UPDATE VISITOR (admin edit — qr_code/badge_id never change)
+router.put('/:id', authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, last_name, email, company, job_title, phone, country, visitor_type, booth_number } = req.body;
+
+    // Email duplicate check (if email is being changed)
+    if (email && email.trim()) {
+      const dupCheck = await pool.query(
+        `SELECT id FROM visitors
+         WHERE lower(email) = lower($1)
+           AND expo_id = (SELECT expo_id FROM visitors WHERE id = $2)
+           AND id != $2
+         LIMIT 1`,
+        [email.trim(), id]
+      );
+      if (dupCheck.rows.length > 0) {
+        return res.status(409).json({ success: false, message: 'Another visitor with this email already exists in this expo' });
+      }
+    }
+
+    const result = await pool.query(
+      `UPDATE visitors SET
+        name = COALESCE(NULLIF($1, ''), name),
+        last_name = COALESCE(NULLIF($2, ''), last_name),
+        email = COALESCE(NULLIF($3, ''), email),
+        company = COALESCE(NULLIF($4, ''), company),
+        job_title = COALESCE(NULLIF($5, ''), job_title),
+        phone = COALESCE(NULLIF($6, ''), phone),
+        country = COALESCE(NULLIF($7, ''), country),
+        visitor_type = COALESCE(NULLIF($8, ''), visitor_type),
+        booth_number = COALESCE(NULLIF($9, ''), booth_number),
+        updated_at = NOW()
+      WHERE id = $10 AND organizer_id = $11
+      RETURNING id, name, last_name, email, company, job_title, phone, country,
+                visitor_type, booth_number, qr_code, badge_id, source, created_at`,
+      [name || '', last_name || '', email || '', company || '', job_title || '',
+       phone || '', country || '', visitor_type || '', booth_number || '',
+       id, req.organizer_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Visitor not found' });
+    }
+
+    res.json({ success: true, visitor: result.rows[0] });
+  } catch (err) {
+    console.error('❌ Visitor update error:', err);
+    res.status(500).json({ success: false, message: 'Update failed' });
   }
 });
 
