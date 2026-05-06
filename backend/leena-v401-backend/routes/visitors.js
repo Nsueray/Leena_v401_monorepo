@@ -46,9 +46,8 @@ router.get('/paginated', authMiddleware, async (req, res) => {
     }
 
     if (req.query.source) {
-      const sourceList = req.query.source.split(',');
-      filters.push(`source = ANY($${idx})`);
-      values.push(sourceList);
+      filters.push(`source ILIKE $${idx}`);
+      values.push(`%${req.query.source}%`);
       idx++;
     }
 
@@ -100,6 +99,26 @@ router.get('/paginated', authMiddleware, async (req, res) => {
 
   } catch (err) {
     console.error('❌ Paginated visitor fetch error:', err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
+// ✅ Get distinct source values for filter dropdown
+router.get('/sources', authMiddleware, async (req, res) => {
+  try {
+    const expo_id = parseInt(req.query.expo_id);
+    if (!expo_id) return res.status(400).json({ success: false, message: 'expo_id is required' });
+
+    const result = await pool.query(
+      `SELECT DISTINCT source FROM visitors
+       WHERE expo_id = $1 AND organizer_id = $2 AND source IS NOT NULL AND source != ''
+       ORDER BY source ASC`,
+      [expo_id, req.organizer_id]
+    );
+
+    res.json({ sources: result.rows.map(r => r.source) });
+  } catch (err) {
+    console.error('❌ Sources fetch error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
@@ -993,7 +1012,7 @@ router.get('/export', authMiddleware, async (req, res) => {
     }
     if (req.query.startDate) { filters.push(`created_at >= $${idx}`); values.push(req.query.startDate); idx++; }
     if (req.query.endDate) { filters.push(`created_at <= $${idx}`); values.push(req.query.endDate + ' 23:59:59'); idx++; }
-    if (req.query.source) { filters.push(`source = ANY($${idx})`); values.push(req.query.source.split(',')); idx++; }
+    if (req.query.source) { filters.push(`source ILIKE $${idx}`); values.push(`%${req.query.source}%`); idx++; }
     if (req.query.origin) { filters.push(`origin = ANY($${idx})`); values.push(req.query.origin.split(',')); idx++; }
     if (req.query.visitor_type) { filters.push(`visitor_type = ANY($${idx})`); values.push(req.query.visitor_type.split(',')); idx++; }
     if (req.query.conference_topic) { filters.push(`custom_fields->>'conference_topic' ILIKE $${idx}`); values.push(`%${req.query.conference_topic}%`); idx++; }

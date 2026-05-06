@@ -202,13 +202,8 @@
                     <div class="filter-row">
                         <div class="filter-group">
                             <label>Source</label>
-                            <div class="filter-pills" id="sourceFilters">
-                                <label class="filter-pill"><input type="checkbox" value="manual"> Manual</label>
-                                <label class="filter-pill"><input type="checkbox" value="form"> Form</label>
-                                <label class="filter-pill"><input type="checkbox" value="import"> Import</label>
-                                <label class="filter-pill"><input type="checkbox" value="webhook"> Webhook</label>
-                                <label class="filter-pill"><input type="checkbox" value="email"> Email</label>
-                            </div>
+                            <input type="text" id="sourceSearch" list="sourcesDatalist" placeholder="Filter by source name..." style="width:100%;padding:7px 10px;border:1px solid var(--border-color);border-radius:var(--radius-md);font-size:13px;">
+                            <datalist id="sourcesDatalist"></datalist>
                         </div>
                         <div class="filter-group">
                             <label>Origin</label>
@@ -319,6 +314,7 @@
             if (!currentExpoId) { window.location.href = 'dashboard_new.html'; return; }
             initEventListeners();
             loadConferenceTopics();
+            loadSources();
             // Check URL params for pre-applied filters (e.g. from conference-sessions page)
             const urlParams = new URLSearchParams(window.location.search);
             if (urlParams.get('conference_topic')) {
@@ -440,8 +436,8 @@
             const endDate = document.getElementById('endDate').value;
             if (startDate) currentFilters.startDate = startDate;
             if (endDate) currentFilters.endDate = endDate;
-            const sources = [...document.querySelectorAll('#sourceFilters input:checked')].map(c => c.value);
-            if (sources.length) currentFilters.source = sources.join(',');
+            const sourceVal = document.getElementById('sourceSearch').value.trim();
+            if (sourceVal) currentFilters.source = sourceVal;
             const origins = [...document.querySelectorAll('#originFilters input:checked')].map(c => c.value);
             if (origins.length) currentFilters.origin = origins.join(',');
             const types = [...document.querySelectorAll('#typeFilters input:checked')].map(c => c.value);
@@ -458,6 +454,7 @@
             document.getElementById('startDate').value = '';
             document.getElementById('endDate').value = '';
             document.getElementById('conferenceTopicFilter').value = '';
+            document.getElementById('sourceSearch').value = '';
             document.querySelectorAll('.filter-pill input').forEach(c => c.checked = false);
             currentFilters = {};
             currentPage = 1;
@@ -510,6 +507,23 @@
                     select.appendChild(opt);
                 });
             } catch (e) { console.error('Error loading topics'); }
+        }
+
+        async function loadSources() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/visitors/sources?expo_id=${currentExpoId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) return;
+                const data = await response.json();
+                const datalist = document.getElementById('sourcesDatalist');
+                datalist.innerHTML = '';
+                (data.sources || []).forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s;
+                    datalist.appendChild(opt);
+                });
+            } catch (e) { /* silent — datalist stays empty, user can still type */ }
         }
 
         function updateFilterBadge() {
