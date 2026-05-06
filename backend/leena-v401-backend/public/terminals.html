@@ -78,9 +78,9 @@
         .alert { padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 16px; display: none; }
         .alert-success { background: var(--success-bg); color: #065f46; }
         .alert-danger { background: #fee2e2; color: #991b1b; }
-        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
-        .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s forwards; }
-        .toast.error { background: var(--danger); }
+        .app-toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+        .app-toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s forwards; }
+        .app-toast.error { background: var(--danger); }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .action-buttons { display: flex; gap: 6px; }
         .template-select { min-width: 140px; }
@@ -205,7 +205,7 @@
             </main>
         </div>
     </div>
-    <div class="toast-container" id="toastContainer"></div>
+    <div class="app-toast-container" id="toastContainer"></div>
 
     <script>
         const API_BASE_URL = '/api';
@@ -450,7 +450,7 @@
 
         function showToast(msg, type = 'success') {
             const toast = document.createElement('div');
-            toast.className = `toast ${type === 'error' ? 'error' : ''}`;
+            toast.className = `app-toast ${type === 'error' ? 'error' : ''}`;
             toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}`;
             document.getElementById('toastContainer').appendChild(toast);
             setTimeout(() => toast.remove(), 3000);

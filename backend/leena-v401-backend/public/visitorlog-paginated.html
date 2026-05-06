@@ -96,9 +96,9 @@
         .page-item.disabled .page-link { color: var(--text-muted); cursor: not-allowed; }
         .qr-btn { padding: 4px 8px; font-size: 11px; background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; text-decoration: none; }
         .qr-btn:hover { background: var(--primary); color: white; }
-        .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
-        .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s forwards; }
-        .toast-error { background: #ef4444; }
+        .app-toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
+        .app-toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s forwards; }
+        .app-toast-error { background: #ef4444; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
         .modal-overlay.show { display: flex; }
@@ -305,7 +305,7 @@
         </div>
     </div>
     
-    <div class="toast-container" id="toastContainer"></div>
+    <div class="app-toast-container" id="toastContainer"></div>
 
     <script>
         const API_BASE_URL = '/api';
@@ -526,7 +526,7 @@
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
         function showToast(msg, type = 'success') {
             const toast = document.createElement('div');
-            toast.className = 'toast' + (type === 'error' ? ' toast-error' : '');
+            toast.className = 'app-toast' + (type === 'error' ? ' app-toast-error' : '');
             toast.innerHTML = `<i class="bi bi-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${msg}`;
             document.getElementById('toastContainer').appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
