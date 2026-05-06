@@ -584,7 +584,7 @@
                 </div>
                 <div style="margin-top:12px;display:flex;gap:12px;align-items:center;">
                     ${v.qr_code ? `<a href="badge.html?qr=${encodeURIComponent(v.qr_code)}" target="_blank" style="color:#4a6fa5;font-size:13px;"><i class="bi bi-qr-code"></i> View Badge</a>` : ''}
-                    <button onclick="toggleSendEmailForm()" style="background:#4a6fa5;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;"><i class="bi bi-envelope"></i> Send Badge Email</button>
+                    <button onclick="toggleSendEmailForm()" style="background:#4a6fa5;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;"><i class="bi bi-envelope"></i> Send Email</button>
                 </div>
                 <div id="sendEmailForm" style="display:none;margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;">
                     <label style="font-size:12px;font-weight:600;color:#6b7280;">Select Template</label>
@@ -725,7 +725,7 @@
                     })
                 });
                 if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Send failed'); }
-                showToast(`Badge email sent to ${_currentVisitor.email}`);
+                showToast(`Email sent to ${_currentVisitor.email}`);
                 document.getElementById('sendEmailForm').style.display = 'none';
                 loadVisitorEmails(_currentVisitor.id);
             } catch (err) {
