@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 20 Nisan 2026 | Versiyon: v4.0.3
+> Son güncelleme: 6 Mayıs 2026 | Versiyon: v4.0.3
 
 ---
 
@@ -545,6 +545,7 @@ Hostess opens conference-scanner.html?terminal_key=X
 - `POST /api/visitors/manual` — Manuel kayıt (upsert)
 - `POST /api/visitors/import` — Excel import (upsert: varsa güncelle+QR koru, yoksa oluştur)
 - `GET /api/visitors/import-logs` — Import history logs (paginated, ?page=1&limit=20&expo_id=)
+- `PUT /api/visitors/:id` — Visitor edit (name, email, company, job_title, phone, country, visitor_type, booth_number — qr_code/badge_id protected, auth required)
 - `GET /api/visitors/:id/emails` — Visitor email history (email_queue + email_logs, auth required)
 
 ### Forms
@@ -759,6 +760,8 @@ Hostess opens conference-scanner.html?terminal_key=X
 3. **Sidebar links:** ✅ All 15 admin pages standardized (23 Feb 2026). CSS `::before` accent bar also added to all pages.
 4. **leena.css merkezi stil dosyası:** CLAUDE.md'de referans verilmiş ama **aslında her sayfa kendi inline CSS'ini taşıyor.** Ortak stil dosyası kullanımı henüz tam uygulanmadı. Yeni sayfa yaparken mevcut sayfaların CSS pattern'ini takip et.
 5. **QR kod içeriği:** Badge QR'ların içinde sadece UUID var (URL değil). Telefonla okutunca düz text görünür. lead-scan.html'de kamera scanner ile okunan QR'lar URL formatında gelebilir — parse logic mevcut.
+6. **CSS class naming:** Bootstrap CSS loaded on admin pages. Avoid generic class names (.toast, .modal, .alert) — use prefix (.app-toast, .leena-modal) to prevent Bootstrap override conflicts.
+7. **PostgreSQL bigint serialization:** `COUNT(*)` returns bigint, pg driver serializes as string. Use `::int` cast in backend or `parseInt()` in frontend for numeric operations.
 
 ### Frontend Nesil Haritası
 Sayfalar 5 farklı CSS neslinde yazılmış. Yeni geliştirmelerde Gen 3/4 pattern kullanılmalı.
@@ -1114,6 +1117,16 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - Connected shape validation (cell adjacency)
 - Sidebar link to existing 15 admin pages
 - Stand resize (edge drag)
+
+**Yaprak Feedback Sprint A+B (5-6 May 2026):**
+- Visitor count display bug fix: `COUNT(*)::int` cast in expos.js (3 endpoints), `parseInt()` defense in dashboard_new.html. Root cause: pg driver serializes bigint as string → JS string concatenation instead of addition.
+- Campaign delete extended: new `requireDeletable` helper (draft/completed/paused), `email_queue` pre-cleanup to prevent FK violation, Delete button on list view (non-active only)
+- Campaign completion logic fix: `computeNextDue` marks recipient `status='completed'` when no more steps. Previously stayed 'active' forever, blocking `checkCampaignCompletion`. See ADR-016.
+- One-time data migration (5 May 2026 Render Shell): 37,574 stuck recipients + 11 campaigns → completed
+- `PUT /api/visitors/:id`: authMiddleware, COALESCE(NULLIF()) pattern, email duplicate check (409), qr_code/badge_id route-level protection (never in UPDATE list)
+- Inline edit UI in visitor detail panel: Edit button, input form, Save/Cancel, visitor_type dropdown, table auto-refresh
+- Toast Bootstrap conflict fix: `.toast` → `.app-toast` (Bootstrap 5 .toast class override caused 0×0 rendering)
+- `badge_id` added to `/paginated` SELECT (was missing from detail panel display)
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

@@ -1,7 +1,7 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 20 Nisan 2026
-> Aktif modül: Form Design + Leena EMS Core
+> Son güncelleme: 6 Mayıs 2026
+> Aktif modül: Leena EMS Core + Email Campaigns
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
 ---
@@ -157,6 +157,40 @@
 
 ---
 
+## ✅ Yaprak Feedback — Sprint A (5 Mayıs 2026)
+
+- [x] Madde 1: Visitor count display bug (bigint→int cast + parseInt defense)
+- [x] Madde 4: Campaign delete extended (draft+completed+paused, email_queue pre-cleanup)
+- [x] Campaign completion logic fix (computeNextDue → recipient 'completed')
+- [x] Delete button on campaign list view (quickDelete function)
+
+## 🔧 Operasyonel Müdahale (5 Mayıs 2026)
+
+Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bug'ının yan etkisini temizlemek için):
+
+- 37,574 recipient (active kampanyalarda) status='completed' yapıldı
+- 11 campaign 'active' → 'completed' geçti
+- 37,545 recipient (draft kampanyalarda) KORUNDU — Conference Invitation Verify ve test66 hâlâ activate edilebilir durumda
+- Transaction kullanıldı, COMMIT öncesi doğrulama yapıldı
+- Bu migration tek seferlik, kod fix'i (commit a449ccb) ile birlikte bir daha gerekmeyecek
+
+## ✅ Yaprak Feedback — Sprint B (5-6 Mayıs 2026)
+
+- [x] Madde 2: PUT /api/visitors/:id endpoint (COALESCE pattern, qr_code protected)
+- [x] Madde 2: Inline edit UI in visitor detail panel
+- [x] Toast Bootstrap conflict fix (.toast → .app-toast)
+- [x] badge_id added to paginated SELECT
+
+---
+
+## ⏳ Yaprak Feedback — Sprint C (Fuar sonrası)
+
+- [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)
+- [ ] Cascade kontrolü: email_queue, email_logs, campaign_recipients temizliği
+- [ ] Confirmation UI: "This visitor has X checkins, cannot be deleted" vs "No associated data, safe to delete"
+
+---
+
 ## 🔴 Floor Plan Builder — Sprint 4 (Next)
 
 - [ ] Background image UX (resize, reposition, alignment)
@@ -216,7 +250,7 @@ Bu büyük refactor. Fuar yokken yapılacak.
 
 - [ ] Form Design: test all form types (conference, exhibitor formlarında tasarım testi)
 - [ ] Central file storage (S3/Cloudinary) — banner images currently base64, migrate when scaling
-- [ ] Visitor detail panel: add edit capability (currently read-only)
+- [x] Visitor detail panel: add edit capability ✅ 6 May 2026
 - [ ] Visitor detail panel: add check-in history (all check-in timestamps)
 - [ ] initial.sql sync with production DB (add missing tables/columns)
 
