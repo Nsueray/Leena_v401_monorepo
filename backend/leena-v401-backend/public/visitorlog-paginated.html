@@ -97,7 +97,7 @@
         .qr-btn { padding: 4px 8px; font-size: 11px; background: var(--primary-light); color: var(--primary); border: 1px solid var(--primary); border-radius: var(--radius-md); cursor: pointer; transition: all 0.15s; text-decoration: none; }
         .qr-btn:hover { background: var(--primary); color: white; }
         .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
-        .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s; }
+        .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s forwards; }
         .toast-error { background: #ef4444; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
