@@ -98,6 +98,7 @@
         .qr-btn:hover { background: var(--primary); color: white; }
         .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
         .toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s; }
+        .toast-error { background: #ef4444; }
         @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
         .modal-overlay.show { display: flex; }
@@ -523,10 +524,10 @@
 
         function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
-        function showToast(msg) {
+        function showToast(msg, type = 'success') {
             const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.innerHTML = `<i class="bi bi-check-circle"></i> ${msg}`;
+            toast.className = 'toast' + (type === 'error' ? ' toast-error' : '');
+            toast.innerHTML = `<i class="bi bi-${type === 'error' ? 'exclamation-circle' : 'check-circle'}"></i> ${msg}`;
             document.getElementById('toastContainer').appendChild(toast);
             setTimeout(() => toast.remove(), 3000);
         }
@@ -619,8 +620,8 @@
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
                     body: JSON.stringify(body)
                 });
-                if (res.status === 409) { showToast('Email already exists for another visitor in this expo'); return; }
-                if (!res.ok) { showToast('Update failed'); return; }
+                if (res.status === 409) { showToast('Email already exists for another visitor in this expo', 'error'); return; }
+                if (!res.ok) { showToast('Update failed', 'error'); return; }
                 const data = await res.json();
                 const updated = data.visitor;
                 // Update cache
@@ -632,7 +633,7 @@
                 showToast('Visitor updated');
                 // Refresh table row
                 loadVisitors();
-            } catch (err) { showToast('Update failed'); }
+            } catch (err) { showToast('Update failed', 'error'); }
         }
 
         function closeVisitorPanel() {
