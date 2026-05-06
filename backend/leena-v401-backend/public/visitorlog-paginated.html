@@ -554,6 +554,7 @@
             if (!v) return;
             _currentVisitor = v;
             _isEditing = false;
+            _emailTemplatesLoaded = false;
             document.getElementById('panelEditBtn').style.display = '';
             document.getElementById('panelEditActions').style.display = 'none';
             renderPanelReadOnly(v);
@@ -564,6 +565,7 @@
 
         function renderPanelReadOnly(v) {
             document.getElementById('panelVisitorName').textContent = (v.name || '') + ' ' + (v.last_name || '');
+            const topicRow = (v.visitor_type === 'conference') ? `<div style="grid-column:1/-1;"><strong>Conference Topic:</strong><br>${escapeHtml(v.conference_topic || '-')}</div>` : '';
             document.getElementById('panelVisitorInfo').innerHTML = `
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;">
                     <div><strong>Name:</strong><br>${escapeHtml(v.name || '-')}</div>
@@ -578,8 +580,21 @@
                     <div><strong>Badge ID:</strong><br>${escapeHtml(v.badge_id || '-')}</div>
                     <div><strong>Source:</strong><br>${escapeHtml(v.source || '-')}</div>
                     <div><strong>Registered:</strong><br>${v.created_at ? new Date(v.created_at).toLocaleDateString() : '-'}</div>
+                    ${topicRow}
                 </div>
-                ${v.qr_code ? `<div style="margin-top:12px;"><a href="badge.html?qr=${encodeURIComponent(v.qr_code)}" target="_blank" style="color:#4a6fa5;font-size:13px;"><i class="bi bi-qr-code"></i> View Badge</a></div>` : ''}`;
+                <div style="margin-top:12px;display:flex;gap:12px;align-items:center;">
+                    ${v.qr_code ? `<a href="badge.html?qr=${encodeURIComponent(v.qr_code)}" target="_blank" style="color:#4a6fa5;font-size:13px;"><i class="bi bi-qr-code"></i> View Badge</a>` : ''}
+                    <button onclick="toggleSendEmailForm()" style="background:#4a6fa5;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;"><i class="bi bi-envelope"></i> Send Badge Email</button>
+                </div>
+                <div id="sendEmailForm" style="display:none;margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;">
+                    <label style="font-size:12px;font-weight:600;color:#6b7280;">Select Template</label>
+                    <select id="emailTemplateSelect" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin:6px 0 10px;"></select>
+                    <div style="display:flex;gap:8px;">
+                        <button id="sendEmailBtn" onclick="sendBadgeEmail()" style="background:#10b981;color:white;border:none;padding:6px 14px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;"><i class="bi bi-send"></i> Send</button>
+                        <button onclick="toggleSendEmailForm()" style="background:#e5e7eb;color:#374151;border:none;padding:6px 14px;border-radius:4px;font-size:12px;cursor:pointer;">Cancel</button>
+                    </div>
+                </div>`;
+            document.getElementById('sendEmailForm').style.display = 'none';
         }
 
         function enterEditMode() {
@@ -605,7 +620,9 @@
                     </div>
                     <div><label style="font-weight:600;font-size:12px;color:#6b7280;">Booth Number</label><br><input id="editBoothNumber" value="${escapeHtml(v.booth_number || '')}" style="${iStyle}"></div>
                     <div style="opacity:0.6;"><label style="font-weight:600;font-size:12px;color:#6b7280;">Badge ID (read-only)</label><br><span style="font-size:13px;">${escapeHtml(v.badge_id || '-')}</span></div>
+                    ${v.visitor_type === 'conference' ? `<div style="grid-column:1/-1;"><label style="font-weight:600;font-size:12px;color:#6b7280;">Conference Topic</label><br><input id="editConferenceTopic" list="topicsDatalist" value="${escapeHtml(v.conference_topic || '')}" style="${iStyle}"><datalist id="topicsDatalist"></datalist></div>` : ''}
                 </div>`;
+            if (v.visitor_type === 'conference') loadTopicsDatalist();
         }
 
         function cancelEdit() {
@@ -628,6 +645,8 @@
                 visitor_type: document.getElementById('editVisitorType').value,
                 booth_number: document.getElementById('editBoothNumber').value
             };
+            const topicEl = document.getElementById('editConferenceTopic');
+            if (topicEl) body.conference_topic = topicEl.value;
             try {
                 const res = await fetch(`/api/visitors/${_currentVisitor.id}`, {
                     method: 'PUT',
@@ -648,6 +667,73 @@
                 // Refresh table row
                 loadVisitors();
             } catch (err) { showToast('Update failed', 'error'); }
+        }
+
+        async function loadTopicsDatalist() {
+            try {
+                const res = await fetch(`${API_BASE_URL}/visitors/conference-topics?expo_id=${currentExpoId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const dl = document.getElementById('topicsDatalist');
+                if (!dl) return;
+                dl.innerHTML = '';
+                (data.topics || []).forEach(t => { const o = document.createElement('option'); o.value = t.topic; dl.appendChild(o); });
+            } catch (e) { /* silent */ }
+        }
+
+        let _emailTemplatesLoaded = false;
+        async function toggleSendEmailForm() {
+            const form = document.getElementById('sendEmailForm');
+            if (!form) return;
+            const visible = form.style.display !== 'none';
+            form.style.display = visible ? 'none' : '';
+            if (!visible && !_emailTemplatesLoaded) {
+                try {
+                    const res = await fetch(`/api/email-templates?expo_id=${currentExpoId}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    const data = await res.json();
+                    const sel = document.getElementById('emailTemplateSelect');
+                    sel.innerHTML = '<option value="">-- Select template --</option>';
+                    (data.templates || []).forEach(t => {
+                        sel.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)} — ${escapeHtml(t.subject || '')}</option>`;
+                    });
+                    _emailTemplatesLoaded = true;
+                } catch (e) { showToast('Failed to load templates', 'error'); }
+            }
+        }
+
+        async function sendBadgeEmail() {
+            if (!_currentVisitor) return;
+            const templateId = document.getElementById('emailTemplateSelect').value;
+            if (!templateId) { showToast('Please select a template', 'error'); return; }
+            const btn = document.getElementById('sendEmailBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+            try {
+                const res = await fetch('/api/email-send/single', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({
+                        template_id: parseInt(templateId),
+                        expo_id: parseInt(currentExpoId),
+                        recipient: { email: _currentVisitor.email, name: _currentVisitor.name || '', company: _currentVisitor.company || '' },
+                        save_to_database: false,
+                        generate_qr: false
+                    })
+                });
+                if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Send failed'); }
+                showToast(`Badge email sent to ${_currentVisitor.email}`);
+                document.getElementById('sendEmailForm').style.display = 'none';
+                loadVisitorEmails(_currentVisitor.id);
+            } catch (err) {
+                showToast(err.message || 'Failed to send email', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send"></i> Send';
+            }
         }
 
         function closeVisitorPanel() {

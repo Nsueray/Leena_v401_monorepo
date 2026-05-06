@@ -149,7 +149,7 @@ router.get('/badge/:qr_code', async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, last_name, email, company, job_title, phone, country, visitor_type, booth_number } = req.body;
+    const { name, last_name, email, company, job_title, phone, country, visitor_type, booth_number, conference_topic } = req.body;
 
     // Email duplicate check (if email is being changed)
     if (email && email.trim()) {
@@ -177,13 +177,19 @@ router.put('/:id', authMiddleware, async (req, res) => {
         country = COALESCE(NULLIF($7, ''), country),
         visitor_type = COALESCE(NULLIF($8, ''), visitor_type),
         booth_number = COALESCE(NULLIF($9, ''), booth_number),
+        custom_fields = jsonb_set(
+          COALESCE(custom_fields, '{}'::jsonb),
+          '{conference_topic}',
+          to_jsonb(COALESCE(NULLIF($10, ''), custom_fields->>'conference_topic', ''))
+        ),
         updated_at = NOW()
-      WHERE id = $10 AND organizer_id = $11
+      WHERE id = $11 AND organizer_id = $12
       RETURNING id, name, last_name, email, company, job_title, phone, country,
-                visitor_type, booth_number, qr_code, badge_id, source, created_at`,
+                visitor_type, booth_number, qr_code, badge_id, source, created_at,
+                custom_fields->>'conference_topic' as conference_topic`,
       [name || '', last_name || '', email || '', company || '', job_title || '',
        phone || '', country || '', visitor_type || '', booth_number || '',
-       id, req.organizer_id]
+       conference_topic || '', id, req.organizer_id]
     );
 
     if (result.rows.length === 0) {
