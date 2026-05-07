@@ -85,6 +85,25 @@ Yapılan **her değişiklik** bu CLAUDE.md dosyasına güncellenmelidir.
 psql "postgresql://leena_v401_db_user:xlM5m9TWwT4gXqqiicMA6QjZboJ6njmu@dpg-d2smvl75r7bs73al6scg-a/leena_v401_db"
 ```
 
+### Database Access
+
+**Read-only (Claude Code, local development):**
+- Connection: `process.env.RENDER_DATABASE_READONLY_URL`
+- User: `claude_readonly`
+- Permission: SELECT only — UPDATE/DELETE/INSERT/ALTER/DROP fail
+- Use for: Analysis, hypothesis testing, COUNT/JOIN/EXPLAIN
+- Located in: `backend/leena-v401-backend/.env`
+
+**Read-write (Suer, Render Shell only):**
+- Connection: `$DATABASE_INTERNAL_URL` from inside Render Shell
+- User: `leena_v401_db_user`
+- Permission: Full
+- Use for: Migrations, cleanup, data fixes — executed by Suer manually
+
+**Rule:** Claude Code uses ONLY read-only for analysis. If a task requires UPDATE/DELETE/INSERT/ALTER/TRUNCATE/CREATE/DROP, prepare the SQL and ask Suer to run it via Render Shell.
+
+**IP Whitelist:** External access requires Suer's current IP in Render's PostgreSQL Inbound IP Rules. If connection fails with "SSL connection has been closed unexpectedly", the IP may have changed — Suer needs to update via Render Dashboard → leena_v401_db → PostgreSQL Inbound IP Rules.
+
 ### Deploy Akışı
 ```
 git add . → git commit -m "mesaj" → git push → Render otomatik deploy

@@ -387,7 +387,8 @@ terminals ──── checkins (via terminal_id)
 
 | Variable | Used In | Purpose |
 |----------|---------|---------|
-| `DATABASE_URL` | db.js | PostgreSQL connection string |
+| `DATABASE_URL` | db.js | PostgreSQL connection string (local dev) |
+| `RENDER_DATABASE_READONLY_URL` | .env | Production read-only access for Claude Code (SELECT only, claude_readonly user) |
 | `JWT_SECRET` | auth.js, authMiddleware.js | JWT signing key |
 | `SENDGRID_API_KEY` | email.js, email_worker.js | SendGrid API key |
 | `BASE_BADGE_URL` | emailSend.js, emailSegments.js, visitors.js | Badge URL base (default: https://leena.app) |
