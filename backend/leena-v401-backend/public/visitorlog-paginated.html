@@ -235,6 +235,16 @@
                             </select>
                         </div>
                     </div>
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label>Email Status</label>
+                            <div class="filter-pills" id="emailStatusFilters">
+                                <label class="filter-pill"><input type="radio" name="emailStatus" value="" checked> All</label>
+                                <label class="filter-pill"><input type="radio" name="emailStatus" value="never_sent"> Never Sent</label>
+                                <label class="filter-pill"><input type="radio" name="emailStatus" value="sent"> Sent</label>
+                            </div>
+                        </div>
+                    </div>
                     <div style="display:flex;gap:10px;margin-top:16px;">
                         <button class="btn btn-primary" onclick="applyFilters()"><i class="bi bi-funnel"></i> Apply</button>
                         <button class="btn btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
@@ -444,6 +454,8 @@
             if (types.length) currentFilters.visitor_type = types.join(',');
             const topic = document.getElementById('conferenceTopicFilter').value;
             if (topic) currentFilters.conference_topic = topic;
+            const emailStatus = document.querySelector('#emailStatusFilters input:checked')?.value;
+            if (emailStatus) currentFilters.email_status = emailStatus;
             currentPage = 1;
             updateFilterBadge();
             loadVisitors();
@@ -455,7 +467,8 @@
             document.getElementById('endDate').value = '';
             document.getElementById('conferenceTopicFilter').value = '';
             document.getElementById('sourceSearch').value = '';
-            document.querySelectorAll('.filter-pill input').forEach(c => c.checked = false);
+            document.querySelectorAll('.filter-pill input[type="checkbox"]').forEach(c => c.checked = false);
+            document.querySelector('#emailStatusFilters input[value=""]').checked = true;
             currentFilters = {};
             currentPage = 1;
             updateFilterBadge();
