@@ -11,6 +11,33 @@ const authMiddleware = require('../middleware/authMiddleware');
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const upload = multer({ storage: multer.memoryStorage() });
 
+// Shared filter builder for visitor queries (used by /paginated, /export, /bulk-email)
+function buildVisitorFilter(query, expo_id) {
+  const filters = ['expo_id = $1'];
+  const values = [expo_id];
+  let idx = 2;
+
+  if (query.search) {
+    filters.push(`(LOWER(name) LIKE $${idx} OR LOWER(email) LIKE $${idx} OR LOWER(company) LIKE $${idx})`);
+    values.push(`%${query.search.toLowerCase()}%`);
+    idx++;
+  }
+  if (query.startDate) { filters.push(`created_at >= $${idx}`); values.push(query.startDate); idx++; }
+  if (query.endDate) { filters.push(`created_at <= $${idx}`); values.push(query.endDate + ' 23:59:59'); idx++; }
+  if (query.source) { filters.push(`source ILIKE $${idx}`); values.push(`%${query.source}%`); idx++; }
+  if (query.origin) { filters.push(`origin = ANY($${idx})`); values.push(query.origin.split(',')); idx++; }
+  if (query.visitor_type) { filters.push(`visitor_type = ANY($${idx})`); values.push(query.visitor_type.split(',')); idx++; }
+  if (query.conference_topic) { filters.push(`custom_fields->>'conference_topic' ILIKE $${idx}`); values.push(`%${query.conference_topic}%`); idx++; }
+  if (query.email_status === 'never_sent') {
+    filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`);
+    filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent')`);
+  } else if (query.email_status === 'sent') {
+    filters.push(`(EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent') OR EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent'))`);
+  }
+
+  return { whereClause: `WHERE ${filters.join(' AND ')}`, values, idx };
+}
+
 // ✅ Get paginated visitors
 router.get('/paginated', authMiddleware, async (req, res) => {
   try {
@@ -23,63 +50,7 @@ router.get('/paginated', authMiddleware, async (req, res) => {
       return res.status(400).json({ success: false, message: 'expo_id is required' });
     }
 
-    const filters = ['expo_id = $1'];
-    const values = [expo_id];
-    let idx = 2;
-
-    if (req.query.search) {
-      filters.push(`(LOWER(name) LIKE $${idx} OR LOWER(email) LIKE $${idx} OR LOWER(company) LIKE $${idx})`);
-      values.push(`%${req.query.search.toLowerCase()}%`);
-      idx++;
-    }
-
-    if (req.query.startDate) {
-      filters.push(`created_at >= $${idx}`);
-      values.push(req.query.startDate);
-      idx++;
-    }
-
-    if (req.query.endDate) {
-      filters.push(`created_at <= $${idx}`);
-      values.push(req.query.endDate + ' 23:59:59');
-      idx++;
-    }
-
-    if (req.query.source) {
-      filters.push(`source ILIKE $${idx}`);
-      values.push(`%${req.query.source}%`);
-      idx++;
-    }
-
-    if (req.query.origin) {
-      const originList = req.query.origin.split(',');
-      filters.push(`origin = ANY($${idx})`);
-      values.push(originList);
-      idx++;
-    }
-
-    if (req.query.visitor_type) {
-      const typeList = req.query.visitor_type.split(',');
-      filters.push(`visitor_type = ANY($${idx})`);
-      values.push(typeList);
-      idx++;
-    }
-
-    if (req.query.conference_topic) {
-      // Support " || "-separated multi-topic values: use ILIKE to match substring
-      filters.push(`custom_fields->>'conference_topic' ILIKE $${idx}`);
-      values.push(`%${req.query.conference_topic}%`);
-      idx++;
-    }
-
-    if (req.query.email_status === 'never_sent') {
-      filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`);
-      filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent')`);
-    } else if (req.query.email_status === 'sent') {
-      filters.push(`(EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent') OR EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent'))`);
-    }
-
-    const whereClause = `WHERE ${filters.join(' AND ')}`;
+    const { whereClause, values, idx } = buildVisitorFilter(req.query, expo_id);
 
     const totalResult = await pool.query(`SELECT COUNT(*) FROM visitors ${whereClause}`, values);
     const total = parseInt(totalResult.rows[0].count);
@@ -984,29 +955,8 @@ router.get('/export', authMiddleware, async (req, res) => {
     const expo_id = parseInt(req.query.expo_id);
     if (!expo_id) return res.status(400).json({ success: false, message: 'expo_id is required' });
 
-    const filters = ['expo_id = $1'];
-    const values = [expo_id];
-    let idx = 2;
+    const { whereClause, values } = buildVisitorFilter(req.query, expo_id);
 
-    if (req.query.search) {
-      filters.push(`(LOWER(name) LIKE $${idx} OR LOWER(email) LIKE $${idx} OR LOWER(company) LIKE $${idx})`);
-      values.push(`%${req.query.search.toLowerCase()}%`);
-      idx++;
-    }
-    if (req.query.startDate) { filters.push(`created_at >= $${idx}`); values.push(req.query.startDate); idx++; }
-    if (req.query.endDate) { filters.push(`created_at <= $${idx}`); values.push(req.query.endDate + ' 23:59:59'); idx++; }
-    if (req.query.source) { filters.push(`source ILIKE $${idx}`); values.push(`%${req.query.source}%`); idx++; }
-    if (req.query.origin) { filters.push(`origin = ANY($${idx})`); values.push(req.query.origin.split(',')); idx++; }
-    if (req.query.visitor_type) { filters.push(`visitor_type = ANY($${idx})`); values.push(req.query.visitor_type.split(',')); idx++; }
-    if (req.query.conference_topic) { filters.push(`custom_fields->>'conference_topic' ILIKE $${idx}`); values.push(`%${req.query.conference_topic}%`); idx++; }
-    if (req.query.email_status === 'never_sent') {
-      filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`);
-      filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent')`);
-    } else if (req.query.email_status === 'sent') {
-      filters.push(`(EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent') OR EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent'))`);
-    }
-
-    const whereClause = `WHERE ${filters.join(' AND ')}`;
     const result = await pool.query(
       `SELECT name, last_name, email, company, country, phone, job_title, visitor_type,
               source, origin, booth_number, custom_fields->>'conference_topic' as conference_topic,
