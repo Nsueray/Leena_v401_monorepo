@@ -547,20 +547,40 @@
         }
         // === VISITOR DETAIL PANEL ===
         let _currentVisitor = null;
+        let _currentVisitorIdx = -1;
         let _isEditing = false;
 
         function openVisitorPanel(idx) {
             const v = window._visitorCache[idx];
             if (!v) return;
             _currentVisitor = v;
+            _currentVisitorIdx = idx;
             _isEditing = false;
             _emailTemplatesLoaded = false;
             document.getElementById('panelEditBtn').style.display = '';
             document.getElementById('panelEditActions').style.display = 'none';
+            updateNavButtons();
             renderPanelReadOnly(v);
             loadVisitorEmails(v.id);
             document.getElementById('visitorPanelOverlay').style.display = '';
             document.getElementById('visitorDetailPanel').style.right = '0';
+        }
+
+        function updateNavButtons() {
+            const prevBtn = document.getElementById('panelPrevBtn');
+            const nextBtn = document.getElementById('panelNextBtn');
+            if (prevBtn) prevBtn.disabled = _currentVisitorIdx <= 0;
+            if (nextBtn) nextBtn.disabled = _currentVisitorIdx >= (window._visitorCache || []).length - 1;
+        }
+
+        function navPrev() {
+            if (_isEditing && !confirm('You have unsaved changes. Discard and continue?')) return;
+            if (_currentVisitorIdx > 0) openVisitorPanel(_currentVisitorIdx - 1);
+        }
+
+        function navNext() {
+            if (_isEditing && !confirm('You have unsaved changes. Discard and continue?')) return;
+            if (_currentVisitorIdx < (window._visitorCache || []).length - 1) openVisitorPanel(_currentVisitorIdx + 1);
         }
 
         function renderPanelReadOnly(v) {
@@ -740,7 +760,15 @@
             document.getElementById('visitorDetailPanel').style.right = '-480px';
             document.getElementById('visitorPanelOverlay').style.display = 'none';
             _isEditing = false;
+            _currentVisitorIdx = -1;
         }
+
+        document.addEventListener('keydown', (e) => {
+            if (_currentVisitorIdx === -1) return; // panel closed
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+            if (e.key === 'ArrowLeft') { e.preventDefault(); navPrev(); }
+            if (e.key === 'ArrowRight') { e.preventDefault(); navNext(); }
+        });
         async function loadVisitorEmails(visitorId) {
             const container = document.getElementById('panelEmailHistory');
             container.innerHTML = '<p style="color:#9ca3af;font-size:13px;">Loading...</p>';
@@ -777,7 +805,9 @@
     <div id="visitorDetailPanel" style="position:fixed;top:0;right:-480px;width:480px;height:100vh;background:white;box-shadow:-4px 0 20px rgba(0,0,0,0.15);z-index:1000;transition:right 0.3s ease;display:flex;flex-direction:column;overflow:hidden;">
         <div style="padding:16px 20px;background:#1e293b;color:white;display:flex;justify-content:space-between;align-items:center;">
             <h3 style="margin:0;font-size:16px;" id="panelVisitorName">Visitor Details</h3>
-            <div style="display:flex;gap:8px;align-items:center;">
+            <div style="display:flex;gap:6px;align-items:center;">
+                <button id="panelPrevBtn" onclick="navPrev()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:14px;cursor:pointer;padding:4px 8px;border-radius:4px;" title="Previous visitor"><i class="bi bi-chevron-left"></i></button>
+                <button id="panelNextBtn" onclick="navNext()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:14px;cursor:pointer;padding:4px 8px;border-radius:4px;" title="Next visitor"><i class="bi bi-chevron-right"></i></button>
                 <button id="panelEditBtn" onclick="enterEditMode()" style="background:rgba(255,255,255,0.15);border:none;color:white;font-size:14px;cursor:pointer;padding:4px 10px;border-radius:4px;" title="Edit visitor"><i class="bi bi-pencil"></i> Edit</button>
                 <button onclick="closeVisitorPanel()" style="background:none;border:none;color:white;font-size:20px;cursor:pointer;">✕</button>
             </div>
