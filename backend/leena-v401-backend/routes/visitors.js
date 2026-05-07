@@ -402,9 +402,9 @@ router.post('/public', async (req, res) => {
 
           // NEW CODE: email_queue Mode 1 (pre-processed HTML, preserves Resent logic + custom_fields)
           await pool.query(`
-            INSERT INTO email_queue (recipient_email, subject, html_content, status, created_at)
-            VALUES ($1, $2, $3, 'pending', NOW())
-          `, [visitorData.email, emailSubject, emailHtml]);
+            INSERT INTO email_queue (recipient_email, subject, html_content, visitor_id, expo_id, organizer_id, template_id, status, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+          `, [visitorData.email, emailSubject, emailHtml, visitor.id, expo_id, organizerId, emailTemplateId]);
 
           emailSent = true;
 
@@ -772,9 +772,9 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
               // NEW CODE: email_queue Mode 1 (pre-processed HTML)
               await pool.query(`
-                INSERT INTO email_queue (recipient_email, subject, html_content, status, created_at)
-                VALUES ($1, $2, $3, 'pending', NOW())
-              `, [email, emailSubject, emailHtml]);
+                INSERT INTO email_queue (recipient_email, subject, html_content, visitor_id, expo_id, organizer_id, template_id, status, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+              `, [email, emailSubject, emailHtml, existing.id, expo_id, organizerId, existing_template_id]);
 
               results.email_sent_count++;
               console.log(`📧 Email queued for existing visitor: ${email}`);
@@ -887,9 +887,9 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
             // NEW CODE: email_queue Mode 1 (pre-processed HTML)
             await pool.query(`
-              INSERT INTO email_queue (recipient_email, subject, html_content, status, created_at)
-              VALUES ($1, $2, $3, 'pending', NOW())
-            `, [email, emailSubject, emailHtml]);
+              INSERT INTO email_queue (recipient_email, subject, html_content, visitor_id, expo_id, organizer_id, template_id, status, created_at)
+              VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', NOW())
+            `, [email, emailSubject, emailHtml, visitor.id, expo_id, organizerId, template_id]);
 
             results.email_sent_count++;
             console.log(`📧 Email queued for: ${email}`);
