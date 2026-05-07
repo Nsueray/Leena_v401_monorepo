@@ -254,7 +254,10 @@
                 <div class="table-container">
                     <div class="table-header">
                         <div class="table-title"><i class="bi bi-list"></i> Visitor Records</div>
-                        <div id="resultsInfo" style="color:var(--text-muted);font-size:13px;">Showing 0 of 0</div>
+                        <div style="display:flex;gap:12px;align-items:center;">
+                            <button id="bulkSendBtn" onclick="openBulkSendModal()" style="display:none;padding:6px 14px;background:#4a6fa5;color:white;border:none;border-radius:var(--radius-md);font-size:12px;font-weight:600;cursor:pointer;"><i class="bi bi-envelope"></i> Send Email to <span id="bulkSendCount">0</span> visitors</button>
+                            <div id="resultsInfo" style="color:var(--text-muted);font-size:13px;">Showing 0 of 0</div>
+                        </div>
                     </div>
                     <div id="tableContent" style="overflow-x:auto;">
                         <table>
@@ -310,6 +313,24 @@
         </div>
     </div>
     
+    <!-- Bulk Send Modal -->
+    <div class="modal-overlay" id="bulkSendModal">
+        <div class="modal-box" style="max-width:480px;text-align:left;">
+            <h3 style="margin-bottom:16px;"><i class="bi bi-envelope"></i> Send Email to <span id="bulkModalCount">0</span> visitors</h3>
+            <div style="margin-bottom:14px;">
+                <label style="font-size:13px;font-weight:600;color:#374151;">Email Template</label>
+                <select id="bulkTemplateSelect" style="width:100%;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;margin-top:6px;"></select>
+            </div>
+            <div style="padding:10px 14px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:12px;color:#92400e;margin-bottom:16px;">
+                <i class="bi bi-info-circle"></i> Emails will be queued and sent in the background by the email worker. Delivery may take a few minutes.
+            </div>
+            <div class="modal-actions" style="justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeBulkSendModal()">Cancel</button>
+                <button id="bulkSendConfirmBtn" class="btn btn-primary" onclick="confirmBulkSend()"><i class="bi bi-send"></i> Send Now</button>
+            </div>
+        </div>
+    </div>
+
     <div class="app-toast-container" id="toastContainer"></div>
 
     <script>
@@ -358,6 +379,7 @@
                 renderTable(data.visitors || []);
                 updateResultsInfo();
                 renderPagination();
+                updateBulkSendButton();
             } catch (e) { console.error(e); alert('Failed to load visitors'); }
             finally { showLoading(false); }
         }
@@ -537,6 +559,70 @@
                     datalist.appendChild(opt);
                 });
             } catch (e) { /* silent — datalist stays empty, user can still type */ }
+        }
+
+        // === BULK SEND ===
+        function updateBulkSendButton() {
+            const btn = document.getElementById('bulkSendBtn');
+            if (totalRecords > 0) {
+                btn.style.display = '';
+                document.getElementById('bulkSendCount').textContent = totalRecords;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
+        async function openBulkSendModal() {
+            document.getElementById('bulkModalCount').textContent = totalRecords;
+            const modal = document.getElementById('bulkSendModal');
+            modal.classList.add('show');
+            // Load templates
+            try {
+                const res = await fetch(`/api/email-templates?expo_id=${currentExpoId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await res.json();
+                const sel = document.getElementById('bulkTemplateSelect');
+                sel.innerHTML = '<option value="">-- Select template --</option>';
+                (data.templates || []).forEach(t => {
+                    sel.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)} — ${escapeHtml(t.subject || '')}</option>`;
+                });
+            } catch (e) { showToast('Failed to load templates', 'error'); }
+        }
+
+        function closeBulkSendModal() {
+            document.getElementById('bulkSendModal').classList.remove('show');
+        }
+
+        async function confirmBulkSend() {
+            const templateId = document.getElementById('bulkTemplateSelect').value;
+            if (!templateId) { showToast('Please select a template', 'error'); return; }
+            if (!confirm(`This will queue ${totalRecords} emails. Continue?`)) return;
+
+            const btn = document.getElementById('bulkSendConfirmBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+
+            try {
+                const res = await fetch(`${API_BASE_URL}/visitors/bulk-email`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: JSON.stringify({
+                        expo_id: parseInt(currentExpoId),
+                        template_id: parseInt(templateId),
+                        filters: { ...currentFilters }
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Failed to queue emails');
+                showToast(`${data.queued_count} emails queued for delivery`);
+                closeBulkSendModal();
+            } catch (err) {
+                showToast(err.message || 'Failed to queue emails', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send"></i> Send Now';
+            }
         }
 
         function updateFilterBadge() {

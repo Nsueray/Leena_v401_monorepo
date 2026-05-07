@@ -999,6 +999,78 @@ router.get('/export', authMiddleware, async (req, res) => {
   }
 });
 
+// ✅ BULK EMAIL SEND (queue emails for filtered visitors)
+router.post('/bulk-email', authMiddleware, async (req, res) => {
+  try {
+    const { expo_id, template_id, filters: filterParams } = req.body;
+    const organizerId = req.organizer_id;
+
+    if (!expo_id || !template_id) {
+      return res.status(400).json({ success: false, message: 'expo_id and template_id are required' });
+    }
+
+    // Validate template belongs to organizer and matches expo (or is global)
+    const tplRes = await pool.query(
+      'SELECT id FROM email_templates WHERE id = $1 AND organizer_id = $2 AND (expo_id = $3 OR expo_id IS NULL)',
+      [template_id, organizerId, expo_id]
+    );
+    if (tplRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Template not found or does not belong to this expo' });
+
+    // Validate expo belongs to organizer
+    const expoRes = await pool.query('SELECT id FROM expos WHERE id = $1 AND organizer_id = $2', [expo_id, organizerId]);
+    if (expoRes.rows.length === 0) return res.status(404).json({ success: false, message: 'Expo not found' });
+
+    // Build filter using same helper as /paginated
+    const query = { ...(filterParams || {}), expo_id };
+    const { whereClause, values } = buildVisitorFilter(query, parseInt(expo_id));
+
+    // Get matching visitor IDs
+    const countRes = await pool.query(`SELECT COUNT(*)::int as cnt FROM visitors ${whereClause} AND email IS NOT NULL AND email != ''`, values);
+    const totalCount = countRes.rows[0].cnt;
+
+    if (totalCount === 0) return res.status(400).json({ success: false, message: 'No visitors match the current filters' });
+    if (totalCount > 10000) return res.status(400).json({ success: false, message: `Too many visitors (${totalCount}). Please narrow your filters to under 10,000.` });
+
+    const visitorRes = await pool.query(`SELECT id FROM visitors ${whereClause} AND email IS NOT NULL AND email != ''`, values);
+    const visitorIds = visitorRes.rows.map(r => r.id);
+
+    // Batch INSERT into email_queue (Mode 2: visitor_id + template_id) — transaction wrapped
+    const client = await pool.connect();
+    let queued = 0;
+    try {
+      await client.query('BEGIN');
+      const CHUNK = 1000;
+      for (let i = 0; i < visitorIds.length; i += CHUNK) {
+        const chunk = visitorIds.slice(i, i + CHUNK);
+        const valueClauses = [];
+        const params = [];
+        chunk.forEach((vid, j) => {
+          const base = j * 4;
+          valueClauses.push(`($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, 'pending', NOW())`);
+          params.push(vid, template_id, expo_id, organizerId);
+        });
+        await client.query(
+          `INSERT INTO email_queue (visitor_id, template_id, expo_id, organizer_id, status, created_at) VALUES ${valueClauses.join(',')}`,
+          params
+        );
+        queued += chunk.length;
+      }
+      await client.query('COMMIT');
+    } catch (insertErr) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw insertErr;
+    } finally {
+      client.release();
+    }
+
+    console.log(`📧 [BULK EMAIL] Queued ${queued} emails for expo ${expo_id}, template ${template_id}`);
+    res.json({ success: true, queued_count: queued, message: `${queued} emails queued for delivery` });
+  } catch (err) {
+    console.error('❌ Bulk email error:', err);
+    res.status(500).json({ success: false, message: 'Failed to queue emails' });
+  }
+});
+
 // ✅ GET CONFERENCE TOPICS WITH COUNTS
 router.get('/conference-topics', authMiddleware, async (req, res) => {
   try {
