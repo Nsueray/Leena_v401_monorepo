@@ -280,16 +280,6 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
             VALUES ($1, $2, $3, $4, 'pending', NOW())
           `, [visitor.id, emailTplId, expo_id, organizer_id]);
 
-          // email_logs with 'queued' status
-          try {
-            await pool.query(`
-              INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            `, [organizer_id, expo_id, visitor.id, emailTplId, email, 'queued', `Subject: ${subject || 'Your Badge'} | To: ${email}`]);
-          } catch (logErr) {
-            console.error('email_logs INSERT failed:', logErr.message);
-          }
-
           console.log('');
           console.log('📧 [WEBHOOK] Email queued successfully');
           console.log(`   📬 To: ${email}`);

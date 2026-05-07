@@ -407,16 +407,6 @@ router.post('/public', async (req, res) => {
           `, [visitorData.email, emailSubject, emailHtml, visitor.id, expo_id, organizerId, emailTemplateId]);
 
           emailSent = true;
-
-          // Log to email_logs for history tracking
-          try {
-            await pool.query(`
-              INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-            `, [organizerId, expo_id, visitor.id, emailTemplateId, visitorData.email, 'queued', `Subject: ${emailSubject} | To: ${visitorData.email}`]);
-          } catch (logErr) {
-            console.error('email_logs INSERT failed:', logErr.message);
-          }
         }
       } catch (emailErr) {
         console.error('⚠️ [PUBLIC FORM] Email queue failed but visitor saved:', emailErr.message);
@@ -778,16 +768,6 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
               results.email_sent_count++;
               console.log(`📧 Email queued for existing visitor: ${email}`);
-
-              // Log to email_logs for history tracking
-              try {
-                await pool.query(`
-                  INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
-                  VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-                `, [organizerId, expo_id, existing.id, existing_template_id, email, 'queued', `Subject: ${emailSubject} | To: ${email}`]);
-              } catch (logErr) {
-                console.error('email_logs INSERT failed:', logErr.message);
-              }
             } catch (emailErr) {
               console.error(`❌ Email queue failed for existing ${email}:`, emailErr.message);
             }
@@ -893,16 +873,6 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
 
             results.email_sent_count++;
             console.log(`📧 Email queued for: ${email}`);
-
-            // Log to email_logs for history tracking
-            try {
-              await pool.query(`
-                INSERT INTO email_logs (organizer_id, expo_id, visitor_id, template_id, email, status, message, sent_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-              `, [organizerId, expo_id, visitor.id, template_id, email, 'queued', `Subject: ${emailSubject} | To: ${email}`]);
-            } catch (logErr) {
-              console.error('email_logs INSERT failed:', logErr.message);
-            }
           } catch (emailErr) {
             console.error(`❌ Email queue failed for ${email}:`, emailErr.message);
             // Don't fail the import, just log the queue error
