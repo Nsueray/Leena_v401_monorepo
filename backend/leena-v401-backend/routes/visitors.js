@@ -74,8 +74,9 @@ router.get('/paginated', authMiddleware, async (req, res) => {
 
     if (req.query.email_status === 'never_sent') {
       filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`);
+      filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent')`);
     } else if (req.query.email_status === 'sent') {
-      filters.push(`EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`);
+      filters.push(`(EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent') OR EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent'))`);
     }
 
     const whereClause = `WHERE ${filters.join(' AND ')}`;
@@ -998,8 +999,12 @@ router.get('/export', authMiddleware, async (req, res) => {
     if (req.query.origin) { filters.push(`origin = ANY($${idx})`); values.push(req.query.origin.split(',')); idx++; }
     if (req.query.visitor_type) { filters.push(`visitor_type = ANY($${idx})`); values.push(req.query.visitor_type.split(',')); idx++; }
     if (req.query.conference_topic) { filters.push(`custom_fields->>'conference_topic' ILIKE $${idx}`); values.push(`%${req.query.conference_topic}%`); idx++; }
-    if (req.query.email_status === 'never_sent') { filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`); }
-    else if (req.query.email_status === 'sent') { filters.push(`EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`); }
+    if (req.query.email_status === 'never_sent') {
+      filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent')`);
+      filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent')`);
+    } else if (req.query.email_status === 'sent') {
+      filters.push(`(EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent') OR EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent'))`);
+    }
 
     const whereClause = `WHERE ${filters.join(' AND ')}`;
     const result = await pool.query(
