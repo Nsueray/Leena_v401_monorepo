@@ -495,6 +495,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="/leena-toast.js"></script>
     <script>
         const token = localStorage.getItem('token');
         const API_URL = '';
@@ -690,7 +691,7 @@
 
         async function saveTemplate() {
             const name = document.getElementById('name').value.trim();
-            if (!name) { alert('Please enter a template name'); return; }
+            if (!name) { showToast('Please enter a template name', 'error'); return; }
 
             const style_config = {};
             ALL_FIELDS.forEach(f => {
@@ -738,7 +739,7 @@
                 if (!res.ok) throw new Error((await res.json()).error || 'Failed');
                 closeModal();
                 loadTemplates();
-            } catch (e) { alert('Failed to save: ' + e.message); }
+            } catch (e) { showToast('Failed to save: ' + e.message, 'error'); }
         }
 
         async function deleteTemplate(id) {
@@ -747,7 +748,7 @@
                 const res = await fetch(`${API_URL}/api/badge-templates/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
                 if (!res.ok) throw new Error((await res.json()).error || 'Failed');
                 loadTemplates();
-            } catch (e) { alert('Failed: ' + e.message); }
+            } catch (e) { showToast('Failed: ' + e.message, 'error'); }
         }
 
         function previewTemplate(id) { window.open(`/badge.html?qr=SAMPLE&template_id=${id}&preview=1`, '_blank', 'width=500,height=350'); }
@@ -803,10 +804,10 @@
 
             if (src === 'excel') {
                 const file = document.getElementById('bulkExcelFile').files[0];
-                if (!file) { alert('Please select an Excel file'); return; }
+                if (!file) { showToast('Please select an Excel file', 'error'); return; }
 
                 const expoId = localStorage.getItem('selectedExpoId');
-                if (!expoId) { alert('No expo selected. Go to dashboard first.'); return; }
+                if (!expoId) { showToast('No expo selected. Go to dashboard first.', 'error'); return; }
 
                 // Get visitor_type from template
                 const selTemplateId = document.getElementById('bulkTemplateSelect').value;
@@ -834,11 +835,11 @@
 
                     if (importData.failed_count > 0) {
                         const errMsgs = (importData.errors || []).slice(0, 5).map(e => 'Row ' + e.row + ': ' + e.message).join('\n');
-                        alert('Import partial: ' + importData.success_count + ' OK, ' + importData.failed_count + ' failed.\n' + errMsgs);
+                        showToast('Import partial: ' + importData.success_count + ' OK, ' + importData.failed_count + ' failed.', 'warning');
                     }
 
                     if (!importData.imported || importData.imported.length === 0) {
-                        alert('No visitors imported. Check for duplicates.');
+                        showToast('No visitors imported. Check for duplicates.', 'warning');
                         document.getElementById('bulkLoadBtn').disabled = false;
                         document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
                         return;
@@ -872,7 +873,7 @@
                     }
 
                 } catch(e) {
-                    alert('Import failed: ' + e.message);
+                    showToast('Import failed: ' + e.message, 'error');
                     document.getElementById('bulkLoadBtn').disabled = false;
                     document.getElementById('bulkLoadBtn').innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
                     return;
@@ -883,7 +884,7 @@
             } else {
                 // From database
                 const expoId = document.getElementById('bulkExpoSelect').value;
-                if (!expoId) { alert('Please select an expo'); return; }
+                if (!expoId) { showToast('Please select an expo', 'error'); return; }
 
                 const filter = document.getElementById('bulkDbFilter').value;
                 let url = `${API_URL}/api/visitors/paginated?expo_id=${expoId}&limit=9999`;
@@ -908,10 +909,10 @@
                         badge_id: v.badge_id || '',
                         qr_code: v.qr_code || ''
                     }));
-                } catch(e) { alert('Failed to load visitors: ' + e.message); return; }
+                } catch(e) { showToast('Failed to load visitors: ' + e.message, 'error'); return; }
             }
 
-            if (bulkData.length === 0) { alert('No data found'); return; }
+            if (bulkData.length === 0) { showToast('No data found', 'warning'); return; }
 
             // Show preview
             document.getElementById('bulkCount').textContent = bulkData.length;
@@ -931,10 +932,10 @@
 
         function executeBulkPrint() {
             const templateId = document.getElementById('bulkTemplateSelect').value;
-            if (!templateId) { alert('Please select a badge template'); return; }
-            
+            if (!templateId) { showToast('Please select a badge template', 'error'); return; }
+
             const template = templates.find(t => t.id == templateId);
-            if (!template) { alert('Template not found'); return; }
+            if (!template) { showToast('Template not found', 'error'); return; }
 
             // Open print window
             const printWin = window.open('', '_blank');

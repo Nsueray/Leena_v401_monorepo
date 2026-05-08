@@ -343,6 +343,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const API_URL = '/api';
         const token = localStorage.getItem('token');
@@ -388,7 +389,7 @@
                 renderAll(totalRegistrations);
             } catch(e) {
                 console.error('Load error:', e);
-                alert('Failed to load data: ' + e.message);
+                showToast('Failed to load data: ' + e.message, 'error');
             }
             showLoading(false);
         }
@@ -718,7 +719,7 @@
 
         // ============ CSV Export ============
         function exportCSV() {
-            if (allCheckins.length === 0) { alert('No data to export'); return; }
+            if (allCheckins.length === 0) { showToast('No data to export', 'warning'); return; }
             const headers = ['Checkin ID','Visitor ID','Name','Email','Company','Country','Visitor Type','Job Title','Source','Terminal','Hall','Check-in Time'];
             const rows = allCheckins.map(c => [
                 c.id, c.visitor_id,

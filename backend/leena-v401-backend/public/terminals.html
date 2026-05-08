@@ -78,10 +78,6 @@
         .alert { padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 16px; display: none; }
         .alert-success { background: var(--success-bg); color: #065f46; }
         .alert-danger { background: #fee2e2; color: #991b1b; }
-        .app-toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; }
-        .app-toast { background: var(--success); color: white; padding: 12px 20px; border-radius: var(--radius-md); margin-top: 8px; display: flex; align-items: center; gap: 8px; animation: slideIn 0.3s forwards; }
-        .app-toast.error { background: var(--danger); }
-        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
         .action-buttons { display: flex; gap: 6px; }
         .template-select { min-width: 140px; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } }
@@ -205,8 +201,7 @@
             </main>
         </div>
     </div>
-    <div class="app-toast-container" id="toastContainer"></div>
-
+    <script src="/leena-toast.js"></script>
     <script>
         const API_BASE_URL = '/api';
         let terminals = [], allTerminals = [], badgeTemplates = [], expoId = null, token = null;
@@ -448,13 +443,6 @@
             setTimeout(() => el.style.display = 'none', 3000);
         }
 
-        function showToast(msg, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `app-toast ${type === 'error' ? 'error' : ''}`;
-            toast.innerHTML = `<i class="bi bi-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i> ${msg}`;
-            document.getElementById('toastContainer').appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
 
         function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t || ''; return d.innerHTML; }
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);

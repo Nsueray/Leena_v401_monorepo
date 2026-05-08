@@ -194,6 +194,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+  <script src="/leena-toast.js"></script>
   <script>
     // ✅ FIX 1: Use relative path that works both locally and in production
     const API_URL = '/api';
@@ -347,7 +348,7 @@
     }
 
     function downloadBadge() {
-      alert('Save feature coming soon! Please use Print > Save as PDF for now.');
+      showToast('Save feature coming soon! Please use Print > Save as PDF for now.', 'info');
     }
 
     document.addEventListener('DOMContentLoaded', () => {

@@ -155,6 +155,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const API = '/api';
         const token = localStorage.getItem('token');
@@ -188,7 +189,7 @@
             const templateId = document.getElementById('templateSelect').value;
             const segment = document.getElementById('segmentSelect').value;
             
-            if (!templateId) { alert('Please select an email template'); return; }
+            if (!templateId) { showToast('Please select an email template', 'warning'); return; }
             
             const btn = document.getElementById('sendBtn');
             const resultBox = document.getElementById('resultBox');

@@ -225,6 +225,7 @@
         </form>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         // Use relative path that works both locally and in production
         const API_URL = '/api';
@@ -300,7 +301,7 @@
                         }, 2000);
                     } else {
                         console.error('Expo ID not found in response:', result);
-                        alert('Expo created but ID not received. Redirecting to dashboard...');
+                        showToast('Expo created but ID not received. Redirecting to dashboard...', 'warning');
                         setTimeout(() => {
                             window.location.href = 'dashboard.html';
                         }, 2000);
@@ -310,7 +311,7 @@
                 }
             } catch (error) {
                 console.error('Error creating expo:', error);
-                alert('Failed to create expo: ' + error.message);
+                showToast('Failed to create expo: ' + error.message, 'error');
                 document.getElementById('submitBtn').disabled = false;
             } finally {
                 document.getElementById('loadingSpinner').style.display = 'none';

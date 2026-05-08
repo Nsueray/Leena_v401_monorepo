@@ -956,6 +956,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const API_BASE_URL = '/api';
         let currentExpoId = null;
@@ -1330,23 +1331,23 @@
         function editForm(formId) { window.location.href = `form-builder.html?id=${formId}`; }
 
         function copyFormUrl(url) {
-            navigator.clipboard.writeText(url).then(() => alert('Form URL copied!')).catch(() => alert('Failed'));
+            navigator.clipboard.writeText(url).then(() => showToast('Form URL copied!')).catch(() => showToast('Failed to copy', 'error'));
         }
 
         function copyZohoWebhookUrl(formId) {
             const organizerId = localStorage.getItem('organizerId');
             const expoId = localStorage.getItem('selectedExpoId');
             const url = `/api/webhook/zoho/${organizerId}/${expoId}/${formId}`;
-            navigator.clipboard.writeText(url).then(() => alert('Zoho webhook URL copied!')).catch(() => alert('Failed'));
+            navigator.clipboard.writeText(url).then(() => showToast('Zoho webhook URL copied!')).catch(() => showToast('Failed to copy', 'error'));
         }
 
         async function deleteForm(formId) {
             if (!confirm('Delete this form?')) return;
             try {
                 const response = await fetch(`${API_BASE_URL}/forms/${formId}`, { method: 'DELETE', headers: getAuthHeaders() });
-                if (response.ok) { alert('Deleted'); loadForms(); }
-                else { const e = await response.json(); alert(e.message || 'Failed'); }
-            } catch (e) { alert('Failed'); }
+                if (response.ok) { showToast('Form deleted'); loadForms(); }
+                else { const e = await response.json(); showToast(e.message || 'Failed to delete form', 'error'); }
+            } catch (e) { showToast('Failed to delete form', 'error'); }
         }
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>

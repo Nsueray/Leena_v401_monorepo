@@ -175,6 +175,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const API_URL = '/api';
         const expoId = localStorage.getItem('selectedExpoId');
@@ -271,7 +272,7 @@
                 a.download = `conference_${topic.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`;
                 a.click();
                 URL.revokeObjectURL(url);
-            } catch (e) { alert('Export failed'); }
+            } catch (e) { showToast('Export failed', 'error'); }
             finally { document.getElementById('loadingOverlay').classList.remove('active'); }
         }
 

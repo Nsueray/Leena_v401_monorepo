@@ -190,6 +190,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const token = localStorage.getItem('token');
         const expoId = localStorage.getItem('selectedExpoId');
@@ -847,7 +848,7 @@
 
         async function exportReport() {
             if (!reportData) {
-                alert('Please wait for report to load');
+                showToast('Please wait for report to load', 'warning');
                 return;
             }
             
@@ -869,7 +870,7 @@
                 window.URL.revokeObjectURL(url);
             } catch (e) {
                 console.error('Export error:', e);
-                alert('Failed to export report');
+                showToast('Failed to export report', 'error');
             }
         }
 

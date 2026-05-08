@@ -305,6 +305,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const API_URL = '/api';
         let selectedFile = null;
@@ -665,7 +666,7 @@
 
         async function resendPending(targetExpoId) {
             const sel = document.getElementById('resendTemplate_' + targetExpoId);
-            if (!sel || !sel.value) { alert('Please select an email template first'); return; }
+            if (!sel || !sel.value) { showToast('Please select an email template first', 'warning'); return; }
             
             const countEl = sel.closest('.card').querySelector('.stat-card.pending .stat-value');
             const count = countEl ? countEl.textContent : '?';
@@ -679,9 +680,9 @@
                 });
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Failed');
-                alert('Success! ' + data.sent + ' emails queued for sending.');
+                showToast('Success! ' + data.sent + ' emails queued for sending.');
                 loadCampaigns();
-            } catch(e) { alert('Resend failed: ' + e.message); }
+            } catch(e) { showToast('Resend failed: ' + e.message, 'error'); }
         }
     function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>

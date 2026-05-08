@@ -492,6 +492,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const API_URL = '/api';
         let formFields = [];
@@ -652,7 +653,7 @@
                 updatePreview();
             } catch (error) {
                 console.error('Error loading form:', error);
-                alert('Failed to load form. Redirecting to forms list.');
+                showToast('Failed to load form. Redirecting to forms list.', 'error');
                 goBackToForms();
             }
         }
@@ -677,12 +678,12 @@
             }
             
             if (!formName) {
-                alert('Please enter a form name');
+                showToast('Please enter a form name', 'error');
                 document.getElementById('formName').focus();
                 return;
             }
             if (formFields.length === 0) {
-                alert('Please add at least one field to the form');
+                showToast('Please add at least one field to the form', 'error');
                 return;
             }
             
@@ -769,17 +770,17 @@
             const required = document.getElementById('fieldRequired').checked;
             
             if (!label || !name) {
-                alert('Field label and name are required');
+                showToast('Field label and name are required', 'error');
                 return;
             }
             if (!/^[a-z_]+$/.test(name)) {
-                alert('Field name must contain only lowercase letters and underscores');
+                showToast('Field name must contain only lowercase letters and underscores', 'error');
                 return;
             }
             
             const isDuplicate = formFields.some((field, index) => field.name === name && index !== editingFieldIndex);
             if (isDuplicate) {
-                alert('A field with this name already exists');
+                showToast('A field with this name already exists', 'error');
                 return;
             }
             
@@ -787,7 +788,7 @@
             if (type === 'select' || type === 'radio') {
                 options = document.getElementById('fieldOptions').value.split('\n').map(opt => opt.trim()).filter(opt => opt);
                 if (options.length === 0) {
-                    alert('Please provide at least one option');
+                    showToast('Please provide at least one option', 'error');
                     return;
                 }
             }
@@ -1032,7 +1033,7 @@
         async function uploadBanner(inputEl, target) {
             const file = inputEl.files[0];
             if (!file) return;
-            if (file.size > 500 * 1024) { alert('File too large. Max 500KB.'); inputEl.value = ''; return; }
+            if (file.size > 500 * 1024) { showToast('File too large. Max 500KB.', 'error'); inputEl.value = ''; return; }
             const fd = new FormData();
             fd.append('banner', file);
             try {
@@ -1043,8 +1044,8 @@
                     if (target === 'header') { currentHeaderBannerImage = result.dataUri; document.getElementById('removeHeaderBanner').disabled = false; }
                     else { currentFooterBannerImage = result.dataUri; document.getElementById('removeFooterBanner').disabled = false; }
                     updateDesignPreview();
-                } else { alert(result.message || 'Upload failed'); }
-            } catch (err) { console.error('Banner upload error:', err); alert('Upload failed.'); }
+                } else { showToast(result.message || 'Upload failed', 'error'); }
+            } catch (err) { console.error('Banner upload error:', err); showToast('Upload failed.', 'error'); }
             inputEl.value = '';
         }
 

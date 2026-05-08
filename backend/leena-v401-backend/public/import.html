@@ -301,6 +301,7 @@
         </div>
     </div>
 
+    <script src="/leena-toast.js"></script>
     <script>
         const API_URL = '/api';
         let selectedFile = null, expos = [], templates = [];
@@ -325,8 +326,8 @@
         function handleFileSelect(e) { if (e.target.files[0]) handleFile(e.target.files[0]); }
 
         function handleFile(file) {
-            if (file.size > 10 * 1024 * 1024) { alert('File too large (max 10MB)'); return; }
-            if (!file.name.match(/\.(xlsx|xls|csv)$/i)) { alert('Please select Excel or CSV file'); return; }
+            if (file.size > 10 * 1024 * 1024) { showToast('File too large (max 10MB)', 'error'); return; }
+            if (!file.name.match(/\.(xlsx|xls|csv)$/i)) { showToast('Please select Excel or CSV file', 'error'); return; }
             selectedFile = file;
             document.getElementById('fileName').textContent = file.name;
             document.getElementById('fileSize').textContent = formatFileSize(file.size);
@@ -390,12 +391,12 @@
         }
 
         async function startImport() {
-            if (!selectedFile) { alert('Please select an Excel file'); return; }
+            if (!selectedFile) { showToast('Please select an Excel file', 'error'); return; }
             const expoId = document.getElementById('expoSelect').value;
-            if (!expoId) { alert('Please select an expo'); return; }
+            if (!expoId) { showToast('Please select an expo', 'error'); return; }
             const sendEmail = document.getElementById('sendEmailCheck').checked;
             const templateId = document.getElementById('templateSelect').value;
-            if (sendEmail && !templateId) { alert('Please select an email template'); return; }
+            if (sendEmail && !templateId) { showToast('Please select an email template', 'error'); return; }
 
             document.getElementById('loadingSpinner').classList.add('active');
             
@@ -419,7 +420,7 @@
                     formData.append('existing_qr_option', document.getElementById('existingQrOption').value);
                     if (existingEmailOption !== 'none') {
                         const existingTplId = document.getElementById('existingTemplateSelect').value;
-                        if (!existingTplId) { alert('Please select an email template for existing visitors'); return; }
+                        if (!existingTplId) { showToast('Please select an email template for existing visitors', 'error'); return; }
                         formData.append('existing_template_id', existingTplId);
                     }
                 }
@@ -431,8 +432,8 @@
                 });
                 const result = await response.json();
                 if (response.ok) showResults(result);
-                else alert(result.message || 'Import failed');
-            } catch (e) { alert('Import failed. Please try again.'); }
+                else showToast(result.message || 'Import failed', 'error');
+            } catch (e) { showToast('Import failed. Please try again.', 'error'); }
             finally { document.getElementById('loadingSpinner').classList.remove('active'); }
         }
 

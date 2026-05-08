@@ -221,6 +221,7 @@
                         <button type="submit" class="btn btn-submit mt-4" id="submitBtn">
                             <i class="bi bi-send me-2"></i> Submit Registration
                         </button>
+                        <div id="formError" style="display:none; color:#ef4444; background:#fee2e2; border:1px solid #fca5a5; border-radius:8px; padding:12px 16px; margin-top:12px; font-size:14px; text-align:center;"></div>
                     </form>
                 </div>
                 <div class="form-footer">
@@ -392,8 +393,12 @@
                 }
             } catch (error) {
                 console.error('Error submitting form:', error);
-                alert(error.message || 'Failed to submit form. Please try again.');
-                
+                const formErrorDiv = document.getElementById('formError');
+                if (formErrorDiv) {
+                    formErrorDiv.textContent = error.message || 'Failed to submit form. Please try again.';
+                    formErrorDiv.style.display = 'block';
+                }
+
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="bi bi-send me-2"></i> Submit Registration';
                 submitting = false;

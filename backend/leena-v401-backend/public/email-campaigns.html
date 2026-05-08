@@ -91,11 +91,6 @@
         .delay-presets { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
         .delay-preset { padding:4px 10px; border:1px solid var(--border-color); border-radius:4px; font-size:11px; cursor:pointer; background:white; font-family:inherit; }
         .delay-preset:hover,.delay-preset.active { background:var(--primary); color:white; border-color:var(--primary); }
-        .toast-container { position:fixed; top:20px; right:20px; z-index:300; display:flex; flex-direction:column; gap:8px; }
-        .toast { padding:12px 20px; border-radius:var(--radius-md); font-size:13px; animation:slideIn 0.3s ease; box-shadow:0 4px 12px rgba(0,0,0,0.1); }
-        .toast-success { background:var(--success-bg); color:#065f46; border:1px solid var(--success); }
-        .toast-error { background:var(--danger-bg); color:#991b1b; border:1px solid var(--danger); }
-        @keyframes slideIn { from{opacity:0;transform:translateX(20px);} to{opacity:1;transform:translateX(0);} }
         .empty-state { text-align:center; padding:60px 24px; color:var(--text-muted); }
         .empty-state i { font-size:48px; opacity:0.3; margin-bottom:12px; display:block; }
         .pagination { display:flex; align-items:center; gap:8px; justify-content:center; margin-top:16px; font-size:13px; }
@@ -264,8 +259,7 @@
         </div>
     </div>
 
-    <div class="toast-container" id="toasts"></div>
-
+    <script src="/leena-toast.js"></script>
     <script>
     const API = '/api';
     const token = localStorage.getItem('token');
@@ -300,13 +294,6 @@
         return data;
     }
 
-    function toast(msg, type = 'success') {
-        const el = document.createElement('div');
-        el.className = `toast toast-${type}`;
-        el.textContent = msg;
-        document.getElementById('toasts').appendChild(el);
-        setTimeout(() => el.remove(), 4000);
-    }
 
     function closeModal(id) { document.getElementById(id).classList.remove('show'); }
     function openModal(id) { document.getElementById(id).classList.add('show'); }
@@ -349,7 +336,7 @@
             }
             html += '</tbody></table>';
             document.getElementById('campaignListBody').innerHTML = html;
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     function filterCampaigns(status) {
@@ -385,7 +372,7 @@
 
     async function createCampaign() {
         const name = document.getElementById('createName').value.trim();
-        if (!name) { toast('Campaign name is required', 'error'); return; }
+        if (!name) { showToast('Campaign name is required', 'error'); return; }
         try {
             const data = await api('POST', '/campaigns', {
                 name,
@@ -393,9 +380,9 @@
                 description: document.getElementById('createDesc').value.trim() || null
             });
             closeModal('modalCreate');
-            toast('Campaign created');
+            showToast('Campaign created');
             openDetail(data.campaign.id);
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -410,7 +397,7 @@
             renderDetailHeader();
             await loadTemplates();
             switchTab('steps');
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     function renderDetailHeader() {
@@ -440,26 +427,26 @@
         if (!confirm('Delete this campaign? This cannot be undone.')) return;
         try {
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}`);
-            toast('Campaign deleted');
+            showToast('Campaign deleted');
             backToList();
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     async function quickDelete(id) {
         if (!confirm('Delete this campaign? This cannot be undone.')) return;
         try {
             await api('DELETE', `/campaigns/${id}`);
-            toast('Campaign deleted');
+            showToast('Campaign deleted');
             loadCampaigns();
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     async function pauseCampaign() {
-        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/pause`); toast('Campaign paused'); openDetail(currentCampaign.campaign.id); } catch (err) { toast(err.message, 'error'); }
+        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/pause`); showToast('Campaign paused'); openDetail(currentCampaign.campaign.id); } catch (err) { showToast(err.message, 'error'); }
     }
 
     async function resumeCampaign() {
-        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/resume`); toast('Campaign resumed'); openDetail(currentCampaign.campaign.id); } catch (err) { toast(err.message, 'error'); }
+        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/resume`); showToast('Campaign resumed'); openDetail(currentCampaign.campaign.id); } catch (err) { showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -489,9 +476,9 @@
         try {
             await api('POST', `/campaigns/${currentCampaign.campaign.id}/activate`);
             closeModal('modalActivate');
-            toast('Campaign activated! Step 1 is being sent.');
+            showToast('Campaign activated! Step 1 is being sent.');
             openDetail(currentCampaign.campaign.id);
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -599,7 +586,7 @@
 
     async function saveStep() {
         const templateId = parseInt(document.getElementById('stepTemplate').value);
-        if (!templateId) { toast('Select a template', 'error'); return; }
+        if (!templateId) { showToast('Select a template', 'error'); return; }
 
         const body = {
             template_id: templateId,
@@ -611,23 +598,23 @@
         try {
             if (editId) {
                 await api('PUT', `/campaigns/${currentCampaign.campaign.id}/steps/${editId}`, body);
-                toast('Step updated');
+                showToast('Step updated');
             } else {
                 await api('POST', `/campaigns/${currentCampaign.campaign.id}/steps`, body);
-                toast('Step added');
+                showToast('Step added');
             }
             closeModal('modalStep');
             await openDetail(currentCampaign.campaign.id);
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     async function deleteStep(stepId) {
         if (!confirm('Delete this step?')) return;
         try {
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/steps/${stepId}`);
-            toast('Step deleted');
+            showToast('Step deleted');
             await openDetail(currentCampaign.campaign.id);
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -749,17 +736,17 @@
         try {
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/recipients/${recId}`);
             renderRecipients();
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     async function clearRecipients() {
         if (!confirm('Remove ALL recipients? This cannot be undone.')) return;
         try {
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/recipients`);
-            toast('All recipients cleared');
+            showToast('All recipients cleared');
             await openDetail(currentCampaign.campaign.id);
             switchTab('recipients');
-        } catch (err) { toast(err.message, 'error'); }
+        } catch (err) { showToast(err.message, 'error'); }
     }
 
     // ============================================================
