@@ -73,7 +73,7 @@ router.post('/', authenticateToken, async (req, res) => {
         v.qr_code,
         v.source,
         v.origin,
-        (SELECT COUNT(*) FROM checkins WHERE visitor_id = v.id AND expo_id = $2 AND terminal = $3) as checkin_count,
+        (SELECT COUNT(*)::int FROM checkins WHERE visitor_id = v.id AND expo_id = $2 AND terminal = $3) as checkin_count,
         (SELECT checkin_time FROM checkins WHERE visitor_id = v.id AND expo_id = $2 AND terminal = $3 ORDER BY checkin_time DESC LIMIT 1) as last_checkin
        FROM visitors v
        WHERE v.id = $1 AND v.expo_id = $2`,
@@ -216,7 +216,7 @@ router.get('/', authenticateToken, async (req, res) => {
   try {
     // First get total count for pagination
     let countQuery = `
-      SELECT COUNT(DISTINCT c.id) as total
+      SELECT COUNT(DISTINCT c.id)::int as total
       FROM checkins c
       JOIN visitors v ON v.id = c.visitor_id
       JOIN expos e ON e.id = c.expo_id
@@ -484,19 +484,19 @@ router.get('/stats/summary', authenticateToken, async (req, res) => {
 
     // Get total check-ins
     const totalResult = await pool.query(
-      'SELECT COUNT(*) as total FROM checkins WHERE expo_id = $1',
+      'SELECT COUNT(*)::int as total FROM checkins WHERE expo_id = $1',
       [expoId]
     );
 
     // Get unique visitors
     const uniqueResult = await pool.query(
-      'SELECT COUNT(DISTINCT visitor_id) as unique_count FROM checkins WHERE expo_id = $1',
+      'SELECT COUNT(DISTINCT visitor_id)::int as unique_count FROM checkins WHERE expo_id = $1',
       [expoId]
     );
 
     // Get today's check-ins
     const todayResult = await pool.query(
-      `SELECT COUNT(*) as today_count 
+      `SELECT COUNT(*)::int as today_count 
        FROM checkins 
        WHERE expo_id = $1 AND DATE(checkin_time) = CURRENT_DATE`,
       [expoId]
@@ -504,7 +504,7 @@ router.get('/stats/summary', authenticateToken, async (req, res) => {
 
     // Get hall distribution
     const hallResult = await pool.query(
-      `SELECT hall, COUNT(*) as count 
+      `SELECT hall, COUNT(*)::int as count 
        FROM checkins 
        WHERE expo_id = $1 
        GROUP BY hall 
@@ -520,7 +520,7 @@ router.get('/stats/summary', authenticateToken, async (req, res) => {
 
     // Get source distribution (from visitors table)
     const sourceResult = await pool.query(
-      `SELECT v.source, COUNT(DISTINCT c.id) as count
+      `SELECT v.source, COUNT(DISTINCT c.id)::int as count
        FROM checkins c
        JOIN visitors v ON v.id = c.visitor_id
        WHERE c.expo_id = $1
@@ -576,19 +576,19 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Get total check-ins
     const totalResult = await pool.query(
-      'SELECT COUNT(*) as total FROM checkins WHERE expo_id = $1',
+      'SELECT COUNT(*)::int as total FROM checkins WHERE expo_id = $1',
       [expoId]
     );
 
     // Get unique visitors
     const uniqueResult = await pool.query(
-      'SELECT COUNT(DISTINCT visitor_id) as unique_count FROM checkins WHERE expo_id = $1',
+      'SELECT COUNT(DISTINCT visitor_id)::int as unique_count FROM checkins WHERE expo_id = $1',
       [expoId]
     );
 
     // Get today's check-ins
     const todayResult = await pool.query(
-      `SELECT COUNT(*) as today_count 
+      `SELECT COUNT(*)::int as today_count 
        FROM checkins 
        WHERE expo_id = $1 AND DATE(checkin_time) = CURRENT_DATE`,
       [expoId]
@@ -596,7 +596,7 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Get hall distribution
     const hallResult = await pool.query(
-      `SELECT hall, COUNT(*) as count 
+      `SELECT hall, COUNT(*)::int as count 
        FROM checkins 
        WHERE expo_id = $1 
        GROUP BY hall 

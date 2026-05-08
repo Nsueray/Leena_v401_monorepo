@@ -70,33 +70,33 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const statsQuery = `
     WITH visitor_stats AS (
       SELECT 
-        COUNT(*) as total_visitors,
-        COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_emails,
-        COUNT(DISTINCT COALESCE(custom_fields->>'company', company)) as unique_companies,
-        COUNT(DISTINCT COALESCE(custom_fields->>'country', country)) as unique_countries,
-        COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as registrations_today,
-        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as registrations_week,
-        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as registrations_month,
+        COUNT(*)::int as total_visitors,
+        COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_emails,
+        COUNT(DISTINCT COALESCE(custom_fields->>'company', company))::int as unique_companies,
+        COUNT(DISTINCT COALESCE(custom_fields->>'country', country))::int as unique_countries,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END)::int as registrations_today,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END)::int as registrations_week,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END)::int as registrations_month,
         AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at))/86400)::numeric(10,2) as avg_days_since_registration
       FROM visitors v
       WHERE expo_id = $1 ${dateFilter}
     ),
     checkin_stats AS (
       SELECT 
-        COUNT(*) as total_checkins,
-        COUNT(DISTINCT visitor_id) as unique_visitors_checked_in,
-        COUNT(CASE WHEN checkin_time >= CURRENT_DATE THEN 1 END) as checkins_today,
-        COUNT(CASE WHEN checkin_type = 'entry' THEN 1 END) as entries,
-        COUNT(CASE WHEN checkin_type = 'exit' THEN 1 END) as exits,
-        COUNT(CASE WHEN checkin_type = 're-entry' THEN 1 END) as reentries
+        COUNT(*)::int as total_checkins,
+        COUNT(DISTINCT visitor_id)::int as unique_visitors_checked_in,
+        COUNT(CASE WHEN checkin_time >= CURRENT_DATE THEN 1 END)::int as checkins_today,
+        COUNT(CASE WHEN checkin_type = 'entry' THEN 1 END)::int as entries,
+        COUNT(CASE WHEN checkin_type = 'exit' THEN 1 END)::int as exits,
+        COUNT(CASE WHEN checkin_type = 're-entry' THEN 1 END)::int as reentries
       FROM checkins
       WHERE expo_id = $1
     ),
     email_stats AS (
       SELECT 
-        COUNT(*) as total_emails_sent,
-        COUNT(CASE WHEN status = 'sent' THEN 1 END) as emails_delivered,
-        COUNT(CASE WHEN status = 'failed' THEN 1 END) as emails_failed
+        COUNT(*)::int as total_emails_sent,
+        COUNT(CASE WHEN status = 'sent' THEN 1 END)::int as emails_delivered,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END)::int as emails_failed
       FROM email_logs el
       WHERE EXISTS (SELECT 1 FROM visitors v WHERE v.id = el.visitor_id AND v.expo_id = $1)
     )
@@ -119,7 +119,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const countriesQuery = `
     SELECT 
       COALESCE(NULLIF(custom_fields->>'country', ''), country) as country,
-      COUNT(*) as count,
+      COUNT(*)::int as count,
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE expo_id = $1), 0)), 2) as percentage
     FROM visitors
     WHERE expo_id = $1 
@@ -135,8 +135,8 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const companiesQuery = `
     SELECT 
       COALESCE(NULLIF(custom_fields->>'company', ''), company) as company,
-      COUNT(*) as count,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_visitors
+      COUNT(*)::int as count,
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_visitors
     FROM visitors
     WHERE expo_id = $1 
     AND (custom_fields->>'company' IS NOT NULL OR company IS NOT NULL)
@@ -151,7 +151,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const sourcesQuery = `
     SELECT 
       source,
-      COUNT(*) as count,
+      COUNT(*)::int as count,
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE expo_id = $1), 0)), 2) as percentage
     FROM visitors
     WHERE expo_id = $1
@@ -165,8 +165,8 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const trendQuery = `
     SELECT 
       DATE(created_at) as date,
-      COUNT(*) as registrations,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_registrations
+      COUNT(*)::int as registrations,
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_registrations
     FROM visitors
     WHERE expo_id = $1
     AND created_at >= CURRENT_DATE - INTERVAL '30 days'
@@ -179,7 +179,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const hourlyQuery = `
     SELECT 
       EXTRACT(HOUR FROM created_at) as hour,
-      COUNT(*) as count
+      COUNT(*)::int as count
     FROM visitors
     WHERE expo_id = $1
     AND DATE(created_at) = CURRENT_DATE
@@ -230,7 +230,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const visitorTypeQuery = `
     SELECT
       COALESCE(visitor_type, 'visitor') as visitor_type,
-      COUNT(*) as count
+      COUNT(*)::int as count
     FROM visitors
     WHERE expo_id = $1
     GROUP BY visitor_type
@@ -243,7 +243,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const jobTitleQuery = `
     SELECT
       job_title,
-      COUNT(*) as count
+      COUNT(*)::int as count
     FROM visitors
     WHERE expo_id = $1
     AND job_title IS NOT NULL AND job_title != ''
@@ -258,8 +258,8 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const dailyCheckinQuery = `
     SELECT
       DATE(checkin_time) as date,
-      COUNT(*) as count,
-      COUNT(DISTINCT visitor_id) as unique_count
+      COUNT(*)::int as count,
+      COUNT(DISTINCT visitor_id)::int as unique_count
     FROM checkins
     WHERE expo_id = $1
     GROUP BY DATE(checkin_time)
@@ -272,7 +272,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const checkinByHallQuery = `
     SELECT
       hall,
-      COUNT(*) as count
+      COUNT(*)::int as count
     FROM checkins
     WHERE expo_id = $1
     AND hall IS NOT NULL
@@ -286,7 +286,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const checkinByTerminalQuery = `
     SELECT
       terminal,
-      COUNT(*) as count
+      COUNT(*)::int as count
     FROM checkins
     WHERE expo_id = $1
     AND terminal IS NOT NULL
@@ -366,42 +366,42 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
   const statsQuery = `
     WITH expo_stats AS (
       SELECT 
-        COUNT(*) as total_expos,
-        COUNT(CASE WHEN start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE THEN 1 END) as active_expos,
-        COUNT(CASE WHEN start_date > CURRENT_DATE THEN 1 END) as upcoming_expos,
-        COUNT(CASE WHEN end_date < CURRENT_DATE THEN 1 END) as past_expos
+        COUNT(*)::int as total_expos,
+        COUNT(CASE WHEN start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE THEN 1 END)::int as active_expos,
+        COUNT(CASE WHEN start_date > CURRENT_DATE THEN 1 END)::int as upcoming_expos,
+        COUNT(CASE WHEN end_date < CURRENT_DATE THEN 1 END)::int as past_expos
       FROM expos
       WHERE organizer_id = $1
     ),
     visitor_stats AS (
       SELECT 
-        COUNT(*) as total_visitors,
-        COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_emails,
-        COUNT(DISTINCT COALESCE(custom_fields->>'company', company)) as unique_companies,
-        COUNT(DISTINCT COALESCE(custom_fields->>'country', country)) as unique_countries,
-        COUNT(DISTINCT expo_id) as expos_with_visitors,
-        COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END) as registrations_today,
-        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END) as registrations_week,
-        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END) as registrations_month
+        COUNT(*)::int as total_visitors,
+        COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_emails,
+        COUNT(DISTINCT COALESCE(custom_fields->>'company', company))::int as unique_companies,
+        COUNT(DISTINCT COALESCE(custom_fields->>'country', country))::int as unique_countries,
+        COUNT(DISTINCT expo_id)::int as expos_with_visitors,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END)::int as registrations_today,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END)::int as registrations_week,
+        COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END)::int as registrations_month
       FROM visitors
       WHERE organizer_id = $1 ${dateFilter}
     ),
     checkin_stats AS (
       SELECT 
-        COUNT(*) as total_checkins,
-        COUNT(DISTINCT c.visitor_id) as unique_visitors_checked_in,
-        COUNT(CASE WHEN c.checkin_time >= CURRENT_DATE THEN 1 END) as checkins_today,
-        COUNT(DISTINCT c.expo_id) as expos_with_checkins
+        COUNT(*)::int as total_checkins,
+        COUNT(DISTINCT c.visitor_id)::int as unique_visitors_checked_in,
+        COUNT(CASE WHEN c.checkin_time >= CURRENT_DATE THEN 1 END)::int as checkins_today,
+        COUNT(DISTINCT c.expo_id)::int as expos_with_checkins
       FROM checkins c
       JOIN visitors v ON c.visitor_id = v.id
       WHERE v.organizer_id = $1
     ),
     email_stats AS (
       SELECT 
-        COUNT(*) as total_emails_sent,
-        COUNT(CASE WHEN status = 'sent' THEN 1 END) as emails_delivered,
-        COUNT(CASE WHEN status = 'failed' THEN 1 END) as emails_failed,
-        COUNT(DISTINCT template_id) as templates_used
+        COUNT(*)::int as total_emails_sent,
+        COUNT(CASE WHEN status = 'sent' THEN 1 END)::int as emails_delivered,
+        COUNT(CASE WHEN status = 'failed' THEN 1 END)::int as emails_failed,
+        COUNT(DISTINCT template_id)::int as templates_used
       FROM email_logs
       WHERE organizer_id = $1
     )
@@ -428,8 +428,8 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
       e.name,
       e.start_date,
       e.end_date,
-      COUNT(DISTINCT v.id) as visitors,
-      COUNT(DISTINCT c.visitor_id) as checked_in,
+      COUNT(DISTINCT v.id)::int as visitors,
+      COUNT(DISTINCT c.visitor_id)::int as checked_in,
       CASE 
         WHEN COUNT(v.id) > 0 
         THEN (COUNT(DISTINCT c.visitor_id)::float / COUNT(DISTINCT v.id) * 100)::numeric(5,2)
@@ -448,8 +448,8 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
   const countriesQuery = `
     SELECT 
       COALESCE(NULLIF(custom_fields->>'country', ''), country) as country,
-      COUNT(*) as count,
-      COUNT(DISTINCT expo_id) as expo_count,
+      COUNT(*)::int as count,
+      COUNT(DISTINCT expo_id)::int as expo_count,
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE organizer_id = $1), 0)), 2) as percentage
     FROM visitors
     WHERE organizer_id = $1 
@@ -465,9 +465,9 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
   const companiesQuery = `
     SELECT 
       COALESCE(NULLIF(custom_fields->>'company', ''), company) as company,
-      COUNT(*) as count,
-      COUNT(DISTINCT expo_id) as expo_count,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_visitors
+      COUNT(*)::int as count,
+      COUNT(DISTINCT expo_id)::int as expo_count,
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_visitors
     FROM visitors
     WHERE organizer_id = $1 
     AND (custom_fields->>'company' IS NOT NULL OR company IS NOT NULL)
@@ -482,8 +482,8 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
   const sourcesQuery = `
     SELECT 
       source,
-      COUNT(*) as count,
-      COUNT(DISTINCT expo_id) as expo_count,
+      COUNT(*)::int as count,
+      COUNT(DISTINCT expo_id)::int as expo_count,
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE organizer_id = $1), 0)), 2) as percentage
     FROM visitors
     WHERE organizer_id = $1
@@ -497,9 +497,9 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
   const monthlyTrendQuery = `
     SELECT 
       TO_CHAR(created_at, 'YYYY-MM') as month,
-      COUNT(*) as registrations,
-      COUNT(DISTINCT expo_id) as active_expos,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email)) as unique_visitors
+      COUNT(*)::int as registrations,
+      COUNT(DISTINCT expo_id)::int as active_expos,
+      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_visitors
     FROM visitors
     WHERE organizer_id = $1
     AND created_at >= CURRENT_DATE - INTERVAL '12 months'
@@ -573,8 +573,8 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
       SELECT 
         et.name as template_name,
         et.template_type,
-        COUNT(el.id) as times_used,
-        COUNT(CASE WHEN el.status = 'sent' THEN 1 END) as successful_sends,
+        COUNT(el.id)::int as times_used,
+        COUNT(CASE WHEN el.status = 'sent' THEN 1 END)::int as successful_sends,
         MAX(el.sent_at) as last_used
       FROM email_templates et
       LEFT JOIN email_logs el ON et.id = el.template_id
