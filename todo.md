@@ -223,6 +223,25 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [x] Sprint 2: POST /api/visitors/bulk-email endpoint (transaction, 10K limit, Mode 2)
 - [x] Sprint 2: Bulk send modal UI (template selector, confirm dialog, toast)
 
+## ✅ UI Quick Fixes Sprint (7 Mayıs 2026)
+
+### Sprint 1
+- [x] leena-toast.js shared component
+- [x] 21 sayfada alert() → showToast() migration (~73 instances)
+- [x] email-campaigns Bootstrap toast conflict fix
+- [x] visitorlog bulk send filter guard (Madde 15)
+- [x] form-public.html alert → inline error div
+- [x] ARIA labels (visitor detail panel: prev/next/edit/close)
+- [x] conference-scanner viewport zoom restored
+
+### Sprint 2
+- [x] reports.js + checkins.js COUNT::int cast (74 instances)
+- [x] leena-fetch.js shared component (auth wrapper)
+- [x] 3 sayfa migration: visitorlog, email-campaigns, dashboard_new
+- [x] email-campaigns loading indicator
+- [x] JWT 30-day lifetime documented
+- [x] middleware/auth.js dead code identified
+
 ---
 
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
@@ -251,6 +270,15 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] Backend bulk send rate limit / duplicate protection (prevent double-submit queueing same visitors twice)
 - [ ] Historical email_logs visitor_id backfill: UPDATE ~114K NULL visitor_id rows via email match, then revert email fallback SQL in email_status filter (19ms vs 227ms)
 - [ ] Email UI Simplification (Senaryo C): merge Send Emails + Email Segments into unified send page, keep Templates and Campaigns separate
+
+### Frontend Components
+- [ ] leena-fetch.js migration: remaining 16+ admin pages
+- [ ] Refresh token mechanism (auto-renew at day 25)
+- [ ] Frontend proactive expire check (decode JWT exp claim)
+- [ ] middleware/auth.js dead code deletion
+
+### Backend
+- [ ] Remaining 11 route files COUNT::int cast cleanup
 
 ### Security & Maintenance
 - [ ] Password rotation: claude_readonly DB user, JWT_SECRET, SENDGRID_API_KEY

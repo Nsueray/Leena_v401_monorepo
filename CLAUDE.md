@@ -1161,6 +1161,44 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - `buildVisitorFilter` helper: extracted shared filter logic from /paginated and /export, also used by /bulk-email
 - Bulk email send: `POST /api/visitors/bulk-email` — transaction-wrapped batch INSERT (1K chunks, 10K limit), template+expo ownership check, Mode 2 queue. Frontend modal with template selector and confirm dialog.
 
+**UI Quick Fixes Sprint 1 + Sprint 2 (7 May 2026):**
+- Shared toast component (`leena-toast.js`): replaces inline alert()/toast across 21 admin pages. ~73 alert() instances migrated to showToast(). Resolves Bootstrap .toast class conflict in email-campaigns.html. Net -16 lines via DRY.
+- Shared fetch wrapper (`leena-fetch.js`): auto-attaches Authorization header, handles 401/403 with auto-logout + redirect, 15s timeout via AbortController, concurrent 401 protection. Migrated in 3 high-traffic pages: visitorlog, email-campaigns, dashboard_new.
+- Bulk send filter guard: visitorlog button now requires active filter (prevents accidental send to entire expo).
+- Public form error: form-public.html alert() → inline error div for better visitor UX.
+- Accessibility: ARIA labels on visitor detail panel buttons (prev/next/edit/close); conference-scanner viewport zoom restored (WCAG 2.1).
+- Loading indicator: email-campaigns.html now shows spinner during loadCampaigns().
+- Backend COUNT::int cast: reports.js (63 instances) + checkins.js (11 instances). Closes Sprint A gap. Other 11 route files deferred (frontend parseInt() defensive).
+
+### Shared Frontend Components (public/leena-*.js)
+
+Two shared components reduce duplication across admin pages:
+
+**leena-toast.js** — Notification component
+- API: `window.showToast(message, type, duration)`
+- Types: success, error, warning, info
+- Auto-injects CSS once, container auto-create
+- Bootstrap conflict-safe (.app-toast prefix)
+
+**leena-fetch.js** — Authenticated fetch wrapper
+- API: `window.leenaFetch(url, options)` — returns Promise<Response>
+- Auto-attaches Authorization from localStorage token
+- 401/403 → toast + auto-logout + redirect (1500ms delay)
+- 15s timeout via AbortController
+- All non-auth errors thrown to caller for contextual handling
+- Caller catch pattern: `if (err.status === 401 || err.status === 403) return;`
+
+Migration status: 3 pages (visitorlog, email-campaigns, dashboard_new). Remaining 16+ admin pages: post-fair backlog.
+
+### Authentication
+
+- **JWT lifetime:** 30 days (`routes/auth.js:54`, `{ expiresIn: '30d' }`)
+- **Storage:** `localStorage.setItem('token', data.token)` in login.html
+- **Middleware:** `authMiddleware.js` (JWT_SECRET required, no fallback)
+- **Dead middleware:** `middleware/auth.js` exists but unused by any route (has `'your-secret-key'` fallback) — to be deleted in post-fair cleanup
+- **Status codes:** 401 = token missing/malformed, 403 = token expired/invalid signature
+- **Frontend handling:** leena-fetch.js catches both 401 and 403 as session expiry
+
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)
 - Reactivation Campaign modülü
