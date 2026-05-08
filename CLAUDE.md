@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 6 Mayıs 2026 | Versiyon: v4.0.3
+> Son güncelleme: 7 Mayıs 2026 | Versiyon: v4.0.3
 
 ---
 
@@ -564,7 +564,9 @@ Hostess opens conference-scanner.html?terminal_key=X
 - `POST /api/visitors/manual` — Manuel kayıt (upsert)
 - `POST /api/visitors/import` — Excel import (upsert: varsa güncelle+QR koru, yoksa oluştur)
 - `GET /api/visitors/import-logs` — Import history logs (paginated, ?page=1&limit=20&expo_id=)
-- `PUT /api/visitors/:id` — Visitor edit (name, email, company, job_title, phone, country, visitor_type, booth_number — qr_code/badge_id protected, auth required)
+- `PUT /api/visitors/:id` — Visitor edit (name, email, company, job_title, phone, country, visitor_type, booth_number, conference_topic — qr_code/badge_id protected, auth required)
+- `GET /api/visitors/sources` — Distinct source values for filter dropdown (auth required)
+- `POST /api/visitors/bulk-email` — Bulk email send to filtered visitors (Mode 2 queue, transaction, 10K limit, auth required)
 - `GET /api/visitors/:id/emails` — Visitor email history (email_queue + email_logs, auth required)
 
 ### Forms
@@ -1146,6 +1148,18 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - Inline edit UI in visitor detail panel: Edit button, input form, Save/Cancel, visitor_type dropdown, table auto-refresh
 - Toast Bootstrap conflict fix: `.toast` → `.app-toast` (Bootstrap 5 .toast class override caused 0×0 rendering)
 - `badge_id` added to `/paginated` SELECT (was missing from detail panel display)
+
+**Yaprak Feedback Sprint C + Email Bug Fix + Madde 10 (7 May 2026):**
+- Source filter: replaced 5 fixed pills with searchable text input + datalist, `GET /api/visitors/sources` endpoint, ILIKE partial match
+- Conference topic edit: `jsonb_set` for `custom_fields.conference_topic` in PUT endpoint, only shown for `visitor_type='conference'`
+- Send Email button in visitor detail panel: template dropdown, `POST /api/email-send/single` integration, double-click protection
+- Prev/next visitor navigation: `< >` buttons in panel header, keyboard shortcuts (ArrowLeft/ArrowRight), edit mode confirm dialog
+- Email queue bug fix (Fix 1): Mode 1 email_queue INSERTs now include `visitor_id, expo_id, organizer_id, template_id` (3 locations in visitors.js)
+- Email queue bug fix (Fix 2): Removed duplicate 'queued' email_logs INSERTs from routes (4 locations). Worker `logToEmailLogs` is now sole log writer.
+- Email queue cleanup: 6,396 ghost 'queued' email_logs updated to 'sent' via SQL transaction
+- Email status filter: `email_status` query param on `/paginated` and `/export` (never_sent/sent). Uses EXISTS on email_logs with email fallback for historical NULL visitor_id logs (~227ms, acceptable).
+- `buildVisitorFilter` helper: extracted shared filter logic from /paginated and /export, also used by /bulk-email
+- Bulk email send: `POST /api/visitors/bulk-email` — transaction-wrapped batch INSERT (1K chunks, 10K limit), template+expo ownership check, Mode 2 queue. Frontend modal with template selector and confirm dialog.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

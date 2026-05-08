@@ -1,7 +1,7 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 6 Mayıs 2026
-> Aktif modül: Leena EMS Core + Email Campaigns
+> Son güncelleme: 7 Mayıs 2026
+> Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
 ---
@@ -183,7 +183,49 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 
 ---
 
-## ⏳ Yaprak Feedback — Sprint C (Fuar sonrası)
+## ✅ Yaprak Feedback — Sprint C1 (7 Mayıs 2026)
+
+- [x] Madde 9: Source filter — searchable text input + datalist (replaced 5 fixed pills)
+- [x] GET /api/visitors/sources endpoint (DISTINCT source values per expo)
+- [x] ILIKE partial match in /paginated and /export
+
+## ✅ Yaprak Feedback — Sprint C2 (7 Mayıs 2026)
+
+- [x] Madde 6: Conference topic edit (jsonb_set in PUT endpoint, only for conference type)
+- [x] Madde 8: Send Email button in visitor detail panel (template dropdown, POST /api/email-send/single)
+- [x] "Send Badge Email" → "Send Email" rename
+
+## ✅ Yaprak Feedback — Sprint C3 (7 Mayıs 2026)
+
+- [x] Madde 11: Prev/next visitor navigation (panel buttons + ArrowLeft/Right keyboard)
+- [x] Edit mode confirm dialog on navigation
+
+## ✅ Read-only DB Access Setup (7 Mayıs 2026)
+
+- [x] Created claude_readonly Postgres user (SELECT only)
+- [x] Render IP whitelist configured for Suer's Mac
+- [x] RENDER_DATABASE_READONLY_URL added to .env
+- [x] Database Access section added to CLAUDE.md
+- [x] leena-db-schema SKILL.md env vars table updated
+- [x] Memory file: reference_db_readonly.md (Claude Code session persistence)
+
+## ✅ Email Queue Bug Fix (7 Mayıs 2026)
+
+- [x] Fix 1: Mode 1 email_queue INSERTs now include visitor_id/expo_id/organizer_id/template_id
+- [x] Fix 2: Removed duplicate 'queued' email_logs INSERTs from routes (worker handles logging)
+- [x] Cleanup: 6,396 ghost 'queued' email_logs → 'sent' via SQL transaction
+
+## ✅ Madde 10 — Email Status Filter + Bulk Send (7 Mayıs 2026)
+
+- [x] Sprint 1: email_status filter (never_sent/sent) in /paginated and /export
+- [x] Sprint 1 fix: email fallback for historical NULL visitor_id logs (17 false positives → 0)
+- [x] Sprint 2: buildVisitorFilter helper extracted (DRY refactor)
+- [x] Sprint 2: POST /api/visitors/bulk-email endpoint (transaction, 10K limit, Mode 2)
+- [x] Sprint 2: Bulk send modal UI (template selector, confirm dialog, toast)
+
+---
+
+## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
 
 - [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)
 - [ ] Cascade kontrolü: email_queue, email_logs, campaign_recipients temizliği
@@ -199,6 +241,25 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] Connected shape validation (cell adjacency check)
 - [ ] Sidebar link to existing 15 admin pages
 - [ ] Stand resize (edge drag to expand/shrink)
+
+---
+
+## 📋 Post-Fair Backlog (Fuar sonrası — Haziran 2026+)
+
+### Email System
+- [ ] Schedule for later: add `scheduled_at` column to email_queue, worker WHERE filter `(scheduled_at IS NULL OR scheduled_at <= NOW())`
+- [ ] Backend bulk send rate limit / duplicate protection (prevent double-submit queueing same visitors twice)
+- [ ] Historical email_logs visitor_id backfill: UPDATE ~114K NULL visitor_id rows via email match, then revert email fallback SQL in email_status filter (19ms vs 227ms)
+- [ ] Email UI Simplification (Senaryo C): merge Send Emails + Email Segments into unified send page, keep Templates and Campaigns separate
+
+### Security & Maintenance
+- [ ] Password rotation: claude_readonly DB user, JWT_SECRET, SENDGRID_API_KEY
+- [ ] Git history cleanup: .env.backup files in 3 locations
+- [ ] .gitignore creation (.env*, *.env, *.backup)
+
+### Visitor Management
+- [ ] Madde 3: Visitor delete (hard delete, checkin-less visitors only)
+- [ ] Visitor detail panel: add check-in history (all check-in timestamps)
 
 ---
 
