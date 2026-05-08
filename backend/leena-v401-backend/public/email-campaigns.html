@@ -260,6 +260,7 @@
     </div>
 
     <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
     <script>
     const API = '/api';
     const token = localStorage.getItem('token');
@@ -277,9 +278,9 @@
     // ============================================================
 
     async function api(method, path, body) {
-        const opts = { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } };
+        const opts = { method, headers: { 'Content-Type': 'application/json' } };
         if (body && method !== 'GET') opts.body = JSON.stringify(body);
-        const res = await fetch(`${API}${path}`, opts);
+        const res = await leenaFetch(`${API}${path}`, opts);
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
         return data;
@@ -288,7 +289,7 @@
     async function apiUpload(path, file) {
         const fd = new FormData();
         fd.append('file', file);
-        const res = await fetch(`${API}${path}`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
+        const res = await leenaFetch(`${API}${path}`, { method: 'POST', body: fd });
         const data = await res.json();
         if (!res.ok) throw new Error(data.message || `Error ${res.status}`);
         return data;
@@ -336,7 +337,7 @@
             }
             html += '</tbody></table>';
             document.getElementById('campaignListBody').innerHTML = html;
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     function filterCampaigns(status) {
@@ -366,7 +367,7 @@
             (Array.isArray(expos) ? expos : []).forEach(e => {
                 sel.innerHTML += `<option value="${e.id}" ${e.id == expoId ? 'selected' : ''}>${esc(e.name)}</option>`;
             });
-        } catch (e) { console.error('Load expos:', e); }
+        } catch (e) { if (e.status === 401 || e.status === 403) return; console.error('Load expos:', e); }
         openModal('modalCreate');
     }
 
@@ -382,7 +383,7 @@
             closeModal('modalCreate');
             showToast('Campaign created');
             openDetail(data.campaign.id);
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -397,7 +398,7 @@
             renderDetailHeader();
             await loadTemplates();
             switchTab('steps');
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     function renderDetailHeader() {
@@ -429,7 +430,7 @@
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}`);
             showToast('Campaign deleted');
             backToList();
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     async function quickDelete(id) {
@@ -438,15 +439,15 @@
             await api('DELETE', `/campaigns/${id}`);
             showToast('Campaign deleted');
             loadCampaigns();
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     async function pauseCampaign() {
-        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/pause`); showToast('Campaign paused'); openDetail(currentCampaign.campaign.id); } catch (err) { showToast(err.message, 'error'); }
+        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/pause`); showToast('Campaign paused'); openDetail(currentCampaign.campaign.id); } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     async function resumeCampaign() {
-        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/resume`); showToast('Campaign resumed'); openDetail(currentCampaign.campaign.id); } catch (err) { showToast(err.message, 'error'); }
+        try { await api('POST', `/campaigns/${currentCampaign.campaign.id}/resume`); showToast('Campaign resumed'); openDetail(currentCampaign.campaign.id); } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -478,7 +479,7 @@
             closeModal('modalActivate');
             showToast('Campaign activated! Step 1 is being sent.');
             openDetail(currentCampaign.campaign.id);
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -504,7 +505,7 @@
         try {
             const data = await api('GET', '/email-templates');
             templates = (data.templates || []).filter(t => t.is_active);
-        } catch (e) { templates = []; }
+        } catch (e) { if (e.status === 401 || e.status === 403) return; templates = []; }
     }
 
     function renderSteps() {
@@ -605,7 +606,7 @@
             }
             closeModal('modalStep');
             await openDetail(currentCampaign.campaign.id);
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     async function deleteStep(stepId) {
@@ -614,7 +615,7 @@
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/steps/${stepId}`);
             showToast('Step deleted');
             await openDetail(currentCampaign.campaign.id);
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -699,7 +700,7 @@
                     </div>`;
                 }
             }
-        } catch (err) { html += `<p style="color:var(--danger);">Failed to load recipients</p>`; }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; html += `<p style="color:var(--danger);">Failed to load recipients</p>`; }
 
         document.getElementById('tabRecipients').innerHTML = html;
     }
@@ -714,7 +715,7 @@
             resultEl.innerHTML = `<span style="color:var(--success);">Added: ${data.added}, Skipped: ${data.skipped_duplicates} dup, ${data.skipped_unsubscribed} unsub, ${data.invalid} invalid. Total: ${data.total_recipients}</span>`;
             await openDetail(currentCampaign.campaign.id);
             switchTab('recipients');
-        } catch (err) { resultEl.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`; }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; resultEl.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`; }
         input.value = '';
     }
 
@@ -729,14 +730,14 @@
             resultEl.innerHTML = `<span style="color:var(--success);">Added: ${data.added} from ${data.total_visitors_found} visitors. Skipped: ${data.skipped_duplicates} dup, ${data.skipped_unsubscribed} unsub. Total: ${data.total_recipients}</span>`;
             await openDetail(currentCampaign.campaign.id);
             switchTab('recipients');
-        } catch (err) { resultEl.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`; }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; resultEl.innerHTML = `<span style="color:var(--danger);">${err.message}</span>`; }
     }
 
     async function removeRecipient(recId) {
         try {
             await api('DELETE', `/campaigns/${currentCampaign.campaign.id}/recipients/${recId}`);
             renderRecipients();
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     async function clearRecipients() {
@@ -746,7 +747,7 @@
             showToast('All recipients cleared');
             await openDetail(currentCampaign.campaign.id);
             switchTab('recipients');
-        } catch (err) { showToast(err.message, 'error'); }
+        } catch (err) { if (err.status === 401 || err.status === 403) return; showToast(err.message, 'error'); }
     }
 
     // ============================================================
@@ -834,6 +835,7 @@
             renderDrilldownFilters();
             renderDrilldownTable();
         } catch (err) {
+            if (err.status === 401 || err.status === 403) return;
             document.getElementById('drilldownBody').innerHTML = `<p style="color:var(--danger);">${err.message}</p>`;
         }
     }

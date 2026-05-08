@@ -595,6 +595,7 @@
     </div>
 
     <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
     <script>
         const API_URL = '/api';
 
@@ -619,13 +620,11 @@
         
         async function loadExpos() {
             try {
-                const res = await fetch(`${API_URL}/expos`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-                if (res.status === 401) { logout(); return; }
+                const res = await leenaFetch(`${API_URL}/expos`);
                 const expos = await res.json();
                 displayExpos(expos);
             } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
                 document.getElementById('expoContainer').innerHTML = '<div class="empty-state"><h3>Error loading expos</h3><button class="btn btn-primary" onclick="loadExpos()">Retry</button></div>';
             }
         }
@@ -695,14 +694,14 @@
             if (!name || !startDate || !endDate) { showToast('Please fill required fields', 'error'); return; }
             document.getElementById('createBtn').disabled = true;
             try {
-                const res = await fetch(`${API_URL}/expos`, {
+                const res = await leenaFetch(`${API_URL}/expos`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, location, start_date: startDate, end_date: endDate })
                 });
                 if (res.ok) { hideCreateModal(); loadExpos(); }
                 else { const err = await res.json(); showToast(err.error || 'Failed to create expo', 'error'); }
-            } catch (err) { showToast('Error creating expo', 'error'); }
+            } catch (err) { if (err.status === 401 || err.status === 403) return; showToast('Error creating expo', 'error'); }
             document.getElementById('createBtn').disabled = false;
         }
         

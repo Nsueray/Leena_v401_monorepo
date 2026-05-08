@@ -328,6 +328,7 @@
     </div>
 
     <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
     <script>
         const API_BASE_URL = '/api';
         let currentPage = 1, totalPages = 1, totalRecords = 0, recordsPerPage = 100;
@@ -366,7 +367,7 @@
             showLoading(true);
             try {
                 const params = new URLSearchParams({ expo_id: currentExpoId, page: currentPage, limit: recordsPerPage, ...currentFilters });
-                const response = await fetch(`${API_BASE_URL}/visitors/paginated?${params}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
+                const response = await leenaFetch(`${API_BASE_URL}/visitors/paginated?${params}`);
                 if (!response.ok) throw new Error('Failed');
                 const data = await response.json();
                 totalRecords = data.total || 0;
@@ -375,7 +376,7 @@
                 updateResultsInfo();
                 renderPagination();
                 updateBulkSendButton();
-            } catch (e) { console.error(e); showToast('Failed to load visitors', 'error'); }
+            } catch (e) { if (e.status === 401 || e.status === 403) return; console.error(e); showToast('Failed to load visitors', 'error'); }
             finally { showLoading(false); }
         }
 
@@ -505,9 +506,7 @@
             showLoading(true);
             try {
                 const params = new URLSearchParams({ expo_id: currentExpoId, ...currentFilters });
-                const response = await fetch(`${API_BASE_URL}/visitors/export?${params}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
+                const response = await leenaFetch(`${API_BASE_URL}/visitors/export?${params}`);
                 if (!response.ok) throw new Error('Export failed');
                 const blob = await response.blob();
                 const url = URL.createObjectURL(blob);
@@ -517,15 +516,13 @@
                 a.click();
                 URL.revokeObjectURL(url);
                 showToast(`Exported ${totalRecords} visitors`);
-            } catch (e) { showToast('Export failed. Please try again.', 'error'); }
+            } catch (e) { if (e.status === 401 || e.status === 403) return; showToast('Export failed. Please try again.', 'error'); }
             finally { showLoading(false); }
         }
 
         async function loadConferenceTopics() {
             try {
-                const response = await fetch(`${API_BASE_URL}/visitors/conference-topics?expo_id=${currentExpoId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
+                const response = await leenaFetch(`${API_BASE_URL}/visitors/conference-topics?expo_id=${currentExpoId}`);
                 if (!response.ok) return;
                 const data = await response.json();
                 const select = document.getElementById('conferenceTopicFilter');
@@ -536,14 +533,12 @@
                     opt.textContent = `${t.topic} (${t.registered_count})`;
                     select.appendChild(opt);
                 });
-            } catch (e) { console.error('Error loading topics'); }
+            } catch (e) { if (e.status === 401 || e.status === 403) return; console.error('Error loading topics'); }
         }
 
         async function loadSources() {
             try {
-                const response = await fetch(`${API_BASE_URL}/visitors/sources?expo_id=${currentExpoId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
+                const response = await leenaFetch(`${API_BASE_URL}/visitors/sources?expo_id=${currentExpoId}`);
                 if (!response.ok) return;
                 const data = await response.json();
                 const datalist = document.getElementById('sourcesDatalist');
@@ -553,7 +548,7 @@
                     opt.value = s;
                     datalist.appendChild(opt);
                 });
-            } catch (e) { /* silent — datalist stays empty, user can still type */ }
+            } catch (e) { if (e.status === 401 || e.status === 403) return; /* silent — datalist stays empty, user can still type */ }
         }
 
         // === BULK SEND ===
@@ -573,16 +568,14 @@
             modal.classList.add('show');
             // Load templates
             try {
-                const res = await fetch(`/api/email-templates?expo_id=${currentExpoId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
+                const res = await leenaFetch(`/api/email-templates?expo_id=${currentExpoId}`);
                 const data = await res.json();
                 const sel = document.getElementById('bulkTemplateSelect');
                 sel.innerHTML = '<option value="">-- Select template --</option>';
                 (data.templates || []).forEach(t => {
                     sel.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)} — ${escapeHtml(t.subject || '')}</option>`;
                 });
-            } catch (e) { showToast('Failed to load templates', 'error'); }
+            } catch (e) { if (e.status === 401 || e.status === 403) return; showToast('Failed to load templates', 'error'); }
         }
 
         function closeBulkSendModal() {
@@ -599,9 +592,9 @@
             btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
 
             try {
-                const res = await fetch(`${API_BASE_URL}/visitors/bulk-email`, {
+                const res = await leenaFetch(`${API_BASE_URL}/visitors/bulk-email`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         expo_id: parseInt(currentExpoId),
                         template_id: parseInt(templateId),
@@ -613,7 +606,7 @@
                 showToast(`${data.queued_count} emails queued for delivery`);
                 closeBulkSendModal();
             } catch (err) {
-                showToast(err.message || 'Failed to queue emails', 'error');
+                if (err.status !== 401 && err.status !== 403) showToast(err.message || 'Failed to queue emails', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-send"></i> Send Now';
@@ -755,9 +748,9 @@
             const topicEl = document.getElementById('editConferenceTopic');
             if (topicEl) body.conference_topic = topicEl.value;
             try {
-                const res = await fetch(`/api/visitors/${_currentVisitor.id}`, {
+                const res = await leenaFetch(`/api/visitors/${_currentVisitor.id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
                 if (res.status === 409) { showToast('Email already exists for another visitor in this expo', 'error'); return; }
@@ -773,21 +766,19 @@
                 showToast('Visitor updated');
                 // Refresh table row
                 loadVisitors();
-            } catch (err) { showToast('Update failed', 'error'); }
+            } catch (err) { if (err.status === 401 || err.status === 403) return; showToast('Update failed', 'error'); }
         }
 
         async function loadTopicsDatalist() {
             try {
-                const res = await fetch(`${API_BASE_URL}/visitors/conference-topics?expo_id=${currentExpoId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
+                const res = await leenaFetch(`${API_BASE_URL}/visitors/conference-topics?expo_id=${currentExpoId}`);
                 if (!res.ok) return;
                 const data = await res.json();
                 const dl = document.getElementById('topicsDatalist');
                 if (!dl) return;
                 dl.innerHTML = '';
                 (data.topics || []).forEach(t => { const o = document.createElement('option'); o.value = t.topic; dl.appendChild(o); });
-            } catch (e) { /* silent */ }
+            } catch (e) { if (e.status === 401 || e.status === 403) return; /* silent */ }
         }
 
         let _emailTemplatesLoaded = false;
@@ -798,9 +789,7 @@
             form.style.display = visible ? 'none' : '';
             if (!visible && !_emailTemplatesLoaded) {
                 try {
-                    const res = await fetch(`/api/email-templates?expo_id=${currentExpoId}`, {
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                    });
+                    const res = await leenaFetch(`/api/email-templates?expo_id=${currentExpoId}`);
                     const data = await res.json();
                     const sel = document.getElementById('emailTemplateSelect');
                     sel.innerHTML = '<option value="">-- Select template --</option>';
@@ -808,7 +797,7 @@
                         sel.innerHTML += `<option value="${t.id}">${escapeHtml(t.name)} — ${escapeHtml(t.subject || '')}</option>`;
                     });
                     _emailTemplatesLoaded = true;
-                } catch (e) { showToast('Failed to load templates', 'error'); }
+                } catch (e) { if (e.status === 401 || e.status === 403) return; showToast('Failed to load templates', 'error'); }
             }
         }
 
@@ -820,9 +809,9 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
             try {
-                const res = await fetch('/api/email-send/single', {
+                const res = await leenaFetch('/api/email-send/single', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         template_id: parseInt(templateId),
                         expo_id: parseInt(currentExpoId),
@@ -836,7 +825,7 @@
                 document.getElementById('sendEmailForm').style.display = 'none';
                 loadVisitorEmails(_currentVisitor.id);
             } catch (err) {
-                showToast(err.message || 'Failed to send email', 'error');
+                if (err.status !== 401 && err.status !== 403) showToast(err.message || 'Failed to send email', 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-send"></i> Send';
@@ -860,9 +849,7 @@
             const container = document.getElementById('panelEmailHistory');
             container.innerHTML = '<p style="color:#9ca3af;font-size:13px;">Loading...</p>';
             try {
-                const res = await fetch(`/api/visitors/${visitorId}/emails`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
+                const res = await leenaFetch(`/api/visitors/${visitorId}/emails`);
                 const data = await res.json();
                 const all = [
                     ...(data.queue_history || []).map(e => ({ date: e.sent_at || e.created_at, subject: e.subject || 'Badge Email', status: e.status, error: e.error_message })),
@@ -881,7 +868,7 @@
                         ${e.error ? `<div style="font-size:11px;color:#ef4444;margin-top:4px;">Error: ${e.error}</div>` : ''}
                     </div>`;
                 }).join('');
-            } catch (err) { container.innerHTML = '<p style="color:#ef4444;font-size:13px;">Failed to load email history.</p>'; }
+            } catch (err) { if (err.status === 401 || err.status === 403) return; container.innerHTML = '<p style="color:#ef4444;font-size:13px;">Failed to load email history.</p>'; }
         }
 
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
