@@ -525,19 +525,71 @@
 
                 const data = await response.json();
 
-                if (!response.ok) {
+                if (!response.ok && response.status !== 202) {
                     throw new Error(data.error || 'Campaign creation failed');
                 }
 
-                // Show results
-                document.getElementById('resultTotal').textContent = data.results.total || 0;
-                document.getElementById('resultCreated').textContent = data.results.created || 0;
-                document.getElementById('resultSkippedRegistered').textContent = data.results.skipped_already_registered || 0;
-                document.getElementById('resultSkippedDuplicate').textContent = data.results.skipped_duplicate || 0;
-                document.getElementById('resultSkippedNoEmail').textContent = data.results.skipped_no_email || 0;
-                document.getElementById('resultsBox').style.display = 'block';
+                // Async job pattern — show progress
+                if (data.job_id) {
+                    document.getElementById('resultsBox').style.display = 'block';
+                    document.getElementById('resultTotal').textContent = data.total || 0;
+                    document.getElementById('resultCreated').textContent = '0 (processing...)';
+                    document.getElementById('resultSkippedRegistered').textContent = '-';
+                    document.getElementById('resultSkippedDuplicate').textContent = '-';
+                    document.getElementById('resultSkippedNoEmail').textContent = data.skipped || 0;
 
-                showAlert(`Campaign created! ${data.results.created} emails queued for sending.`, 'success');
+                    // Show progress bar
+                    let progressHtml = `<div style="margin-top:12px;"><div style="background:#e5e7eb;border-radius:8px;height:20px;overflow:hidden;"><div id="progressFill" style="background:var(--primary);height:100%;width:0%;transition:width 0.5s;border-radius:8px;"></div></div><p id="progressText" style="font-size:12px;color:var(--text-muted);margin-top:6px;">Processing... 0 / ${data.valid || data.total}</p></div>`;
+                    document.getElementById('resultsBox').insertAdjacentHTML('beforeend', progressHtml);
+
+                    // Poll for progress
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const jobRes = await fetch(`${API_URL}/reactivation/job/${data.job_id}`, {
+                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                            });
+                            const job = await jobRes.json();
+                            const validCount = (data.valid || data.total) - (data.skipped || 0);
+                            const pct = validCount > 0 ? Math.round((job.processed_count / validCount) * 100) : 0;
+                            const fill = document.getElementById('progressFill');
+                            const txt = document.getElementById('progressText');
+                            if (fill) fill.style.width = Math.min(pct, 100) + '%';
+                            if (txt) txt.textContent = `Processing... ${(job.processed_count || 0).toLocaleString()} / ${validCount.toLocaleString()} tokens created`;
+                            document.getElementById('resultCreated').textContent = (job.processed_count || 0).toLocaleString();
+
+                            if (job.status === 'completed') {
+                                clearInterval(pollInterval);
+                                if (fill) fill.style.width = '100%';
+                                if (fill) fill.style.background = 'var(--success)';
+                                if (txt) txt.textContent = `✅ Completed! ${(job.processed_count || 0).toLocaleString()} tokens created.`;
+                                showAlert(`Campaign created! ${(job.processed_count || 0).toLocaleString()} emails queued for sending.`, 'success');
+                                startBtn.disabled = false;
+                                startBtn.innerHTML = '<i class="bi bi-send"></i> Start Campaign';
+                                loadCampaigns();
+                            } else if (job.status === 'failed') {
+                                clearInterval(pollInterval);
+                                if (fill) fill.style.background = 'var(--danger)';
+                                if (txt) txt.textContent = `❌ Failed: ${job.error_message || 'Unknown error'}`;
+                                showAlert('Campaign processing failed: ' + (job.error_message || ''), 'danger');
+                                startBtn.disabled = false;
+                                startBtn.innerHTML = '<i class="bi bi-send"></i> Start Campaign';
+                            }
+                        } catch (pollErr) {
+                            console.error('Poll error:', pollErr);
+                        }
+                    }, 2000);
+
+                    return; // Don't reset button — polling will handle it
+                }
+
+                // Legacy sync fallback (if backend doesn't return job_id)
+                document.getElementById('resultTotal').textContent = data.results?.total || 0;
+                document.getElementById('resultCreated').textContent = data.results?.created || 0;
+                document.getElementById('resultSkippedRegistered').textContent = data.results?.skipped_already_registered || 0;
+                document.getElementById('resultSkippedDuplicate').textContent = data.results?.skipped_duplicate || 0;
+                document.getElementById('resultSkippedNoEmail').textContent = data.results?.skipped_no_email || 0;
+                document.getElementById('resultsBox').style.display = 'block';
+                showAlert(`Campaign created! ${data.results?.created || 0} emails queued for sending.`, 'success');
 
             } catch (err) {
                 console.error('Campaign error:', err);

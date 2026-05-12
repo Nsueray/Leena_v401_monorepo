@@ -24,6 +24,129 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+// ============================================================
+// BACKGROUND JOB HELPERS (async, called via setImmediate)
+// ============================================================
+
+async function processReactivationChunks(jobId, validRows, ctx) {
+  const { target_expo_id, organizerId, template_id, form_id, emailTemplate, targetExpo, source_expo_id } = ctx;
+  const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+  const CHUNK_SIZE = 1000;
+  const isExpo = !!source_expo_id;
+  let created = 0;
+
+  const client = await pool.connect();
+  try {
+    for (let c = 0; c < validRows.length; c += CHUNK_SIZE) {
+      const chunk = validRows.slice(c, c + CHUNK_SIZE);
+      await client.query('BEGIN');
+      try {
+        // Batch INSERT reactivation_tokens
+        const tokenClauses = [];
+        const tokenParams = [];
+        if (isExpo) {
+          chunk.forEach((r, j) => {
+            const base = j * 13;
+            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},'pending',NOW(),NOW()+INTERVAL '30 days')`);
+            tokenParams.push(r.token, r.id, source_expo_id, target_expo_id, organizerId, r.email, r.name, r.last_name, r.company, r.country, r.job_title, r.phone, form_id || null);
+          });
+          await client.query(
+            `INSERT INTO reactivation_tokens (token, source_visitor_id, source_expo_id, target_expo_id, organizer_id, email, name, last_name, company, country, job_title, phone, form_id, status, created_at, expires_at) VALUES ${tokenClauses.join(',')}`,
+            tokenParams
+          );
+        } else {
+          chunk.forEach((r, j) => {
+            const base = j * 11;
+            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},'pending',NOW(),NOW()+INTERVAL '30 days')`);
+            tokenParams.push(r.token, target_expo_id, organizerId, r.email, r.name, r.last_name, r.company, r.country, r.job_title, r.phone, form_id || null);
+          });
+          await client.query(
+            `INSERT INTO reactivation_tokens (token, target_expo_id, organizer_id, email, name, last_name, company, country, job_title, phone, form_id, status, created_at, expires_at) VALUES ${tokenClauses.join(',')}`,
+            tokenParams
+          );
+        }
+
+        // Queue emails (per-row: unique rendered HTML)
+        if (emailTemplate) {
+          for (const r of chunk) {
+            const activationUrl = `${baseUrl}/reactivate.html?token=${r.token}`;
+            const templateData = {
+              name: r.name || 'Valued Guest', last_name: r.last_name || '', email: r.email,
+              company: r.company || '', country: r.country || '', job_title: r.job_title || '',
+              activation_url: activationUrl, expo_name: targetExpo.name,
+              date: new Date().toLocaleDateString()
+            };
+            const htmlContent = processEmailTemplate(emailTemplate.html_content || emailTemplate.body || '', templateData);
+            const subject = processEmailTemplate(emailTemplate.subject || 'Activate Your Visitor Pass', templateData);
+            await client.query(
+              `INSERT INTO email_queue (organizer_id, expo_id, visitor_id, template_id, recipient_email, subject, html_content, status, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',NOW())`,
+              [organizerId, target_expo_id, isExpo ? r.id : null, template_id, r.email, subject, htmlContent]
+            );
+          }
+        }
+
+        await client.query('COMMIT');
+        created += chunk.length;
+
+        // Update progress
+        await pool.query(
+          'UPDATE import_jobs SET processed_count = $1, updated_at = NOW() WHERE id = $2',
+          [created, jobId]
+        );
+      } catch (chunkErr) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error(`[reactivation-job-${jobId}] chunk ${Math.floor(c/CHUNK_SIZE)+1} error:`, chunkErr.message);
+        await pool.query(
+          'UPDATE import_jobs SET failed_count = failed_count + $1, updated_at = NOW() WHERE id = $2',
+          [chunk.length, jobId]
+        ).catch(() => {});
+      }
+    }
+  } finally {
+    client.release();
+  }
+
+  // Mark completed
+  await pool.query(
+    `UPDATE import_jobs SET status='completed', processed_count=$1, completed_at=NOW(), updated_at=NOW() WHERE id=$2`,
+    [created, jobId]
+  );
+  console.log(`[reactivation-job-${jobId}] ✅ COMPLETED: ${created} tokens created`);
+}
+
+function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails) {
+  const results = { skipped_no_email: 0, skipped_already_registered: 0, skipped_duplicate: 0 };
+  const validRows = [];
+  for (const row of rows) {
+    const email = (row.email || row.Email || row.EMAIL || '').toString().trim().toLowerCase();
+    if (!email) { results.skipped_no_email++; continue; }
+    if (existingVisitorEmails.has(email)) { results.skipped_already_registered++; continue; }
+    if (existingTokenEmails.has(email)) { results.skipped_duplicate++; continue; }
+    existingTokenEmails.add(email);
+    validRows.push({
+      email,
+      name: (row.name || row.Name || row.first_name || row['First Name'] || '').toString().trim(),
+      last_name: (row.last_name || row['Last Name'] || row.surname || '').toString().trim(),
+      company: (row.company || row.Company || row.organization || '').toString().trim(),
+      country: (row.country || row.Country || '').toString().trim(),
+      job_title: (row.job_title || row['Job Title'] || row.title || '').toString().trim(),
+      phone: (row.phone || row.Phone || row.mobile || '').toString().trim(),
+      token: generateToken()
+    });
+  }
+  return { validRows, ...results };
+}
+
+async function prefetchEmails(target_expo_id) {
+  const existingVisitorsRes = await pool.query(
+    'SELECT LOWER(email) AS email FROM visitors WHERE expo_id = $1 AND email IS NOT NULL', [target_expo_id]);
+  const existingVisitorEmails = new Set(existingVisitorsRes.rows.map(r => r.email));
+  const existingTokensRes = await pool.query(
+    'SELECT LOWER(email) AS email FROM reactivation_tokens WHERE target_expo_id = $1', [target_expo_id]);
+  const existingTokenEmails = new Set(existingTokensRes.rows.map(r => r.email));
+  return { existingVisitorEmails, existingTokenEmails };
+}
+
 /**
  * GET /api/reactivation/campaigns
  * List all reactivation campaigns (grouped by target_expo)
@@ -143,114 +266,41 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
 
     console.log(`📊 Processing ${rows.length} rows for reactivation campaign`);
 
-    const results = {
-      total: rows.length,
-      created: 0,
-      skipped_already_registered: 0,
-      skipped_duplicate: 0,
-      skipped_no_email: 0,
-      errors: []
-    };
+    // Pre-fetch existing emails for O(1) dedup
+    const { existingVisitorEmails, existingTokenEmails } = await prefetchEmails(target_expo_id);
 
-    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+    // Filter valid rows (no DB calls)
+    const { validRows, skipped_no_email, skipped_already_registered, skipped_duplicate } = prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails);
+    const totalSkipped = skipped_no_email + skipped_already_registered + skipped_duplicate;
 
-    // Pre-fetch existing emails for O(1) dedup (eliminates 2 SELECT per row)
-    const existingVisitorsRes = await pool.query(
-      'SELECT LOWER(email) AS email FROM visitors WHERE expo_id = $1 AND email IS NOT NULL',
-      [target_expo_id]
+    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_no_email} no email, ${skipped_already_registered} already registered, ${skipped_duplicate} duplicate)`);
+
+    // Create import job
+    const jobRes = await pool.query(
+      `INSERT INTO import_jobs (organizer_id, job_type, target_expo_id, template_id, form_id, total_count, skipped_count, status)
+       VALUES ($1, 'reactivation_excel', $2, $3, $4, $5, $6, 'processing') RETURNING id`,
+      [organizerId, target_expo_id, template_id || null, form_id || null, rows.length, totalSkipped]
     );
-    const existingVisitorEmails = new Set(existingVisitorsRes.rows.map(r => r.email));
+    const jobId = jobRes.rows[0].id;
 
-    const existingTokensRes = await pool.query(
-      'SELECT LOWER(email) AS email FROM reactivation_tokens WHERE target_expo_id = $1',
-      [target_expo_id]
-    );
-    const existingTokenEmails = new Set(existingTokensRes.rows.map(r => r.email));
-
-    // Parse and filter rows first (no DB calls)
-    const validRows = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const email = (row.email || row.Email || row.EMAIL || '').toString().trim().toLowerCase();
-      if (!email) { results.skipped_no_email++; continue; }
-      if (existingVisitorEmails.has(email)) { results.skipped_already_registered++; continue; }
-      if (existingTokenEmails.has(email)) { results.skipped_duplicate++; continue; }
-
-      // Mark as seen to prevent intra-file duplicates
-      existingTokenEmails.add(email);
-
-      validRows.push({
-        email,
-        name: (row.name || row.Name || row.first_name || row['First Name'] || '').toString().trim(),
-        last_name: (row.last_name || row['Last Name'] || row.surname || '').toString().trim(),
-        company: (row.company || row.Company || row.organization || '').toString().trim(),
-        country: (row.country || row.Country || '').toString().trim(),
-        job_title: (row.job_title || row['Job Title'] || row.title || '').toString().trim(),
-        phone: (row.phone || row.Phone || row.mobile || '').toString().trim(),
-        token: generateToken()
+    // Start background processing
+    setImmediate(() => {
+      processReactivationChunks(jobId, validRows, {
+        target_expo_id, organizerId, template_id, form_id, emailTemplate, targetExpo
+      }).catch(err => {
+        console.error(`[reactivation-job-${jobId}] FATAL:`, err);
+        pool.query(`UPDATE import_jobs SET status='failed', error_message=$1, updated_at=NOW() WHERE id=$2`, [err.message, jobId]).catch(() => {});
       });
-    }
+    });
 
-    console.log(`📊 ${validRows.length} valid rows after filtering (${results.skipped_no_email} no email, ${results.skipped_already_registered} already registered, ${results.skipped_duplicate} duplicate)`);
-
-    // Batch INSERT tokens + queue emails in chunked transactions
-    const CHUNK_SIZE = 1000;
-    const client = await pool.connect();
-    try {
-      for (let c = 0; c < validRows.length; c += CHUNK_SIZE) {
-        const chunk = validRows.slice(c, c + CHUNK_SIZE);
-        await client.query('BEGIN');
-        try {
-          // Batch INSERT reactivation_tokens
-          const tokenClauses = [];
-          const tokenParams = [];
-          chunk.forEach((r, j) => {
-            const base = j * 11;
-            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},'pending',NOW(),NOW()+INTERVAL '30 days')`);
-            tokenParams.push(r.token, target_expo_id, organizerId, r.email, r.name, r.last_name, r.company, r.country, r.job_title, r.phone, form_id || null);
-          });
-          await client.query(
-            `INSERT INTO reactivation_tokens (token, target_expo_id, organizer_id, email, name, last_name, company, country, job_title, phone, form_id, status, created_at, expires_at) VALUES ${tokenClauses.join(',')}`,
-            tokenParams
-          );
-
-          // Queue emails (per-row: each has unique rendered HTML)
-          if (emailTemplate) {
-            for (const r of chunk) {
-              const activationUrl = `${baseUrl}/reactivate.html?token=${r.token}`;
-              const templateData = {
-                name: r.name || 'Valued Guest', last_name: r.last_name, email: r.email,
-                company: r.company, country: r.country, job_title: r.job_title,
-                activation_url: activationUrl, expo_name: targetExpo.name,
-                date: new Date().toLocaleDateString()
-              };
-              const htmlContent = processEmailTemplate(emailTemplate.html_content || emailTemplate.body || '', templateData);
-              const subject = processEmailTemplate(emailTemplate.subject || 'Activate Your Visitor Pass', templateData);
-              await client.query(
-                `INSERT INTO email_queue (organizer_id, expo_id, visitor_id, template_id, recipient_email, subject, html_content, status, created_at) VALUES ($1,$2,NULL,$3,$4,$5,$6,'pending',NOW())`,
-                [organizerId, target_expo_id, template_id, r.email, subject, htmlContent]
-              );
-            }
-          }
-
-          await client.query('COMMIT');
-          results.created += chunk.length;
-        } catch (chunkErr) {
-          await client.query('ROLLBACK').catch(() => {});
-          console.error(`[reactivation] Chunk ${Math.floor(c/CHUNK_SIZE)+1} error:`, chunkErr.message);
-          results.errors.push({ chunk: Math.floor(c/CHUNK_SIZE)+1, rows: `${c+1}-${c+chunk.length}`, error: chunkErr.message });
-        }
-      }
-    } finally {
-      client.release();
-    }
-
-    console.log(`✅ Reactivation campaign created: ${results.created} tokens, ${results.skipped_already_registered} already registered`);
-
-    res.json({
+    // Return immediately
+    res.status(202).json({
       success: true,
-      message: `Campaign created successfully`,
-      results
+      job_id: jobId,
+      total: rows.length,
+      valid: validRows.length,
+      skipped: totalSkipped,
+      message: 'Campaign processing started. Poll /api/reactivation/job/' + jobId + ' for status.'
     });
 
   } catch (err) {
@@ -317,99 +367,48 @@ router.post('/create-from-expo', authMiddleware, async (req, res) => {
 
     console.log(`📊 Found ${visitors.rows.length} visitors from source expo (filter: ${filter || 'all'})`);
 
-    const results = {
-      total: visitors.rows.length,
-      created: 0,
-      skipped_already_registered: 0,
-      skipped_duplicate: 0,
-      errors: []
-    };
-
-    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
-
     // Pre-fetch existing emails for O(1) dedup
-    const existingVisitorsRes = await pool.query(
-      'SELECT LOWER(email) AS email FROM visitors WHERE expo_id = $1 AND email IS NOT NULL',
-      [target_expo_id]
-    );
-    const existingVisitorEmails = new Set(existingVisitorsRes.rows.map(r => r.email));
+    const { existingVisitorEmails, existingTokenEmails } = await prefetchEmails(target_expo_id);
 
-    const existingTokensRes = await pool.query(
-      'SELECT LOWER(email) AS email FROM reactivation_tokens WHERE target_expo_id = $1',
-      [target_expo_id]
-    );
-    const existingTokenEmails = new Set(existingTokensRes.rows.map(r => r.email));
-
-    // Filter and prepare valid rows
+    // Filter valid rows
+    let skipped_already = 0, skipped_dup = 0;
     const validRows = [];
     for (const visitor of visitors.rows) {
       const email = visitor.email.toLowerCase().trim();
-      if (existingVisitorEmails.has(email)) { results.skipped_already_registered++; continue; }
-      if (existingTokenEmails.has(email)) { results.skipped_duplicate++; continue; }
+      if (existingVisitorEmails.has(email)) { skipped_already++; continue; }
+      if (existingTokenEmails.has(email)) { skipped_dup++; continue; }
       existingTokenEmails.add(email);
       validRows.push({ ...visitor, email, token: generateToken() });
     }
+    const totalSkipped = skipped_already + skipped_dup;
 
-    console.log(`📊 ${validRows.length} valid rows after filtering`);
+    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_already} already, ${skipped_dup} dup)`);
 
-    // Batch INSERT in chunked transactions
-    const CHUNK_SIZE = 1000;
-    const client = await pool.connect();
-    try {
-      for (let c = 0; c < validRows.length; c += CHUNK_SIZE) {
-        const chunk = validRows.slice(c, c + CHUNK_SIZE);
-        await client.query('BEGIN');
-        try {
-          // Batch INSERT reactivation_tokens
-          const tokenClauses = [];
-          const tokenParams = [];
-          chunk.forEach((r, j) => {
-            const base = j * 13;
-            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},'pending',NOW(),NOW()+INTERVAL '30 days')`);
-            tokenParams.push(r.token, r.id, source_expo_id, target_expo_id, organizerId, r.email, r.name, r.last_name, r.company, r.country, r.job_title, r.phone, form_id || null);
-          });
-          await client.query(
-            `INSERT INTO reactivation_tokens (token, source_visitor_id, source_expo_id, target_expo_id, organizer_id, email, name, last_name, company, country, job_title, phone, form_id, status, created_at, expires_at) VALUES ${tokenClauses.join(',')}`,
-            tokenParams
-          );
+    // Create import job
+    const jobRes = await pool.query(
+      `INSERT INTO import_jobs (organizer_id, job_type, target_expo_id, source_expo_id, template_id, form_id, total_count, skipped_count, status)
+       VALUES ($1, 'reactivation_expo', $2, $3, $4, $5, $6, $7, 'processing') RETURNING id`,
+      [organizerId, target_expo_id, source_expo_id, template_id || null, form_id || null, visitors.rows.length, totalSkipped]
+    );
+    const jobId = jobRes.rows[0].id;
 
-          // Queue emails (per-row: unique rendered HTML)
-          if (emailTemplate) {
-            for (const r of chunk) {
-              const activationUrl = `${baseUrl}/reactivate.html?token=${r.token}`;
-              const templateData = {
-                name: r.name || 'Valued Guest', last_name: r.last_name || '', email: r.email,
-                company: r.company || '', country: r.country || '', job_title: r.job_title || '',
-                activation_url: activationUrl, expo_name: targetExpo.name,
-                date: new Date().toLocaleDateString()
-              };
-              const htmlContent = processEmailTemplate(emailTemplate.html_content || emailTemplate.body || '', templateData);
-              const subject = processEmailTemplate(emailTemplate.subject || 'Activate Your Visitor Pass', templateData);
-              await client.query(
-                `INSERT INTO email_queue (organizer_id, expo_id, visitor_id, template_id, recipient_email, subject, html_content, status, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',NOW())`,
-                [organizerId, target_expo_id, r.id, template_id, r.email, subject, htmlContent]
-              );
-            }
-          }
+    // Start background processing
+    setImmediate(() => {
+      processReactivationChunks(jobId, validRows, {
+        target_expo_id, source_expo_id, organizerId, template_id, form_id, emailTemplate, targetExpo
+      }).catch(err => {
+        console.error(`[reactivation-job-${jobId}] FATAL:`, err);
+        pool.query(`UPDATE import_jobs SET status='failed', error_message=$1, updated_at=NOW() WHERE id=$2`, [err.message, jobId]).catch(() => {});
+      });
+    });
 
-          await client.query('COMMIT');
-          results.created += chunk.length;
-        } catch (chunkErr) {
-          await client.query('ROLLBACK').catch(() => {});
-          console.error(`[reactivation] Expo chunk ${Math.floor(c/CHUNK_SIZE)+1} error:`, chunkErr.message);
-          results.errors.push({ chunk: Math.floor(c/CHUNK_SIZE)+1, error: chunkErr.message });
-        }
-      }
-    } finally {
-      client.release();
-    }
-
-    console.log(`✅ Reactivation campaign created from expo: ${results.created} tokens`);
-
-    res.json({
+    res.status(202).json({
       success: true,
-      message: 'Campaign created successfully',
-      results
+      job_id: jobId,
+      total: visitors.rows.length,
+      valid: validRows.length,
+      skipped: totalSkipped,
+      message: 'Campaign processing started. Poll /api/reactivation/job/' + jobId + ' for status.'
     });
 
   } catch (err) {
@@ -666,6 +665,25 @@ router.post('/activate', async (req, res) => {
   } catch (err) {
     console.error('[reactivation] Activate error:', err.message);
     res.status(500).json({ success: false, error: 'Activation failed' });
+  }
+});
+
+/**
+ * GET /api/reactivation/job/:id
+ * Poll background import job status
+ */
+router.get('/job/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, job_type, status, total_count, processed_count, skipped_count, failed_count, error_message, created_at, completed_at
+       FROM import_jobs WHERE id = $1 AND organizer_id = $2`,
+      [req.params.id, req.organizer_id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ success: false, error: 'Job not found' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[reactivation] Job status error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to get job status' });
   }
 });
 
