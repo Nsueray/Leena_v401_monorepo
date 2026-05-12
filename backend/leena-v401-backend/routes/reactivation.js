@@ -114,12 +114,13 @@ async function processReactivationChunks(jobId, validRows, ctx) {
   console.log(`[reactivation-job-${jobId}] ✅ COMPLETED: ${created} tokens created`);
 }
 
-function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails) {
-  const results = { skipped_no_email: 0, skipped_already_registered: 0, skipped_duplicate: 0 };
+function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails) {
+  const results = { skipped_no_email: 0, skipped_already_registered: 0, skipped_duplicate: 0, skipped_unsubscribed: 0 };
   const validRows = [];
   for (const row of rows) {
     const email = (row.email || row.Email || row.EMAIL || '').toString().trim().toLowerCase();
     if (!email) { results.skipped_no_email++; continue; }
+    if (unsubscribedEmails.has(email)) { results.skipped_unsubscribed++; continue; }
     if (existingVisitorEmails.has(email)) { results.skipped_already_registered++; continue; }
     if (existingTokenEmails.has(email)) { results.skipped_duplicate++; continue; }
     existingTokenEmails.add(email);
@@ -137,14 +138,17 @@ function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails) {
   return { validRows, ...results };
 }
 
-async function prefetchEmails(target_expo_id) {
+async function prefetchEmails(target_expo_id, organizerId) {
   const existingVisitorsRes = await pool.query(
     'SELECT LOWER(email) AS email FROM visitors WHERE expo_id = $1 AND email IS NOT NULL', [target_expo_id]);
   const existingVisitorEmails = new Set(existingVisitorsRes.rows.map(r => r.email));
   const existingTokensRes = await pool.query(
     'SELECT LOWER(email) AS email FROM reactivation_tokens WHERE target_expo_id = $1', [target_expo_id]);
   const existingTokenEmails = new Set(existingTokensRes.rows.map(r => r.email));
-  return { existingVisitorEmails, existingTokenEmails };
+  const unsubscribedRes = await pool.query(
+    'SELECT LOWER(email) AS email FROM email_unsubscribes WHERE organizer_id = $1', [organizerId]);
+  const unsubscribedEmails = new Set(unsubscribedRes.rows.map(r => r.email));
+  return { existingVisitorEmails, existingTokenEmails, unsubscribedEmails };
 }
 
 /**
@@ -266,14 +270,14 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
 
     console.log(`📊 Processing ${rows.length} rows for reactivation campaign`);
 
-    // Pre-fetch existing emails for O(1) dedup
-    const { existingVisitorEmails, existingTokenEmails } = await prefetchEmails(target_expo_id);
+    // Pre-fetch existing emails + unsubscribes for O(1) dedup
+    const { existingVisitorEmails, existingTokenEmails, unsubscribedEmails } = await prefetchEmails(target_expo_id, organizerId);
 
     // Filter valid rows (no DB calls)
-    const { validRows, skipped_no_email, skipped_already_registered, skipped_duplicate } = prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails);
-    const totalSkipped = skipped_no_email + skipped_already_registered + skipped_duplicate;
+    const { validRows, skipped_no_email, skipped_already_registered, skipped_duplicate, skipped_unsubscribed } = prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails);
+    const totalSkipped = skipped_no_email + skipped_already_registered + skipped_duplicate + skipped_unsubscribed;
 
-    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_no_email} no email, ${skipped_already_registered} already registered, ${skipped_duplicate} duplicate)`);
+    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_no_email} no email, ${skipped_already_registered} already registered, ${skipped_duplicate} duplicate, ${skipped_unsubscribed} unsubscribed)`);
 
     // Create import job
     const jobRes = await pool.query(
@@ -367,22 +371,23 @@ router.post('/create-from-expo', authMiddleware, async (req, res) => {
 
     console.log(`📊 Found ${visitors.rows.length} visitors from source expo (filter: ${filter || 'all'})`);
 
-    // Pre-fetch existing emails for O(1) dedup
-    const { existingVisitorEmails, existingTokenEmails } = await prefetchEmails(target_expo_id);
+    // Pre-fetch existing emails + unsubscribes for O(1) dedup
+    const { existingVisitorEmails, existingTokenEmails, unsubscribedEmails } = await prefetchEmails(target_expo_id, organizerId);
 
     // Filter valid rows
-    let skipped_already = 0, skipped_dup = 0;
+    let skipped_already = 0, skipped_dup = 0, skipped_unsub = 0;
     const validRows = [];
     for (const visitor of visitors.rows) {
       const email = visitor.email.toLowerCase().trim();
+      if (unsubscribedEmails.has(email)) { skipped_unsub++; continue; }
       if (existingVisitorEmails.has(email)) { skipped_already++; continue; }
       if (existingTokenEmails.has(email)) { skipped_dup++; continue; }
       existingTokenEmails.add(email);
       validRows.push({ ...visitor, email, token: generateToken() });
     }
-    const totalSkipped = skipped_already + skipped_dup;
+    const totalSkipped = skipped_already + skipped_dup + skipped_unsub;
 
-    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_already} already, ${skipped_dup} dup)`);
+    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_already} already, ${skipped_dup} dup, ${skipped_unsub} unsubscribed)`);
 
     // Create import job
     const jobRes = await pool.query(
