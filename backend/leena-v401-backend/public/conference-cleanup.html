@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Conference Topic Cleanup — Leena</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-text: #9ca3af; --sidebar-text-active: #fff;
+            --bg-main: #f8fafc; --bg-card: #fff; --border-color: #e2e8f0;
+            --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #94a3b8;
+            --success: #10b981; --danger: #ef4444; --warning: #f59e0b;
+            --radius-md: 8px; --radius-lg: 12px;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-main); color: var(--text-primary); font-size: 14px; }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 256px; background: var(--sidebar-bg); position: fixed; top: 0; left: 0; bottom: 0; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #252542; }
+        .sidebar-logo { height: 80px; }
+        .sidebar-nav { flex: 1; padding: 16px 12px; }
+        .nav-section { margin-bottom: 24px; }
+        .nav-section-title { font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--sidebar-text); padding: 0 12px 8px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; color: var(--sidebar-text); text-decoration: none; border-radius: var(--radius-md); margin-bottom: 2px; transition: all 0.15s; position: relative; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: #2d2d4a; color: var(--sidebar-text-active); }
+        .nav-item.active::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 3px; height: 24px; background: var(--primary); border-radius: 0 3px 3px 0; }
+        .nav-item i { font-size: 18px; width: 20px; }
+        .nav-item span { font-size: 13px; font-weight: 500; }
+        .nav-divider { height: 1px; background: #252542; margin: 16px 12px; }
+        .main-wrapper { flex: 1; margin-left: 256px; display: flex; flex-direction: column; }
+        .main-header { height: 64px; background: var(--bg-card); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+        .main-header h1 { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .main-header h1 i { color: var(--primary); }
+        .main-content { flex: 1; padding: 24px; }
+        .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; font-size: 13px; font-weight: 500; border-radius: var(--radius-md); border: 1px solid transparent; cursor: pointer; transition: all 0.15s; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-secondary { background: var(--bg-card); color: var(--text-primary); border-color: var(--border-color); }
+        .btn-danger { background: var(--danger); color: white; border-color: var(--danger); }
+        .btn-sm { padding: 5px 10px; font-size: 12px; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .warning-banner { background: #fff3cd; color: #664d03; padding: 12px 24px; border-bottom: 1px solid #ffe69c; font-size: 14px; }
+        .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 16px; }
+        .toolbar label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+        .toolbar select, .toolbar input { padding: 7px 10px; border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; font-family: inherit; }
+        .toolbar select { min-width: 180px; }
+        .toolbar input { min-width: 200px; }
+        .cleanup-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 16px; height: calc(100vh - 280px); }
+        .panel { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); display: flex; flex-direction: column; overflow: hidden; }
+        .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border-color); font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+        .panel-body { flex: 1; overflow-y: auto; }
+        .variant-row { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; align-items: center; gap: 10px; font-size: 13px; transition: background 0.1s; }
+        .variant-row:hover { background: #f8fafc; }
+        .variant-row.active { background: var(--primary-light); border-left: 3px solid var(--primary); }
+        .variant-icon { font-size: 14px; flex-shrink: 0; }
+        .variant-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .variant-badges { display: flex; gap: 6px; flex-shrink: 0; }
+        .badge-count { padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .badge-visitors { background: #dbeafe; color: #1e40af; }
+        .badge-certs { background: #fef3c7; color: #92400e; }
+        .visitor-toolbar { padding: 10px 16px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 12px; font-size: 13px; }
+        .visitor-table { width: 100%; border-collapse: collapse; }
+        .visitor-table th { background: var(--bg-main); padding: 8px 12px; text-align: left; font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color); }
+        .visitor-table td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+        .visitor-table tr:hover td { background: #f8fafc; }
+        .empty-panel { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 13px; text-align: center; padding: 40px; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-overlay.show { display: flex; }
+        .modal-box { background: white; border-radius: var(--radius-lg); padding: 24px; max-width: 520px; width: 90%; }
+        .modal-box h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+        .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+        .dry-run-result { margin-top: 12px; padding: 12px 16px; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-size: 13px; }
+        .dry-run-result .conflict-warning { margin-top: 8px; padding: 8px 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; color: #991b1b; font-size: 12px; }
+        .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .loading-overlay.active { display: flex; }
+        .spinner { width: 40px; height: 40px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .cleanup-grid { grid-template-columns: 1fr; height: auto; } }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <a id="sidebarExpo" href="dashboard_new.html" title="Switch Expo" style="padding:8px 20px;font-size:11px;color:#9ca3af;border-bottom:1px solid #252542;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;text-decoration:none;cursor:pointer;"><i class="bi bi-geo-alt" style="margin-right:4px;color:#4a6fa5;"></i><span id="expoNameDisplay"></span> <i class="bi bi-arrow-left-right" style="float:right;font-size:9px;opacity:0.5;margin-top:2px;"></i></a>
+            <script>(function(){var n=localStorage.getItem('selectedExpoName'),el=document.getElementById('sidebarExpo');if(n&&el){document.getElementById('expoNameDisplay').textContent=n;el.style.display='block';}})();</script>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a class="nav-item" href="main-panel-v2.html"><i class="bi bi-grid-1x2"></i><span>Dashboard</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Management</div>
+                    <a class="nav-item" href="visitorlog-paginated.html"><i class="bi bi-people"></i><span>Visitors</span></a>
+                    <a class="nav-item" href="form-list.html"><i class="bi bi-ui-checks-grid"></i><span>Forms</span></a>
+                    <a class="nav-item" href="checkins.html"><i class="bi bi-check2-square"></i><span>Check-ins</span></a>
+                    <a class="nav-item" href="terminals.html"><i class="bi bi-pc-display"></i><span>Terminals</span></a>
+                    <a class="nav-item" href="conference-sessions.html"><i class="bi bi-mortarboard"></i><span>Conferences</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Communication</div>
+                    <a class="nav-item" href="email-templates.html"><i class="bi bi-envelope"></i><span>Email Templates</span></a>
+                    <a class="nav-item" href="email-send.html"><i class="bi bi-send"></i><span>Send Emails</span></a>
+                    <a class="nav-item" href="email-campaigns.html"><i class="bi bi-envelope-paper"></i><span>Email Campaigns</span></a>
+                    <a class="nav-item" href="email-segments.html"><i class="bi bi-megaphone"></i><span>Email Segments</span></a>
+                </div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Settings</div>
+                    <a class="nav-item" href="badge-templates.html"><i class="bi bi-person-badge"></i><span>Badge Templates</span></a>
+                    <a class="nav-item" href="reactivation-campaign.html"><i class="bi bi-arrow-repeat"></i><span>Re-activation</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <div class="nav-section-title">Tools</div>
+                    <a class="nav-item" href="checkin-reports.html"><i class="bi bi-clipboard-data"></i><span>Check-in Reports</span></a>
+                    <a class="nav-item" href="reports.html"><i class="bi bi-graph-up"></i><span>Reports</span></a>
+                    <a class="nav-item" href="import.html"><i class="bi bi-download"></i><span>Import</span></a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+
+            <header class="main-header">
+                <h1><i class="bi bi-tools"></i> Conference Topic Cleanup</h1>
+                <button class="btn btn-secondary" onclick="window.location.href='conference-sessions.html'"><i class="bi bi-arrow-left"></i> Back</button>
+            </header>
+
+            <div class="warning-banner">&#128679; <strong>Temporary Cleanup Tool</strong> — This page will be removed after Mega Clima Nigeria 2026 fair. Use only for one-time topic variation cleanup.</div>
+
+            <main class="main-content">
+                <div class="toolbar">
+                    <div><label>Expo:</label><br><select id="expoSelect" onchange="onExpoChange()"><option value="">Loading...</option></select></div>
+                    <div><label>Show:</label><br><select id="filterSelect" onchange="applyFilter()"><option value="all">All variants</option><option value="non-canonical">Non-canonical only</option><option value="canonical">Canonical only</option></select></div>
+                    <div><label>Search:</label><br><input type="text" id="searchInput" placeholder="Search topic text..." oninput="applyFilter()"></div>
+                    <div style="margin-left:auto;align-self:flex-end;"><button class="btn btn-secondary btn-sm" onclick="refreshData()"><i class="bi bi-arrow-clockwise"></i> Refresh</button></div>
+                </div>
+
+                <div class="cleanup-grid">
+                    <div class="panel" id="variantsPanel">
+                        <div class="panel-header">
+                            <span>Topic Variants</span>
+                            <span id="variantCount" style="font-weight:400;color:var(--text-muted);font-size:12px;">0</span>
+                        </div>
+                        <div class="panel-body" id="variantsList">
+                            <div class="empty-panel">Select an expo to load topic variants</div>
+                        </div>
+                    </div>
+
+                    <div class="panel" id="visitorsPanel">
+                        <div class="panel-header">
+                            <span id="visitorsPanelTitle">Visitors</span>
+                            <span id="visitorCount" style="font-weight:400;color:var(--text-muted);font-size:12px;">0</span>
+                        </div>
+                        <div class="visitor-toolbar" id="visitorToolbar" style="display:none;">
+                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"> Select All</label>
+                            <span id="selectedCount" style="color:var(--text-muted);">0 selected</span>
+                            <button class="btn btn-primary btn-sm" id="moveBtn" disabled onclick="openMoveModal()" style="margin-left:auto;"><i class="bi bi-arrow-right-circle"></i> Move Selected to...</button>
+                        </div>
+                        <div class="panel-body" id="visitorsBody">
+                            <div class="empty-panel">Select a variant on the left to see visitors</div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Move Modal -->
+    <div class="modal-overlay" id="moveModal">
+        <div class="modal-box">
+            <h3><i class="bi bi-arrow-right-circle"></i> Move <span id="moveCount">0</span> visitors to canonical topic</h3>
+            <div style="margin-bottom:12px;">
+                <label style="font-size:13px;font-weight:600;color:var(--text-secondary);">Target Topic (canonical)</label>
+                <select id="targetTopicSelect" style="width:100%;padding:8px 10px;border:1px solid var(--border-color);border-radius:6px;font-size:13px;margin-top:6px;"></select>
+            </div>
+            <div style="display:flex;gap:8px;">
+                <button class="btn btn-secondary" id="dryRunBtn" onclick="runDryRun()"><i class="bi bi-eye"></i> Run Dry Run</button>
+            </div>
+            <div id="dryRunResult" style="display:none;"></div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeMoveModal()">Cancel</button>
+                <button class="btn btn-danger" id="executeBtn" disabled onclick="executeBulkUpdate()"><i class="bi bi-check-circle"></i> Execute</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/leena-toast.js"></script>
+    <script>
+        const API = '/api/conference-cleanup';
+        const token = localStorage.getItem('token');
+        let currentExpoId = null;
+        let allVariants = [];
+        let canonicalTopics = [];
+        let currentVariant = null;
+        let currentVisitors = [];
+        let selectedVisitorIds = new Set();
+        let dryRunData = null;
+        let searchTimeout = null;
+
+        function showLoading(show) { document.getElementById('loadingOverlay').classList.toggle('active', show); }
+
+        async function apiFetch(path) {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 15000);
+            try {
+                const res = await fetch(`${API}${path}`, { headers: { 'Authorization': `Bearer ${token}` }, signal: controller.signal });
+                clearTimeout(tid);
+                if (res.status === 401 || res.status === 403) { localStorage.removeItem('token'); window.location.href = 'login.html'; return null; }
+                return res;
+            } catch (e) {
+                clearTimeout(tid);
+                if (e.name === 'AbortError') showToast('Request timed out', 'error');
+                else showToast('Network error', 'error');
+                throw e;
+            }
+        }
+
+        async function apiPost(path, body) {
+            const controller = new AbortController();
+            const tid = setTimeout(() => controller.abort(), 30000);
+            try {
+                const res = await fetch(`${API}${path}`, {
+                    method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body), signal: controller.signal
+                });
+                clearTimeout(tid);
+                if (res.status === 401 || res.status === 403) { localStorage.removeItem('token'); window.location.href = 'login.html'; return null; }
+                return res;
+            } catch (e) {
+                clearTimeout(tid);
+                if (e.name === 'AbortError') showToast('Request timed out', 'error');
+                else showToast('Network error', 'error');
+                throw e;
+            }
+        }
+
+        function esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+
+        // ============================================================
+        // INIT
+        // ============================================================
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (!token) { window.location.href = 'login.html'; return; }
+            loadExpos();
+        });
+
+        async function loadExpos() {
+            try {
+                const res = await apiFetch('/expos');
+                if (!res) return;
+                const data = await res.json();
+                const sel = document.getElementById('expoSelect');
+                sel.innerHTML = '<option value="">-- Select Expo --</option>';
+                (data.expos || []).forEach(e => {
+                    const flag = e.has_conference_data ? '' : ' (no conference data)';
+                    sel.innerHTML += `<option value="${e.id}" ${e.has_conference_data ? '' : 'style="color:#94a3b8"'}>${esc(e.name)}${flag}</option>`;
+                });
+                const savedExpo = localStorage.getItem('selectedExpoId');
+                if (savedExpo) { sel.value = savedExpo; onExpoChange(); }
+            } catch (e) { /* toast already shown by apiFetch */ }
+        }
+
+        async function onExpoChange() {
+            const expoId = parseInt(document.getElementById('expoSelect').value);
+            if (!expoId) { currentExpoId = null; allVariants = []; canonicalTopics = []; renderVariants([]); clearVisitors(); return; }
+            currentExpoId = expoId;
+            showLoading(true);
+            try {
+                // Load canonical topics
+                const cRes = await apiFetch(`/canonical-topics?expo_id=${expoId}`);
+                if (cRes && cRes.ok) {
+                    const cData = await cRes.json();
+                    canonicalTopics = cData.canonical_topics || [];
+                } else { canonicalTopics = []; }
+
+                // Load variants
+                const vRes = await apiFetch(`/topic-variants?expo_id=${expoId}`);
+                if (!vRes || !vRes.ok) throw new Error('Failed to load variants');
+                const vData = await vRes.json();
+                allVariants = vData.variants || [];
+                applyFilter();
+                clearVisitors();
+            } catch (e) { showToast('Failed to load data', 'error'); }
+            finally { showLoading(false); }
+        }
+
+        function refreshData() { if (currentExpoId) onExpoChange(); }
+
+        // ============================================================
+        // VARIANTS PANEL
+        // ============================================================
+
+        function applyFilter() {
+            const filter = document.getElementById('filterSelect').value;
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            let filtered = allVariants;
+            if (filter === 'non-canonical') filtered = filtered.filter(v => !v.is_canonical);
+            else if (filter === 'canonical') filtered = filtered.filter(v => v.is_canonical);
+            if (search) filtered = filtered.filter(v => v.topic.toLowerCase().includes(search));
+            renderVariants(filtered);
+        }
+
+        function renderVariants(variants) {
+            const list = document.getElementById('variantsList');
+            document.getElementById('variantCount').textContent = variants.length;
+            if (variants.length === 0) {
+                list.innerHTML = '<div class="empty-panel">No variants found</div>';
+                return;
+            }
+            list.innerHTML = variants.map((v, i) => {
+                const icon = v.topic.startsWith('[') ? '<span class="variant-icon" title="Possibly malformed data">&#9888;</span>'
+                    : v.is_canonical ? '<span class="variant-icon" style="color:var(--success);">&#10003;</span>'
+                    : '<span class="variant-icon" style="color:var(--warning);">&#9888;</span>';
+                const active = currentVariant && currentVariant.topic === v.topic ? ' active' : '';
+                return `<div class="variant-row${active}" onclick="selectVariant(${i})" title="${esc(v.topic)}">
+                    ${icon}
+                    <span class="variant-text">${esc(v.topic)}</span>
+                    <div class="variant-badges">
+                        <span class="badge-count badge-visitors">${v.visitor_count}</span>
+                        ${v.cert_count > 0 ? `<span class="badge-count badge-certs">${v.cert_count} cert</span>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function selectVariant(idx) {
+            const filter = document.getElementById('filterSelect').value;
+            const search = document.getElementById('searchInput').value.toLowerCase().trim();
+            let filtered = allVariants;
+            if (filter === 'non-canonical') filtered = filtered.filter(v => !v.is_canonical);
+            else if (filter === 'canonical') filtered = filtered.filter(v => v.is_canonical);
+            if (search) filtered = filtered.filter(v => v.topic.toLowerCase().includes(search));
+            currentVariant = filtered[idx];
+            renderVariants(filtered);
+            loadVisitors();
+        }
+
+        // ============================================================
+        // VISITORS PANEL
+        // ============================================================
+
+        async function loadVisitors() {
+            if (!currentVariant || !currentExpoId) return;
+            const panel = document.getElementById('visitorsBody');
+            const toolbar = document.getElementById('visitorToolbar');
+            document.getElementById('visitorsPanelTitle').textContent = `Visitors with: ${currentVariant.topic.substring(0, 60)}${currentVariant.topic.length > 60 ? '...' : ''}`;
+            panel.innerHTML = '<div class="empty-panel">Loading...</div>';
+            toolbar.style.display = 'none';
+            selectedVisitorIds.clear();
+            try {
+                const res = await apiFetch(`/visitors?expo_id=${currentExpoId}&topic=${encodeURIComponent(currentVariant.topic)}`);
+                if (!res || !res.ok) throw new Error('Failed');
+                const data = await res.json();
+                currentVisitors = data.visitors || [];
+                document.getElementById('visitorCount').textContent = currentVisitors.length;
+                if (currentVisitors.length === 0) {
+                    panel.innerHTML = '<div class="empty-panel">No visitors found for this variant</div>';
+                    return;
+                }
+                toolbar.style.display = 'flex';
+                renderVisitors();
+            } catch (e) { panel.innerHTML = '<div class="empty-panel" style="color:var(--danger);">Failed to load visitors</div>'; }
+        }
+
+        function renderVisitors() {
+            const panel = document.getElementById('visitorsBody');
+            panel.innerHTML = `<table class="visitor-table">
+                <thead><tr><th style="width:30px;"><input type="checkbox" id="selectAllHead" onchange="toggleSelectAll()"></th><th>Name</th><th>Email</th><th>Company</th><th>Multi</th></tr></thead>
+                <tbody>${currentVisitors.map(v => `<tr onclick="toggleVisitor(${v.id})" style="cursor:pointer;">
+                    <td><input type="checkbox" ${selectedVisitorIds.has(v.id) ? 'checked' : ''} onclick="event.stopPropagation(); toggleVisitor(${v.id})"></td>
+                    <td>${esc(v.name || '-')}</td>
+                    <td style="font-size:12px;color:var(--text-secondary);">${esc(v.email || '-')}</td>
+                    <td style="font-size:12px;">${esc(v.company || '-')}</td>
+                    <td>${v.is_multi_topic ? '<span style="color:var(--warning);" title="Has multiple topics">&#8644;</span>' : ''}</td>
+                </tr>`).join('')}</tbody>
+            </table>`;
+            updateSelectedCount();
+        }
+
+        function toggleVisitor(id) {
+            if (selectedVisitorIds.has(id)) selectedVisitorIds.delete(id);
+            else selectedVisitorIds.add(id);
+            renderVisitors();
+        }
+
+        function toggleSelectAll() {
+            if (selectedVisitorIds.size === currentVisitors.length) { selectedVisitorIds.clear(); }
+            else { currentVisitors.forEach(v => selectedVisitorIds.add(v.id)); }
+            renderVisitors();
+        }
+
+        function updateSelectedCount() {
+            document.getElementById('selectedCount').textContent = selectedVisitorIds.size + ' selected';
+            document.getElementById('moveBtn').disabled = selectedVisitorIds.size === 0 || currentVariant.is_canonical;
+            const sa = document.getElementById('selectAll');
+            if (sa) sa.checked = selectedVisitorIds.size === currentVisitors.length && currentVisitors.length > 0;
+            const sah = document.getElementById('selectAllHead');
+            if (sah) sah.checked = selectedVisitorIds.size === currentVisitors.length && currentVisitors.length > 0;
+        }
+
+        function clearVisitors() {
+            currentVariant = null;
+            currentVisitors = [];
+            selectedVisitorIds.clear();
+            document.getElementById('visitorsBody').innerHTML = '<div class="empty-panel">Select a variant on the left to see visitors</div>';
+            document.getElementById('visitorToolbar').style.display = 'none';
+            document.getElementById('visitorsPanelTitle').textContent = 'Visitors';
+            document.getElementById('visitorCount').textContent = '0';
+        }
+
+        // ============================================================
+        // MOVE MODAL
+        // ============================================================
+
+        function openMoveModal() {
+            if (selectedVisitorIds.size === 0 || !currentVariant) return;
+            document.getElementById('moveCount').textContent = selectedVisitorIds.size;
+            const sel = document.getElementById('targetTopicSelect');
+            sel.innerHTML = '<option value="">-- Select canonical topic --</option>';
+            canonicalTopics.forEach(t => {
+                if (t !== currentVariant.topic) sel.innerHTML += `<option value="${esc(t)}">${esc(t)}</option>`;
+            });
+            document.getElementById('dryRunResult').style.display = 'none';
+            document.getElementById('executeBtn').disabled = true;
+            dryRunData = null;
+            document.getElementById('moveModal').classList.add('show');
+        }
+
+        function closeMoveModal() {
+            document.getElementById('moveModal').classList.remove('show');
+        }
+
+        async function runDryRun() {
+            const newTopic = document.getElementById('targetTopicSelect').value;
+            if (!newTopic) { showToast('Select a target topic', 'error'); return; }
+            const btn = document.getElementById('dryRunBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Running...';
+            try {
+                const res = await apiPost('/bulk-update', {
+                    expo_id: currentExpoId,
+                    visitor_ids: Array.from(selectedVisitorIds),
+                    old_topic: currentVariant.topic,
+                    new_topic: newTopic,
+                    mode: 'dry_run'
+                });
+                if (!res) return;
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Dry run failed');
+                dryRunData = data;
+                const dr = document.getElementById('dryRunResult');
+                dr.style.display = '';
+                let html = `<div class="dry-run-result">
+                    <strong>Dry Run Results:</strong><br>
+                    &#8226; ${data.will_affect.visitors} visitors will be updated<br>
+                    &#8226; ${data.will_affect.certificates_to_update} certificates will be renamed<br>
+                    &#8226; ${data.will_affect.certificates_to_delete} certificates will be deleted`;
+                if (data.conflicts.count > 0) {
+                    html += `<div class="conflict-warning">&#9888;&#65039; ${data.conflicts.count} visitors have conflicts. ${data.conflicts.message}</div>`;
+                }
+                html += '</div>';
+                dr.innerHTML = html;
+                document.getElementById('executeBtn').disabled = false;
+            } catch (e) {
+                showToast(e.message || 'Dry run failed', 'error');
+            } finally {
+                btn.disabled = false; btn.innerHTML = '<i class="bi bi-eye"></i> Run Dry Run';
+            }
+        }
+
+        async function executeBulkUpdate() {
+            if (!dryRunData) return;
+            if (!confirm('Are you sure? This cannot be undone.')) return;
+            const newTopic = document.getElementById('targetTopicSelect').value;
+            const btn = document.getElementById('executeBtn');
+            btn.disabled = true; btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Executing...';
+            try {
+                const res = await apiPost('/bulk-update', {
+                    expo_id: currentExpoId,
+                    visitor_ids: Array.from(selectedVisitorIds),
+                    old_topic: currentVariant.topic,
+                    new_topic: newTopic,
+                    mode: 'execute'
+                });
+                if (!res) return;
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || 'Execute failed');
+                showToast(`Updated: ${data.affected.visitors_updated} visitors, ${data.affected.certificates_updated} certs renamed, ${data.affected.certificates_deleted} certs deleted`);
+                closeMoveModal();
+                onExpoChange();
+            } catch (e) {
+                showToast(e.message || 'Execute failed', 'error');
+            } finally {
+                btn.disabled = false; btn.innerHTML = '<i class="bi bi-check-circle"></i> Execute';
+            }
+        }
+    </script>
+</body>
+</html>
