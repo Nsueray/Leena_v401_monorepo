@@ -428,8 +428,8 @@
         }
 
         function handleFile(file) {
-            if (file.size > 10 * 1024 * 1024) {
-                showAlert('File too large (max 10MB)', 'danger');
+            if (file.size > 50 * 1024 * 1024) {
+                showAlert('File too large (max 50MB)', 'danger');
                 return;
             }
             if (!file.name.match(/\.(xlsx|xls|csv)$/i)) {
