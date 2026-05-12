@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 7 Mayıs 2026 | Versiyon: v4.0.3
+> Son güncelleme: 12 Mayıs 2026 | Versiyon: v4.0.3
 
 ---
 
@@ -1198,6 +1198,24 @@ Migration status: 3 pages (visitorlog, email-campaigns, dashboard_new). Remainin
 - **Dead middleware:** `middleware/auth.js` exists but unused by any route (has `'your-secret-key'` fallback) — to be deleted in post-fair cleanup
 - **Status codes:** 401 = token missing/malformed, 403 = token expired/invalid signature
 - **Frontend handling:** leena-fetch.js catches both 401 and 403 as session expiry
+
+**Conference Topic Cleanup Tool (10-12 May 2026):**
+- Temporary admin tool to fix conference_topic data quality issues in Mega Clima Nigeria 2026 expo. DB had 55 distinct variants for 13 canonical topics (apostrophe variants, prefix variants, numbered variants, JSON array strings).
+- Backend: `routes/conferenceCleanup.js` — 5 endpoints (GET /expos, /canonical-topics, /topic-variants, /visitors, POST /bulk-update). Transaction-wrapped execute, CHUNK_SIZE=100, organizer-scoped, conflict detection (cert UNIQUE constraint).
+- Frontend: `public/conference-cleanup.html` — master-detail layout (variants left, visitors right), dry-run preview modal, segment-aware execute. Entry via "Topic Cleanup" button on conference-sessions.html header.
+- Canonical source: `forms.fields` JSONB → field with `name='conference_topic'` → `options` array. Dynamic per expo, no hardcoded list.
+- conference-sessions.html line 242 orphan sidebar link fix (14969f6).
+- Temporary tool — to be removed post Mega Clima Nigeria 2026 fair. See ADR-021.
+
+### Conference Topic Architecture
+
+**Current model (legacy):** Conference topics stored as free-text in `visitors.custom_fields->>'conference_topic'` (multi-topic via `" || "` separator) and `conference_certificates.conference_topic` column. Canonical source: `forms.fields` JSONB array for active conference form per expo.
+
+**Known issue:** No canonical entity model. Renaming requires multi-table updates. Form changes don't propagate to existing visitors. Anti-pattern documented in ell-docs ADR-021.
+
+**Cleanup tool (temporary):** `/api/conference-cleanup` endpoints allow bulk segment-aware rename of variants to canonical topic within an expo. Transaction-wrapped, conflict-detection (cert UNIQUE constraint), CHUNK_SIZE=100.
+
+**Planned refactor (post-fair):** Conference Entity Migration — new tables `expo_conferences` (id, expo_id, name, day, order_no) and `visitor_conferences` (junction). See ADR-021.
 
 ### v4.0.2 (6 Şubat 2026)
 - Import email QR fix (UUID → img tag)

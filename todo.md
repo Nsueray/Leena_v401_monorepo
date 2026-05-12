@@ -1,6 +1,6 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 7 Mayıs 2026
+> Son güncelleme: 12 Mayıs 2026
 > Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
@@ -242,6 +242,26 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [x] JWT 30-day lifetime documented
 - [x] middleware/auth.js dead code identified
 
+## ✅ Conference Topic Cleanup Sprint (10-12 Mayıs 2026)
+
+### Hazırlık
+- [x] conference-sessions.html line 242 orphan sidebar link fix (14969f6)
+
+### Backend
+- [x] /api/conference-cleanup/expos — organizer-scoped expo list
+- [x] /api/conference-cleanup/canonical-topics — dynamic dropdown from form
+- [x] /api/conference-cleanup/topic-variants — variants with visitor/cert counts
+- [x] /api/conference-cleanup/visitors — multi-topic-aware lookup
+- [x] /api/conference-cleanup/bulk-update — dry_run + execute, segment-aware, conflict detection, transaction-wrapped (61db471)
+
+### Frontend
+- [x] /conference-cleanup.html — master-detail page, dry-run modal (aa7012f)
+- [x] Topic Cleanup button on conference-sessions.html (aa7012f)
+
+### Tested
+- [x] All 5 endpoints tested via curl (expos, canonical-topics, topic-variants, visitors, bulk-update dry_run)
+- [x] UI flow tested manually in browser
+
 ---
 
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
@@ -288,6 +308,13 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 ### Visitor Management
 - [ ] Madde 3: Visitor delete (hard delete, checkin-less visitors only)
 - [ ] Visitor detail panel: add check-in history (all check-in timestamps)
+
+### Conference Module (post-fair)
+- [ ] Sprint Cleanup: remove /api/conference-cleanup routes + conference-cleanup.html + Topic Cleanup button from conference-sessions
+- [ ] Conference Entity Migration: new tables (expo_conferences, visitor_conferences), migrate JSONB strings to FKs, refactor 8-10 affected modules. See ADR-021.
+- [ ] Webhook input validation: normalize conference_topic against canonical form options
+- [ ] Audit DB: remove any remaining test data ("Choice One" etc.)
+- [ ] Ghana expo (id=5) cleanup decision: archive or migrate
 
 ---
 
