@@ -831,4 +831,60 @@ router.post('/resend-pending', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/reactivation/campaign/:expoId/stats
+ * Per-status email_queue breakdown for this expo (last 24h window)
+ * Read-only: SELECT only, no writes
+ */
+router.get('/campaign/:expoId/stats', authMiddleware, async (req, res) => {
+  try {
+    const { expoId } = req.params;
+    const organizerId = req.organizer_id;
+
+    // Verify expo belongs to organizer
+    const expoCheck = await pool.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expoId, organizerId]
+    );
+    if (expoCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Expo not found' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        status,
+        COUNT(*)::int AS count,
+        MIN(created_at) AS oldest,
+        MAX(sent_at) FILTER (WHERE status = 'sent') AS latest_sent
+      FROM email_queue
+      WHERE expo_id = $1
+        AND created_at > NOW() - INTERVAL '24 hours'
+      GROUP BY status
+      ORDER BY status
+    `, [expoId]);
+
+    const stats = {};
+    let lastGlobalSentAt = null;
+    for (const row of result.rows) {
+      stats[row.status] = {
+        count: row.count,
+        oldest: row.oldest,
+        latest_sent: row.latest_sent
+      };
+      if (row.latest_sent && (!lastGlobalSentAt || new Date(row.latest_sent) > new Date(lastGlobalSentAt))) {
+        lastGlobalSentAt = row.latest_sent;
+      }
+    }
+
+    res.json({
+      expo_id: parseInt(expoId, 10),
+      stats,
+      last_global_sent_at: lastGlobalSentAt
+    });
+  } catch (err) {
+    console.error('[reactivation] Stats breakdown error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to get stats breakdown' });
+  }
+});
+
 module.exports = router;
