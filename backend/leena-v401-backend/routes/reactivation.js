@@ -887,4 +887,46 @@ router.get('/campaign/:expoId/stats', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * GET /api/reactivation/campaign/:expoId/is-active
+ * Used by the View Campaigns UI to decide whether the Resend button can
+ * fire. is_active = (pending+processing count > 0) OR (anything queued in
+ * the last 10 minutes). Same SELECT-only contract as /stats.
+ */
+router.get('/campaign/:expoId/is-active', authMiddleware, async (req, res) => {
+  try {
+    const { expoId } = req.params;
+    const organizerId = req.organizer_id;
+
+    const expoCheck = await pool.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expoId, organizerId]
+    );
+    if (expoCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Expo not found' });
+    }
+
+    const result = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE status IN ('pending','processing'))::int AS pending_count,
+        MAX(created_at) FILTER (WHERE created_at > NOW() - INTERVAL '10 minutes') AS last_queued_at
+      FROM email_queue
+      WHERE expo_id = $1
+        AND created_at > NOW() - INTERVAL '24 hours'
+    `, [expoId]);
+
+    const row = result.rows[0];
+    const isActive = row.pending_count > 0 || row.last_queued_at !== null;
+
+    res.json({
+      is_active: isActive,
+      pending_count: row.pending_count,
+      last_queued_at: row.last_queued_at
+    });
+  } catch (err) {
+    console.error('[reactivation] is-active check error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to check campaign state' });
+  }
+});
+
 module.exports = router;
