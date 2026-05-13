@@ -157,22 +157,53 @@ async function prefetchEmails(target_expo_id, organizerId) {
  */
 router.get('/campaigns', authMiddleware, async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT 
-        target_expo_id,
-        e.name as expo_name,
-        COUNT(*) as total_tokens,
-        COUNT(*) FILTER (WHERE rt.status = 'pending') as pending,
-        COUNT(*) FILTER (WHERE rt.status = 'activated') as activated,
-        COUNT(*) FILTER (WHERE rt.status = 'expired') as expired,
-        MIN(rt.created_at) as campaign_started,
-        MAX(rt.created_at) as last_added
-      FROM reactivation_tokens rt
-      JOIN expos e ON rt.target_expo_id = e.id
-      WHERE rt.organizer_id = $1
-      GROUP BY target_expo_id, e.name
-      ORDER BY campaign_started DESC
-    `, [req.organizer_id]);
+    let result;
+    // Try the augmented query first (post-migration 006); fall back to the
+    // legacy query if the new columns don't exist yet.
+    try {
+      result = await pool.query(`
+        SELECT
+          target_expo_id,
+          e.name as expo_name,
+          e.reactivation_closed_at,
+          e.reactivation_closed_by,
+          o.name as closed_by_name,
+          COUNT(*) as total_tokens,
+          COUNT(*) FILTER (WHERE rt.status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE rt.status = 'activated') as activated,
+          COUNT(*) FILTER (WHERE rt.status = 'expired') as expired,
+          MIN(rt.created_at) as campaign_started,
+          MAX(rt.created_at) as last_added
+        FROM reactivation_tokens rt
+        JOIN expos e ON rt.target_expo_id = e.id
+        LEFT JOIN organizers o ON o.id = e.reactivation_closed_by
+        WHERE rt.organizer_id = $1
+        GROUP BY target_expo_id, e.name, e.reactivation_closed_at, e.reactivation_closed_by, o.name
+        ORDER BY campaign_started DESC
+      `, [req.organizer_id]);
+    } catch (err) {
+      if (err.code !== '42703') throw err; // 42703 = undefined_column
+      // Pre-migration fallback — keep dashboard functional until ALTER TABLE runs
+      result = await pool.query(`
+        SELECT
+          target_expo_id,
+          e.name as expo_name,
+          NULL::timestamptz as reactivation_closed_at,
+          NULL::int as reactivation_closed_by,
+          NULL::text as closed_by_name,
+          COUNT(*) as total_tokens,
+          COUNT(*) FILTER (WHERE rt.status = 'pending') as pending,
+          COUNT(*) FILTER (WHERE rt.status = 'activated') as activated,
+          COUNT(*) FILTER (WHERE rt.status = 'expired') as expired,
+          MIN(rt.created_at) as campaign_started,
+          MAX(rt.created_at) as last_added
+        FROM reactivation_tokens rt
+        JOIN expos e ON rt.target_expo_id = e.id
+        WHERE rt.organizer_id = $1
+        GROUP BY target_expo_id, e.name
+        ORDER BY campaign_started DESC
+      `, [req.organizer_id]);
+    }
 
     res.json({ success: true, campaigns: result.rows });
   } catch (err) {
@@ -926,6 +957,109 @@ router.get('/campaign/:expoId/is-active', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('[reactivation] is-active check error:', err.message);
     res.status(500).json({ success: false, error: 'Failed to check campaign state' });
+  }
+});
+
+/**
+ * POST /api/reactivation/campaign/:expoId/close
+ * Marks the reactivation campaign as closed. Does NOT cancel in-flight queued
+ * emails — the worker keeps draining whatever is already in email_queue.
+ * Closing is a UI/intent signal: no further activations are expected, the
+ * Resend button is disabled, and the card moves to Past Campaigns.
+ *
+ * Idempotent surface: 409 if already closed.
+ * Requires migration 006_reactivation_closed_at.sql; returns 503 otherwise.
+ */
+router.post('/campaign/:expoId/close', authMiddleware, async (req, res) => {
+  try {
+    const { expoId } = req.params;
+    const organizerId = req.organizer_id;
+
+    const expoCheck = await pool.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expoId, organizerId]
+    );
+    if (expoCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Expo not found' });
+    }
+
+    let result;
+    try {
+      result = await pool.query(`
+        UPDATE expos
+        SET reactivation_closed_at = NOW(),
+            reactivation_closed_by = $1
+        WHERE id = $2 AND reactivation_closed_at IS NULL
+        RETURNING reactivation_closed_at
+      `, [organizerId, expoId]);
+    } catch (err) {
+      if (err.code === '42703') {
+        return res.status(503).json({
+          success: false,
+          error: 'Close feature not yet enabled (migration 006 pending)'
+        });
+      }
+      throw err;
+    }
+
+    if (result.rowCount === 0) {
+      return res.status(409).json({ success: false, error: 'Campaign is already closed' });
+    }
+
+    console.log(`[reactivation] Campaign closed: expo ${expoId} by organizer ${organizerId}`);
+    res.json({ success: true, closed_at: result.rows[0].reactivation_closed_at });
+  } catch (err) {
+    console.error('[reactivation] Close error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to close campaign' });
+  }
+});
+
+/**
+ * POST /api/reactivation/campaign/:expoId/reopen
+ * Clears the closed flag. Idempotent: 409 if not currently closed.
+ * Requires migration 006_reactivation_closed_at.sql; returns 503 otherwise.
+ */
+router.post('/campaign/:expoId/reopen', authMiddleware, async (req, res) => {
+  try {
+    const { expoId } = req.params;
+    const organizerId = req.organizer_id;
+
+    const expoCheck = await pool.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expoId, organizerId]
+    );
+    if (expoCheck.rows.length === 0) {
+      return res.status(404).json({ success: false, error: 'Expo not found' });
+    }
+
+    let result;
+    try {
+      result = await pool.query(`
+        UPDATE expos
+        SET reactivation_closed_at = NULL,
+            reactivation_closed_by = NULL
+        WHERE id = $1 AND reactivation_closed_at IS NOT NULL
+        RETURNING id
+      `, [expoId]);
+    } catch (err) {
+      if (err.code === '42703') {
+        return res.status(503).json({
+          success: false,
+          error: 'Close feature not yet enabled (migration 006 pending)'
+        });
+      }
+      throw err;
+    }
+
+    if (result.rowCount === 0) {
+      return res.status(409).json({ success: false, error: 'Campaign is not closed' });
+    }
+
+    console.log(`[reactivation] Campaign reopened: expo ${expoId} by organizer ${organizerId}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[reactivation] Reopen error:', err.message);
+    res.status(500).json({ success: false, error: 'Failed to reopen campaign' });
   }
 });
 
