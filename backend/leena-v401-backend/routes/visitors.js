@@ -192,7 +192,7 @@ router.post('/public', async (req, res) => {
       email: custom_fields?.email || '',
       company: custom_fields?.company || '',
       country: custom_fields?.country || '',
-      job_title: custom_fields?.job_title || '',
+      job_title: custom_fields?.job_title || custom_fields?.title || '',
       phone: custom_fields?.phone || '',
       source: source || 'public_form',
       origin: 'public',
