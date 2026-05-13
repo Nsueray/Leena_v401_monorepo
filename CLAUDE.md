@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 12 Mayıs 2026 | Versiyon: v4.0.3
+> Son güncelleme: 13 Mayıs 2026 | Versiyon: v4.0.3
 
 ---
 
@@ -1206,6 +1206,48 @@ Migration status: 3 pages (visitorlog, email-campaigns, dashboard_new). Remainin
 - Canonical source: `forms.fields` JSONB → field with `name='conference_topic'` → `options` array. Dynamic per expo, no hardcoded list.
 - conference-sessions.html line 242 orphan sidebar link fix (14969f6).
 - Temporary tool — to be removed post Mega Clima Nigeria 2026 fair. See ADR-021.
+
+**Pre-launch Mega Clima Nigeria 70k Reactivation Sprint (13 May 2026):**
+
+Code commits (all deployed to production):
+- **BLOCKER-1 fix (3e4b969):** `routes/reactivation.js:589-607` POST /activate template selection corrected. Previously picked first form for expo (often wrong template — e.g. conference template used for visitor activation). New logic: `tokenData.form_id` primary, NULL fallback → `expo_id + visitor_type='visitor' + ORDER BY f.id ASC LIMIT 1`. Added log line: `[reactivation] Activate template selection: form_id=X, template_id=Y`.
+- **Async job pattern (094ef99):** New `import_jobs` table (`migrations/005_import_jobs.sql`) with status, total_count, processed_count, skipped_count, failed_count, error_message, target_expo_id, source_expo_id, template_id, form_id. POST /create-from-excel + /create-from-expo refactored: pre-fetch existing emails into Sets (O(1) dedup) → INSERT import_jobs → setImmediate background → 202 response. Helper `processReactivationChunks` with CHUNK_SIZE=1000 and BEGIN/COMMIT/ROLLBACK per chunk. New endpoint: GET /api/reactivation/job/:id polling. Frontend: progress bar + 2s polling loop.
+- **File size limit (7d10144):** multer + frontend validation 10MB → 50MB (`routes/reactivation.js:20`, `public/reactivation-campaign.html:431`). 70k Excel ~24MB, headroom retained.
+- **email_unsubscribes pre-check (e7d9cf4):** `prefetchEmails()` now returns 3 Sets — existingVisitors, existingTokens, unsubscribed. Filter loop adds `skipped_unsubscribed++` counter, surfaced in UI breakdown.
+- **Exhibitor job_title fallback (aff83bc):** `routes/visitors.js:195` — `custom_fields?.job_title || custom_fields?.title || ''`. Exhibitor form (id=35, expo 7) uses field name `title`. Aligns with Excel import path which already uses this OR fallback (visitors.js:612).
+
+DB operations (Render Shell, production):
+- **Template 24 unsubscribe footer:** SQL REPLACE inserted standard footer before `</body>` — "You received this email because you registered for or were invited to an Elan Expo event. Elan Expo, Istanbul, Turkey. To unsubscribe from future emails, reply with UNSUBSCRIBE in the subject line." Manual unsubscribe path until automated endpoint is built post-fair.
+- **52 exhibitor job_title backfill (expo 7):** `UPDATE visitors SET job_title = custom_fields->>'title' WHERE expo_id=7 AND visitor_type='exhibitor' AND (job_title IS NULL OR job_title='') AND custom_fields->>'title' <> ''`. Backup: `exhibitor_job_title_backup_20260513`. UPDATE 52, visually validated by Yaprak in Visitor Log.
+- **76 visitor conference_topic split (expo 7):** "Day 1 & Day 2 | Workforce Development Programme..." segment → Topic 1 + Topic 5 (canonical from form 39). Backup: `conference_topic_backup_20260513`. Method: WITH refs (DB-derived strings) + LATERAL `regexp_split_to_table(...,' \|\| ')` + UNNEST + DISTINCT trim + string_agg. Multi-segment visitors preserved with dedup (e.g. visitor 49864 expanded from 3 to 4 segments). Validation: still_has_day_1_2=0, has_topic_1=76, has_topic_5=76.
+
+Crisis response — test domain SendGrid suppression:
+- During async-pattern stress test, 85,000 reactivation tokens were inserted with `test-NNNNN@leena-test.local` (no DNS) recipients. Working assumption "SendGrid skips invalid-domain addresses" was wrong — SendGrid attempts MX lookup, returns deferred, retries 72h, then hard-bounces. 42,924 already submitted to SendGrid; 42,077 pending in queue.
+- Action 1: `UPDATE email_queue SET status='cancelled' WHERE status IN ('pending','processing') AND recipient_email LIKE '%@leena-test.local'` → 42,077 cancelled.
+- Action 2: 85,000 unique test addresses POSTed to SendGrid Global Suppression List via `/v3/asm/suppressions/global` (85 batches × 1000) → 85/85 success → deferred retries blocked, hard-bounce escalation prevented, sender reputation preserved (~98%).
+- Verified: random 10 sent emails confirmed in suppression list.
+
+Infrastructure:
+- SendGrid plan upgrade: Pro 100K → Pro 300K ($89.95 → $249/mo). Month-to-date usage already ~84k; 70k reactivation would have exceeded Pro 100K cap.
+
+Smoke test (production validation):
+- 5 real recipients (`suer+smoke1@elan-expo.com` … `suer+smoke5`) on Mega Clima Nigeria expo validated full chain. Response 464ms → progress bar → "Completed! 5 tokens created". Reactivation invite used Template 34 ("MC Nigeria Reactive Badge Mailing") with correct {{name}} and {{activation_url}}. Activate flow → reactivate.html → Success. Badge confirmation emitted Template 24 ("QR Code Badge"), proving BLOCKER-1 fix (previously selected Template 29 "Conference QR Badge").
+
+Yaprak's 70k campaign:
+- ~12:00 — Yaprak uploaded Excel (41,222 rows, 34,041 unique emails after dedup; header bug `jot_title` corrected by Yaprak before upload). Background drain currently running at ~5 emails/sec (~2-2.5h ETA).
+
+Lessons learned (operational rules):
+- **L1 — SendGrid sends to invalid-DNS test domains:** `@leena-test.local`-style fake-domain bulk inserts trigger MX lookup → deferred → 72h retry → hard bounce. Reputation risk. Mitigations: (a) plus-addressing on real mailbox (`suer+test1@elan-expo.com`); (b) pre-add fake domain to SendGrid suppression before bulk send; (c) SendGrid sandbox mode for simulation. *Candidate ELL_RULES.md cross-system rule — pending Suer decision.*
+- **L2 — PostgreSQL string match apostrophe types:** `'` (ASCII U+0027) and `'` (typographic U+2019) are distinct codepoints. Form inputs often autocorrect to typographic. SQL hardcoded strings WILL NOT match — derive byte-exact value from DB via subquery (this sprint's 76-visitor split SQL relied on this).
+- **L3 — Render Shell vs external DB access:** Render Shell uses `$DATABASE_INTERNAL_URL`. External access requires IP whitelist via Render Dashboard → leena_v401_db → Inbound IP Rules — update when Suer's IP changes.
+
+Open backlog from this sprint (post-fair):
+- Generic token-based unsubscribe endpoint (replace manual "reply with UNSUBSCRIBE" instruction).
+- SendGrid bounce/complaint webhook integration → automated `email_unsubscribes` population.
+- `conferenceCleanup` 1→N split capability (current tool is 1→1 rename only; Day 1 & Day 2 → Topic 1 + Topic 5 done via manual SQL this sprint).
+- `email_unsubscribes` per-expo or per-organizer-form scope (currently organizer-level — unsubscribing affects all expos for that organizer).
+- Form 39 canonical topic typo cleanup ("Cool Plus Limit" → "Limited", duplicate spaces).
+- Existing risks re-flagged for tracking: R5 stale 'processing' email recovery, R8 setImmediate orphan recovery, R9 reactivation_tokens UNIQUE(email,target_expo_id), R14 backend template `{{activation_url}}` placeholder validation.
 
 ### Conference Topic Architecture
 

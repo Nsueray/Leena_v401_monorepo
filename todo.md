@@ -1,6 +1,6 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 12 Mayıs 2026
+> Son güncelleme: 13 Mayıs 2026
 > Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
@@ -264,6 +264,36 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 
 ---
 
+## ✅ Pre-launch Mega Clima Nigeria 70k Reactivation Sprint (13 Mayıs 2026)
+
+### Code (deployed)
+- [x] BLOCKER-1 fix: POST /activate template selection (form_id primary, visitor-type fallback) (3e4b969)
+- [x] Async job pattern: `import_jobs` table + setImmediate + 202 response + GET /job/:id polling (094ef99)
+- [x] File size limit 10MB → 50MB (multer + frontend) (7d10144)
+- [x] email_unsubscribes pre-check in `prefetchEmails()` + skipped_unsubscribed counter (e7d9cf4)
+- [x] Public form job_title fallback: `custom_fields?.job_title || custom_fields?.title` (aff83bc)
+
+### DB Operations (Render Shell)
+- [x] Template 24 unsubscribe footer SQL REPLACE before `</body>`
+- [x] 52 Mega Clima Nigeria exhibitor job_title backfill from `custom_fields->>'title'` (backup table: `exhibitor_job_title_backup_20260513`)
+- [x] 76 visitor conference_topic split "Day 1 & Day 2 ..." → Topic 1 + Topic 5 (backup table: `conference_topic_backup_20260513`, segment-aware dedup, multi-segment preserved)
+
+### Crisis Response — Test Domain SendGrid Suppression
+- [x] 42,077 pending `@leena-test.local` emails cancelled via `UPDATE email_queue SET status='cancelled'`
+- [x] 85,000 unique test addresses added to SendGrid Global Suppression (85 batches × 1000, 85/85 success)
+- [x] Random 10-sample verification confirmed suppression effective
+
+### Infrastructure
+- [x] SendGrid Pro 100K → Pro 300K upgrade ($89.95 → $249/mo)
+
+### Smoke Test
+- [x] 5-recipient real-domain test on Mega Clima Nigeria expo → 464ms response, full chain validated (invite Template 34, badge Template 24)
+
+### Yaprak Campaign
+- [x] 12:00 — Yaprak uploaded Excel (41,222 rows, 34,041 unique emails); background drain in progress (~2-2.5h at 5/sec)
+
+---
+
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
 
 - [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)
@@ -290,6 +320,14 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] Backend bulk send rate limit / duplicate protection (prevent double-submit queueing same visitors twice)
 - [ ] Historical email_logs visitor_id backfill: UPDATE ~114K NULL visitor_id rows via email match, then revert email fallback SQL in email_status filter (19ms vs 227ms)
 - [ ] Email UI Simplification (Senaryo C): merge Send Emails + Email Segments into unified send page, keep Templates and Campaigns separate
+- [ ] **Generic token-based unsubscribe endpoint** (replace "reply with UNSUBSCRIBE" manual flow for non-campaign emails). Reactivation emails currently lack one-click unsubscribe.
+- [ ] **SendGrid bounce/complaint webhook integration** → automated `email_unsubscribes` population. Currently bounces invisible to Leena.
+- [ ] **email_unsubscribes scope refinement**: per-expo or per-organizer-form (currently organizer-level — unsub blocks all that organizer's expos).
+- [ ] **R5: Stale 'processing' email recovery** — deploy/restart strands rows in `email_queue.status='processing'`. No recovery cron.
+- [ ] **R8: setImmediate orphan recovery** — server restart kills background reactivation job, `import_jobs.status='processing'` stuck. Boot-time orphan detector or cron needed.
+- [ ] **R9: reactivation_tokens UNIQUE(email, target_expo_id) constraint** — currently only an index. Concurrent duplicate request risk.
+- [ ] **R14: Backend template `{{activation_url}}` placeholder validation** — wrong template selection sends 70k+ emails with no link.
+- [ ] **Test email safety practice** — pre-add fake test domains to SendGrid suppression OR enforce plus-addressing on real mailboxes (see L1 lesson in CLAUDE.md).
 
 ### Frontend Components
 - [ ] leena-fetch.js migration: remaining 16+ admin pages
@@ -315,6 +353,8 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] Webhook input validation: normalize conference_topic against canonical form options
 - [ ] Audit DB: remove any remaining test data ("Choice One" etc.)
 - [ ] Ghana expo (id=5) cleanup decision: archive or migrate
+- [ ] **conferenceCleanup 1→N split capability** — current tool is 1→1 rename only. Day 1 & Day 2 → Topic 1 + Topic 5 done via manual SQL this sprint; encode pattern in tool.
+- [ ] **Form 39 canonical topic typo cleanup**: "Cool Plus Limit" → "Limited", duplicate spaces in 13 conference topics for Mega Clima Nigeria.
 
 ---
 
