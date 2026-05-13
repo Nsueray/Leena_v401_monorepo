@@ -104,6 +104,12 @@
         .stat-value.activation-mid { color: var(--warning); }
         .stat-value.activation-high { color: var(--success); }
         .stat-card[data-activation-tip]:hover { cursor: help; }
+        .mail-delivery-status { margin-top:12px; padding:10px 12px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md); font-size:12px; color:var(--text-secondary); }
+        .mail-delivery-status.stalled { background:var(--warning-bg); border-color:#fde68a; color:#92400e; }
+        .mail-delivery-status .row1 { display:flex; gap:16px; flex-wrap:wrap; }
+        .mail-delivery-status .row2 { margin-top:4px; font-size:11px; color:var(--text-muted); }
+        .mail-delivery-status.stalled .row2 { color:#92400e; }
+        .mail-delivery-status.loading { color:var(--text-muted); font-style:italic; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
         .page-info-box{margin:0 0 20px;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:8px;background:#f0f7ff;padding:16px 20px;position:relative;font-size:14px;line-height:1.6}.info-box-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:12px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:12px;border-top:1px solid #dbeafe;padding-top:10px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:13px;padding:4px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:6px 0;padding-left:20px}.page-info-box li{margin-bottom:4px}
     </style>
@@ -805,6 +811,7 @@
                                         </div>
                                     </div>
                                     ${buildProgressHtml(c)}
+                                    <div class="mail-delivery-status loading" id="mailStatus_${c.target_expo_id}">Loading delivery status…</div>
                                 </div>
                                 <div class="card-footer" style="padding:16px 20px; border-top:1px solid var(--border-color); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                                     <select id="resendTemplate_${c.target_expo_id}" class="form-select" style="width:auto; padding:6px 10px; font-size:13px; flex:1; min-width:200px;">
@@ -820,6 +827,8 @@
                     document.getElementById('campaignsList').innerHTML = html;
                     // Load email templates into resend dropdowns
                     loadResendTemplates();
+                    // T2.2 — fetch per-expo SendGrid delivery breakdown in parallel
+                    loadAllMailDeliveryStatus(campaigns.map(c => c.target_expo_id));
                 }
 
             } catch (err) {
@@ -847,6 +856,69 @@
             const div = document.createElement('div');
             div.textContent = text || '';
             return div.innerHTML;
+        }
+
+        // T2.2 — fetch /stats per expo and render delivery row
+        async function loadAllMailDeliveryStatus(expoIds) {
+            if (!expoIds || expoIds.length === 0) return;
+            await Promise.allSettled(expoIds.map(id => loadMailDeliveryStatus(id)));
+        }
+
+        async function loadMailDeliveryStatus(expoId) {
+            try {
+                const res = await fetch(`${API_URL}/reactivation/campaign/${expoId}/stats`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!res.ok) {
+                    renderMailStatus(expoId, null, 'Failed to load delivery status');
+                    return;
+                }
+                const data = await res.json();
+                renderMailStatus(expoId, data, null);
+            } catch (err) {
+                renderMailStatus(expoId, null, 'Failed to load delivery status');
+            }
+        }
+
+        function renderMailStatus(expoId, data, errMsg) {
+            const el = document.getElementById('mailStatus_' + expoId);
+            if (!el) return;
+            if (errMsg) {
+                el.className = 'mail-delivery-status loading';
+                el.textContent = errMsg;
+                return;
+            }
+            const s = (data && data.stats) || {};
+            const sent = (s.sent && s.sent.count) || 0;
+            const pending = (s.pending && s.pending.count) || 0;
+            const processing = (s.processing && s.processing.count) || 0;
+            const queued = pending + processing;
+            const failed = (s.failed && s.failed.count) || 0;
+            const lastTs = data && data.last_global_sent_at ? new Date(data.last_global_sent_at).getTime() : null;
+            const secAgo = lastTs ? Math.floor((Date.now() - lastTs) / 1000) : null;
+            // Stalled = no email sent in 120s while queue still has work
+            const stalled = secAgo !== null && secAgo > 120 && queued > 0;
+            el.className = 'mail-delivery-status' + (stalled ? ' stalled' : '');
+            const lastLabel = secAgo === null ? 'never' : formatRelativeSeconds(secAgo);
+            el.innerHTML = `
+                <div class="row1">
+                    <span>📤 Sent to SendGrid: <strong>${sent.toLocaleString()}</strong></span>
+                    <span>⏳ Queued: <strong>${queued.toLocaleString()}</strong></span>
+                    <span>⚠️ Failed: <strong>${failed.toLocaleString()}</strong></span>
+                </div>
+                <div class="row2">
+                    Last email sent: ${lastLabel}${stalled ? ' — <strong>Worker may be stalled</strong>' : ''}
+                </div>
+            `;
+        }
+
+        function formatRelativeSeconds(s) {
+            if (s < 5) return 'just now';
+            if (s < 60) return s + ' seconds ago';
+            const m = Math.floor(s / 60);
+            if (m < 60) return m + ' min' + (m > 1 ? 's' : '') + ' ago';
+            const h = Math.floor(m / 60);
+            return h + 'h ' + (m % 60) + 'm ago';
         }
 
         async function loadResendTemplates() {
