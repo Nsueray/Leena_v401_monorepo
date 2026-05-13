@@ -120,6 +120,13 @@
         .stats-grid.is-test .stat-card .stat-value { color:var(--text-muted) !important; }
         .campaign-progress.is-test .campaign-progress-fill { background:#cbd5e1; }
         .empty-active-hint { margin-bottom:16px; padding:10px 14px; background:#dbeafe; border:1px solid #93c5fd; border-radius:var(--radius-md); font-size:13px; color:#1e40af; }
+        .past-campaigns-divider { margin:32px 0 12px; border:0; border-top:1px solid #e5e7eb; }
+        .past-campaigns-header { color:#6b7280; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.6px; margin-bottom:10px; }
+        .campaign-compact { display:flex; align-items:center; gap:12px; padding:10px 16px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); margin-bottom:8px; opacity:0.72; font-size:13px; transition:opacity 0.2s; }
+        .campaign-compact:hover { opacity:1; }
+        .campaign-compact .cc-name { font-weight:600; color:var(--text-primary); display:flex; align-items:center; gap:6px; }
+        .campaign-compact .cc-meta { color:var(--text-muted); font-size:12px; flex:1; }
+        .campaign-compact .campaign-status-badge { margin-left:auto; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
         .page-info-box{margin:0 0 20px;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:8px;background:#f0f7ff;padding:16px 20px;position:relative;font-size:14px;line-height:1.6}.info-box-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:12px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:12px;border-top:1px solid #dbeafe;padding-top:10px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:13px;padding:4px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:6px 0;padding-left:20px}.page-info-box li{margin-bottom:4px}
     </style>
@@ -447,6 +454,80 @@
             } catch (err) {
                 return { is_active: false, pending_count: 0, last_queued_at: null };
             }
+        }
+
+        // İŞ 3 — full card (top section)
+        function buildFullCardHtml(c) {
+            const activationRate = c.total_tokens > 0
+                ? Math.round((c.activated / c.total_tokens) * 100)
+                : 0;
+            trackPending(c.target_expo_id, c.pending || 0);
+            let rateCls = 'activation-low';
+            if (activationRate > 5) rateCls = 'activation-high';
+            else if (activationRate >= 1) rateCls = 'activation-mid';
+            const rateTip = `${c.activated || 0} out of ${c.total_tokens || 0} activated`;
+            return `
+                <div class="card">
+                    <div class="card-header">
+                        <span>
+                            <i class="bi bi-calendar-event"></i> ${escapeHtml(c.expo_name)}
+                            ${statusBadgeHtml(c.status || 'Completed')}
+                        </span>
+                        <span class="badge badge-secondary">${c.total_tokens} total</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid${c.is_test ? ' is-test' : ''}" style="margin-bottom: 0;">
+                            <div class="stat-card">
+                                <div class="stat-value">${c.total_tokens}</div>
+                                <div class="stat-label">Total Sent</div>
+                            </div>
+                            <div class="stat-card pending">
+                                <div class="stat-value">${c.pending}</div>
+                                <div class="stat-label">Pending</div>
+                            </div>
+                            <div class="stat-card activated">
+                                <div class="stat-value">${c.activated}</div>
+                                <div class="stat-label">Activated</div>
+                            </div>
+                            <div class="stat-card" title="${rateTip}" data-activation-tip="1">
+                                <div class="stat-value ${rateCls}">${activationRate}%</div>
+                                <div class="stat-label">Activation Rate</div>
+                            </div>
+                        </div>
+                        ${buildProgressHtml(c)}
+                        <div class="mail-delivery-status loading" id="mailStatus_${c.target_expo_id}">Loading delivery status…</div>
+                    </div>
+                    <div class="card-footer" style="padding:16px 20px; border-top:1px solid var(--border-color); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <select id="resendTemplate_${c.target_expo_id}" class="form-select" style="width:auto; padding:6px 10px; font-size:13px; flex:1; min-width:200px;">
+                            <option value="">Select email template...</option>
+                        </select>
+                        <button class="btn btn-primary btn-sm"
+                                id="resendBtn_${c.target_expo_id}"
+                                data-expo-id="${c.target_expo_id}"
+                                data-expo-name="${escapeHtml(c.expo_name)}"
+                                data-pending="${c.pending}"
+                                onclick="resendPending(this)"
+                                style="white-space:nowrap;">
+                            <i class="bi bi-envelope-arrow-up"></i> Resend to ${c.pending} Pending
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // İŞ 3 — compact card (past campaigns section)
+        function buildCompactCardHtml(c) {
+            const total = c.total_tokens || 0;
+            const activated = c.activated || 0;
+            const rate = total > 0 ? Math.round((activated / total) * 100) : 0;
+            const totalLabel = total >= 1000 ? (total / 1000).toFixed(total >= 10000 ? 0 : 1) + 'k' : total;
+            return `
+                <div class="campaign-compact">
+                    <span class="cc-name"><i class="bi bi-calendar-event"></i> ${escapeHtml(c.expo_name)}</span>
+                    <span class="cc-meta">• ${totalLabel} total • ${activated.toLocaleString()} activated (${rate}%)</span>
+                    ${statusBadgeHtml(c.status || 'Completed')}
+                </div>
+            `;
         }
 
         function applyResendButtonState(c) {
@@ -874,69 +955,18 @@
                         </div>
                     `;
                 } else {
-                    let html = '';
-                    campaigns.forEach(c => {
-                        const activationRate = c.total_tokens > 0
-                            ? Math.round((c.activated / c.total_tokens) * 100)
-                            : 0;
+                    // Split into current (top) and past (bottom) sections
+                    const CURRENT = ['Active', 'Awaiting', 'Stalled'];
+                    const currentCampaigns = campaigns.filter(c => CURRENT.includes(c.status));
+                    const pastCampaigns = campaigns.filter(c => !CURRENT.includes(c.status));
 
-                        // T1.3 — track pending history for stalled detection
-                        trackPending(c.target_expo_id, c.pending || 0);
-
-                        // T1.4 — color-code activation rate
-                        let rateCls = 'activation-low';
-                        if (activationRate > 5) rateCls = 'activation-high';
-                        else if (activationRate >= 1) rateCls = 'activation-mid';
-                        const rateTip = `${c.activated || 0} out of ${c.total_tokens || 0} activated`;
-
-                        html += `
-                            <div class="card">
-                                <div class="card-header">
-                                    <span>
-                                        <i class="bi bi-calendar-event"></i> ${escapeHtml(c.expo_name)}
-                                        ${statusBadgeHtml(c.status || 'Completed')}
-                                    </span>
-                                    <span class="badge badge-secondary">${c.total_tokens} total</span>
-                                </div>
-                                <div class="card-body">
-                                    <div class="stats-grid${c.is_test ? ' is-test' : ''}" style="margin-bottom: 0;">
-                                        <div class="stat-card">
-                                            <div class="stat-value">${c.total_tokens}</div>
-                                            <div class="stat-label">Total Sent</div>
-                                        </div>
-                                        <div class="stat-card pending">
-                                            <div class="stat-value">${c.pending}</div>
-                                            <div class="stat-label">Pending</div>
-                                        </div>
-                                        <div class="stat-card activated">
-                                            <div class="stat-value">${c.activated}</div>
-                                            <div class="stat-label">Activated</div>
-                                        </div>
-                                        <div class="stat-card" title="${rateTip}" data-activation-tip="1">
-                                            <div class="stat-value ${rateCls}">${activationRate}%</div>
-                                            <div class="stat-label">Activation Rate</div>
-                                        </div>
-                                    </div>
-                                    ${buildProgressHtml(c)}
-                                    <div class="mail-delivery-status loading" id="mailStatus_${c.target_expo_id}">Loading delivery status…</div>
-                                </div>
-                                <div class="card-footer" style="padding:16px 20px; border-top:1px solid var(--border-color); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                                    <select id="resendTemplate_${c.target_expo_id}" class="form-select" style="width:auto; padding:6px 10px; font-size:13px; flex:1; min-width:200px;">
-                                        <option value="">Select email template...</option>
-                                    </select>
-                                    <button class="btn btn-primary btn-sm"
-                                            id="resendBtn_${c.target_expo_id}"
-                                            data-expo-id="${c.target_expo_id}"
-                                            data-expo-name="${escapeHtml(c.expo_name)}"
-                                            data-pending="${c.pending}"
-                                            onclick="resendPending(this)"
-                                            style="white-space:nowrap;">
-                                        <i class="bi bi-envelope-arrow-up"></i> Resend to ${c.pending} Pending
-                                    </button>
-                                </div>
-                            </div>
-                        `;
-                    });
+                    const topHtml = currentCampaigns.map(c => buildFullCardHtml(c)).join('');
+                    const bottomHtml = pastCampaigns.length > 0
+                        ? `<hr class="past-campaigns-divider">
+                           <div class="past-campaigns-header">Past Campaigns</div>
+                           ${pastCampaigns.map(c => buildCompactCardHtml(c)).join('')}`
+                        : '';
+                    const html = topHtml + bottomHtml;
                     // G4 — empty active hint (Active / Awaiting / Stalled all count as "current")
                     const hasCurrent = campaigns.some(c => ['Active', 'Awaiting', 'Stalled'].includes(c.status));
                     const hintHtml = !hasCurrent
@@ -946,10 +976,10 @@
                     document.getElementById('campaignsList').innerHTML = hintHtml + html;
                     // Load email templates into resend dropdowns
                     loadResendTemplates();
-                    // T2.2 — fetch per-expo SendGrid delivery breakdown in parallel
-                    loadAllMailDeliveryStatus(campaigns.map(c => c.target_expo_id));
-                    // G1/G3 — apply resend button state from already-fetched is-active data
-                    campaigns.forEach(c => applyResendButtonState(c));
+                    // T2.2 — only full (current) cards have a mail-delivery-status div, skip compact
+                    loadAllMailDeliveryStatus(currentCampaigns.map(c => c.target_expo_id));
+                    // G1/G3 — only full cards have a resend button, skip compact
+                    currentCampaigns.forEach(c => applyResendButtonState(c));
                 }
 
             } catch (err) {
