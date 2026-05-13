@@ -1249,6 +1249,70 @@ Open backlog from this sprint (post-fair):
 - Form 39 canonical topic typo cleanup ("Cool Plus Limit" → "Limited", duplicate spaces).
 - Existing risks re-flagged for tracking: R5 stale 'processing' email recovery, R8 setImmediate orphan recovery, R9 reactivation_tokens UNIQUE(email,target_expo_id), R14 backend template `{{activation_url}}` placeholder validation.
 
+**Reactivation Monitoring UI Sprint (13 May 2026, afternoon):**
+
+Built on top of the 70k pre-launch sprint above, this pass turned the View Campaigns tab into a live monitoring surface and added a manual close lifecycle. Yaprak's 32k drain ran throughout — frontend deploys never touched the email worker (separate Render service).
+
+Code commits (all deployed):
+- **Tier 1 + 2 + Resend safety (`1b9c87e`..`777bb6c`, 7 commits):**
+  - `1b9c87e` — Auto-refresh dropdown (Off/10s/30s/60s, default 30s) + "Last updated: X ago" indicator. Scoped to View Campaigns tab; pauses when user switches tabs; `beforeunload` clears intervals.
+  - `0978a8c` — Progress bar + ETA per card. Formula: `(total_tokens - pending) / total_tokens` for drain progress; ETA = `pending / 300` minutes (5 email/sec worker throughput). Stalled-history heuristic: same `pending` across 3 consecutive refreshes → yellow fill + "Stalled?" warning.
+  - `5d4de9e` — Activation Rate color coding: 0%=red, 1-5%=orange, 5%+=green. Native `title` tooltip "X out of Y activated".
+  - `573d182` — Backend `GET /api/reactivation/campaign/:expoId/stats`. Returns per-status email_queue breakdown (count + MIN(created_at) + MAX(sent_at) FILTER `status='sent'`) plus top-level `last_global_sent_at`. SELECT only, organizer-scoped. EXPLAIN ANALYZE in production under 32k live drain: **45ms** (Parallel Seq Scan, expo_id+created_at 24h filter, no index added).
+  - `695c28c` — Per-card "Mail Delivery Status" row: `📤 Sent / ⏳ Queued / ⚠️ Failed` + "Last email sent: X ago". 120s+ idle while queue > 0 → yellow "Worker may be stalled". `Promise.allSettled` per-card fetches.
+  - `f31a6b1` — Backend `GET /api/reactivation/campaign/:expoId/is-active`. Returns `{ is_active, pending_count, last_queued_at }`. `is_active = (pending+processing in queue > 0) OR (queued in last 10 min)`. Drives resend button enabled state.
+  - `777bb6c` — Resend button disabled-while-active + 3-layer confirm: (1) confirm "Resend N emails?" → (2) prompt "Type expo name EXACTLY" (case-sensitive) → (3) confirm "FINAL WARNING". Button carries `data-expo-id`/`data-expo-name`/`data-pending` for the flow.
+- **Categorization + sort + test protection (`cdc295a`):**
+  - 4 status badges: 🟢 Active, 🟡 Stalled, ⚪ Completed, 🔴 Test (test name prefix `[TEST]` overrides everything).
+  - Card sort by `statusOrder = { Active:0, Stalled:1, Completed:2, Test:3 }`, then `last_queued_at` DESC within same status.
+  - Test campaigns: permanent resend disable (tooltip "Test campaign — resend disabled to protect from accidental mass send"), `.is-test` opacity 0.55 on stats grid, progress fill gray, caption shows "Test campaign" instead of ETA.
+  - Refactor: collapsed previous `loadAllResendButtonStates`/`updateResendButtonState` N+1 fetch pattern into a single batch `Promise.all` of `/is-active` calls that feeds both status computation and resend button state.
+  - Empty-active hint: blue info bar above list when no Active/Stalled card exists.
+- **Awaiting Activation badge (`0820b00`):**
+  - New 🔵 Awaiting badge (`badge-awaiting`, blue). Triggered when `email_queue.pending = 0 AND reactivation_tokens.pending > 0`. Tooltip: "Email delivery complete. Waiting for user activations to come in over time."
+  - Stalled redefined: queue still has pending rows AND worker idle 10+ minutes. No longer the catch-all bucket for drained-but-unactivated campaigns.
+  - Before this fix, Yaprak's drained-but-pre-activation 32k campaign was wrongly flagged Stalled.
+- **Past Campaigns separator + compact view (`384b3fe`):**
+  - View Campaigns is now split into two visual sections. Top: full cards for Active/Awaiting/Stalled. Separator (`<hr>` + "PAST CAMPAIGNS" uppercase header). Bottom: compact rows (opacity 0.72, hover→1, single line "[icon] Name • Nk total • N activated (X%) [badge]").
+  - Per-card render extracted to `buildFullCardHtml(c)` and new `buildCompactCardHtml(c)`.
+  - `loadAllMailDeliveryStatus` and `applyResendButtonState` now iterate only `currentCampaigns` — compact cards skip their mailStatus + resendBtn DOM lookups.
+- **Close Campaign + reopen (`4e61c35`) + migration 006:**
+  - Migration: `migrations/006_reactivation_closed_at.sql` — `ALTER TABLE expos ADD COLUMN reactivation_closed_at TIMESTAMPTZ NULL, ADD COLUMN reactivation_closed_by INTEGER NULL`. Additive, IF NOT EXISTS, run from Render Shell.
+  - Backend: `POST /api/reactivation/campaign/:expoId/close` (idempotent, 409 if already closed, 503 pre-migration), `POST /campaign/:expoId/reopen` (same surface). `GET /campaigns` augmented with `LEFT JOIN organizers o ON o.id = e.reactivation_closed_by` to surface `closed_by_name`, **wrapped in try/catch with legacy-query fallback** so the dashboard never breaks pre-migration.
+  - Frontend: 🔒 Closed badge (`badge-closed`, indigo). `computeCampaignStatus` priority: Test > Closed > Active > Awaiting > Stalled > Completed. Full-card header shows a small "🔒 Close" link (current campaigns only). 2-layer confirm: (1) "Close this campaign? Visitors who haven't activated yet will no longer be expected" → (2) "...mark as closed, can reopen later". Closed campaigns render as compact cards in Past Campaigns with `• Closed on DD MMM YYYY by NAME` and a small Reopen link.
+  - **Close is a UI/intent signal, not a kill switch** — email_worker keeps draining whatever is already in `email_queue`. Use case: stop expecting more activations from this list.
+
+New endpoints (this sprint):
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/reactivation/campaign/:expoId/stats` | Per-status email_queue breakdown (last 24h), drives Mail Delivery Status row |
+| GET | `/api/reactivation/campaign/:expoId/is-active` | Light yes/no for drain state, drives resend button + Active badge |
+| POST | `/api/reactivation/campaign/:expoId/close` | Mark campaign as closed (UI/intent only) |
+| POST | `/api/reactivation/campaign/:expoId/reopen` | Reverse close |
+
+Schema delta:
+- `expos.reactivation_closed_at TIMESTAMPTZ NULL`
+- `expos.reactivation_closed_by INTEGER NULL` (soft FK to `organizers.id`, no constraint)
+
+Badge taxonomy reference (6 states, priority order Test > Closed > Active > Awaiting > Stalled > Completed):
+
+| Badge | Trigger | Meaning |
+|-------|---------|---------|
+| 🔴 Test | `expo_name` starts with `[TEST]` | Test data; resend permanently disabled |
+| 🔒 Closed | `reactivation_closed_at IS NOT NULL` | Manually closed by admin; reopen available |
+| 🟢 Active | `is_active=true` (queue has pending/processing OR queued in last 10 min) | Worker is sending right now |
+| 🔵 Awaiting | `queue_pending=0 AND tokens_pending>0` | Drain done, healthy wait for clicks |
+| 🟡 Stalled | `queue_pending>0 AND is_active=false` | Real problem: queue has work but worker idle 10+ min |
+| ⚪ Completed | `tokens_pending=0 AND activated>0` | All resolved |
+
+Reactivation monitor open backlog (post-fair):
+- "Stalled" 3-fetch heuristic is intentionally short — replace with a smarter detector that considers actual worker `sent_at` cadence.
+- Reactivation drop-off analytics: daily activation curve graph (currently only a single percentage).
+- Auto-close N days after `expos.end_date` (replace manual close click for routine cases).
+- ETA formula currently hardcoded at 300/min (5/sec) — make dynamic from observed throughput.
+- Custom modal in place of native `prompt()` for 3-layer resend confirm (some browsers let users mute prompts).
+- Bulk-card SendGrid stats endpoint (current per-card fetch is fine at 1-3 expos; revisit if list grows).
+
 ### Conference Topic Architecture
 
 **Current model (legacy):** Conference topics stored as free-text in `visitors.custom_fields->>'conference_topic'` (multi-topic via `" || "` separator) and `conference_certificates.conference_topic` column. Canonical source: `forms.fields` JSONB array for active conference form per expo.

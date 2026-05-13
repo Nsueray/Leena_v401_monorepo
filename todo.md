@@ -294,6 +294,45 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 
 ---
 
+## ✅ Reactivation Monitoring UI Sprint (13 Mayıs 2026, afternoon)
+
+### Tier 1 — UI quality of life (frontend only)
+- [x] T1.1 — Auto-refresh dropdown Off/10s/30s/60s + "Last updated: X ago" indicator (1b9c87e)
+- [x] T1.3 — Progress bar + ETA per card, stalled-history heuristic (0978a8c)
+- [x] T1.4 — Activation Rate color coding (red/orange/green) + tooltip (5d4de9e)
+
+### Tier 2 — SendGrid delivery breakdown
+- [x] T2.1 — Backend GET /api/reactivation/campaign/:expoId/stats (per-status counts + last_sent timestamps, 45ms in prod) (573d182)
+- [x] T2.2 — Per-card Mail Delivery Status row (Sent/Queued/Failed + "Last email sent: X ago", 120s+ idle → "Worker may be stalled") (695c28c)
+
+### Resend safety
+- [x] S2 — GET /api/reactivation/campaign/:expoId/is-active endpoint (f31a6b1)
+- [x] S1 — Resend button disabled-while-active + 3-layer confirm (confirm → prompt expo name → final confirm) (777bb6c)
+
+### Categorization + sort + test protection
+- [x] 4 status badges (🟢 Active / 🟡 Stalled / ⚪ Completed / 🔴 Test) with statusOrder sort + last_queued_at DESC same-status (cdc295a)
+- [x] Test campaigns: permanent resend disable + deemphasized stats + "Test campaign" caption
+- [x] Empty-active hint when no current campaigns
+- [x] Refactor: collapsed N+1 is-active fetch into single batch
+
+### Awaiting Activation badge
+- [x] 🔵 Awaiting badge (drain done, tokens pending — healthy waiting state) (0820b00)
+- [x] Stalled redefined as "real problem" (queue pending AND worker idle 10+ min)
+
+### Past Campaigns visual hierarchy
+- [x] Top section (full cards: Active/Awaiting/Stalled) + separator + bottom section (compact rows: Completed/Closed/Test) (384b3fe)
+- [x] Compact card: opacity 0.72, single-line info, hover→1
+- [x] Mail status + resend button updates scoped to currentCampaigns only (no wasted fetches)
+
+### Close Campaign feature
+- [x] Migration 006_reactivation_closed_at.sql (expos.reactivation_closed_at + reactivation_closed_by) (4e61c35)
+- [x] Migration applied on production via Render Shell
+- [x] Backend POST /api/reactivation/campaign/:expoId/close + /reopen (idempotent, 409/503 graceful)
+- [x] GET /campaigns augmented with JOIN organizers for closed_by_name, try/catch fallback to pre-migration query
+- [x] Frontend 🔒 Closed badge + 2-layer confirm + "Closed on X by Y" compact card + Reopen link
+
+---
+
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
 
 - [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)
@@ -328,6 +367,12 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] **R9: reactivation_tokens UNIQUE(email, target_expo_id) constraint** — currently only an index. Concurrent duplicate request risk.
 - [ ] **R14: Backend template `{{activation_url}}` placeholder validation** — wrong template selection sends 70k+ emails with no link.
 - [ ] **Test email safety practice** — pre-add fake test domains to SendGrid suppression OR enforce plus-addressing on real mailboxes (see L1 lesson in CLAUDE.md).
+- [ ] **Stalled detection upgrade** — current 3-fetch unchanged-pending heuristic is short and shallow. Replace with a worker-cadence aware detector (compare observed `sent_at` rate to expected throughput).
+- [ ] **Reactivation drop-off analytics** — daily activation curve graph for each campaign (currently the dashboard only shows a single % number).
+- [ ] **Auto-close after expo end + N days** — replace manual `🔒 Close` click for routine campaigns where the expo has ended.
+- [ ] **ETA formula dynamic throughput** — currently hardcoded at 300 emails/min (5/sec). Compute from observed `sent_at` cadence over the last 5 minutes instead.
+- [ ] **Custom modal for 3-layer resend confirm** — native `prompt()` can be muted by users in some browsers ("prevent this site from showing dialogs"), skipping layer 2.
+- [ ] **Bulk-card SendGrid stats endpoint** — current per-card fetch is fine at 1-3 visible expos; revisit once campaign list grows.
 
 ### Frontend Components
 - [ ] leena-fetch.js migration: remaining 16+ admin pages
