@@ -93,6 +93,13 @@
         .results-box { background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-top: 16px; }
         .results-box h4 { font-size: 14px; margin-bottom: 12px; }
         .results-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+        .campaign-progress { margin-top: 16px; }
+        .campaign-progress-bar { background:#e5e7eb; border-radius:8px; height:14px; overflow:hidden; }
+        .campaign-progress-fill { background: var(--primary); height:100%; width:0%; transition: width 0.6s ease; border-radius:8px; }
+        .campaign-progress-fill.completed { background: var(--success); }
+        .campaign-progress-fill.stalled { background: var(--warning); }
+        .campaign-progress-caption { font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+        .campaign-progress-caption .stalled-warn { color:#92400e; font-weight:600; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
         .page-info-box{margin:0 0 20px;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:8px;background:#f0f7ff;padding:16px 20px;position:relative;font-size:14px;line-height:1.6}.info-box-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:12px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:12px;border-top:1px solid #dbeafe;padding-top:10px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:13px;padding:4px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:6px 0;padding-left:20px}.page-info-box li{margin-bottom:4px}
     </style>
@@ -330,6 +337,50 @@
         let autoRefreshIntervalId = null;
         let lastUpdatedAt = null;
         let lastUpdatedTickerId = null;
+
+        // Stalled detection (T1.3): expo_id → last N pending counts
+        const pendingHistory = {};
+        const PENDING_HISTORY_LEN = 3;
+        const EMAIL_RATE_PER_MIN = 300; // 5/sec sustained worker throughput
+
+        function trackPending(expoId, pending) {
+            if (!pendingHistory[expoId]) pendingHistory[expoId] = [];
+            pendingHistory[expoId].push(pending);
+            if (pendingHistory[expoId].length > PENDING_HISTORY_LEN) {
+                pendingHistory[expoId].shift();
+            }
+        }
+
+        function isStalled(expoId) {
+            const h = pendingHistory[expoId];
+            if (!h || h.length < PENDING_HISTORY_LEN) return false;
+            return h.every(v => v === h[0]) && h[0] > 0;
+        }
+
+        function buildProgressHtml(c) {
+            const total = c.total_tokens || 0;
+            const pending = c.pending || 0;
+            const drained = Math.max(0, total - pending);
+            const pct = total > 0 ? Math.min(100, Math.round((drained / total) * 100)) : 0;
+            const etaMin = pending > 0 ? Math.ceil(pending / EMAIL_RATE_PER_MIN) : 0;
+            const stalled = isStalled(c.target_expo_id);
+            const completed = pending === 0 && total > 0;
+            const fillCls = completed ? 'completed' : (stalled ? 'stalled' : '');
+            let caption;
+            if (completed) {
+                caption = `<span>✅ Completed — all ${total.toLocaleString()} tokens drained</span>`;
+            } else if (stalled) {
+                caption = `<span>Drained: ${drained.toLocaleString()} / ${total.toLocaleString()}</span><span class="stalled-warn">⚠️ Stalled? Pending unchanged for ${PENDING_HISTORY_LEN} refreshes</span>`;
+            } else {
+                caption = `<span>Drained: ${drained.toLocaleString()} / ${total.toLocaleString()}</span><span>ETA: ~${etaMin} min</span>`;
+            }
+            return `
+                <div class="campaign-progress">
+                    <div class="campaign-progress-bar"><div class="campaign-progress-fill ${fillCls}" style="width:${pct}%;"></div></div>
+                    <div class="campaign-progress-caption">${caption}</div>
+                </div>
+            `;
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             if (!localStorage.getItem('token')) {
@@ -711,9 +762,12 @@
                 } else {
                     let html = '';
                     campaigns.forEach(c => {
-                        const activationRate = c.total_tokens > 0 
-                            ? Math.round((c.activated / c.total_tokens) * 100) 
+                        const activationRate = c.total_tokens > 0
+                            ? Math.round((c.activated / c.total_tokens) * 100)
                             : 0;
+
+                        // T1.3 — track pending history for stalled detection
+                        trackPending(c.target_expo_id, c.pending || 0);
 
                         html += `
                             <div class="card">
@@ -740,6 +794,7 @@
                                             <div class="stat-label">Activation Rate</div>
                                         </div>
                                     </div>
+                                    ${buildProgressHtml(c)}
                                 </div>
                                 <div class="card-footer" style="padding:16px 20px; border-top:1px solid var(--border-color); display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
                                     <select id="resendTemplate_${c.target_expo_id}" class="form-select" style="width:auto; padding:6px 10px; font-size:13px; flex:1; min-width:200px;">
