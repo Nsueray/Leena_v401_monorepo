@@ -817,7 +817,13 @@
                                     <select id="resendTemplate_${c.target_expo_id}" class="form-select" style="width:auto; padding:6px 10px; font-size:13px; flex:1; min-width:200px;">
                                         <option value="">Select email template...</option>
                                     </select>
-                                    <button class="btn btn-primary btn-sm" onclick="resendPending(${c.target_expo_id})" style="white-space:nowrap;">
+                                    <button class="btn btn-primary btn-sm"
+                                            id="resendBtn_${c.target_expo_id}"
+                                            data-expo-id="${c.target_expo_id}"
+                                            data-expo-name="${escapeHtml(c.expo_name)}"
+                                            data-pending="${c.pending}"
+                                            onclick="resendPending(this)"
+                                            style="white-space:nowrap;">
                                         <i class="bi bi-envelope-arrow-up"></i> Resend to ${c.pending} Pending
                                     </button>
                                 </div>
@@ -829,6 +835,8 @@
                     loadResendTemplates();
                     // T2.2 — fetch per-expo SendGrid delivery breakdown in parallel
                     loadAllMailDeliveryStatus(campaigns.map(c => c.target_expo_id));
+                    // S1 — per-expo is-active check drives resend button enabled state
+                    loadAllResendButtonStates(campaigns.map(c => c.target_expo_id));
                 }
 
             } catch (err) {
@@ -940,13 +948,62 @@
             } catch(e) { console.error('Failed to load templates:', e); }
         }
 
-        async function resendPending(targetExpoId) {
+        // S2 — fetch is-active state for all campaigns and toggle resend buttons
+        async function loadAllResendButtonStates(expoIds) {
+            if (!expoIds || expoIds.length === 0) return;
+            await Promise.allSettled(expoIds.map(id => updateResendButtonState(id)));
+        }
+
+        async function updateResendButtonState(expoId) {
+            try {
+                const res = await fetch(`${API_URL}/reactivation/campaign/${expoId}/is-active`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                const btn = document.getElementById('resendBtn_' + expoId);
+                if (!btn) return;
+                if (data.is_active) {
+                    btn.disabled = true;
+                    btn.title = 'Campaign is currently sending. Wait until completed.';
+                    btn.style.opacity = '0.5';
+                    btn.style.cursor = 'not-allowed';
+                } else {
+                    btn.disabled = false;
+                    btn.title = '';
+                    btn.style.opacity = '';
+                    btn.style.cursor = '';
+                }
+            } catch (err) { /* swallow — leave button in default state */ }
+        }
+
+        // S1 — 3-layer confirmation before resending pending emails
+        async function resendPending(btnEl) {
+            if (!btnEl || btnEl.disabled) return;
+
+            const targetExpoId = parseInt(btnEl.dataset.expoId, 10);
+            const expoName = (btnEl.dataset.expoName || '').trim();
+            const pending = parseInt(btnEl.dataset.pending, 10) || 0;
+
             const sel = document.getElementById('resendTemplate_' + targetExpoId);
-            if (!sel || !sel.value) { showToast('Please select an email template first', 'warning'); return; }
-            
-            const countEl = sel.closest('.card').querySelector('.stat-card.pending .stat-value');
-            const count = countEl ? countEl.textContent : '?';
-            if (!confirm('Resend to ' + count + ' pending recipients?')) return;
+            if (!sel || !sel.value) {
+                showToast('Please select an email template first', 'warning');
+                return;
+            }
+
+            // Layer 1 — first warning
+            if (!confirm(`You are about to resend ${pending.toLocaleString()} emails for "${expoName}". Continue?`)) return;
+
+            // Layer 2 — type expo name to confirm
+            const typed = prompt(`Type the expo name EXACTLY to confirm (case-sensitive):\n\n${expoName}`);
+            if (typed === null) return; // cancel
+            if (typed.trim() !== expoName) {
+                showToast('Expo name did not match. Resend cancelled.', 'warning');
+                return;
+            }
+
+            // Layer 3 — final warning
+            if (!confirm(`FINAL WARNING: ${pending.toLocaleString()} emails will be sent to "${expoName}". Are you absolutely sure?`)) return;
 
             try {
                 const res = await fetch(API_URL + '/reactivation/resend-pending', {
