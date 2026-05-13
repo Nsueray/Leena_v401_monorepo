@@ -295,10 +295,24 @@
                 
                 <!-- View Campaigns Tab -->
                 <div id="campaignsTab" class="tab-content">
+                    <div class="monitor-toolbar" style="display:flex; gap:16px; align-items:center; flex-wrap:wrap; margin-bottom:16px; padding:10px 14px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md);">
+                        <label style="font-size:13px; color:var(--text-secondary); display:flex; align-items:center; gap:8px;">
+                            <i class="bi bi-arrow-repeat"></i> Auto-refresh:
+                            <select id="autoRefreshSelect" class="form-select" style="width:auto; padding:6px 10px; font-size:13px;">
+                                <option value="0">Off</option>
+                                <option value="10">10s</option>
+                                <option value="30" selected>30s</option>
+                                <option value="60">60s</option>
+                            </select>
+                        </label>
+                        <span style="color:var(--text-muted); font-size:12px;">|</span>
+                        <span id="lastUpdatedLabel" style="font-size:12px; color:var(--text-muted);">Last updated: <strong style="color:var(--text-secondary);">never</strong></span>
+                    </div>
+
                     <div id="campaignsLoading" class="loading-spinner" style="display: none;">
                         <div class="spinner"></div>
                     </div>
-                    
+
                     <div id="campaignsList"></div>
                 </div>
             </main>
@@ -312,18 +326,75 @@
         let expos = [];
         let templates = [];
 
+        // Auto-refresh state (T1.1)
+        let autoRefreshIntervalId = null;
+        let lastUpdatedAt = null;
+        let lastUpdatedTickerId = null;
+
         document.addEventListener('DOMContentLoaded', () => {
             if (!localStorage.getItem('token')) {
                 window.location.href = 'login.html';
                 return;
             }
-            
+
             loadExpos();
             loadTemplates();
             loadFormsForDesign();
             setupTabs();
             setupDragDrop();
+            setupAutoRefresh();
+            startLastUpdatedTicker();
         });
+
+        window.addEventListener('beforeunload', () => {
+            if (autoRefreshIntervalId) clearInterval(autoRefreshIntervalId);
+            if (lastUpdatedTickerId) clearInterval(lastUpdatedTickerId);
+        });
+
+        function setupAutoRefresh() {
+            const sel = document.getElementById('autoRefreshSelect');
+            if (!sel) return;
+            sel.addEventListener('change', () => {
+                applyAutoRefresh(parseInt(sel.value, 10));
+            });
+            // Initial value (default 30s) applies only when campaigns tab is active
+        }
+
+        function applyAutoRefresh(seconds) {
+            if (autoRefreshIntervalId) {
+                clearInterval(autoRefreshIntervalId);
+                autoRefreshIntervalId = null;
+            }
+            if (!seconds || seconds <= 0) return;
+            // Only refresh when View Campaigns tab is currently active
+            autoRefreshIntervalId = setInterval(() => {
+                const campaignsTab = document.getElementById('campaignsTab');
+                if (campaignsTab && campaignsTab.classList.contains('active')) {
+                    loadCampaigns();
+                }
+            }, seconds * 1000);
+        }
+
+        function startLastUpdatedTicker() {
+            // Update the "X ago" label every second
+            if (lastUpdatedTickerId) clearInterval(lastUpdatedTickerId);
+            lastUpdatedTickerId = setInterval(() => {
+                const el = document.querySelector('#lastUpdatedLabel strong');
+                if (el && lastUpdatedAt) el.textContent = formatRelativeTime(lastUpdatedAt);
+            }, 1000);
+        }
+
+        function formatRelativeTime(ts) {
+            if (!ts) return 'never';
+            const diffSec = Math.floor((Date.now() - ts) / 1000);
+            if (diffSec < 2) return 'just now';
+            if (diffSec < 60) return diffSec + 's ago';
+            const m = Math.floor(diffSec / 60);
+            const s = diffSec % 60;
+            if (m < 60) return s > 0 ? m + 'm ' + s + 's ago' : m + 'm ago';
+            const h = Math.floor(m / 60);
+            return h + 'h ' + (m % 60) + 'm ago';
+        }
 
         function setupTabs() {
             document.querySelectorAll('.tab').forEach(tab => {
@@ -337,6 +408,14 @@
                     
                     if (tabId === 'campaigns') {
                         loadCampaigns();
+                        const sel = document.getElementById('autoRefreshSelect');
+                        if (sel) applyAutoRefresh(parseInt(sel.value, 10));
+                    } else {
+                        // Pause auto-refresh when leaving the tab
+                        if (autoRefreshIntervalId) {
+                            clearInterval(autoRefreshIntervalId);
+                            autoRefreshIntervalId = null;
+                        }
                     }
                 });
             });
@@ -601,8 +680,11 @@
         }
 
         async function loadCampaigns() {
-            document.getElementById('campaignsLoading').style.display = 'flex';
-            document.getElementById('campaignsList').innerHTML = '';
+            // Show spinner only on first load — refresh in place after that
+            if (!lastUpdatedAt) {
+                document.getElementById('campaignsLoading').style.display = 'flex';
+                document.getElementById('campaignsList').innerHTML = '';
+            }
 
             try {
                 const response = await fetch(`${API_URL}/reactivation/campaigns`, {
@@ -613,6 +695,11 @@
 
                 const data = await response.json();
                 const campaigns = data.campaigns || [];
+
+                // Mark fetch successful (T1.2)
+                lastUpdatedAt = Date.now();
+                const el = document.querySelector('#lastUpdatedLabel strong');
+                if (el) el.textContent = 'just now';
 
                 if (campaigns.length === 0) {
                     document.getElementById('campaignsList').innerHTML = `
