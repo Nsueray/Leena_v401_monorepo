@@ -100,6 +100,10 @@
         .campaign-progress-fill.stalled { background: var(--warning); }
         .campaign-progress-caption { font-size:12px; color:var(--text-muted); margin-top:6px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
         .campaign-progress-caption .stalled-warn { color:#92400e; font-weight:600; }
+        .stat-value.activation-low { color: var(--danger); }
+        .stat-value.activation-mid { color: var(--warning); }
+        .stat-value.activation-high { color: var(--success); }
+        .stat-card[data-activation-tip]:hover { cursor: help; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
         .page-info-box{margin:0 0 20px;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:8px;background:#f0f7ff;padding:16px 20px;position:relative;font-size:14px;line-height:1.6}.info-box-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:12px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:12px;border-top:1px solid #dbeafe;padding-top:10px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:13px;padding:4px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:6px 0;padding-left:20px}.page-info-box li{margin-bottom:4px}
     </style>
@@ -769,6 +773,12 @@
                         // T1.3 — track pending history for stalled detection
                         trackPending(c.target_expo_id, c.pending || 0);
 
+                        // T1.4 — color-code activation rate
+                        let rateCls = 'activation-low';
+                        if (activationRate > 5) rateCls = 'activation-high';
+                        else if (activationRate >= 1) rateCls = 'activation-mid';
+                        const rateTip = `${c.activated || 0} out of ${c.total_tokens || 0} activated`;
+
                         html += `
                             <div class="card">
                                 <div class="card-header">
@@ -789,8 +799,8 @@
                                             <div class="stat-value">${c.activated}</div>
                                             <div class="stat-label">Activated</div>
                                         </div>
-                                        <div class="stat-card">
-                                            <div class="stat-value">${activationRate}%</div>
+                                        <div class="stat-card" title="${rateTip}" data-activation-tip="1">
+                                            <div class="stat-value ${rateCls}">${activationRate}%</div>
                                             <div class="stat-label">Activation Rate</div>
                                         </div>
                                     </div>
