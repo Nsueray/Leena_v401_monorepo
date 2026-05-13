@@ -112,6 +112,7 @@
         .mail-delivery-status.loading { color:var(--text-muted); font-style:italic; }
         .campaign-status-badge { display:inline-flex; align-items:center; gap:4px; margin-left:10px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; vertical-align:middle; }
         .badge-active { background:var(--success-bg); color:#065f46; }
+        .badge-awaiting { background:#dbeafe; color:#1e40af; }
         .badge-completed { background:#f3f4f6; color:#4b5563; }
         .badge-stalled { background:var(--warning-bg); color:#92400e; }
         .badge-test { background:transparent; color:var(--danger); border:1px solid var(--danger); font-style:italic; }
@@ -407,23 +408,33 @@
         }
 
         // G1/G2 — compute status from campaign + is-active data
+        // c.queue_pending = pending+processing in email_queue (from is-active endpoint)
+        // c.pending       = token-level pending (from /campaigns endpoint)
         function computeCampaignStatus(c) {
             if (c.is_test) return 'Test'; // Test priority overrides all
+            const queuePending = c.queue_pending || 0;
+            const tokenPending = c.pending || 0;
+            // Active: worker still draining the queue (queue rows pending/processing OR queued in last 10 min)
             if (c.is_active) return 'Active';
-            if ((c.pending || 0) === 0 && (c.activated || 0) > 0) return 'Completed';
-            if ((c.pending || 0) > 0) return 'Stalled';
-            return 'Completed'; // fallback (no pending, no activations)
+            // Awaiting: drain done, but visitors haven't activated yet — healthy waiting state
+            if (queuePending === 0 && tokenPending > 0) return 'Awaiting';
+            // Stalled: real problem — queue has work but worker idle for 10+ min
+            if (queuePending > 0) return 'Stalled';
+            // Completed: queue empty AND all tokens resolved
+            if (tokenPending === 0 && (c.activated || 0) > 0) return 'Completed';
+            return 'Completed'; // fallback
         }
 
         function statusBadgeHtml(status) {
             const map = {
-                'Active':    { cls: 'badge-active',    icon: '🟢' },
-                'Completed': { cls: 'badge-completed', icon: '⚪' },
-                'Stalled':   { cls: 'badge-stalled',   icon: '🟡' },
-                'Test':      { cls: 'badge-test',      icon: '🔴' }
+                'Active':    { cls: 'badge-active',    icon: '🟢', tip: 'Worker is currently sending emails for this campaign.' },
+                'Awaiting':  { cls: 'badge-awaiting',  icon: '🔵', tip: 'Email delivery complete. Waiting for user activations to come in over time.' },
+                'Stalled':   { cls: 'badge-stalled',   icon: '🟡', tip: 'Queue has pending emails but no worker activity in the last 10 minutes.' },
+                'Completed': { cls: 'badge-completed', icon: '⚪', tip: 'All tokens resolved.' },
+                'Test':      { cls: 'badge-test',      icon: '🔴', tip: 'Test campaign — protected from accidental resend.' }
             };
             const m = map[status] || map['Completed'];
-            return `<span class="campaign-status-badge ${m.cls}">${m.icon} ${status}</span>`;
+            return `<span class="campaign-status-badge ${m.cls}" title="${m.tip}">${m.icon} ${status}</span>`;
         }
 
         async function fetchIsActiveSafe(expoId) {
@@ -843,8 +854,8 @@
                         c.status = computeCampaignStatus(c);
                     });
 
-                    // Sort: Active → Stalled → Completed → Test, then last_activity DESC
-                    const statusOrder = { 'Active': 0, 'Stalled': 1, 'Completed': 2, 'Test': 3 };
+                    // Sort: Active → Awaiting → Stalled → Completed → Test, then last_activity DESC
+                    const statusOrder = { 'Active': 0, 'Awaiting': 1, 'Stalled': 2, 'Completed': 3, 'Test': 4 };
                     campaigns.sort((a, b) => {
                         const sA = statusOrder[a.status] ?? 99;
                         const sB = statusOrder[b.status] ?? 99;
@@ -926,9 +937,9 @@
                             </div>
                         `;
                     });
-                    // G4 — empty active hint
-                    const hasActiveOrStalled = campaigns.some(c => c.status === 'Active' || c.status === 'Stalled');
-                    const hintHtml = !hasActiveOrStalled
+                    // G4 — empty active hint (Active / Awaiting / Stalled all count as "current")
+                    const hasCurrent = campaigns.some(c => ['Active', 'Awaiting', 'Stalled'].includes(c.status));
+                    const hintHtml = !hasCurrent
                         ? `<div class="empty-active-hint"><i class="bi bi-info-circle"></i> No active campaigns. Showing completed and test campaigns below.</div>`
                         : '';
 
