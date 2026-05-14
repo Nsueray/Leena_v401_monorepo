@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 13 Mayıs 2026 | Versiyon: v4.0.3
+> Son güncelleme: 14 Mayıs 2026 | Versiyon: v4.0.3
 
 ---
 
@@ -1312,6 +1312,24 @@ Reactivation monitor open backlog (post-fair):
 - ETA formula currently hardcoded at 300/min (5/sec) — make dynamic from observed throughput.
 - Custom modal in place of native `prompt()` for 3-layer resend confirm (some browsers let users mute prompts).
 - Bulk-card SendGrid stats endpoint (current per-card fetch is fine at 1-3 expos; revisit if list grows).
+
+**Test Email Cleanup (14 May 2026):**
+- 5 internal test email addresses removed from all expos to give Mega Clima Nigeria 2026 (19-21 May) clean baseline metrics:
+  - `yaprakguzelcik@gmail.com` (27 visitor rows across expos 1, 3, 5, 7, 9, 10)
+  - `suer@elan-expo.com` (3 rows: expos 3, 5, 7)
+  - `elan02@elan-expo.com` (7 rows: expos 3, 5, 6, 7, 8, 9, 10)
+  - `info@siemamaroc.com` (4 rows: expos 3, 5, 7, 9)
+  - `info@moroccofoodexpo.com` (4 rows: expos 3, 5, 6, 7)
+- Migration: `migrations/007_test_email_cleanup.sql` (commits `aae78f4` original, `aa7dbcc` post-dry-run fix)
+- Backup: `visitors_test_backup_20260514` (46 visitor rows snapshot — DROP after fair end 21 May 2026; see todo.md post-fair backlog)
+- Rows affected: 46 visitors + ~389 related rows across 10 tables (campaign_recipients, conference_certificates, exhibitor_leads, reactivation_tokens, visitor_event_status, email_queue, email_logs, email_events via CASCADE, checkins via CASCADE).
+- **First cleanup-pattern migration in this repo.** Migrations 001-006 are schema-only; 007 is the first data-only / pre-fair-housekeeping migration. Wrapped in a single transaction with explicit pre-cleanup of all RESTRICT FKs before the visitors DELETE.
+- **Audit gap surfaced + caught by dry-run:** initial FK audit (13 May "delete capability" analysis) only mapped FKs pointing TO `visitors.id` and missed inbound FKs on the intermediate tables. Specifically `email_queue.campaign_recipient_id → campaign_recipients(id)` is a RESTRICT FK that blocked the first dry-run. Fix added a new STEP 1 in the migration to clean those email_queue rows before STEP 2 deletes campaign_recipients. No data harmed — transaction rolled back cleanly.
+- **Two-phase migration pattern proven and adopted as the template for future cleanup migrations:**
+  1. Phase 1 — dry run: `sed 's/^COMMIT;$/ROLLBACK;/' migrations/NNN.sql | psql $DATABASE_INTERNAL_URL` — runs every DELETE, prints row counts, rolls back at end. Any FK violation or syntax error surfaces here, zero risk to production data.
+  2. Phase 2 — real run: `psql $DATABASE_INTERNAL_URL -f migrations/NNN.sql` — same file, but COMMIT instead of ROLLBACK at end.
+- Apply this template to upcoming post-fair cleanup work: country pollution (44 distinct strings → ~33 canonical, audit 14 May), conference topic variants beyond what `conferenceCleanup.js` can handle (see ADR-021 + post-fair TODO).
+- Verification post-execute: `SELECT COUNT(*) FROM visitors_test_backup_20260514` → 46; all four `remaining_*` validation counters → 0.
 
 ### Conference Topic Architecture
 

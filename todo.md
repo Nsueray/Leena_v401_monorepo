@@ -1,6 +1,6 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 13 Mayıs 2026
+> Son güncelleme: 14 Mayıs 2026
 > Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
@@ -333,6 +333,19 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 
 ---
 
+## ✅ Test Email Cleanup (14 Mayıs 2026)
+
+- [x] Migration `migrations/007_test_email_cleanup.sql` written (commits aae78f4 + aa7dbcc)
+- [x] FK dependency map completed (8 intermediate tables + visitors)
+- [x] Dry-run caught missed FK: `email_queue.campaign_recipient_id → campaign_recipients`
+- [x] Fix: new STEP 1 cleans email_queue by campaign_recipient_id before STEP 2
+- [x] Real run executed by Suer on Render Shell: 46 visitor rows + ~389 related rows removed
+- [x] Backup table created: `visitors_test_backup_20260514` (46 rows snapshot)
+- [x] Validation: all 4 remaining_* counters = 0; backup_rows = 46
+- [x] Two-phase migration pattern (dry-run ROLLBACK → real run COMMIT) proven and adopted as template
+
+---
+
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
 
 - [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)
@@ -387,6 +400,7 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] Password rotation: claude_readonly DB user, JWT_SECRET, SENDGRID_API_KEY
 - [ ] Git history cleanup: .env.backup files in 3 locations
 - [ ] .gitignore creation (.env*, *.env, *.backup)
+- [ ] **Drop `visitors_test_backup_20260514` after 21 May 2026 fair end** — snapshot of 46 test-email visitor rows from migration 007; kept as safety net through fair, no longer needed once Mega Clima Nigeria 2026 closes.
 
 ### Visitor Management
 - [ ] Madde 3: Visitor delete (hard delete, checkin-less visitors only)
