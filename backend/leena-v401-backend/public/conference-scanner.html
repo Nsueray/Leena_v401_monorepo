@@ -91,6 +91,36 @@
         @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .terminal-info { font-size: 12px; color: var(--text-muted); text-align: center; margin-bottom: 16px; padding: 8px; background: var(--primary-light); border-radius: 8px; }
+
+        /* Pre-display: visitor preview before /checkin-and-certify (Change A) */
+        .preview-card { background: var(--card); border: 2px solid var(--primary); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; animation: slideUp 0.3s ease; }
+        .preview-card .pv-name { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+        .preview-card .pv-company { font-size: 14px; color: var(--primary); text-align: center; margin-bottom: 16px; }
+        .preview-card .pv-section-label { font-size: 11px; font-weight: 600; color: var(--text-sec); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .preview-card .pv-topics { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+        .preview-card .pv-topic-chip { padding: 8px 12px; background: var(--primary-light); border-radius: 6px; font-size: 13px; color: var(--text); line-height: 1.4; word-break: break-word; }
+        .preview-card .pv-topic-chip.empty { font-style: italic; color: var(--text-muted); background: #f1f5f9; }
+        .preview-card .pv-match-banner { padding: 10px 12px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-bottom: 14px; text-align: center; }
+        .preview-card .pv-match-banner.match { background: var(--success-bg); color: #065f46; }
+        .preview-card .pv-match-banner.mismatch { background: var(--warning-bg); color: #92400e; }
+        .preview-card .pv-actions { display: flex; gap: 10px; }
+        .preview-card .btn-confirm { flex: 1; padding: 14px; background: var(--success); color: white; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; }
+        .preview-card .btn-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
+        .preview-card .btn-cancel { flex: 1; padding: 14px; background: #e2e8f0; color: var(--text); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; }
+
+        /* Force confirm modal (Change B) */
+        .force-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+        .force-modal-backdrop.show { opacity: 1; pointer-events: auto; }
+        .force-modal { background: var(--card); border-radius: var(--radius); max-width: 420px; width: 100%; padding: 24px; box-shadow: 0 25px 50px rgba(0,0,0,0.25); transform: scale(0.95); transition: transform 0.2s ease; }
+        .force-modal-backdrop.show .force-modal { transform: scale(1); }
+        .force-modal .fm-icon { text-align: center; font-size: 44px; margin-bottom: 10px; }
+        .force-modal .fm-title { text-align: center; font-size: 18px; font-weight: 700; color: var(--danger); margin-bottom: 12px; }
+        .force-modal .fm-body { font-size: 14px; color: var(--text); line-height: 1.55; margin-bottom: 20px; }
+        .force-modal .fm-body strong { color: var(--danger); }
+        .force-modal .fm-actions { display: flex; gap: 10px; }
+        .force-modal .fm-cancel { flex: 1; padding: 14px; background: #e2e8f0; color: var(--text); border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; }
+        .force-modal .fm-confirm { flex: 1; padding: 14px; background: var(--danger); color: white; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; }
+        .force-modal .fm-confirm:disabled { opacity: 0.6; cursor: wait; }
     </style>
 </head>
 <body>
@@ -172,8 +202,24 @@
             <button onclick="handleScan()">Check-in</button>
         </div>
 
+        <!-- Pre-display: visitor preview before issuing (Change A, hidden by default) -->
+        <div id="previewCard" class="hidden"></div>
+
         <!-- Unregistered Warning Card (hidden by default) -->
         <div id="unregCard" class="hidden"></div>
+
+        <!-- Force confirm modal (Change B, hidden by default) -->
+        <div id="forceConfirmModal" class="force-modal-backdrop">
+            <div class="force-modal" role="dialog" aria-modal="true" aria-labelledby="forceModalTitle">
+                <div class="fm-icon">&#9888;&#65039;</div>
+                <div class="fm-title" id="forceModalTitle">Override Required</div>
+                <div class="fm-body" id="forceModalBody"></div>
+                <div class="fm-actions">
+                    <button class="fm-cancel" onclick="closeForceConfirm()">Cancel</button>
+                    <button class="fm-confirm" id="forceModalConfirmBtn" onclick="executeForceCertify()">Yes, Issue Certificate</button>
+                </div>
+            </div>
+        </div>
 
         <!-- Scan Log -->
         <div class="scan-log" id="scanLog" style="display:none;">
@@ -345,10 +391,15 @@
             return qrCode;
         }
 
+        // Change A: processQR splits into lookup → preview → confirm.
+        // The /checkin-and-certify call moves from inline (was line 384) to
+        // confirmAndIssue() after the hostess taps "Confirm & Issue Certificate"
+        // in the preview card.
         async function processQR(rawQR) {
             if (isProcessing) return;
             isProcessing = true;
             hideUnregCard();
+            hidePreviewCard();
             initAudio();
 
             const qrCode = parseQR(rawQR);
@@ -378,9 +429,111 @@
                 }
 
                 const visitor = lookupRes.visitor;
-                const visitorCompany = visitor.company || '';
 
-                // 2. Check-in + certify
+                // 2. Show preview card (Change A) — hostess sees visitor + registered
+                // sessions BEFORE the /checkin-and-certify call fires. The actual
+                // certify call happens in confirmAndIssue() when hostess taps Confirm.
+                showVisitorPreview(visitor, topic);
+                vibrate(50);
+                playBeep(700, 80);
+                setTimeout(() => {
+                    document.getElementById('previewCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }, 50);
+
+            } catch (err) {
+                showOverlay('error', 'Connection Error', 'Please try again');
+                vibrate([200, 100, 200]);
+                playBeep(300, 400);
+                console.error('processQR error:', err);
+                isProcessing = false;
+                document.getElementById('qrInput').focus();
+                return;
+            }
+
+            // Note: isProcessing stays true until hostess taps Confirm or Cancel
+            // in the preview card. cancelPreview() / confirmAndIssue() handle the reset.
+        }
+
+        // Change A helpers — preview card render + confirm flow
+
+        // Inline mirror of conferenceCertificates.js splitTopics (' || ' only).
+        function splitTopicsClient(raw) {
+            if (!raw) return [];
+            const s = String(raw).trim();
+            if (!s) return [];
+            return s.split(' || ').map(t => t.trim()).filter(Boolean);
+        }
+
+        function showVisitorPreview(visitor, selectedTopic) {
+            const fullName = [visitor.name, visitor.lastName].filter(Boolean).join(' ') || 'Visitor';
+            const company = visitor.company || '';
+
+            // visitor-by-qr response includes customFields (camelCase, from terminalCheckins.js:190)
+            const cf = visitor.customFields || {};
+            const rawTopic = cf.conference_topic || '';
+            const registeredTopics = splitTopicsClient(rawTopic);
+
+            // Case-insensitive match check, mirrors isVisitorRegisteredForTopic
+            const selectedLower = selectedTopic.trim().toLowerCase();
+            const isMatch = registeredTopics.some(t => t.toLowerCase() === selectedLower);
+
+            const topicsHtml = registeredTopics.length
+                ? registeredTopics.map(t => {
+                    const highlight = t.toLowerCase() === selectedLower
+                        ? 'background:var(--success-bg);color:#065f46;font-weight:600;'
+                        : '';
+                    return `<div class="pv-topic-chip" style="${highlight}">${esc(t)}</div>`;
+                }).join('')
+                : '<div class="pv-topic-chip empty">No sessions registered</div>';
+
+            const banner = isMatch
+                ? `<div class="pv-match-banner match">&#10004; Selected session matches a registered topic</div>`
+                : `<div class="pv-match-banner mismatch">&#9888;&#65039; Selected session NOT in visitor&rsquo;s list &mdash; force will be needed</div>`;
+
+            const card = document.getElementById('previewCard');
+            card.className = 'preview-card';
+            card.innerHTML = `
+                <div class="pv-name">${esc(fullName)}</div>
+                ${company ? `<div class="pv-company">${esc(company)}</div>` : ''}
+                <div class="pv-section-label">Registered sessions</div>
+                <div class="pv-topics">${topicsHtml}</div>
+                ${banner}
+                <div class="pv-section-label">Issuing for</div>
+                <div class="pv-topics"><div class="pv-topic-chip" style="border-left:3px solid var(--primary);">${esc(selectedTopic)}</div></div>
+                <div class="pv-actions">
+                    <button class="btn-cancel" onclick="cancelPreview()">Cancel / Re-scan</button>
+                    <button class="btn-confirm" id="pvConfirmBtn" onclick="confirmAndIssue()">Confirm &amp; Issue Certificate</button>
+                </div>
+            `;
+
+            // Stash data needed by confirmAndIssue without polluting globals heavily.
+            _pendingScan = { visitor, fullName, company, topic: selectedTopic };
+        }
+
+        function hidePreviewCard() {
+            const card = document.getElementById('previewCard');
+            if (!card) return;
+            card.className = 'hidden';
+            card.innerHTML = '';
+        }
+
+        function cancelPreview() {
+            hidePreviewCard();
+            _pendingScan = null;
+            isProcessing = false;
+            document.getElementById('qrInput').focus();
+        }
+
+        let _pendingScan = null;
+
+        async function confirmAndIssue() {
+            if (!_pendingScan) return;
+            const { visitor, fullName, company, topic } = _pendingScan;
+            const btn = document.getElementById('pvConfirmBtn');
+            if (btn) { btn.disabled = true; btn.textContent = 'Issuing…'; }
+
+            try {
+                // POST shape unchanged from previous inline call.
                 const certRes = await apiFetch('/api/conference-certificates/checkin-and-certify', {
                     method: 'POST',
                     body: JSON.stringify({ visitor_id: visitor.id, conference_topic: topic })
@@ -390,55 +543,92 @@
                     showOverlay('error', certRes.error || 'Check-in failed', '');
                     vibrate([200, 100, 200]);
                     playBeep(300, 400);
+                    hidePreviewCard();
+                    _pendingScan = null;
                     isProcessing = false;
                     document.getElementById('qrInput').focus();
                     return;
                 }
 
-                const fullName = certRes.certificate
+                const finalName = certRes.certificate
                     ? certRes.certificate.visitor_name
-                    : certRes.visitor_name || [visitor.name, visitor.lastName].filter(Boolean).join(' ');
-                const company = certRes.visitor_company || visitorCompany;
+                    : certRes.visitor_name || fullName;
+                const finalCompany = certRes.visitor_company || company;
 
-                // 3. Handle response
+                // Response handling identical to the original processQR flow.
                 if (certRes.registered === false) {
-                    // Not registered — show warning card with force option
-                    showUnregCard(fullName, company, topic, visitor.id);
+                    hidePreviewCard();
+                    showUnregCard(finalName, finalCompany, topic, visitor.id);
                     vibrate(100);
                     playBeep(600, 100);
                     setTimeout(() => playBeep(600, 100), 200);
-                    // Scroll to warning card
                     setTimeout(() => {
                         document.getElementById('unregCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                     }, 100);
                 } else if (certRes.duplicate) {
-                    // Already certified — pass token for resend
+                    hidePreviewCard();
                     const certToken = certRes.certificate ? certRes.certificate.token : null;
-                    showOverlay('duplicate', fullName, 'Certificate already sent for this session', company, certToken);
+                    showOverlay('duplicate', finalName, 'Certificate already sent for this session', finalCompany, certToken);
                     vibrate(100);
                     playBeep(600, 100);
                     setTimeout(() => playBeep(600, 100), 200);
-                    addToLog(fullName, topic, 'duplicate');
+                    addToLog(finalName, topic, 'duplicate');
                 } else {
-                    // Success!
+                    hidePreviewCard();
                     certCounter++;
                     document.getElementById('certCount').textContent = certCounter;
                     document.getElementById('todayLabel').textContent = `Today: ${certCounter}`;
-                    showOverlay('success', fullName, 'Certificate Sent!', company);
+                    showOverlay('success', finalName, 'Certificate Sent!', finalCompany);
                     vibrate(200);
                     playBeep(1000, 150);
-                    addToLog(fullName, topic, certRes.forced ? 'forced' : 'sent');
+                    addToLog(finalName, topic, certRes.forced ? 'forced' : 'sent');
                 }
-
             } catch (err) {
                 showOverlay('error', 'Connection Error', 'Please try again');
                 vibrate([200, 100, 200]);
                 playBeep(300, 400);
-                console.error('processQR error:', err);
+                console.error('confirmAndIssue error:', err);
+                hidePreviewCard();
             }
 
+            _pendingScan = null;
             isProcessing = false;
             document.getElementById('qrInput').focus();
+        }
+
+        // Change B: custom confirm modal wraps forceCertify().
+        // confirmForce() opens the modal; executeForceCertify() (triggered by
+        // the modal's "Yes, Issue Certificate" button) calls forceCertify() unchanged.
+        let _pendingForce = null;
+
+        function confirmForce(visitorId, topic, visitorName) {
+            _pendingForce = { visitorId, topic, visitorName };
+            const body = document.getElementById('forceModalBody');
+            body.innerHTML = `<strong>${esc(visitorName)}</strong> is <strong>NOT registered</strong> for &ldquo;${esc(topic)}&rdquo;.<br><br>` +
+                `Issuing this certificate will permanently add this session to their record and send the certificate email. ` +
+                `<strong>This action cannot be undone.</strong>`;
+            const btn = document.getElementById('forceModalConfirmBtn');
+            btn.disabled = false;
+            btn.textContent = 'Yes, Issue Certificate';
+            document.getElementById('forceConfirmModal').classList.add('show');
+        }
+
+        function closeForceConfirm() {
+            document.getElementById('forceConfirmModal').classList.remove('show');
+            _pendingForce = null;
+        }
+
+        async function executeForceCertify() {
+            if (!_pendingForce) return;
+            const { visitorId, topic } = _pendingForce;
+            const btn = document.getElementById('forceModalConfirmBtn');
+            btn.disabled = true;
+            btn.textContent = 'Issuing…';
+            // Hand off to unchanged forceCertify(). Close modal first so the
+            // existing UI flow (overlay, scan log, focus reset) is unobstructed.
+            document.getElementById('forceConfirmModal').classList.remove('show');
+            _pendingForce = null;
+            await forceCertify(visitorId, topic);
         }
 
         // --- Force certify (unregistered visitor) ---
@@ -587,7 +777,7 @@
                 ${company ? `<div style="text-align:center;font-size:13px;color:var(--primary);margin-bottom:4px;">${esc(company)}</div>` : ''}
                 <div class="unreg-msg">Not registered for this session!</div>
                 <div class="unreg-actions">
-                    <button class="btn-force" onclick="forceCertify(${visitorId}, '${esc(topic).replace(/'/g, "\\'")}')">Save & Send Certificate</button>
+                    <button class="btn-force" onclick="confirmForce(${visitorId}, '${esc(topic).replace(/'/g, "\\'")}', '${esc(name).replace(/'/g, "\\'")}')">Save & Send Certificate</button>
                     <button class="btn-cancel" onclick="hideUnregCard()">Cancel</button>
                 </div>
             `;
