@@ -23,14 +23,28 @@
 --   email_logs       by visitor_id            116 rows (CASCADE)
 --   email_logs       by email text orphans     52 rows (manual — no FK)
 --   email_queue      by visitor_id             47 rows (CASCADE)
+--   email_queue      by campaign_recipient_id   5 rows  (manual pre-clean — RESTRICT FK, see FIX 14 May)
 --   email_queue      by recipient_email        46 rows (manual — no FK)
 --   exhibitor_leads                            1 row   (manual pre-clean — RESTRICT FK)
 --   visitor_event_status                      28 rows (manual — no FK to visitors)
 --   reactivation_tokens by new_visitor_id      1 row   (manual pre-clean — RESTRICT FK)
 --   reactivation_tokens by email text          1 row   (manual — email-only link)
 --   campaign_recipients                        3 rows  (manual pre-clean — RESTRICT FK)
+--   email_events                              10 rows (CASCADE via campaign_recipients delete)
 --   ─────────────────────────────────────────────────
---   Total                                    ~374 rows across 9 tables
+--   Total                                    ~389 rows across 10 tables
+--
+-- FIX 14 May 2026 (post dry-run): added email_queue cleanup by
+-- campaign_recipient_id BEFORE campaign_recipients delete (new STEP 1).
+-- Original migration failed dry-run because email_queue has an FK
+-- (email_queue_campaign_recipient_id_fkey) pointing to campaign_recipients
+-- WITHOUT ON DELETE — the initial FK audit only checked FKs pointing TO
+-- visitors.id and missed inbound FKs on the intermediate tables.
+-- Verified: campaign_recipients is the ONLY intermediate table with a
+-- non-CASCADE inbound FK. All other steps (conference_certificates,
+-- exhibitor_leads, reactivation_tokens, visitor_event_status, email_queue,
+-- email_logs) have zero inbound FKs and remain safe to delete in their
+-- original positions.
 --
 -- Live numbers may drift by a handful of rows between dry-run and execute as
 -- Yaprak's activation-link clicks may still produce new check-in / event_status
@@ -89,8 +103,26 @@ WHERE LOWER(email) IN (SELECT email FROM _cleanup_targets);
 SELECT COUNT(*) AS backed_up_visitor_rows FROM visitors_test_backup_20260514;
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 1 — campaign_recipients (RESTRICT FK on visitor_id)
+-- STEP 1 — email_queue rows linked to doomed campaign_recipients (NEW)
+-- Added 14 May 2026 after dry-run revealed email_queue.campaign_recipient_id
+-- is a RESTRICT FK to campaign_recipients(id). Must clean these BEFORE
+-- the campaign_recipients delete in STEP 2.
+-- Expected: 5 rows.
+-- ─────────────────────────────────────────────────────────────────────
+DELETE FROM email_queue
+WHERE campaign_recipient_id IN (
+  SELECT id FROM campaign_recipients
+  WHERE visitor_id IN (
+    SELECT id FROM visitors
+    WHERE LOWER(email) IN (SELECT email FROM _cleanup_targets)
+  )
+);
+
+-- ─────────────────────────────────────────────────────────────────────
+-- STEP 2 — campaign_recipients (RESTRICT FK on visitor_id)
 -- Expected: 3 rows (one each for yaprak/elan02/siemamaroc, all expo 9).
+-- CASCADE auto-cleans 10 email_events rows (email_events.recipient_id
+-- has ON DELETE CASCADE pointing at campaign_recipients).
 -- ─────────────────────────────────────────────────────────────────────
 DELETE FROM campaign_recipients
 WHERE visitor_id IN (
@@ -99,7 +131,7 @@ WHERE visitor_id IN (
 );
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 2 — conference_certificates (RESTRICT FK on visitor_id)
+-- STEP 3 — conference_certificates (RESTRICT FK on visitor_id)
 -- Expected: 7 rows (yaprak 42427 x3, elan02 42429 x1, suer 46075 x3).
 -- ─────────────────────────────────────────────────────────────────────
 DELETE FROM conference_certificates
@@ -109,7 +141,7 @@ WHERE visitor_id IN (
 );
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 3 — exhibitor_leads (RESTRICT FK on BOTH directions)
+-- STEP 4 — exhibitor_leads (RESTRICT FK on BOTH directions)
 -- Expected: 1 row (suer 37896 as exhibitor or lead — direction unknown).
 -- ─────────────────────────────────────────────────────────────────────
 DELETE FROM exhibitor_leads
@@ -123,9 +155,9 @@ WHERE lead_visitor_id IN (
       );
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 4 — reactivation_tokens
--- 4a. By new_visitor_id (RESTRICT FK)   — expected: 1 row (info@morocco 37814)
--- 4b. By email text (no FK, but logical link) — expected: 1 row
+-- STEP 5 — reactivation_tokens
+-- 5a. By new_visitor_id (RESTRICT FK)   — expected: 1 row (info@morocco 37814)
+-- 5b. By email text (no FK, but logical link) — expected: 1 row
 -- ─────────────────────────────────────────────────────────────────────
 DELETE FROM reactivation_tokens
 WHERE new_visitor_id IN (
@@ -137,7 +169,7 @@ DELETE FROM reactivation_tokens
 WHERE LOWER(email) IN (SELECT email FROM _cleanup_targets);
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 5 — visitor_event_status (NO FK to visitors)
+-- STEP 6 — visitor_event_status (NO FK to visitors)
 -- These rows would otherwise become orphans after visitor delete.
 -- Expected: 28 rows.
 -- ─────────────────────────────────────────────────────────────────────
@@ -148,9 +180,10 @@ WHERE visitor_id IN (
 );
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 6 — email_queue text-only orphans (visitor_id NULL rows)
+-- STEP 7 — email_queue text-only orphans (visitor_id NULL rows)
 -- Rows linked to target emails only via recipient_email column.
--- Note: rows WITH visitor_id are CASCADE-cleaned by Step 8 (visitors delete).
+-- Note: rows WITH visitor_id are CASCADE-cleaned by Step 9 (visitors delete).
+-- Note: rows linked to doomed campaign_recipients are cleaned in STEP 1.
 -- Expected: 46 rows.
 -- ─────────────────────────────────────────────────────────────────────
 DELETE FROM email_queue
@@ -158,8 +191,8 @@ WHERE visitor_id IS NULL
   AND LOWER(recipient_email) IN (SELECT email FROM _cleanup_targets);
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 7 — email_logs text-only orphans (visitor_id NULL rows)
--- Same pattern as Step 6. CASCADE handles visitor_id-linked rows in Step 8.
+-- STEP 8 — email_logs text-only orphans (visitor_id NULL rows)
+-- Same pattern as Step 7. CASCADE handles visitor_id-linked rows in Step 9.
 -- Expected: 52 rows.
 -- ─────────────────────────────────────────────────────────────────────
 DELETE FROM email_logs
@@ -167,7 +200,7 @@ WHERE visitor_id IS NULL
   AND LOWER(email) IN (SELECT email FROM _cleanup_targets);
 
 -- ─────────────────────────────────────────────────────────────────────
--- STEP 8 — visitors (final delete)
+-- STEP 9 — visitors (final delete)
 -- CASCADE handles:
 --   checkins                                (26 rows)
 --   email_logs   by visitor_id              (116 rows)
