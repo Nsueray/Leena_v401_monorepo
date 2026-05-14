@@ -346,6 +346,17 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 
 ---
 
+## ✅ Conference Scanner UX Hardening (14 Mayıs 2026)
+- [x] Visitor preview card before `/checkin-and-certify` (Change A)
+- [x] Custom confirm modal for force certify (Change B)
+- [x] Backend unchanged; `forceCertify` body preserved
+- [x] Field name compatibility verified (customFields camelCase)
+- [x] Deployed to production (commit 27ddae7)
+- [ ] **PENDING:** Suer functional smoke test (real QR scan + force scenario)
+- [ ] **DEFERRED post-fair:** Audit log table for force=true events — see `CONFERENCE_FORCE_AUDIT_20260514.md` Karar Soru 2
+
+---
+
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
 
 - [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)

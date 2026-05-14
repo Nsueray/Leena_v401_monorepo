@@ -1331,6 +1331,16 @@ Reactivation monitor open backlog (post-fair):
 - Apply this template to upcoming post-fair cleanup work: country pollution (44 distinct strings → ~33 canonical, audit 14 May), conference topic variants beyond what `conferenceCleanup.js` can handle (see ADR-021 + post-fair TODO).
 - Verification post-execute: `SELECT COUNT(*) FROM visitors_test_backup_20260514` → 46; all four `remaining_*` validation counters → 0.
 
+**Conference Scanner Pre-Display + Force Confirm (14 May 2026):**
+- `public/conference-scanner.html` — two UX layers added before fair-day operation:
+  - **Change A:** Visitor preview between QR lookup and `/checkin-and-certify` call. Hostess sees visitor's currently-registered sessions (parsed from `custom_fields.conference_topic` via `" || "` split) and a match/mismatch banner for the selected session, then taps "Confirm & Issue Certificate" or "Cancel / Re-scan". New helpers: `showVisitorPreview`, `confirmAndIssue`, `cancelPreview`, `splitTopicsClient`.
+  - **Change B:** Custom confirm modal wrapping the "Save & Send Certificate" button in `showUnregCard`. Two-step: hostess must tap "Yes, Issue Certificate" in the modal (danger-red) after reading "this action cannot be undone". New helpers: `confirmForce`, `closeForceConfirm`, `executeForceCertify`.
+- Backend untouched. `/checkin-and-certify` POST body shape, response handling, `forceCertify()` body, `showUnregCard` layout — all preserved. Only the call-site wrappers and pre-display layer added.
+- Field name compatibility verified: backend response uses `customFields` (camelCase, `terminalCheckins.js:190` transforms snake_case `custom_fields` column).
+- Frontend-only deploy (Render web service auto-deploy ~30s); email worker separate service, unaffected.
+- Commit: `27ddae7`. Deploy verified 14 May 2026 11:38 UTC.
+- Audit reference: `CONFERENCE_FORCE_AUDIT_20260514.md` (Karar Soru 2 + Karar Soru 3).
+
 ### Conference Topic Architecture
 
 **Current model (legacy):** Conference topics stored as free-text in `visitors.custom_fields->>'conference_topic'` (multi-topic via `" || "` separator) and `conference_certificates.conference_topic` column. Canonical source: `forms.fields` JSONB array for active conference form per expo.
