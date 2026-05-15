@@ -386,7 +386,8 @@
                 });
                 
                 if (response.ok) {
-                    showSuccess();
+                    const data = await response.json().catch(() => ({}));
+                    showSuccess(data && data.qr_code);
                 } else {
                     const error = await response.json();
                     throw new Error(error.message || 'Failed to submit form');
@@ -406,8 +407,21 @@
         }
 
         // Show success message
-        function showSuccess() {
+        // #4 — when the backend returns a qr_code, render it server-side via
+        // /api/qr-image/:qr (same-origin PNG, no external lib/CDN) so a visitor
+        // who never gets the email can still show the QR at the entrance.
+        function showSuccess(qrCode) {
             const container = document.getElementById('formContent');
+            const qrBlock = qrCode ? `
+                        <div style="margin:18px auto 6px;">
+                            <img src="/api/qr-image/${encodeURIComponent(qrCode)}"
+                                 alt="Your entrance QR code"
+                                 width="200" height="200"
+                                 style="display:block;margin:0 auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;background:#fff;">
+                        </div>
+                        <p style="font-weight:600;color:#0f172a;margin-bottom:4px;">Show this QR at the entrance</p>
+                        <p class="text-muted" style="font-size:13px;">A copy was also emailed to you. No email? Just show this screen.</p>
+            ` : '';
             container.innerHTML = `
                 <div class="form-header">
                     <h2>Thank You!</h2>
@@ -416,7 +430,8 @@
                     <div class="success-message">
                         <i class="bi bi-check-circle"></i>
                         <h4>Registration Successful</h4>
-                        <p class="text-muted">Your registration has been received. We'll contact you soon with more information.</p>
+                        ${qrBlock}
+                        <p class="text-muted">Your registration has been received.</p>
                         <button class="btn btn-submit mt-3" onclick="location.reload()">
                             <i class="bi bi-arrow-clockwise me-2"></i> Submit Another Registration
                         </button>
