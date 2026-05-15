@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#1e293b">
+<link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+<title>Hostess Quick Reference — Mega Clima Nigeria 2026</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px;line-height:1.5;color:#0f172a;background:#f8fafc;
+    padding:16px;padding-bottom:80px;max-width:560px;margin:0 auto;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* Header */
+  .header{background:#1e293b;color:#fff;padding:18px 18px 16px;border-radius:12px;margin-bottom:16px;}
+  .header h1{font-size:22px;line-height:1.25;font-weight:700;margin-bottom:6px;}
+  .header .subtitle{font-size:14px;opacity:0.85;font-weight:500;}
+  .header .calm{margin-top:12px;padding:10px 12px;background:rgba(255,255,255,0.1);border-radius:8px;font-size:14px;font-weight:600;text-align:center;letter-spacing:0.3px;}
+
+  /* Index — sticky jump bar */
+  .index{
+    position:sticky;top:0;background:#f8fafc;
+    padding:12px 0;margin:0 -16px 16px;
+    border-bottom:1px solid #e2e8f0;z-index:10;
+  }
+  .index-inner{padding:0 16px;display:flex;flex-wrap:wrap;gap:6px;}
+  .index a{
+    display:inline-block;padding:6px 10px;font-size:13px;font-weight:600;
+    text-decoration:none;color:#1e40af;background:#dbeafe;border-radius:6px;
+    border:1px solid #bfdbfe;white-space:nowrap;
+  }
+  .index a:active,.index a:hover{background:#bfdbfe;}
+
+  /* Scenario card base */
+  .card{
+    background:#fff;border-radius:12px;padding:18px;margin-bottom:14px;
+    border:1px solid #e2e8f0;box-shadow:0 1px 2px rgba(0,0,0,0.04);
+    scroll-margin-top:72px;
+  }
+  .card-head{display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;}
+  .card-icon{font-size:32px;line-height:1;flex-shrink:0;width:44px;text-align:center;}
+  .card-title{font-size:18px;font-weight:700;color:#0f172a;line-height:1.3;flex:1;padding-top:4px;}
+  .card-action{font-size:16px;line-height:1.6;color:#0f172a;}
+  .card-action ol,.card-action ul{padding-left:22px;margin:6px 0;}
+  .card-action li{margin-bottom:6px;}
+  .card-action strong{font-weight:700;}
+  .card-note{
+    margin-top:12px;padding:10px 12px;background:#f1f5f9;border-radius:8px;
+    font-size:13px;color:#475569;line-height:1.55;font-style:italic;
+  }
+  .card-note strong{font-style:normal;color:#0f172a;}
+
+  /* Severity tints — left border + light bg */
+  .sev-red    {border-left:5px solid #dc2626;background:#fef2f2;}
+  .sev-orange {border-left:5px solid #f59e0b;background:#fffbeb;}
+  .sev-yellow {border-left:5px solid #eab308;background:#fefce8;}
+  .sev-blue   {border-left:5px solid #2563eb;background:#eff6ff;}
+  .sev-green  {border-left:5px solid #16a34a;background:#f0fdf4;}
+  .sev-gray   {border-left:5px solid #64748b;background:#f8fafc;}
+  .sev-red .card-title    {color:#991b1b;}
+  .sev-orange .card-title {color:#9a3412;}
+  .sev-yellow .card-title {color:#854d0e;}
+  .sev-blue .card-title   {color:#1e3a8a;}
+  .sev-green .card-title  {color:#14532d;}
+
+  /* Emphasis boxes inside actions */
+  .emph{
+    display:block;margin:10px 0;padding:10px 12px;background:rgba(0,0,0,0.06);
+    border-radius:8px;font-weight:700;text-align:center;letter-spacing:0.3px;
+  }
+
+  /* Footer */
+  .footer{
+    margin-top:24px;padding:16px;background:#1e293b;color:#cbd5e1;
+    border-radius:12px;text-align:center;font-size:13px;line-height:1.6;
+  }
+  .footer .ask{display:block;margin-top:6px;color:#fff;font-weight:700;font-size:14px;}
+
+  /* Tablet up: a little more breathing room */
+  @media (min-width:600px){
+    body{padding:24px;padding-bottom:80px;}
+    .header h1{font-size:26px;}
+    .card-icon{font-size:38px;}
+    .card-title{font-size:20px;}
+  }
+
+  /* Reduce motion */
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important;}
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <h1>Conference Hostess — Quick Reference</h1>
+  <div class="subtitle">Mega Clima Nigeria 2026 &mdash; 19-21 May</div>
+  <div class="calm">Stay calm. Find your situation below.</div>
+</header>
+
+<nav class="index" aria-label="Jump to scenario">
+  <div class="index-inner">
+    <a href="#s1">1. Force</a>
+    <a href="#s2">2. Not registered</a>
+    <a href="#s3">3. QR fails</a>
+    <a href="#s4">4. Badge</a>
+    <a href="#s5">5. Wrong page</a>
+    <a href="#s6">6. No email</a>
+    <a href="#s7">7. Help</a>
+    <a href="#s8">8. Offline</a>
+  </div>
+</nav>
+
+<!-- ── SENARYO 1 ── -->
+<section id="s1" class="card sev-red">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">🔴</div>
+    <h2 class="card-title">Visitor not registered for this session</h2>
+  </div>
+  <div class="card-action">
+    <strong>DEFAULT:</strong> Tap <strong>Cancel</strong>. Direct the visitor to the admin desk.
+    <span class="emph">Only Force IF the visitor can show: registration email, ticket, or invitation for this session.</span>
+  </div>
+  <div class="card-note">
+    <strong>Force cannot be undone.</strong> The system permanently records the session in the visitor's record and sends the certificate email.
+  </div>
+</section>
+
+<!-- ── SENARYO 2 ── -->
+<section id="s2" class="card sev-orange">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">⚠️</div>
+    <h2 class="card-title">"Not registered for this session" card appeared</h2>
+  </div>
+  <div class="card-action">
+    Default action: <strong>Cancel</strong>. Send the visitor to the admin desk.
+    <span class="emph">Only proceed with Force if the visitor proves their registration (email, ticket, or invitation).</span>
+  </div>
+  <div class="card-note">
+    This card is the <strong>second warning</strong>. Treat it the same as the Force warning above.
+  </div>
+</section>
+
+<!-- ── SENARYO 3 ── -->
+<section id="s3" class="card sev-yellow">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">🔍</div>
+    <h2 class="card-title">QR doesn't scan, or "Not Found" appears</h2>
+  </div>
+  <div class="card-action">
+    <ol>
+      <li>Try scanning <strong>once more</strong> — hold steady, good light.</li>
+      <li>Still not working? Type the <strong>badge ID</strong> manually in the input field below the camera.</li>
+      <li>Still "Not Found"? Take the visitor's <strong>email and phone</strong> and send them to the lead hostess.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ── SENARYO 4 ── -->
+<section id="s4" class="card sev-blue">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">🪪</div>
+    <h2 class="card-title">Visitor wants a badge (new or reprint)</h2>
+  </div>
+  <div class="card-action">
+    Direct them to the <strong>entrance gate</strong>.
+    <span class="emph">Badges are only printed at the gate scanner.<br>This scanner is for conference certificates only.</span>
+  </div>
+</section>
+
+<!-- ── SENARYO 5 ── -->
+<section id="s5" class="card sev-blue">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">📍</div>
+    <h2 class="card-title">Make sure you are on the conference scanner</h2>
+  </div>
+  <div class="card-action">
+    Look at the top of your screen. It must say:
+    <span class="emph">"Conference Check-in"</span>
+    If it says <strong>"Badge Scanner"</strong> or <strong>"Lead Scanner"</strong> — <strong>STOP.</strong> Open the bookmarked URL for conference. Ask the lead hostess if unsure.
+  </div>
+  <div class="card-note">
+    <strong>Bookmark / URL:</strong> &lt;will be filled by Suer before fair&gt;
+  </div>
+</section>
+
+<!-- ── SENARYO 6 ── -->
+<section id="s6" class="card sev-yellow">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">📧</div>
+    <h2 class="card-title">Visitor says: "I didn't get the certificate email"</h2>
+  </div>
+  <div class="card-action">
+    <ol>
+      <li>Ask them to check their <strong>spam / junk folder</strong>. Wait 1-2 minutes.</li>
+      <li>If still nothing, <strong>scan their QR again</strong> &mdash; a duplicate overlay will appear with a <strong>"Resend Certificate"</strong> button.</li>
+      <li><strong>Maximum 2 resends.</strong> If still no email after 3 attempts total, send them to the lead hostess.</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ── SENARYO 7 ── -->
+<section id="s7" class="card sev-red">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">🆘</div>
+    <h2 class="card-title">Escalate to the lead hostess for:</h2>
+  </div>
+  <div class="card-action">
+    <ul>
+      <li>Wrong certificate issued by mistake</li>
+      <li>Visitor data is wrong (name / company / email)</li>
+      <li>Visitor not found in system, but insists they registered</li>
+      <li>Certificate fails to send after 3 resends</li>
+      <li>Scanner is frozen and refresh didn't help</li>
+      <li><strong>Anything you're not sure about</strong></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ── SENARYO 8 ── -->
+<section id="s8" class="card sev-orange">
+  <div class="card-head">
+    <div class="card-icon" aria-hidden="true">📡</div>
+    <h2 class="card-title">"Connection Error" keeps showing, or device hangs</h2>
+  </div>
+  <div class="card-action">
+    <ol>
+      <li>Wait <strong>30 seconds</strong>, try one more scan.</li>
+      <li>Still not working? <strong>Refresh the page.</strong> (You'll lose today's running count, but the scanner will work again.)</li>
+      <li>Wi-Fi still down after 1 minute? <strong>Switch to paper:</strong>
+        <span class="emph">Write down for each visitor:<br>Name &middot; Company &middot; Session &middot; Time</span>
+        Give the paper log to the lead hostess when Wi-Fi returns &mdash; entries will be added to the system manually.
+      </li>
+    </ol>
+  </div>
+</section>
+
+<footer class="footer">
+  Last updated: 15 May 2026 &mdash; Mega Clima Nigeria 2026
+  <span class="ask">If unsure — ASK the lead hostess. Never guess.</span>
+</footer>
+
+</body>
+</html>
