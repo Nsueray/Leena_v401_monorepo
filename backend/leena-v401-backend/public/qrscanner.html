@@ -407,7 +407,30 @@
             updateTerminalDisplay();
             checkRequiredData();
             setupEventListeners();
+            applyTerminalDefaultType();
         });
+
+        // #2 — Default the manual-registration visitor_type dropdown to the
+        // visitor_type of the terminal's assigned badge template. Reuses the
+        // existing public endpoint; dropdown stays visible + editable.
+        async function applyTerminalDefaultType() {
+            if (!terminalKey) return; // no terminal context → keep HTML default
+            try {
+                const res = await fetch(`${API_BASE_URL}/badge-templates/for-terminal/${encodeURIComponent(terminalKey)}`);
+                if (!res.ok) return;
+                const data = await res.json();
+                const vt = data && data.template && data.template.visitor_type;
+                if (!vt) return;
+                const norm = String(vt).trim().toLowerCase();
+                if (!norm || norm === 'all') return; // 'all'/empty → keep default
+                const sel = document.getElementById('visitorType');
+                if (!sel) return;
+                const match = Array.from(sel.options).find(o => o.value.toLowerCase() === norm);
+                if (match) sel.value = match.value; // editable — hostess can still change
+            } catch (e) {
+                /* network/parse error → silently keep HTML default */
+            }
+        }
         
         function processUrlParameters() {
             const urlParams = new URLSearchParams(window.location.search);
