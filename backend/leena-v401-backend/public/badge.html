@@ -374,7 +374,7 @@
       }
 
       if (content.show_role === true && displayRole && displayRole.toLowerCase() !== 'visitor') {
-        badgeHTML += `<div class="visitor-role">${esc(displayRole)}</div>`;
+        badgeHTML += `<div class="visitor-role">${esc(formatRole(displayRole))}</div>`;
       }
 
       if (content.show_badge_id === true && displayBadgeId) {
@@ -417,6 +417,23 @@
       const div = document.createElement('div');
       div.textContent = text || '';
       return div.innerHTML;
+    }
+
+    // Smart capitalize for the role label only. DB stores visitor_type
+    // lowercase; this is display-only. Known acronyms render uppercase,
+    // everything else Title Case. esc() still wraps the result (XSS safe).
+    function formatRole(value) {
+      if (!value) return '';
+      const ACRONYMS = new Set(['vip','ceo','cto','cfo','vp','md']);
+      return String(value)
+        .split(/\s+/)
+        .filter(Boolean)
+        .map(w => {
+          const lower = w.toLowerCase();
+          if (ACRONYMS.has(lower)) return lower.toUpperCase();
+          return lower.charAt(0).toUpperCase() + lower.slice(1);
+        })
+        .join(' ');
     }
 
     document.addEventListener('DOMContentLoaded', loadBadge);
