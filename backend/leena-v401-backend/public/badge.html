@@ -289,7 +289,10 @@
           company: 'Acme Corporation',
           country: 'Nigeria',
           job_title: 'Marketing Manager',
-          visitor_type: 'VIP',
+          // Preview reflects the selected template's visitor_type (raw, to
+          // match the real-print path which renders the DB value verbatim).
+          // null/'all' → 'Visitor' so the role line is hidden (see :373 guard).
+          visitor_type: (template && template.visitor_type && template.visitor_type !== 'all') ? template.visitor_type : 'Visitor',
           badge_id: 'ABC12345',
           qr_code: 'SAMPLE'
         };
