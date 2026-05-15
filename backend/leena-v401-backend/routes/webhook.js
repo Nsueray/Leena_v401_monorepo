@@ -7,6 +7,29 @@ const { sendEmail, sendEmailWithReplyTo, processEmailTemplate } = require('../ut
 
 const ZOHO_TOKEN = process.env.ZOHO_WEBHOOK_TOKEN || '98uy237fbiweuhr8h23g9rg239';
 
+// ============================================================
+// Day 1 & Day 2 conference_topic normalization
+// Zoho form 39 has a single merged option that combines canonical
+// topics 1 and 5 of conference. We detect and split it here. The
+// byte-level values below are verified against form 39 (read via
+// psql). Do NOT "fix" the typos ("Limit", double space) — they
+// mirror the form's canonical strings; changing them breaks the
+// cleanup tool and reporting topic matching.
+// Refs: WEBHOOK_DAY1_DAY2_FIX_PLAN_20260515.md
+// ============================================================
+
+const TOPIC_1 = '1. Workforce Development Programme at MegaClima 2026 by Cool Plus Limit  | From Skill to Service: Building Africa\u2019s HVAC&R Workforce.';
+const TOPIC_5 = '5. Workforce Development Programme at MegaClima 2026 by Cool Plus Limit  | From Skill to Service: Building Africa\u2019s HVAC&R Workforce.';
+const MERGED_DAY12 = 'Day 1 & Day 2 | Workforce Development Programme at MegaClima 2026 by Cool Plus Limited | From Skill to Service: Building Africa\u2019s HVAC&R Workforce';
+
+function normalizeConferenceTopic(raw) {
+  if (!raw) return raw;
+  if (raw === MERGED_DAY12) {
+    return TOPIC_1 + ' || ' + TOPIC_5;
+  }
+  return raw;
+}
+
 // ✅ POST /api/webhook/zoho/:organizer_id/:expo_id/:form_id
 // With duplicate email handling (upsert logic) + resend email for existing visitors
 router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
@@ -48,6 +71,16 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       if (!knownFields.has(key) && value !== null && value !== undefined && value !== '') {
         customFields[key] = value;
       }
+    }
+
+    // Apply Day1/Day2 split before branching to new/existing visitor paths.
+    // Fail-safe: any error → keep original value (existing behavior).
+    try {
+      if (customFields.conference_topic) {
+        customFields.conference_topic = normalizeConferenceTopic(customFields.conference_topic);
+      }
+    } catch (e) {
+      console.error('[WEBHOOK] conference_topic normalize failed, passing through raw:', e);
     }
 
     console.log('═══════════════════════════════════════════════════════════');
