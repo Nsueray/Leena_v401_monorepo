@@ -432,11 +432,18 @@ router.post('/public', async (req, res) => {
 // ✅ MANUAL REGISTRATION (authMiddleware added — Sprint 1 security fix)
 router.post('/manual', authMiddleware, async (req, res) => {
   try {
-    const { name, last_name, email, company, job_title, country, expo_id, organizer_id, visitor_type, origin, source } = req.body;
+    const { name, last_name, email, company, job_title, country, expo_id, organizer_id, visitor_type, origin, source, manual_reason } = req.body;
 
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
+
+    // #5 — audit trail: store why this was a manual registration.
+    // Backward compatible: callers that omit manual_reason → cfJson stays
+    // null and custom_fields is left untouched (INSERT) / unchanged (UPDATE).
+    const cfJson = (manual_reason && String(manual_reason).trim())
+      ? JSON.stringify({ manual_reason: String(manual_reason).trim() })
+      : null;
 
     // Check for existing visitor with same email in this expo
     const existing = await pool.query(
@@ -455,9 +462,14 @@ router.post('/manual', authMiddleware, async (req, res) => {
           job_title = COALESCE(NULLIF($4, ''), job_title),
           country = COALESCE(NULLIF($5, ''), country),
           visitor_type = COALESCE(NULLIF($7, ''), visitor_type),
+          custom_fields = CASE
+            WHEN $8::jsonb IS NOT NULL
+            THEN COALESCE(custom_fields, '{}'::jsonb) || $8::jsonb
+            ELSE custom_fields
+          END,
           updated_at = NOW()
         WHERE id = $6`,
-        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id, visitor_type || '']
+        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id, visitor_type || '', cfJson]
       );
       console.log('🔄 [MANUAL] Updated existing visitor:', email, 'ID:', ex.id);
       return res.json({
@@ -476,14 +488,14 @@ router.post('/manual', authMiddleware, async (req, res) => {
     const result = await pool.query(
       `INSERT INTO visitors (name, last_name, email, company, job_title, country,
         expo_id, organizer_id, visitor_type, origin, source,
-        qr_code, badge_id, badge_url, created_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,NOW())
+        qr_code, badge_id, badge_url, custom_fields, created_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb,NOW())
       RETURNING id, qr_code, badge_id`,
       [name || '', last_name || '', email, company || '',
        job_title || '', country || '',
        expo_id || null, organizer_id || null,
        visitor_type || 'visitor', origin || 'onsite', source || 'manual',
-       qrCode, badgeId, badgeUrl]
+       qrCode, badgeId, badgeUrl, cfJson]
     );
 
     const visitor = result.rows[0];

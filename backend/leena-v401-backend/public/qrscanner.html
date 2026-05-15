@@ -179,6 +179,20 @@
                             <option value="speaker">Speaker</option>
                         </select>
                     </div>
+                    <div class="form-group">
+                        <label class="form-label">Why manual? <span class="required">*</span></label>
+                        <select class="form-select" id="manualReason" required>
+                            <option value="" selected>Select reason...</option>
+                            <option value="No internet">No internet</option>
+                            <option value="Did not receive email">Did not receive email</option>
+                            <option value="Speaker">Speaker</option>
+                            <option value="VIP">VIP</option>
+                            <option value="Press">Press</option>
+                            <option value="Long queue">Long queue</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <input type="text" class="form-control" id="manualReasonOther" placeholder="Specify..." style="display:none;margin-top:8px;">
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Job Title</label>
@@ -502,6 +516,13 @@
             
             document.getElementById('registrationForm').addEventListener('submit', async (e) => { e.preventDefault(); if (!isProcessing) await handleManualRegistration(); });
             document.getElementById('autoCheckin').addEventListener('change', (e) => { autoCheckinEnabled = e.target.checked; });
+
+            // #5 — show the "Specify..." text input only when reason is "Other"
+            document.getElementById('manualReason').addEventListener('change', (e) => {
+                const other = document.getElementById('manualReasonOther');
+                if (e.target.value === 'Other') { other.style.display = ''; other.focus(); }
+                else { other.style.display = 'none'; other.value = ''; }
+            });
         }
         
         // ==================== QR SCAN ====================
@@ -591,10 +612,26 @@
             const { expoId, organizerId, token } = getStorageData();
             if (!expoId || !token) { showAlert('Missing required data. Please login again.', 'danger'); return; }
             
+            // #5 — manual reason is required (audit trail)
+            const reasonSel = document.getElementById('manualReason').value;
+            if (!reasonSel) {
+                showAlert('Please select a reason for manual registration', 'danger');
+                return;
+            }
+            let manualReason = reasonSel;
+            if (reasonSel === 'Other') {
+                const otherTxt = document.getElementById('manualReasonOther').value.trim();
+                if (!otherTxt) {
+                    showAlert('Please specify the reason for manual registration', 'danger');
+                    return;
+                }
+                manualReason = `Other: ${otherTxt}`;
+            }
+
             isProcessing = true;
             showLoading(true);
             hideAlert();
-            
+
             try {
                 const formData = {
                     name: document.getElementById('firstName').value.trim(),
@@ -606,6 +643,7 @@
                     origin: 'onsite',
                     source: 'manual',
                     visitor_type: document.getElementById('visitorType').value,
+                    manual_reason: manualReason,
                     expo_id: expoId,
                     organizer_id: organizerId || '1',
                     hall: hall,
