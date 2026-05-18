@@ -1,6 +1,6 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 14 Mayıs 2026
+> Son güncelleme: 18 Mayıs 2026
 > Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
@@ -396,6 +396,44 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 
 ---
 
+## ✅ Mega Clima Nigeria 2026 Pre-Fair Sprint Day 2 (18 Mayıs 2026)
+
+### Per-Terminal Manual Registration Toggle (commit 1324296, Yaprak #3)
+- [x] Migration 008 (terminals.allow_manual_registration) production'da
+- [x] POST/PUT /api/terminals + for-terminal response (allowManualRegistration) + terminals.html + qrscanner.html
+- [x] Suer tested ✅
+- [ ] **POST-FAIR:** clone/:id allow_manual_registration kopyalama bug
+
+### Token-Protected Bulk Badge Print (commit 5a66070, Yaprak #1)
+- [x] Migration 009 (terminals.kind) production'da
+- [x] dualAuth middleware + /paginated + /import swap + bulk-badge-print.html + for-terminal kind
+- [x] Suer tested ✅ (Mega Clima + Mega Water token)
+
+### Nigeria Certificate Branch (commit 9a20641, Method A2)
+- [x] verify/:token expo_id + CERT_EMAIL_TEMPLATE_NG + certificate-ng.html + certificate.html redirect
+- [ ] **PENDING:** fuar günü test (Yaprak/Suer)
+
+### Cool Plus Topic Block (commit 02e0692, Yaprak)
+- [x] Helpers (getCoolPlusBlockedTopics/isTopicBlocked/coolPlusBlockResponse) + 3-dokunuş guard + frontend blocked-overlay
+- [ ] **PENDING:** fuar günü test (Topics 1/5/11 expo 7, check-in korunuyor + non-Cool-Plus normal)
+
+### Preemptive Cool Plus Warning + Microcopy (commit d858391)
+- [x] /blocked-topics endpoint + frontend preemptive UI + mikrokopi
+- [x] Suer tested ✅ (mobile)
+
+### Tokens (Render Shell, no commit)
+- [x] Bulk print token Mega Clima Nigeria (expo 7): 50a9d2a4-76b4-437a-818e-271193777fff
+- [x] Bulk print token Nigeria Mega Water (expo 8): 77565c52-fee4-40d9-a378-22c5112529a2
+- [x] Conference scanner terminal Mega Clima Nigeria (expo 7): 7a7537d3-62e5-4ec6-aaca-1d9846e8d16e
+
+### Pending Smoke Tests (fuar günü — Yaprak/Suer)
+- [ ] Nigeria certificate email (yeşil, Lagos) + certificate-ng.html render + cert-id
+- [ ] Cool Plus block (Topics 1/5/11) → turuncu overlay, check-in VAR, cert+email YOK
+- [ ] Non-Cool-Plus topic → normal yeşil success + Nigeria email
+- [ ] Conference scanner preemptive warning (mobile, expo 7 terminal)
+
+---
+
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
 
 - [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)
@@ -464,6 +502,16 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] Ghana expo (id=5) cleanup decision: archive or migrate
 - [ ] **conferenceCleanup 1→N split capability** — current tool is 1→1 rename only. Day 1 & Day 2 → Topic 1 + Topic 5 done via manual SQL this sprint; encode pattern in tool.
 - [ ] **Form 39 canonical topic typo cleanup**: "Cool Plus Limit" → "Limited", duplicate spaces in 13 conference topics for Mega Clima Nigeria.
+
+### Mega Clima Nigeria 2026 Sprint (18 May) — post-fair
+- [ ] **Bulk print tokenları revoke** — `UPDATE terminals SET is_active=false WHERE terminal_key IN ('50a9d2a4-76b4-437a-818e-271193777fff','77565c52-fee4-40d9-a378-22c5112529a2')` (fuar bitince)
+- [ ] **Drop backup tabloları** — `conference_topic_backup_20260518`, `conference_topic_backup_20260513` (fuar sonrası, artık gerekmez)
+- [ ] **JWT organizer_id filter zayıflığı** — `/paginated` + `/import` `buildVisitorFilter` sadece expo_id filtreliyor, organizer scope yok; multi-tenant öncesi düzeltilmeli
+- [ ] **clone/:id allow_manual_registration bug** — `POST /api/terminals/clone/:id` yeni kolonu kopyalamıyor (DB DEFAULT TRUE alır, kaynağı yansıtmaz)
+- [ ] **Certificate system Option 2/3** — DB-backed per-expo certificate templates + admin UI (mevcut hardcoded + Method A2 expo-gated branch yerine). Bkz CERTIFICATE_SYSTEM_ANALYSIS_20260518.md
+- [ ] **Cool Plus rescan dedup** — aynı Cool Plus visitor 2 kez taranırsa 2 check-in; cert-row-yok nedeniyle dedup yok (polish)
+- [ ] **conference scanner `terminal_key` vs bulk-print `key=` param adı tutarsızlığı** — standardize
+- (Not: "Form 39 Cool Plus Limit→Limited typo" yukarıda + "Audit log force=true" 15-May backlog'da zaten takip ediliyor — duplike eklenmedi)
 
 ---
 

@@ -1,7 +1,7 @@
 # CLAUDE.md — Leena EMS
 
 > Bu dosya Claude Code'un her oturumda otomatik okuduğu proje hafızasıdır.
-> Son güncelleme: 14 Mayıs 2026 | Versiyon: v4.0.3
+> Son güncelleme: 18 Mayıs 2026 | Versiyon: v4.0.5
 
 ---
 
@@ -1248,6 +1248,74 @@ Migration yok (1 webhook auto-split + 1 one-off DB cleanup).
 - Yaprak confirmed: form-public QR display works ✅
 - Yaprak confirmed: badge preview shows SPEAKER (capitalize) ✅
 - Other 8 commits: smoke test pending (Yaprak + Suer post-doc-update)
+
+### v4.0.5 — Mega Clima Nigeria 2026 Pre-Fair Sprint Day 2 (18 May 2026)
+
+**Context:** Fuara 1 gün kala (19-21 May, Landmark Centre, Lagos) ikinci pre-fair sprint.
+**5 production commit** + 2 migration + 1 DB cleanup/token oluşturma + 1 yeni endpoint.
+Hepsi backward compatible. Tüm yeni davranışlar expo-scoped veya additive — mevcut
+fuarlar (Ghana expo 5 vb.) etkilenmez.
+
+#### Per-Terminal Manual Registration Toggle (commit 1324296)
+- Migration 008: `terminals.allow_manual_registration BOOLEAN DEFAULT TRUE NOT NULL` (production'da uygulandı; 20 terminal default TRUE)
+- `POST/PUT /api/terminals` body'de `allow_manual_registration` kabul (snake_case; backward compat: yoksa TRUE / değişmez)
+- `GET /api/badge-templates/for-terminal/:key` response'a `allowManualRegistration` (camelCase, terminal objesi konvansiyonu)
+- `public/terminals.html`: "Manual Reg" checkbox (Add form + her satır inline toggle, snake_case body)
+- `public/qrscanner.html`: `applyTerminalManualRegToggle()` — flag false ise Manual Registration checkbox disabled + not (ayrı fonksiyon; `applyTerminalDefaultType` dokunulmadı)
+- Yaprak request #3. Frontend enforcement (`/api/visitors/manual` gate'lenmedi — kapsam dışı)
+- Clone bug deferred: `POST /api/terminals/clone/:id` yeni kolonu kopyalamıyor → DB DEFAULT TRUE (post-fair)
+- Suer tested ✅
+
+#### Token-Protected Public Bulk Badge Print (commit 5a66070)
+- Migration 009: `terminals.kind VARCHAR(20) DEFAULT 'scanner' NOT NULL` + `idx_terminals_kind` (production'da uygulandı; 20 terminal kind=scanner)
+- Yeni `middleware/dualAuth.js`: `Authorization: Bearer` → JWT path (authMiddleware ile byte-identical); `x-terminal-key` → kendi terminal SELECT'i + `kind='bulk_print'` gate (403 WRONG_TERMINAL_KIND). `terminalAuth.js` dokunulmadı (scanner/cert/lead route'ları etkilenmez)
+- `routes/visitors.js`: `/paginated` + `/import` `authMiddleware` → `dualAuth` swap; token mode'da `expo_id = req.scopedExpoId` (token'dan zorlanır, cross-expo leak yok). JWT path byte-identical
+- `public/bulk-badge-print.html` (390 satır, self-contained): `?key=` token, for-terminal `kind` ile gate, Excel upload + DB-from-paginated modu, badge-templates.html modal mantığı port (loadBulkData/executeBulkPrint/generateBulkPrintHTML verbatim), tüm fetch `x-terminal-key`
+- `GET /api/badge-templates/for-terminal/:key` response'a `kind` (camelCase, additive — qrscanner #2 etkilenmez)
+- Yaprak request #1. Single-organizer sadeleştirme: organizer_id zorlama YOK (sadece Elan Expo; multi-tenant guard post-fair). JWT organizer_id filter zayıflığı (`buildVisitorFilter` sadece expo_id filtreliyor) bilinen, post-fair backlog
+- Suer tested ✅ (Mega Clima + Mega Water token'ları)
+
+#### Nigeria Certificate Expo-Gated Branch (commit 9a20641)
+- `routes/conferenceCertificates.js`: `/verify/:token` response'a `expo_id` (1 satır additive); yeni `CERT_EMAIL_TEMPLATE_NG` const (yeşil #54AF3A tema, "19–21 May 2026 • Landmark Centre, Lagos", westafricahvacexpo.com asset, Ghana template **yapısıyla birebir** — sadece branding swap). `issueCertificate` + `/resend`: `Number(expoId)===7 ? NG : Ghana`. Ghana `CERT_EMAIL_TEMPLATE` byte-identical (dokunulmadı)
+- `public/certificate-ng.html` (yeni): Yaprak `certificate 2.html` markup+CSS **byte-identical** (cp, satır 1-588) + yeni `<script>` (`/verify/:token` → `.field`/`.topic`/`.cert-id` data binding, fetch öncesi gizle, hata overlay)
+- `public/certificate.html`: +6 satır JS — `Number(cert.expo_id)===7` → `location.replace('certificate-ng.html'+search)`. Ghana HTML/CSS + DOM-injection **byte-identical**
+- Method A2 (ayrı dosya + redirect); Method B (DOM override) reddedildi (Ghana ↔ Yaprak Nigeria template yapısal divergence). cert-id format: `MCN-2026-<token[0:10]>`. "9th International Mega Clima Expo Nigeria 2026" hardcoded (Suer onayı, expo-7'ye özel dosya)
+- Forward-only (deploy anında expo 7'de 0 cert). **Test pending** (fuar günü)
+
+#### Cool Plus Topic Block (commit 02e0692)
+- Yaprak request: Topics 1, 5, 11 (Cool Plus Limited oturumları) Leena sertifikası ALMAMALI — Cool Plus kendi sertifikasını verir
+- `routes/conferenceCertificates.js` helper'ları: `getCoolPlusBlockedTopics(expoId)` (form 39 options [0,4,10] canlı çek; module-level `coolPlusCache` lazy; **fail-OPEN**: DB hatası → boş Set + console.error → sertifika akışı durmaz), `isTopicBlocked` (" || " split + segment normalize + Set.has), `coolPlusBlockResponse` (`code:'COOL_PLUS_BLOCKED'`). `normalizeTopic`: `NFKC + trim + lowercase`
+- 3-dokunuş tasarım: `issueCertificate` guard **EN BAŞTA** (blocked → check-in INSERT + visitor_event_status upsert normal akışla **byte-identical SQL**, A1 attendance korunur; cert+email atlanır; `return {blocked,blocked_topic}`) + `checkin-and-certify` caller `if(result.blocked){COMMIT; return coolPlusBlockResponse}` (duplicate branch'ten önce, değişmedi) + `/resend` guard
+- `public/conference-scanner.html`: yeni turuncu `blocked-overlay` (success/error/duplicate'ten ayrı; duplicate'in Resend butonu çelişkisi nedeniyle reuse edilmedi), 2sn auto-dismiss (workflow kırılmaz), `confirmAndIssue` + `forceCertify` ikisinde `code==='COOL_PLUS_BLOCKED'` guard (`!success`'ten önce), scan log "Cool Plus". Saf additive
+- Rescan dedup (a) kabul: aynı Cool Plus visitor 2 kez taranırsa 2 check-in (cert row yok; sistemde çoklu check-in olağan; post-fair polish)
+- Scope: SADECE `expo_id=7`. Forward-only. Diğer expo'lar sıfır davranış değişikliği. **Test pending** (fuar günü)
+
+#### Preemptive Cool Plus Warning + Force Microcopy (commit d858391)
+- Yeni `GET /api/conference-certificates/blocked-topics` (terminalAuth, expo-scoped, `getCoolPlusBlockedTopics` reuse, fail-open; **normalize/lowercase string** döner)
+- `public/conference-scanner.html`: `loadBlockedTopics()` (sayfa açılışta cache; fail-open boş Set) + `isClientSideBlocked` (backend ile birebir NFKC normalize + " || " split) + dropdown change → selector altı turuncu uyarı + `showVisitorPreview` turuncu banner + Confirm disable + `showUnregCard` Force disable. Saf additive, yeni CSS rule yok (inline + `.pv-match-banner` reuse)
+- Defense-in-depth: backend block (02e0692) otoriter — frontend disable bypass edilse bile reject. Fail-safe: endpoint fail → frontend uyarı yok ama backend reddeder
+- Mikrokopi: mismatch banner "force will be needed" → "click Confirm to proceed with force certification" (class/yapı dokunulmadı)
+- Suer tested ✅ (mobile)
+
+#### Migrations (production'da uygulandı, Render Shell heredoc)
+- `008_add_allow_manual_registration_to_terminals.sql` — idempotent IF NOT EXISTS; 20 terminal allow_true
+- `009_add_kind_to_terminals.sql` — idempotent; kind=scanner ×20; idx_terminals_kind
+
+#### Tokens / DB ops (no commit, Render Shell)
+- Bulk print token — Mega Clima Nigeria (expo 7): `50a9d2a4-76b4-437a-818e-271193777fff`
+- Bulk print token — Nigeria Mega Water (expo 8): `77565c52-fee4-40d9-a378-22c5112529a2`
+- Conference scanner terminal — Mega Clima Nigeria (expo 7): `7a7537d3-62e5-4ec6-aaca-1d9846e8d16e` (hall='Conference', terminal_no='1', badge_template_id=16, allow_manual_registration=FALSE)
+
+#### Key Decisions / Learnings
+- Single-organizer sadeleştirme: bulk-print'te organizer_id enforcement atlandı (sadece Elan Expo; multi-tenant guard deferred)
+- JWT organizer_id filter zayıflığı: `/paginated` + `/import` `buildVisitorFilter` sadece expo_id filtreliyor — post-fair backlog
+- Certificate redesign Method A2 (ayrı dosya + redirect) > Method B (DOM override): Ghana ve Yaprak Nigeria template yapısal divergence
+- Cool Plus block: form 39 canonical string NFKC normalize; defense-in-depth (backend guard + frontend preemptive UI); DB hatasında fail-open
+- Conference scanner URL param adı: `terminal_key` (bulk-badge-print.html `key=` kullanır — farklı)
+
+#### Test Status
+- Suer tested ✅: 1324296 (manual reg toggle), 5a66070 (bulk print, 2 token), d858391 (preemptive warning, mobile)
+- Pending (fuar günü Yaprak/Suer): 9a20641 (Nigeria certificate), 02e0692 (Cool Plus block)
 
 ### Shared Frontend Components (public/leena-*.js)
 
