@@ -519,6 +519,12 @@
 
         const cert = data.certificate;
 
+        // Nigeria (expo_id=7) → separate certificate page (Yaprak design)
+        if (Number(cert.expo_id) === 7) {
+          location.replace('certificate-ng.html' + location.search);
+          return;
+        }
+
         // Populate certificate fields
         const fullName = [cert.name, cert.last_name].filter(Boolean).join(' ') || 'Guest';
         document.getElementById('certName').textContent = fullName;

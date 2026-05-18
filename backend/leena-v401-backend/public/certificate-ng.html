@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mega Clima Nigeria 2026 - Certificate of Participation</title>
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --brand:#54AF3A;
+      --brand-dark:#3d8a26;
+      --accent:#0a7a3b;
+      --text:#1a1a1a;
+      --muted:#555;
+      --line:#2b2b2b;
+    }
+    *{ box-sizing:border-box; }
+    html, body{ margin:0; padding:0; }
+    body{
+      background:#e8e8e8;
+      font-family: "Montserrat", Arial, Helvetica, sans-serif;
+      color:var(--text);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ====== A4 LANDSCAPE PRINT ====== */
+    @page { size: A4 landscape; margin: 0; }
+    @media print{
+      body{ background:#fff; }
+      .page{ padding:0; min-height:auto; }
+      .certificate{
+        box-shadow:none;
+        width:297mm;
+        height:210mm;
+        page-break-after: avoid;
+      }
+    }
+
+    .page{
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:18px;
+    }
+
+    /* ====== CERTIFICATE FRAME ====== */
+    .certificate{
+      width:297mm;
+      height:210mm;
+      max-width:98vw;
+      background:#fff;
+      position:relative;
+      padding:14mm 16mm;
+      box-shadow:0 18px 50px rgba(0,0,0,.18);
+      overflow:hidden;
+    }
+
+    /* Outer decorative double border */
+    .certificate::before{
+      content:"";
+      position:absolute;
+      inset:6mm;
+      border:2px solid var(--brand);
+      pointer-events:none;
+    }
+    .certificate::after{
+      content:"";
+      position:absolute;
+      inset:8mm;
+      border:1px solid var(--brand);
+      pointer-events:none;
+    }
+
+    /* Soft corner accents */
+    .corner{
+      position:absolute;
+      width:38mm;
+      height:38mm;
+      pointer-events:none;
+      opacity:.10;
+    }
+    .corner svg{ width:100%; height:100%; }
+    .corner.tl{ top:6mm;    left:6mm;   }
+    .corner.tr{ top:6mm;    right:6mm;  transform: scaleX(-1); }
+    .corner.bl{ bottom:6mm; left:6mm;   transform: scaleY(-1); }
+    .corner.br{ bottom:6mm; right:6mm;  transform: scale(-1,-1); }
+
+    .inner{
+      position:relative;
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      z-index:2;
+    }
+
+    /* ====== TOP HEADER ====== */
+    .top{
+      display:grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items:center;
+      gap:12px;
+      padding-top:2mm;
+    }
+    .top .left,
+    .top .right{
+      font-size:12px;
+      display:flex;
+      align-items:center;
+      gap:9px;
+      color:#222;
+      letter-spacing:.4px;
+    }
+    .top .right{ justify-content:flex-end; }
+    .top strong{ font-weight:600; font-size:12.5px; }
+
+    .icon{
+      width:28px;
+      height:28px;
+      border-radius:50%;
+      background:var(--brand);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      flex:0 0 28px;
+      box-shadow:0 2px 6px rgba(84,175,58,.35);
+    }
+    .icon svg{
+      width:15px;
+      height:15px;
+      fill:#fff;
+    }
+
+    .event-logo{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .event-logo img{
+      height:62px;
+      max-width:280px;
+      display:block;
+      object-fit:contain;
+    }
+
+    /* ====== TITLE ====== */
+    .title{
+      text-align:center;
+      margin-top:6px;
+    }
+    .title h1{
+      margin:0;
+      font-size:54px;
+      color:var(--brand);
+      font-weight:400;
+      font-family: "Great Vibes", "Brush Script MT", cursive;
+      line-height:1;
+      letter-spacing:.5px;
+    }
+    .title .deco{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:14px;
+      margin-top:4px;
+    }
+    .title .deco .line{
+      width:90px;
+      height:1px;
+      background:var(--brand);
+      opacity:.6;
+    }
+    .title .deco .dot{
+      width:6px;
+      height:6px;
+      border-radius:50%;
+      background:var(--brand);
+    }
+
+    /* ====== MAIN CONTENT BOX ====== */
+    .main-box{
+      flex:1;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      align-items:center;
+      text-align:center;
+      padding:6mm 10mm;
+      margin:4mm auto 0;
+      width:min(230mm, 96%);
+    }
+    .main-box .small{
+      font-size:14px;
+      color:#444;
+      margin-bottom:4px;
+      letter-spacing:.6px;
+      font-style:italic;
+    }
+    .field{
+      display:inline-block;
+      min-width:260mm;
+      max-width:90%;
+      padding:6px 18px;
+      font-size:28px;
+      font-weight:600;
+      color:var(--brand-dark);
+      margin:4px 0 10px;
+      border-bottom:2px solid var(--brand);
+      letter-spacing:.5px;
+      font-family: "Montserrat", sans-serif;
+    }
+    .main-text{
+      font-size:14px;
+      line-height:1.65;
+      margin:6px auto 8px;
+      max-width:225mm;
+      color:#333;
+    }
+    .main-text .theme{
+      font-style:italic;
+      color:var(--brand-dark);
+      font-weight:500;
+    }
+    .topic-label{
+      font-size:13px;
+      color:#444;
+      margin-top:4px;
+      font-style:italic;
+    }
+    .topic{
+      display:inline-block;
+      min-width:140mm;
+      max-width:90%;
+      padding:7px 16px;
+      border:1.5px dashed var(--brand);
+      border-radius:6px;
+      font-size:14px;
+      font-weight:500;
+      margin-top:5px;
+      color:#1a1a1a;
+      background:#fafff7;
+    }
+
+    /* ====== SIGNATURE ====== */
+    .signature-row{
+      width:min(220mm, 96%);
+      margin:6mm auto 0;
+      display:flex;
+      justify-content:center;
+      align-items:flex-end;
+    }
+    .signature-col{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+    }
+    .sig-box{
+      width:220px;
+      text-align:center;
+    }
+    .sig-box img{
+      width:160px;
+      height:42px;
+      object-fit:contain;
+      display:block;
+      margin:0 auto 2px;
+    }
+    .sig-line{
+      width:100%;
+      border-top:1.5px solid #333;
+      margin-top:2px;
+      padding-top:5px;
+    }
+    .sig-label{
+      font-size:11px;
+      color:#333;
+      font-weight:500;
+      letter-spacing:.3px;
+    }
+    .sig-sub{
+      font-size:10px;
+      color:#666;
+      font-style:italic;
+      margin-top:1px;
+    }
+
+    /* ====== BOTTOM SECTION ====== */
+    .bottom{
+      margin-top:auto;
+      padding-top:6mm;
+      border-top:1px solid #ddd;
+    }
+
+    .bottom-grid{
+      display:grid;
+      grid-template-columns: 0.85fr 0.85fr 2fr 0.85fr;
+      gap:14px;
+      align-items:start;
+    }
+
+    .brand-group{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      text-align:center;
+    }
+    .brand-group .label{
+      font-size:9.5px;
+      color:#555;
+      margin-bottom:5px;
+      letter-spacing:.5px;
+      text-transform:uppercase;
+      font-weight:600;
+    }
+    .brand-group .logos{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      justify-content:center;
+      flex-wrap:wrap;
+      min-height:42px;
+    }
+    .brand-group .logos img{
+      height:38px;
+      max-width:130px;
+      object-fit:contain;
+      display:block;
+    }
+
+    /* Supporting associations - inline scroll-free row */
+    .partners{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+    }
+    .partners .label{
+      font-size:9.5px;
+      color:#555;
+      margin-bottom:5px;
+      letter-spacing:.5px;
+      text-transform:uppercase;
+      font-weight:600;
+    }
+    .partners-row{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      flex-wrap:nowrap;
+      width:100%;
+    }
+    .partners-row img{
+      height:36px;
+      max-width:95px;
+      object-fit:contain;
+      display:block;
+      flex:0 1 auto;
+    }
+
+    /* Contact block */
+    .contact{
+      grid-column: 1 / -1;
+      margin-top:6mm;
+      padding-top:4mm;
+      border-top:1px dashed #ddd;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:20px;
+      font-size:10.5px;
+      color:#333;
+    }
+    .contact .row{
+      display:flex;
+      align-items:center;
+      gap:7px;
+      white-space:nowrap;
+    }
+    .contact .dot{
+      width:20px;
+      height:20px;
+      border-radius:50%;
+      background:var(--brand);
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+    }
+    .contact .dot svg{
+      width:11px;
+      height:11px;
+      fill:#fff;
+    }
+    .contact a{
+      color:#333;
+      text-decoration:none;
+    }
+    .cert-id{
+      font-size:10px;
+      color:#888;
+      letter-spacing:.5px;
+    }
+
+    /* ====== SCREEN-ONLY HELPERS ====== */
+    .toolbar{
+      position:fixed;
+      top:14px;
+      right:14px;
+      display:flex;
+      gap:8px;
+      z-index:50;
+    }
+    .toolbar button{
+      background:var(--brand);
+      color:#fff;
+      border:0;
+      padding:10px 16px;
+      border-radius:6px;
+      font-family:inherit;
+      font-weight:600;
+      font-size:13px;
+      cursor:pointer;
+      box-shadow:0 4px 12px rgba(84,175,58,.35);
+    }
+    .toolbar button:hover{ background:var(--brand-dark); }
+    @media print{
+      .toolbar{ display:none; }
+    }
+
+    /* ====== RESPONSIVE FALLBACK ====== */
+    @media (max-width: 1100px){
+      .certificate{
+        width:100%;
+        height:auto;
+        aspect-ratio: 297/210;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <button onclick="window.print()">Print / Save PDF</button>
+  </div>
+
+  <div class="page">
+    <section class="certificate" role="document" aria-label="Certificate of Participation">
+
+      <!-- Corner ornaments -->
+      <div class="corner tl" aria-hidden="true">
+        <svg viewBox="0 0 200 200"><path d="M0 0 L200 0 L200 20 L20 20 L20 200 L0 200 Z M40 40 L160 40 L160 50 L50 50 L50 160 L40 160 Z" fill="#54AF3A"/></svg>
+      </div>
+      <div class="corner tr" aria-hidden="true">
+        <svg viewBox="0 0 200 200"><path d="M0 0 L200 0 L200 20 L20 20 L20 200 L0 200 Z M40 40 L160 40 L160 50 L50 50 L50 160 L40 160 Z" fill="#54AF3A"/></svg>
+      </div>
+      <div class="corner bl" aria-hidden="true">
+        <svg viewBox="0 0 200 200"><path d="M0 0 L200 0 L200 20 L20 20 L20 200 L0 200 Z M40 40 L160 40 L160 50 L50 50 L50 160 L40 160 Z" fill="#54AF3A"/></svg>
+      </div>
+      <div class="corner br" aria-hidden="true">
+        <svg viewBox="0 0 200 200"><path d="M0 0 L200 0 L200 20 L20 20 L20 200 L0 200 Z M40 40 L160 40 L160 50 L50 50 L50 160 L40 160 Z" fill="#54AF3A"/></svg>
+      </div>
+
+      <div class="inner">
+
+        <!-- ========= TOP: DATE / LOGO / VENUE ========= -->
+        <div class="top">
+          <div class="left">
+            <span class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M7 2h2v2h6V2h2v2h3a2 2 0 0 1 2 2v15a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h3V2zm15 8H2v11a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V10zM3 6a1 1 0 0 0-1 1v2h20V7a1 1 0 0 0-1-1H3z"/></svg>
+            </span>
+            <strong>19 - 21 MAY 2026</strong>
+          </div>
+
+          <div class="event-logo">
+            <img src="https://westafricahvacexpo.com/newsletter/mc-nigeria-logo.png" alt="Mega Clima Nigeria 2026" />
+          </div>
+
+          <div class="right">
+            <span class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 5-7 13-7 13S5 14 5 9a7 7 0 0 1 7-7zm0 9.5A2.5 2.5 0 1 0 12 6a2.5 2.5 0 0 0 0 5.5z"/></svg>
+            </span>
+            <strong>LANDMARK CENTRE, VI LAGOS</strong>
+          </div>
+        </div>
+
+        <!-- ========= TITLE ========= -->
+        <div class="title">
+          <h1>Certificate of Participation</h1>
+          <div class="deco" aria-hidden="true">
+            <span class="line"></span>
+            <span class="dot"></span>
+            <span class="line"></span>
+          </div>
+        </div>
+
+        <!-- ========= MAIN BODY ========= -->
+        <div class="main-box">
+          <div class="small">This is to certify that</div>
+          <div class="field">{{name}} {{last_name}}</div>
+
+          <p class="main-text">
+            has successfully participated in the <strong>9<sup>th</sup> International Mega Clima Expo Nigeria 2026</strong>
+            under the theme:<br/>
+            <span class="theme">&ldquo;Cooling Africa Responsibly: Performance Excellence, People and Sustainable HVAC&amp;R&rdquo;</span><br/>
+            held from <strong>19&ndash;21 May 2026</strong> at <strong>Landmark Centre, Lagos, Nigeria</strong>.
+          </p>
+
+          <div class="topic-label">The participant attended technical sessions and panel discussions covering:</div>
+          <div class="topic">{{conference_topic}}</div>
+        </div>
+
+        <!-- ========= SIGNATURE ========= -->
+        <div class="signature-row">
+          <div class="signature-col">
+            <div class="sig-box">
+              <img src="https://www.megaclimaexpo.com/ghana/newsletter/elan-signature.png" alt="Authorized Signature" />
+              <div class="sig-line">
+                <div class="sig-label">Elan Exhibition West Africa</div>
+                <div class="sig-sub">Authorized Signatory</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ========= BOTTOM SECTION ========= -->
+        <div class="bottom">
+          <div class="bottom-grid">
+
+            <div class="brand-group">
+              <div class="label">Organized by</div>
+              <div class="logos">
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/elanexpo.png" alt="Elan Expo" />
+              </div>
+            </div>
+
+            <div class="brand-group">
+              <div class="label">In Collaboration With</div>
+              <div class="logos">
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/ashrae-logo.png" alt="ASHRAE" />
+              </div>
+            </div>
+
+            <div class="partners">
+              <div class="label">Supporting Associations</div>
+              <div class="partners-row">
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter1.png" alt="Supporter 1" />
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter2.png" alt="Supporter 2" />
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter3.png" alt="Supporter 3" />
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter4.png" alt="Supporter 4" />
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter5.png" alt="Supporter 5" />
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter6.png" alt="Supporter 6" />
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter7.png" alt="Supporter 7" />
+				  <img src="https://westafricahvacexpo.com/newsletter/supporter/supporter8.png" alt="Supporter 8" />
+              </div>
+            </div>
+
+            <div class="brand-group">
+              <div class="label">Venue</div>
+              <div class="logos">
+                <img src="https://westafricahvacexpo.com/newsletter/supporter/landmark.png" alt="Landmark Centre" />
+              </div>
+            </div>
+
+            <!-- Contact -->
+            <div class="contact">
+              <div class="row">
+                <span class="dot" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                </span>
+                <a href="mailto:info@westafricahvacexpo.com">info@westafricahvacexpo.com</a>
+              </div>
+
+              <div class="cert-id">CERTIFICATE No: MCN-2026-{{name}}</div>
+
+              <div class="row">
+                <span class="dot" aria-hidden="true">
+                  <svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm7.93 9h-3.2a15.6 15.6 0 0 0-1.24-5A8.03 8.03 0 0 1 19.93 11zM12 4c1.07 1.6 1.9 3.87 2.23 7H9.77C10.1 7.87 10.93 5.6 12 4zM4.07 13h3.2a15.6 15.6 0 0 0 1.24 5A8.03 8.03 0 0 1 4.07 13zm3.2-2H4.07a8.03 8.03 0 0 1 3.44-5 15.6 15.6 0 0 0-1.24 5zm2.5 2h4.46c-.33 3.13-1.16 5.4-2.23 7-1.07-1.6-1.9-3.87-2.23-7zm6.72 5a15.6 15.6 0 0 0 1.24-5h3.2a8.03 8.03 0 0 1-4.44 5z"/></svg>
+                </span>
+                <a href="https://www.westafricahvacexpo.com" target="_blank" rel="noopener">www.westafricahvacexpo.com</a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <script>
+    (function () {
+      // Hide Yaprak markup until verified data is bound (no placeholder flash).
+      // Markup/CSS untouched — this style is injected/removed at runtime only.
+      var hideStyle = document.createElement('style');
+      hideStyle.id = 'ng-prebind-hide';
+      hideStyle.textContent = '.page{visibility:hidden}';
+      document.head.appendChild(hideStyle);
+
+      function showOverlay(html) {
+        var o = document.getElementById('ng-overlay');
+        if (!o) {
+          o = document.createElement('div');
+          o.id = 'ng-overlay';
+          o.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#e8e8e8;font-family:Montserrat,Arial,sans-serif;color:#555;font-size:15px;line-height:1.5;text-align:center;padding:24px;z-index:9999;';
+          document.body.appendChild(o);
+        }
+        o.innerHTML = html;
+      }
+      function reveal() {
+        var s = document.getElementById('ng-prebind-hide');
+        if (s) s.remove();
+        var o = document.getElementById('ng-overlay');
+        if (o) o.remove();
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        showOverlay('Loading certificate&hellip;');
+        var params = new URLSearchParams(window.location.search);
+        var token = params.get('token');
+        if (!token) {
+          showOverlay('<div><strong>Missing token</strong><br>No certificate token provided in the URL.</div>');
+          return;
+        }
+        fetch('/api/conference-certificates/verify/' + encodeURIComponent(token))
+          .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+          .then(function (r) {
+            if (!r.ok || !r.data || !r.data.success || !r.data.certificate) {
+              showOverlay('<div><strong>Certificate not found</strong><br>' + ((r.data && r.data.error) || 'This certificate link may be invalid or expired.') + '</div>');
+              return;
+            }
+            var cert = r.data.certificate;
+            var fullName = [cert.name, cert.last_name].filter(Boolean).join(' ') || 'Guest';
+            var topic = cert.conference_topic || '-';
+            var tok10 = String(token).replace(/[^A-Za-z0-9]/g, '').slice(0, 10);
+
+            var fieldEl = document.querySelector('.field');
+            var topicEl = document.querySelector('.topic');
+            var certIdEl = document.querySelector('.cert-id');
+            if (fieldEl) fieldEl.textContent = fullName;
+            if (topicEl) topicEl.textContent = topic;
+            if (certIdEl) certIdEl.textContent = 'CERTIFICATE No: MCN-2026-' + tok10;
+
+            document.title = 'Certificate — ' + fullName + ' — ' + topic;
+            reveal();
+          })
+          .catch(function () {
+            showOverlay('<div><strong>Connection error</strong><br>Could not load the certificate. Please check your connection and reload.</div>');
+          });
+      });
+    })();
+  </script>
+
+</body>
+</html>
