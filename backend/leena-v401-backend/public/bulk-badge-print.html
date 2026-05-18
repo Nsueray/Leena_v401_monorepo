@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulk Badge Print</title>
+<link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  :root { --primary:#4a6fa5; --primary-dark:#3d5d8a; --text-muted:#6b7280; --border:#e5e7eb; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',Arial,sans-serif; background:#f4f6f9; color:#1f2937; padding:24px; }
+  .wrap { max-width:760px; margin:0 auto; }
+  .card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:24px; margin-bottom:18px; }
+  h1 { font-size:22px; font-weight:700; display:flex; align-items:center; gap:10px; }
+  h1 .bi { color:var(--primary); }
+  .sub { color:var(--text-muted); font-size:13px; margin-top:4px; }
+  .bound { display:flex; gap:24px; flex-wrap:wrap; margin-top:16px; }
+  .bound div { font-size:13px; }
+  .bound .lbl { color:var(--text-muted); display:block; margin-bottom:2px; }
+  .bound .val { font-weight:600; font-size:15px; }
+  .form-section-title { font-weight:600; margin:18px 0 8px; font-size:14px; }
+  label { display:block; font-size:13px; font-weight:500; margin-bottom:6px; }
+  select, input[type=file] { width:100%; padding:9px 11px; border:1px solid var(--border); border-radius:7px; font-size:14px; font-family:inherit; background:#fff; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:200px; }
+  .btn { padding:10px 20px; border:none; border-radius:7px; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit; display:inline-flex; align-items:center; gap:7px; }
+  .btn-primary { background:var(--primary); color:#fff; } .btn-primary:hover { background:var(--primary-dark); }
+  .btn-success { background:#16a34a; color:#fff; } .btn-success:hover { background:#15803d; }
+  .btn:disabled { opacity:.6; cursor:not-allowed; }
+  .actions { margin-top:18px; display:flex; gap:10px; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; font-size:13px; }
+  th { text-align:left; padding:7px 8px; background:#f9fafb; border-bottom:2px solid var(--border); }
+  #status { padding:12px 14px; border-radius:7px; font-size:14px; margin-top:14px; display:none; }
+  #status.err { background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; display:block; }
+  #status.warn { background:#fffbeb; color:#92400e; border:1px solid #fde68a; display:block; }
+  #status.ok { background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; display:block; }
+  #gate { text-align:center; padding:48px 24px; }
+  #gate .bi { font-size:42px; color:#b91c1c; }
+  #gate h2 { margin:14px 0 6px; font-size:19px; }
+  #gate p { color:var(--text-muted); font-size:14px; }
+  .hidden { display:none !important; }
+  .preview-wrap { max-height:340px; overflow:auto; border:1px solid var(--border); border-radius:7px; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="card" id="loadingCard">
+    <p style="text-align:center;color:var(--text-muted);"><i class="bi bi-hourglass-split"></i> Validating link…</p>
+  </div>
+
+  <div class="card hidden" id="gateCard">
+    <div id="gate">
+      <i class="bi bi-shield-exclamation"></i>
+      <h2 id="gateTitle">Invalid link</h2>
+      <p id="gateMsg">This link is not valid or no longer active.</p>
+    </div>
+  </div>
+
+  <div class="hidden" id="tool">
+    <div class="card">
+      <h1><i class="bi bi-printer"></i> Bulk Badge Print</h1>
+      <div class="sub">Print badges for this event. No login required — this page is bound to a secure token.</div>
+      <div class="bound">
+        <div><span class="lbl">Event</span><span class="val" id="boundExpo">—</span></div>
+        <div><span class="lbl">Badge Template</span><span class="val" id="boundTemplate">—</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="form-section-title">1. Data Source</div>
+      <div class="row">
+        <div>
+          <label for="dataSource">Source</label>
+          <select id="dataSource" onchange="toggleSource()">
+            <option value="excel">Excel upload (creates visitors + QR)</option>
+            <option value="database">Existing visitors (database)</option>
+          </select>
+        </div>
+        <div id="dbFilterGroup" class="hidden">
+          <label for="dbFilter">Visitor type filter</label>
+          <select id="dbFilter">
+            <option value="all">All types</option>
+            <option value="visitor">Visitor</option>
+            <option value="exhibitor">Exhibitor</option>
+            <option value="conference">Conference</option>
+            <option value="vip">VIP</option>
+            <option value="press">Press</option>
+            <option value="staff">Staff</option>
+            <option value="speaker">Speaker</option>
+          </select>
+        </div>
+      </div>
+      <div id="excelGroup" style="margin-top:14px;">
+        <label for="excelFile">Excel file (.xlsx, .xls, .csv)</label>
+        <input type="file" id="excelFile" accept=".xlsx,.xls,.csv">
+      </div>
+
+      <div id="status"></div>
+
+      <div class="actions">
+        <button class="btn btn-primary" id="loadBtn" onclick="loadBulkData()"><i class="bi bi-arrow-clockwise"></i> Load Data</button>
+        <button class="btn btn-success hidden" id="printBtn" onclick="executeBulkPrint()"><i class="bi bi-printer"></i> Print All Badges</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="previewCard">
+      <div class="form-section-title">2. Preview (<span id="count">0</span> badges)</div>
+      <div class="preview-wrap">
+        <table>
+          <thead><tr><th>#</th><th>Name</th><th>Company</th><th>Booth</th><th>Type</th></tr></thead>
+          <tbody id="previewTable"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const API_URL = '';
+  const params = new URLSearchParams(location.search);
+  const KEY = params.get('key') || '';
+  let boundTemplate = null;
+  let boundExpoId = null;
+  let bulkData = [];
+
+  function esc(t){ const d=document.createElement('div'); d.textContent = t==null?'':t; return d.innerHTML; }
+  function setStatus(msg, type){ const s=document.getElementById('status'); if(!msg){ s.style.display='none'; s.className=''; s.textContent=''; return; } s.className=type; s.textContent=msg; }
+  function showGate(title, msg){
+    document.getElementById('loadingCard').classList.add('hidden');
+    document.getElementById('tool').classList.add('hidden');
+    document.getElementById('gateTitle').textContent = title;
+    document.getElementById('gateMsg').textContent = msg;
+    document.getElementById('gateCard').classList.remove('hidden');
+  }
+
+  async function init(){
+    if (!KEY){ showGate('Invalid link', 'No token provided in the link.'); return; }
+    try {
+      const res = await fetch(`${API_URL}/api/badge-templates/for-terminal/${encodeURIComponent(KEY)}`);
+      if (!res.ok){
+        showGate('Link not active', 'This link is not valid or has been deactivated. Ask the organizer for a new one.');
+        return;
+      }
+      const data = await res.json();
+      if (!data || !data.success || !data.terminal){
+        showGate('Invalid link', 'This link could not be validated.');
+        return;
+      }
+      if (data.terminal.kind !== 'bulk_print'){
+        showGate('Not authorized', 'This link is not authorized for bulk badge printing.');
+        return;
+      }
+      boundTemplate = data.template || null;
+      boundExpoId = data.terminal.expoId;
+      document.getElementById('boundExpo').textContent = data.terminal.expoName || ('Expo ' + boundExpoId);
+      document.getElementById('boundTemplate').textContent = (boundTemplate && boundTemplate.name) ? boundTemplate.name : 'System Default';
+      document.getElementById('loadingCard').classList.add('hidden');
+      document.getElementById('tool').classList.remove('hidden');
+    } catch (e){
+      showGate('Connection error', 'Could not reach the server. Check your connection and reload.');
+    }
+  }
+
+  function toggleSource(){
+    const src = document.getElementById('dataSource').value;
+    document.getElementById('excelGroup').classList.toggle('hidden', src !== 'excel');
+    document.getElementById('dbFilterGroup').classList.toggle('hidden', src !== 'database');
+    document.getElementById('previewCard').classList.add('hidden');
+    document.getElementById('printBtn').classList.add('hidden');
+    setStatus('');
+  }
+
+  async function loadBulkData(){
+    const src = document.getElementById('dataSource').value;
+    const loadBtn = document.getElementById('loadBtn');
+    bulkData = [];
+    setStatus('');
+
+    if (src === 'excel'){
+      const file = document.getElementById('excelFile').files[0];
+      if (!file){ setStatus('Please select an Excel file.', 'err'); return; }
+      const vType = (boundTemplate && boundTemplate.visitor_type && boundTemplate.visitor_type !== 'all') ? boundTemplate.visitor_type : 'exhibitor';
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('expo_id', boundExpoId);   // server forces token's expo (dualAuth); sent for parity
+      formData.append('visitor_type', vType);
+      formData.append('source_override', 'import');
+
+      loadBtn.disabled = true;
+      loadBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Importing…';
+      try {
+        const importRes = await fetch(API_URL + '/api/visitors/import', {
+          method: 'POST',
+          headers: { 'x-terminal-key': KEY },
+          body: formData
+        });
+        if (!importRes.ok){
+          let m = 'Import failed';
+          try { const er = await importRes.json(); m = er.message || er.error || m; } catch(_){}
+          throw new Error(m);
+        }
+        const importData = await importRes.json();
+        if (importData.failed_count > 0){
+          setStatus(`Import partial: ${importData.success_count||0} OK, ${importData.failed_count} failed.`, 'warn');
+        }
+        if (!importData.imported || importData.imported.length === 0){
+          setStatus('No visitors imported (possible duplicates).', 'warn');
+          loadBtn.disabled = false; loadBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+          return;
+        }
+        bulkData = importData.imported.map(v => ({
+          name: v.name||'', last_name:'', email: v.email||'', company:'', country:'',
+          job_title:'', booth_number:'', phone:'', sector:'',
+          visitor_type: vType, badge_id: v.badge_id||'', qr_code: v.qr_code||''
+        }));
+        // Enrich with full visitor details
+        const ids = new Set(importData.imported.map(v => v.id));
+        const fr = await fetch(`${API_URL}/api/visitors/paginated?expo_id=${boundExpoId}&limit=9999&visitor_type=${encodeURIComponent(vType)}`, { headers:{ 'x-terminal-key': KEY } });
+        if (fr.ok){
+          const fd = await fr.json();
+          const matched = (fd.visitors || fd.rows || []).filter(v => ids.has(v.id));
+          if (matched.length){
+            bulkData = matched.map(v => ({
+              name:v.name||'', last_name:v.last_name||'', email:v.email||'', company:v.company||'',
+              country:v.country||'', job_title:v.job_title||'', booth_number:v.booth_number||'',
+              phone:v.phone||'', sector:v.sector||'', visitor_type:v.visitor_type||vType,
+              badge_id:v.badge_id||'', qr_code:v.qr_code||''
+            }));
+          }
+        }
+      } catch(e){
+        setStatus('Import failed: ' + e.message, 'err');
+        loadBtn.disabled = false; loadBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+        return;
+      }
+      loadBtn.disabled = false; loadBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+
+    } else {
+      const filter = document.getElementById('dbFilter').value;
+      let url = `${API_URL}/api/visitors/paginated?expo_id=${boundExpoId}&limit=9999`;
+      if (filter !== 'all') url += `&visitor_type=${encodeURIComponent(filter)}`;
+      loadBtn.disabled = true;
+      loadBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading…';
+      try {
+        const res = await fetch(url, { headers:{ 'x-terminal-key': KEY } });
+        if (!res.ok){
+          let m = 'Failed to load visitors';
+          try { const er = await res.json(); m = er.message || er.error || m; } catch(_){}
+          throw new Error(m);
+        }
+        const data = await res.json();
+        const visitors = data.visitors || data.rows || [];
+        bulkData = visitors.map(v => ({
+          name:v.name||'', last_name:v.last_name||'', email:v.email||'', company:v.company||'',
+          country:v.country||'', job_title:v.job_title||'', booth_number:v.booth_number||'',
+          phone:v.phone||'', sector:v.sector||'', visitor_type:v.visitor_type||'visitor',
+          badge_id:v.badge_id||'', qr_code:v.qr_code||''
+        }));
+      } catch(e){
+        setStatus('Failed to load visitors: ' + e.message, 'err');
+        loadBtn.disabled = false; loadBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+        return;
+      }
+      loadBtn.disabled = false; loadBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Load Data';
+    }
+
+    if (bulkData.length === 0){ setStatus('No data found.', 'warn'); return; }
+
+    document.getElementById('count').textContent = bulkData.length;
+    document.getElementById('previewTable').innerHTML = bulkData.slice(0,50).map((d,i) =>
+      `<tr>
+        <td style="padding:6px 8px">${i+1}</td>
+        <td style="padding:6px 8px">${esc(d.name)} ${esc(d.last_name)}</td>
+        <td style="padding:6px 8px">${esc(d.company)}</td>
+        <td style="padding:6px 8px">${esc(d.booth_number)}</td>
+        <td style="padding:6px 8px;text-transform:capitalize">${esc(d.visitor_type)}</td>
+      </tr>`
+    ).join('') + (bulkData.length > 50 ? `<tr><td colspan="5" style="padding:8px;text-align:center;color:var(--text-muted)">… and ${bulkData.length-50} more</td></tr>` : '');
+
+    document.getElementById('previewCard').classList.remove('hidden');
+    document.getElementById('printBtn').classList.remove('hidden');
+    setStatus(`Loaded ${bulkData.length} record(s). Review the preview, then Print All Badges.`, 'ok');
+  }
+
+  function executeBulkPrint(){
+    if (!boundTemplate){ setStatus('No badge template bound to this link.', 'err'); return; }
+    if (!bulkData.length){ setStatus('Load data first.', 'err'); return; }
+    const printWin = window.open('', '_blank');
+    printWin.document.write(generateBulkPrintHTML(boundTemplate, bulkData));
+    printWin.document.close();
+  }
+
+  function generateBulkPrintHTML(template, data){
+    const s = template.size_config || {};
+    const c = template.content_config || {};
+    const st = template.style_config || {};
+    const w = s.width_mm || 100;
+    const h = s.height_mm || 50;
+    const ml = s.margin_left_mm || 0;
+    const mt = s.margin_top_mm || 0;
+    const qrSize = s.qr_size_mm || 30;
+
+    function fieldStyle(field, defaultSize){
+      const size = st[`font_size_${field}`] || defaultSize;
+      const bold = st[`bold_${field}`] ? 'font-weight:bold;' : '';
+      const italic = st[`italic_${field}`] ? 'font-style:italic;' : '';
+      return `font-size:${size};${bold}${italic}`;
+    }
+
+    const badges = data.map(person => {
+      const fullName = [person.name, person.last_name].filter(Boolean).join(' ') || 'Guest';
+      let infoHtml = '';
+      if (c.show_name) infoHtml += `<div style="${fieldStyle('name','18pt')};margin-bottom:2mm;line-height:1.2;word-break:break-word;">${esc(fullName)}</div>`;
+      if (c.show_company && person.company) infoHtml += `<div style="${fieldStyle('company','14pt')};margin-bottom:1mm;line-height:1.2;">${esc(person.company)}</div>`;
+      if (c.show_job_title && person.job_title) infoHtml += `<div style="${fieldStyle('job_title','11pt')};color:#444;line-height:1.2;">${esc(person.job_title)}</div>`;
+      if (c.show_booth_number && person.booth_number) infoHtml += `<div style="${fieldStyle('booth_number','14pt')};color:#c2410c;margin-top:1mm;">Booth: ${esc(person.booth_number)}</div>`;
+      if (c.show_country && person.country) infoHtml += `<div style="${fieldStyle('country','12pt')};color:#555;">${esc(person.country)}</div>`;
+      if (c.show_phone && person.phone) infoHtml += `<div style="${fieldStyle('phone','10pt')};color:#666;">${esc(person.phone)}</div>`;
+      if (c.show_sector && person.sector) infoHtml += `<div style="${fieldStyle('sector','10pt')};color:#666;">${esc(person.sector)}</div>`;
+      if (c.show_role && person.visitor_type) infoHtml += `<div style="${fieldStyle('role','10pt')};color:#888;text-transform:uppercase;">${esc(person.visitor_type)}</div>`;
+      if (c.show_badge_id && person.badge_id) infoHtml += `<div style="${fieldStyle('badge_id','8pt')};color:#aaa;margin-top:1mm;">${esc(person.badge_id)}</div>`;
+
+      let qrHtml = '';
+      if (c.show_qr){
+        if (person.qr_code){
+          qrHtml = `<div style="width:${qrSize}mm;height:${qrSize}mm;margin-right:4mm;flex-shrink:0;display:flex;align-items:center;justify-content:center;">
+            <img src="/api/qr-image/${person.qr_code}" style="width:${qrSize}mm;height:${qrSize}mm;" />
+          </div>`;
+        } else {
+          qrHtml = `<div style="width:${qrSize}mm;height:${qrSize}mm;margin-right:4mm;flex-shrink:0;background:#f0f0f0;display:flex;align-items:center;justify-content:center;font-size:8px;color:#999;">No QR</div>`;
+        }
+      }
+
+      return `<div class="badge-page">
+        <div class="badge-wrapper ${c.show_qr ? '' : 'no-qr'}">
+          ${qrHtml}
+          <div class="info-section">${infoHtml}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<!DOCTYPE html>
+<html><head>
+<meta charset="UTF-8">
+<title>Bulk Badge Print - ${esc(template.name || 'Badges')}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial, sans-serif; }
+  .badge-page { width:${w}mm; height:${h}mm; page-break-after:always; overflow:hidden; margin-left:${ml}mm; margin-top:${mt}mm; }
+  .badge-page:last-child { page-break-after:auto; }
+  .badge-wrapper { display:flex; flex-direction:row; align-items:center; justify-content:flex-start; width:${w}mm; height:${h}mm; padding:4mm; }
+  .badge-wrapper.no-qr { justify-content:center; }
+  .badge-wrapper.no-qr .info-section { text-align:center; align-items:center; }
+  .info-section { flex:1; display:flex; flex-direction:column; justify-content:center; overflow:hidden; min-width:0; }
+  @media print {
+    @page { size:${w}mm ${h}mm; margin:0; }
+    html, body { width:${w}mm; height:${h}mm; }
+    .print-header { display:none !important; }
+    .badge-page { width:${w}mm; height:${h}mm; margin:0; padding-left:${ml}mm; padding-top:${mt}mm; page-break-after:always; overflow:hidden; }
+    .badge-page:last-child { page-break-after:auto; }
+  }
+  @media screen {
+    body { background:#eee; padding:20px; }
+    .badge-page { background:white; border:1px solid #ccc; margin:10px auto; box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    .print-header { text-align:center; padding:20px; background:white; margin-bottom:20px; border-radius:8px; font-family:Arial, sans-serif; }
+    .print-header h2 { margin-bottom:8px; }
+    .print-header button { padding:10px 24px; font-size:14px; background:#4a6fa5; color:white; border:none; border-radius:6px; cursor:pointer; margin-top:8px; }
+    .print-header button:hover { background:#3d5d8a; }
+  }
+</style>
+</head>
+<body>
+  <div class="print-header">
+    <h2>${esc(template.name || 'Badges')} - ${data.length} Badges</h2>
+    <p>Press Ctrl+P or click the button below to print</p>
+    <button onclick="window.print()">🖨️ Print All Badges</button>
+  </div>
+  ${badges}
+</body></html>`;
+  }
+
+  init();
+</script>
+</body>
+</html>

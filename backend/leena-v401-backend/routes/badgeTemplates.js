@@ -251,6 +251,7 @@ router.get('/for-terminal/:terminalKey', async (req, res) => {
          t.terminal_no,
          t.badge_template_id,
          t.allow_manual_registration,
+         t.kind,
          t.expo_id,
          t.organizer_id,
          e.default_badge_template_id as expo_badge_template_id,
@@ -315,7 +316,8 @@ router.get('/for-terminal/:terminalKey', async (req, res) => {
         terminalNo: terminal.terminal_no,
         expoId: terminal.expo_id,
         expoName: terminal.expo_name,
-        allowManualRegistration: terminal.allow_manual_registration
+        allowManualRegistration: terminal.allow_manual_registration,
+        kind: terminal.kind
       },
       template: template
     });

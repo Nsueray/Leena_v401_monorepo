@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('../utils/email');
 const authMiddleware = require('../middleware/authMiddleware');
+const dualAuth = require('../middleware/dualAuth');
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const upload = multer({ storage: multer.memoryStorage() });
@@ -39,9 +40,9 @@ function buildVisitorFilter(query, expo_id) {
 }
 
 // ✅ Get paginated visitors
-router.get('/paginated', authMiddleware, async (req, res) => {
+router.get('/paginated', dualAuth, async (req, res) => {
   try {
-    const expo_id = parseInt(req.query.expo_id);
+    const expo_id = req.scopedExpoId != null ? req.scopedExpoId : parseInt(req.query.expo_id);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 100;
     const offset = (page - 1) * limit;
@@ -515,7 +516,7 @@ router.post('/manual', authMiddleware, async (req, res) => {
 
 
 // ✅ IMPORT VISITORS FROM EXCEL
-router.post('/import', authMiddleware, upload.single('file'), async (req, res) => {
+router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
   console.log('📥 Import request received');
   
   try {
@@ -524,8 +525,10 @@ router.post('/import', authMiddleware, upload.single('file'), async (req, res) =
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const { expo_id, visitor_type, source_override, send_email, template_id,
+    const { visitor_type, source_override, send_email, template_id,
             existing_email_option, existing_qr_option, existing_template_id, skip_existing } = req.body;
+    // Token (bulk_print) mode forces expo scope from the token; client body expo_id ignored.
+    const expo_id = req.scopedExpoId != null ? req.scopedExpoId : req.body.expo_id;
     const origin = 'massimport';
     const effectiveExistingEmailOption = existing_email_option || 'none';
     const effectiveExistingQrOption = existing_qr_option || 'keep';
