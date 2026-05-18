@@ -65,6 +65,7 @@
         .scan-overlay.success-overlay { background: rgba(16, 185, 129, 0.95); }
         .scan-overlay.duplicate-overlay { background: rgba(245, 158, 11, 0.95); }
         .scan-overlay.error-overlay { background: rgba(239, 68, 68, 0.95); }
+        .scan-overlay.blocked-overlay { background: rgba(217, 119, 6, 0.96); }
 
         /* Unregistered warning card */
         .unreg-card { background: var(--card); border: 2px solid var(--warning); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; animation: slideUp 0.3s ease; box-shadow: 0 0 0 3px var(--warning-bg); }
@@ -156,6 +157,13 @@
         <button onclick="dismissDuplicateOverlay()" style="margin-top:8px;padding:10px 24px;background:transparent;color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.4);border-radius:8px;font-size:14px;cursor:pointer;">
             Dismiss
         </button>
+    </div>
+    <div class="scan-overlay blocked-overlay" id="blockedOverlay">
+        <div class="overlay-icon">&#9432;</div>
+        <div style="font-size:15px;color:rgba(255,255,255,0.85);font-weight:600;margin-bottom:8px;letter-spacing:1px;">COOL PLUS SESSION</div>
+        <div class="overlay-name" id="blockedName">-</div>
+        <div class="overlay-company" id="blockedCompany"></div>
+        <div class="overlay-msg">Cool Plus Limited will issue the certificate for this session</div>
     </div>
     <div class="scan-overlay error-overlay" id="errorOverlay">
         <div class="overlay-icon">&#10060;</div>
@@ -539,6 +547,18 @@
                     body: JSON.stringify({ visitor_id: visitor.id, conference_topic: topic })
                 });
 
+                if (certRes.code === 'COOL_PLUS_BLOCKED') {
+                    hidePreviewCard();
+                    showOverlay('blocked', fullName, '', company);
+                    vibrate(100);
+                    playBeep(600, 100);
+                    addToLog(fullName, topic, 'blocked');
+                    _pendingScan = null;
+                    isProcessing = false;
+                    document.getElementById('qrInput').focus();
+                    return;
+                }
+
                 if (!certRes.success) {
                     showOverlay('error', certRes.error || 'Check-in failed', '');
                     vibrate([200, 100, 200]);
@@ -643,6 +663,16 @@
                     body: JSON.stringify({ visitor_id: visitorId, conference_topic: topic, force: true })
                 });
 
+                if (certRes.code === 'COOL_PLUS_BLOCKED') {
+                    const fName = certRes.certificate ? certRes.certificate.visitor_name : 'Visitor';
+                    showOverlay('blocked', fName, '', '');
+                    playBeep(600, 100);
+                    addToLog(fName, topic, 'blocked');
+                    isProcessing = false;
+                    document.getElementById('qrInput').focus();
+                    return;
+                }
+
                 if (!certRes.success) {
                     showOverlay('error', certRes.error || 'Force certify failed', '');
                     playBeep(300, 400);
@@ -683,7 +713,8 @@
             const overlayMap = {
                 success: 'successOverlay',
                 duplicate: 'duplicateOverlay',
-                error: 'errorOverlay'
+                error: 'errorOverlay',
+                blocked: 'blockedOverlay'
             };
 
             const id = overlayMap[type];
@@ -706,6 +737,9 @@
             } else if (type === 'error') {
                 document.getElementById('errorOverlayMsg').textContent = name;
                 document.getElementById('errorOverlayDetail').textContent = msg || 'Please try again';
+            } else if (type === 'blocked') {
+                document.getElementById('blockedName').textContent = name;
+                document.getElementById('blockedCompany').textContent = company || '';
             }
 
             // Show with animation
@@ -804,7 +838,8 @@
                     sent: { cls: 'sent', text: 'Sent' },
                     duplicate: { cls: 'dup', text: 'Already' },
                     forced: { cls: 'forced', text: 'Forced' },
-                    error: { cls: 'dup', text: 'Error' }
+                    error: { cls: 'dup', text: 'Error' },
+                    blocked: { cls: 'dup', text: 'Cool Plus' }
                 };
                 const st = statusMap[s.status] || statusMap.error;
                 return `

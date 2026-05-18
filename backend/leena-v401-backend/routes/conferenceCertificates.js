@@ -197,11 +197,87 @@ async function addTopicToVisitor(client, visitorId, customFields, newTopic) {
   );
 }
 
+// --- Cool Plus Limited certificate block (Mega Clima Nigeria 2026, expo_id=7) ---
+// Topics 1, 5, 11 are run by Cool Plus Limited, who issue their own certificates.
+// Leena still records check-in (attendance) but skips certificate + email for these.
+// Block strings are derived LIVE from form 39 options [0,4,10] (M1, byte-exact),
+// cached in-memory until process restart. Scope: expo_id=7 only.
+// Refs: COOL_PLUS_BLOCK_ANALYSIS_20260518.md (Option A1 + M1)
+const COOL_PLUS_EXPO_ID = 7;
+let coolPlusCache = null; // Set<string> of normalized blocked topics (expo 7), lazy-loaded
+
+function normalizeTopic(s) {
+  return String(s == null ? '' : s).normalize('NFKC').trim().toLowerCase();
+}
+
+async function getCoolPlusBlockedTopics(expoId) {
+  if (Number(expoId) !== COOL_PLUS_EXPO_ID) return new Set();
+  if (coolPlusCache) return coolPlusCache;
+  try {
+    const res = await pool.query(
+      `SELECT fld->'options'->>0  AS t1,
+              fld->'options'->>4  AS t5,
+              fld->'options'->>10 AS t11
+       FROM forms, jsonb_array_elements(fields::jsonb) AS fld
+       WHERE id = 39 AND fld->>'name' = 'conference_topic'
+       LIMIT 1`
+    );
+    const row = res.rows[0] || {};
+    const set = new Set(
+      [row.t1, row.t5, row.t11].filter(Boolean).map(normalizeTopic).filter(Boolean)
+    );
+    coolPlusCache = set; // cache only the expo-7 set (process-lifetime)
+    return set;
+  } catch (err) {
+    // fail-OPEN: on DB error do NOT block — certificate flow must not halt during the fair
+    console.error('[Cool Plus Block] getCoolPlusBlockedTopics failed (fail-open, no block applied):', err.message);
+    return new Set();
+  }
+}
+
+async function isTopicBlocked(topicString, expoId) {
+  if (Number(expoId) !== COOL_PLUS_EXPO_ID) return false;
+  if (!topicString) return false;
+  const blocked = await getCoolPlusBlockedTopics(expoId);
+  if (blocked.size === 0) return false;
+  // Multi-topic safe: split by " || " (reuses splitTopics), normalize each segment
+  return splitTopics(topicString).some(seg => blocked.has(normalizeTopic(seg)));
+}
+
+function coolPlusBlockResponse(blockedTopic) {
+  return {
+    success: false,
+    error: 'Certificate not issued — Cool Plus Limited will issue the certificate for this session',
+    code: 'COOL_PLUS_BLOCKED',
+    blocked_topic: blockedTopic
+  };
+}
+
 /**
  * Core logic: issue certificate, create check-in, queue email.
  * Extracted to reuse for both normal and force flows.
  */
 async function issueCertificate(client, visitor, expoId, organizerId, hall, terminalNo, conference_topic, expoName) {
+  // Cool Plus block (expo 7, Topics 1/5/11): still record check-in (attendance, A1)
+  // but skip certificate + email. Non-blocked path below stays byte-identical.
+  if (await isTopicBlocked(conference_topic, expoId)) {
+    // Same check-in INSERT + visitor_event_status upsert as the normal flow (copied verbatim)
+    await client.query(
+      `INSERT INTO checkins (visitor_id, expo_id, terminal, hall, notes, checkin_type, staff_id, source, checkin_time)
+       VALUES ($1, $2, $3, $4, $5, 'entry', $6, 'conference-cert', NOW())`,
+      [visitor.id, expoId, terminalNo || 'conf', hall || 'conference', `Conference: ${conference_topic}`, organizerId]
+    );
+    await client.query(
+      `INSERT INTO visitor_event_status (visitor_id, expo_id, status, created_at, updated_at)
+       VALUES ($1, $2, 'checked_in', NOW(), NOW())
+       ON CONFLICT (visitor_id, expo_id)
+       DO UPDATE SET status = 'checked_in', updated_at = NOW()`,
+      [visitor.id, expoId]
+    );
+    console.log('[Cool Plus Block]', { visitor_id: visitor.id, topic: conference_topic, expo_id: expoId });
+    return { blocked: true, blocked_topic: conference_topic };
+  }
+
   const certToken = crypto.randomBytes(32).toString('hex');
 
   const certRes = await client.query(
@@ -370,6 +446,11 @@ router.post('/checkin-and-certify', terminalAuth, async (req, res) => {
     // 4. Issue certificate (check-in + cert + email)
     const result = await issueCertificate(client, visitor, expoId, organizerId, hall, terminalNo, conference_topic, expoName);
 
+    if (result.blocked) {
+      await client.query('COMMIT'); // persist check-in (A1) — no cert, no email
+      return res.json(coolPlusBlockResponse(result.blocked_topic));
+    }
+
     if (result.duplicate) {
       await client.query('ROLLBACK');
 
@@ -510,6 +591,12 @@ router.post('/resend', terminalAuth, async (req, res) => {
 
     if (!cert.email) {
       return res.status(400).json({ success: false, error: 'Visitor has no email address' });
+    }
+
+    // Cool Plus block (expo 7, Topics 1/5/11): never resend a Leena certificate
+    if (await isTopicBlocked(cert.conference_topic, cert.expo_id)) {
+      console.log('[Cool Plus Block]', { visitor_id: cert.visitor_id, topic: cert.conference_topic, expo_id: cert.expo_id });
+      return res.json(coolPlusBlockResponse(cert.conference_topic));
     }
 
     // Build and queue the same certificate email
