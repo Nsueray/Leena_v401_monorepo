@@ -357,6 +357,45 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 
 ---
 
+## ✅ Mega Clima Nigeria 2026 Pre-Fair Sprint (15 Mayıs 2026)
+
+### Conference Scanner Hardening
+- [x] Pre-display visitor sessions card (commit 27ddae7)
+- [x] Custom confirm modal for force button (commit 27ddae7)
+- [x] Smoke test verified by Yaprak (badge "SPEAKER" display)
+
+### Quick Fixes
+- [x] qrscanner country default Morocco → Nigeria (commit d1464b7)
+- [x] Hostess quick reference card /hostess-guide.html (commit 7e852ba)
+- [ ] **PENDING:** Senaryo 5 bookmark URL placeholder fill (Suer manual)
+
+### Yaprak Requests #2, #4, #5, #6 + Capitalize
+- [x] #2 Terminal default visitor_type (commit 86c3738)
+- [x] #4 form-public QR display (commit 9a94447) — smoke tested ✅
+- [x] #5 Manual registration reason required (commit 439eb0e)
+- [x] #6 Badge preview type fix (commit 5606ef6) — smoke tested ✅
+- [x] Smart capitalize badge type display (commit d9908d9)
+
+### Zoho Day1/Day2 Recurrence Fix
+- [x] Root cause research (DAY1_DAY2_ISSUE_RESEARCH_20260515.md)
+- [x] Webhook auto-split deployed (commit 6dd34ca)
+- [x] DB cleanup of 2 historical merged rows (Render Shell, no commit)
+- [x] Backup: conference_topic_backup_20260518 (2 rows)
+- [ ] **POST-FAIR:** Drop conference_topic_backup_20260518
+
+### Pending Smoke Tests (Yaprak + Suer)
+- [ ] #2 terminal default visitor_type on actual terminal URLs
+- [ ] #5 manual reason dropdown + required validation
+- [ ] Conference scanner pre-display + force modal end-to-end
+
+### Post-Fair Backlog
+- [ ] **Request #1**: Token-protected bulk badge print page (HIGH risk)
+- [ ] **Request #3**: Manual Registration on/off toggle per terminal (migration 008)
+- [ ] Form 39 "Cool Plus Limit" → "Limited" typo cleanup
+- [ ] Audit log table for force=true events (deferred from 14 May)
+
+---
+
 ## ⏳ Yaprak Feedback — Sprint C Remaining (Fuar sonrası)
 
 - [ ] Madde 3: Visitor silme (hard delete, sadece checkin'siz ve email gönderilmemiş visitor'lar)

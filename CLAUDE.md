@@ -1170,6 +1170,85 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 - Loading indicator: email-campaigns.html now shows spinner during loadCampaigns().
 - Backend COUNT::int cast: reports.js (63 instances) + checkins.js (11 instances). Closes Sprint A gap. Other 11 route files deferred (frontend parseInt() defensive).
 
+### v4.0.4 — Mega Clima Nigeria 2026 Pre-Fair Sprint (15 May 2026)
+
+**Context:** Fuara 4 gün kala (19-21 May, Lagos) toplu UX hardening + 
+data quality fixes. 10 production commit, hepsi backward compatible. 
+Migration yok (1 webhook auto-split + 1 one-off DB cleanup).
+
+#### Conference Scanner Hardening (commit 27ddae7)
+- `public/conference-scanner.html` — pre-display visitor preview + force confirm modal
+- Hostess QR scan ettiğinde visitor'ın registered topic'leri ekrana basılır
+- "Save & Send Certificate" force butonu artık custom confirm modal'la korunmuş
+- Backend untouched
+- Audit: CONFERENCE_FORCE_AUDIT_20260514.md
+
+#### qrscanner Country Default (commit d1464b7)
+- `public/qrscanner.html:582` — country default `'Morocco' → 'Nigeria'`
+- Dropdown options preserved (Morocco still selectable)
+
+#### Hostess Quick Reference Card (commit 7e852ba)
+- New page: `public/hostess-guide.html` (10KB, self-contained, no external deps)
+- 8 crisis-moment scenarios: force button, not-registered, QR fails, badge redirect, wrong page, cert resend, escalation, offline fallback
+- Mobile-first, sticky jump bar, severity color coding
+- Production URL: https://leena.app/hostess-guide.html
+- Suer needs to fill bookmark URL in Senaryo 5 (placeholder)
+
+#### Terminal Default Visitor Type (commit 86c3738)
+- `public/qrscanner.html` — manual registration's visitor_type dropdown defaults to the terminal's badge template visitor_type
+- Uses existing `/api/badge-templates/for-terminal/:terminalKey` endpoint (no new endpoint)
+- Dropdown remains editable
+- Backend/DB unchanged
+
+#### form-public QR Display on Success (commit 9a94447)
+- `public/form-public.html` — submit response's `qr_code` rendered as `<img src="/api/qr-image/${qr}">` in success card
+- "Show this QR at the entrance" message
+- Use case: visitors who don't receive confirmation email can still enter via on-screen QR
+- Backend already returned qr_code (no backend change)
+
+#### Manual Registration Reason Field (commit 439eb0e)
+- `public/qrscanner.html` — required "Why manual?" dropdown added to manual registration form
+- Options: No internet / Did not receive email / Speaker / VIP / Press / Long queue / Other (with conditional text input)
+- `routes/visitors.js` `/api/visitors/manual` — accepts manual_reason, merges into custom_fields JSONB
+- Backward compatible: missing manual_reason → null, doesn't break existing flow
+- Stored as `custom_fields.manual_reason` (string)
+
+#### Badge Preview Type Fix (commit 5606ef6)
+- `public/badge.html:295` — preview mode now reflects selected template's visitor_type instead of hardcoded 'VIP'
+- Real-print path (else branch) untouched
+- Audit: BUG_6_DEEPDIVE_20260515.md (Senaryo 1 — preview-only kozmetik)
+
+#### Smart Capitalize Badge Type (commit d9908d9)
+- `public/badge.html` — `formatRole()` helper added: Title Case for normal words, UPPERCASE for known acronyms (vip, ceo, cto, cfo, vp, md)
+- Applied at single render site (line 377), affects both preview and real-print paths
+- DB unchanged (display-only transformation)
+- `esc()` XSS protection preserved (wraps formatRole output)
+
+#### Zoho Day1/Day2 Auto-Split Webhook (commit 6dd34ca)
+- `routes/webhook.js` — new `normalizeConferenceTopic()` helper + try-catch guard
+- Detects exact MERGED_DAY12 string (Zoho form 39's merged "Day 1 & Day 2" option) and splits into Topic 1 + Topic 5 (canonical form 39 strings)
+- Strict exact-match detection (no substring/regex) — zero false-positive risk
+- Insertion point: after customFields loop (line ~74), before new/existing visitor branch — covers both INSERT and append-merge paths
+- Fail-safe: try-catch pass-through on any error (preserves current behavior)
+- Backward compatible: non-matching values byte-identical to current behavior
+- Audit: DAY1_DAY2_ISSUE_RESEARCH_20260515.md + WEBHOOK_DAY1_DAY2_FIX_PLAN_20260515.md
+
+#### Day1/Day2 Historical Cleanup (one-off DB, no commit)
+- 2 pre-deploy visitors (id 55052, 55909) had merged "Day 1 & Day 2" conference_topic — manually split via Render Shell heredoc, NOT a migration
+- Backup table: `conference_topic_backup_20260518` (2 rows, preserved for post-fair drop)
+- Pattern: BEGIN; UPDATE ... RETURNING ...; (verify) COMMIT;
+- Validated POST-COMMIT: merged_rows_remaining = 0, split_rows_total = 87
+
+#### Post-Fair Backlog (yarın için karar)
+- **Request #1**: Token-protected bulk badge print page (HIGH risk, ~yarım-1 gün, security infrastructure)
+- **Request #3**: Manual Registration on/off toggle per terminal (LOW-MED risk, migration 008, ~2-3 saat)
+- Decisions pending: see REQUESTS_1_AND_3_ANALYSIS_20260515.md
+
+#### Smoke Test Status
+- Yaprak confirmed: form-public QR display works ✅
+- Yaprak confirmed: badge preview shows SPEAKER (capitalize) ✅
+- Other 8 commits: smoke test pending (Yaprak + Suer post-doc-update)
+
 ### Shared Frontend Components (public/leena-*.js)
 
 Two shared components reduce duplication across admin pages:
