@@ -422,6 +422,7 @@
             checkRequiredData();
             setupEventListeners();
             applyTerminalDefaultType();
+            applyTerminalManualRegToggle();
         });
 
         // #2 — Default the manual-registration visitor_type dropdown to the
@@ -445,7 +446,39 @@
                 /* network/parse error → silently keep HTML default */
             }
         }
-        
+
+        // #3 — Disable the Manual Registration checkbox when the terminal's
+        // allow_manual_registration flag is false. Frontend enforcement only
+        // (backend /api/visitors/manual is NOT gated). Separate fetch keeps
+        // applyTerminalDefaultType's control flow untouched. Backward compat:
+        // missing field / error / no terminal → keep checkbox enabled.
+        async function applyTerminalManualRegToggle() {
+            if (!terminalKey) return; // no terminal context → keep enabled
+            try {
+                const res = await fetch(`${API_BASE_URL}/badge-templates/for-terminal/${encodeURIComponent(terminalKey)}`);
+                if (!res.ok) return; // error → default enabled (backward compat)
+                const data = await res.json();
+                const allowed = data && data.terminal && data.terminal.allowManualRegistration;
+                if (allowed !== false) return; // true / undefined → keep enabled
+                const toggle = document.getElementById('manualToggle');
+                if (!toggle) return;
+                toggle.disabled = true;
+                const wrap = toggle.closest('.toggle-manual');
+                if (wrap) {
+                    wrap.style.opacity = '0.55';
+                    if (!document.getElementById('manualRegDisabledNote')) {
+                        const note = document.createElement('div');
+                        note.id = 'manualRegDisabledNote';
+                        note.textContent = 'Manual registration disabled for this terminal';
+                        note.style.cssText = 'font-size:12px;color:#888;margin-top:4px;';
+                        wrap.appendChild(note);
+                    }
+                }
+            } catch (e) {
+                /* network/parse error → silently keep checkbox enabled */
+            }
+        }
+
         function processUrlParameters() {
             const urlParams = new URLSearchParams(window.location.search);
             const urlHall = urlParams.get('hall');

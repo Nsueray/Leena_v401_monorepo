@@ -93,7 +93,7 @@ router.post('/clone/:id', authMiddleware, async (req, res) => {
 // ✅ POST /api/terminals
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { hall, terminal_no, auto_checkin, is_active, badge_template_id } = req.body;
+    const { hall, terminal_no, auto_checkin, is_active, badge_template_id, allow_manual_registration } = req.body;
     const expo_id = req.body.expo_id;
     const organizer_id = req.organizer_id;
 
@@ -105,17 +105,18 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const result = await pool.query(
       `INSERT INTO terminals (
-        organizer_id, expo_id, hall, terminal_no, auto_checkin, is_active, terminal_key, badge_template_id
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        organizer_id, expo_id, hall, terminal_no, auto_checkin, is_active, terminal_key, badge_template_id, allow_manual_registration
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
       [
-        organizer_id, 
-        expo_id, 
-        hall, 
-        terminal_no, 
-        auto_checkin ?? true, 
+        organizer_id,
+        expo_id,
+        hall,
+        terminal_no,
+        auto_checkin ?? true,
         is_active ?? true,
         terminalKey,
-        badge_template_id || null
+        badge_template_id || null,
+        allow_manual_registration ?? true
       ]
     );
 
@@ -131,7 +132,7 @@ router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const terminalId = req.params.id;
     const organizer_id = req.organizer_id;
-    const { hall, terminal_no, auto_checkin, is_active, badge_template_id } = req.body;
+    const { hall, terminal_no, auto_checkin, is_active, badge_template_id, allow_manual_registration } = req.body;
 
     // Build dynamic update query
     const updates = [];
@@ -157,6 +158,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
     if (badge_template_id !== undefined) {
       updates.push(`badge_template_id = $${paramIndex++}`);
       values.push(badge_template_id || null);
+    }
+    if (allow_manual_registration !== undefined) {
+      updates.push(`allow_manual_registration = $${paramIndex++}`);
+      values.push(allow_manual_registration);
     }
 
     if (updates.length === 0) {
