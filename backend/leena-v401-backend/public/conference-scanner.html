@@ -199,6 +199,9 @@
             <select id="topicSelect">
                 <option value="">-- Select session topic --</option>
             </select>
+            <div id="coolPlusWarn" class="hidden" style="margin-top:10px;padding:10px 12px;border-radius:8px;font-size:13px;font-weight:600;text-align:center;background:rgba(217,119,6,0.12);color:#9a3412;">
+                &#9432; Cool Plus Limited will issue the certificate for this session
+            </div>
         </div>
 
         <!-- Scanner -->
@@ -268,6 +271,7 @@
                     `Terminal: ${res.terminal.terminalNo || '-'} | Hall: ${res.terminal.hall || '-'}`;
 
                 await loadTopics();
+                await loadBlockedTopics();
 
                 document.getElementById('loadingScreen').classList.add('hidden');
                 document.getElementById('mainScreen').classList.remove('hidden');
@@ -277,6 +281,11 @@
 
                 // Init audio on first user interaction (topic select or input focus)
                 document.getElementById('topicSelect').addEventListener('change', initAudio);
+                document.getElementById('topicSelect').addEventListener('change', (e) => {
+                    const warn = document.getElementById('coolPlusWarn');
+                    if (isClientSideBlocked(e.target.value)) warn.classList.remove('hidden');
+                    else warn.classList.add('hidden');
+                });
                 document.getElementById('qrInput').addEventListener('focus', initAudio, { once: true });
 
                 document.getElementById('qrInput').addEventListener('keydown', (e) => {
@@ -472,6 +481,30 @@
             return s.split(' || ').map(t => t.trim()).filter(Boolean);
         }
 
+        // --- Cool Plus preemptive warning (Sorun 1) ---
+        // Mirrors backend getCoolPlusBlockedTopics/isTopicBlocked. UX-only:
+        // the backend block (commit 02e0692) stays authoritative. Fail-open:
+        // if the endpoint fails, BLOCKED_TOPICS stays empty and the backend
+        // block still rejects on Confirm.
+        let BLOCKED_TOPICS = new Set();
+        function normalizeTopicClient(s) {
+            return String(s == null ? '' : s).normalize('NFKC').trim().toLowerCase();
+        }
+        async function loadBlockedTopics() {
+            try {
+                const data = await apiFetch('/api/conference-certificates/blocked-topics');
+                if (data && data.success && Array.isArray(data.blocked_topics)) {
+                    BLOCKED_TOPICS = new Set(data.blocked_topics.map(normalizeTopicClient).filter(Boolean));
+                }
+            } catch (e) {
+                console.error('[blocked-topics] load failed (fail-open):', e);
+            }
+        }
+        function isClientSideBlocked(topicString) {
+            if (!topicString || BLOCKED_TOPICS.size === 0) return false;
+            return splitTopicsClient(topicString).some(seg => BLOCKED_TOPICS.has(normalizeTopicClient(seg)));
+        }
+
         function showVisitorPreview(visitor, selectedTopic) {
             const fullName = [visitor.name, visitor.lastName].filter(Boolean).join(' ') || 'Visitor';
             const company = visitor.company || '';
@@ -496,7 +529,7 @@
 
             const banner = isMatch
                 ? `<div class="pv-match-banner match">&#10004; Selected session matches a registered topic</div>`
-                : `<div class="pv-match-banner mismatch">&#9888;&#65039; Selected session NOT in visitor&rsquo;s list &mdash; force will be needed</div>`;
+                : `<div class="pv-match-banner mismatch">&#9888;&#65039; Selected session NOT in visitor&rsquo;s list &mdash; click Confirm to proceed with force certification</div>`;
 
             const card = document.getElementById('previewCard');
             card.className = 'preview-card';
@@ -513,6 +546,22 @@
                     <button class="btn-confirm" id="pvConfirmBtn" onclick="confirmAndIssue()">Confirm &amp; Issue Certificate</button>
                 </div>
             `;
+
+            // Cool Plus preemptive warning + disable Confirm (backend still authoritative)
+            if (isClientSideBlocked(selectedTopic)) {
+                const warn = document.createElement('div');
+                warn.className = 'pv-match-banner';
+                warn.style.cssText = 'background:rgba(217,119,6,0.12);color:#9a3412;';
+                warn.innerHTML = '&#9432; Cool Plus Limited will issue the certificate for this session';
+                card.insertBefore(warn, card.firstChild);
+                const cb = document.getElementById('pvConfirmBtn');
+                if (cb) {
+                    cb.disabled = true;
+                    cb.style.opacity = '0.5';
+                    cb.style.cursor = 'not-allowed';
+                    cb.title = 'Cool Plus session — Leena does not issue this certificate';
+                }
+            }
 
             // Stash data needed by confirmAndIssue without polluting globals heavily.
             _pendingScan = { visitor, fullName, company, topic: selectedTopic };
@@ -815,6 +864,16 @@
                     <button class="btn-cancel" onclick="hideUnregCard()">Cancel</button>
                 </div>
             `;
+            // Cool Plus: disable force (backend rejects it anyway — defense-in-depth)
+            if (isClientSideBlocked(topic)) {
+                const fb = card.querySelector('.btn-force');
+                if (fb) {
+                    fb.disabled = true;
+                    fb.style.opacity = '0.5';
+                    fb.style.cursor = 'not-allowed';
+                    fb.title = 'Cool Plus session — Leena does not issue this certificate';
+                }
+            }
         }
 
         function hideUnregCard() {

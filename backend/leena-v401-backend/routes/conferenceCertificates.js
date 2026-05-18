@@ -640,6 +640,26 @@ router.post('/resend', terminalAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/conference-certificates/blocked-topics
+ *
+ * Terminal auth: returns the Cool Plus blocked topic strings for this
+ * terminal's expo (empty array unless expo_id=7). Reuses getCoolPlusBlockedTopics
+ * (in-memory cached, fail-open). Frontend uses this only for a preemptive
+ * warning — the backend block (issueCertificate / checkin-and-certify / resend)
+ * remains authoritative. Returned strings are normalized (NFKC+trim+lowercase).
+ */
+router.get('/blocked-topics', terminalAuth, async (req, res) => {
+  try {
+    const expoId = req.terminal.expoId;
+    const blockedSet = await getCoolPlusBlockedTopics(expoId);
+    res.json({ success: true, expoId, blocked_topics: Array.from(blockedSet) });
+  } catch (err) {
+    console.error('[blocked-topics] error', err);
+    res.json({ success: true, expoId: null, blocked_topics: [] });
+  }
+});
+
+/**
  * GET /api/conference-certificates/topics
  *
  * Terminal auth endpoint: returns conference topics for hostess dropdown.
