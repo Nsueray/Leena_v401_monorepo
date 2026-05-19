@@ -541,6 +541,10 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] **visitors.phone data quality** (identified during WhatsApp campaign prep, expo_id=7 verified 2026-05-19): ~95 rows with short numbers (len < 14 after normalize, missing digits); ~10 rows with junk/over-length numbers (len > 14 after normalize). Separate from normalize logic — require manual cleanup or form-layer input validation.
 - [ ] **phoneNormalize Nigeria-hardcoded**: uses `COUNTRY_CODE = '+234'`. Future: expo-aware country code (read from expos.country or similar). Currently sufficient for Mega Clima Nigeria 2026 (expo_id=7).
 
+### Zoho Webhook Phone Mapping (19 May) — post-fair
+- [ ] **Forward-only fix**: `routes/webhook.js:57` değiştir: `const phone = req.body.phone ?? req.body.mobile ?? req.body.Mobile ?? '';` + `knownFields` Set'e `'mobile'`, `'Mobile'` ekle. `routes/visitors.js:208` paralel fix: `phone: custom_fields?.phone || custom_fields?.mobile || custom_fields?.Mobile || '',`. 2 satır additive değişiklik. Identified 2026-05-19, root cause: Zoho `mobile` lowercase gönderiyor, handler sadece `phone` okuyor. Backfill (6,214 rows) applied; new Zoho payloads still drop phone until this fix lands.
+- [ ] **webhook_payload_log table**: observability layer for incoming webhook POSTs (endpoint, params, body_jsonb, received_at). Would have caught Zoho `mobile` vs `phone` mismatch in minutes instead of hours. Migration + handler hook.
+
 ---
 
 ## 📌 Previous TODOs
