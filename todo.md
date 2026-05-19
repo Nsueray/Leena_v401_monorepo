@@ -513,6 +513,29 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] **conference scanner `terminal_key` vs bulk-print `key=` param adı tutarsızlığı** — standardize
 - (Not: "Form 39 Cool Plus Limit→Limited typo" yukarıda + "Audit log force=true" 15-May backlog'da zaten takip ediliyor — duplike eklenmedi)
 
+### Fair Day 1 Observations (19 Mayıs 2026)
+
+**Data Quality**
+- [ ] `visitors.source` normalization — "Pixad Meta Form" 2 invisible-char variants (combined ~3,568, true #1 channel). Detected in FAIR_DAY1_ANALYTICS_20260519.md.
+- [ ] `visitors.country` casing canonicalization — Nigeria/Nigerian/NIGERIA fragmentation. Same audit doc.
+- [ ] `visitors.company` free-text noise — "Self-employed" 5+ variants (~362 combined), placeholder junk (Nil/Student/Nigeria as company). Same audit doc.
+
+**Schema Issues**
+- [ ] `checkins.terminal` is TEXT (not FK to terminals.id) — JOINs expensive, no referential integrity. Detected during FAIR_DAY1_HEALTH_REPORT_20260519.md.
+- [ ] `conference_certificates.created_at` timestamp vs timestamptz tz quirk — displayed times appear "in the future" (cosmetic, non-functional). Detected in FAIR_DAY1_AFTERNOON_20260519.md.
+
+**Documentation Gaps**
+- [ ] Mega Clima Nigeria 2025 data: not in current DB (system started Sept 2025) and not in local backups. Export from Zoho/Pixad/old Leena4 hosting required for year-over-year comparison.
+- (Not: "conference scanner `terminal_key` vs bulk-print `key=` param" doc-gap zaten yukarıdaki 18-May alt-bölümünde takip ediliyor — duplike eklenmedi)
+
+**Audit Files (root, untracked — preserve for post-fair review)**
+- FAIR_DAY1_HEALTH_REPORT_20260519.md
+- FAIR_DAY1_ANALYTICS_20260519.md
+- FAIR_DAY1_AFTERNOON_20260519.md
+- CERTIFICATE_SYSTEM_ANALYSIS_20260518.md
+- COOL_PLUS_BLOCK_ANALYSIS_20260518.md
+- BULK_PRINT_DUAL_AUTH_DESIGN_20260518.md
+
 ---
 
 ## 📌 Previous TODOs
