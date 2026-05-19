@@ -241,6 +241,18 @@
                             </div>
                         </div>
                     </div>
+                    <div class="filter-row">
+                        <div class="filter-group">
+                            <label>Check-in Status</label>
+                            <div class="filter-pills" id="checkinStatusFilters">
+                                <label class="filter-pill"><input type="radio" name="checkinStatus" value="" checked> All</label>
+                                <label class="filter-pill"><input type="radio" name="checkinStatus" value="checked_in_today"> Checked in today</label>
+                                <label class="filter-pill"><input type="radio" name="checkinStatus" value="checked_in_cumulative"> Checked in (any time)</label>
+                                <label class="filter-pill"><input type="radio" name="checkinStatus" value="registered_today_no_show"> Registered today, no-show</label>
+                                <label class="filter-pill"><input type="radio" name="checkinStatus" value="never_checked_in"> Never checked in</label>
+                            </div>
+                        </div>
+                    </div>
                     <div style="display:flex;gap:10px;margin-top:16px;">
                         <button class="btn btn-primary" onclick="applyFilters()"><i class="bi bi-funnel"></i> Apply</button>
                         <button class="btn btn-secondary" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear</button>
@@ -474,6 +486,8 @@
             if (topic) currentFilters.conference_topic = topic;
             const emailStatus = document.querySelector('#emailStatusFilters input:checked')?.value;
             if (emailStatus) currentFilters.email_status = emailStatus;
+            const checkinStatus = document.querySelector('#checkinStatusFilters input:checked')?.value;
+            if (checkinStatus) currentFilters.checkin_status = checkinStatus;
             currentPage = 1;
             updateFilterBadge();
             loadVisitors();
@@ -487,6 +501,7 @@
             document.getElementById('sourceSearch').value = '';
             document.querySelectorAll('.filter-pill input[type="checkbox"]').forEach(c => c.checked = false);
             document.querySelector('#emailStatusFilters input[value=""]').checked = true;
+            document.querySelector('#checkinStatusFilters input[value=""]').checked = true;
             currentFilters = {};
             currentPage = 1;
             updateFilterBadge();

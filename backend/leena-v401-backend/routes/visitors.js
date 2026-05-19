@@ -6,6 +6,7 @@ const XLSX = require('xlsx');
 const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('../utils/email');
+const { normalizePhone } = require('../utils/phoneNormalize');
 const authMiddleware = require('../middleware/authMiddleware');
 const dualAuth = require('../middleware/dualAuth');
 
@@ -34,6 +35,16 @@ function buildVisitorFilter(query, expo_id) {
     filters.push(`NOT EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent')`);
   } else if (query.email_status === 'sent') {
     filters.push(`(EXISTS (SELECT 1 FROM email_logs el WHERE el.visitor_id = visitors.id AND el.status = 'sent') OR EXISTS (SELECT 1 FROM email_logs el2 WHERE LOWER(TRIM(el2.email)) = LOWER(TRIM(visitors.email)) AND el2.status = 'sent'))`);
+  }
+  if (query.checkin_status === 'checked_in_today') {
+    filters.push(`EXISTS (SELECT 1 FROM checkins c WHERE c.visitor_id = visitors.id AND c.expo_id = $1 AND (c.checkin_time AT TIME ZONE 'Africa/Lagos')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date)`);
+  } else if (query.checkin_status === 'checked_in_cumulative') {
+    filters.push(`EXISTS (SELECT 1 FROM visitor_event_status ves WHERE ves.visitor_id = visitors.id AND ves.expo_id = $1 AND ves.status = 'checked_in')`);
+  } else if (query.checkin_status === 'registered_today_no_show') {
+    filters.push(`(visitors.created_at AT TIME ZONE 'Africa/Lagos')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date`);
+    filters.push(`NOT EXISTS (SELECT 1 FROM checkins c WHERE c.visitor_id = visitors.id AND c.expo_id = $1 AND (c.checkin_time AT TIME ZONE 'Africa/Lagos')::date = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date)`);
+  } else if (query.checkin_status === 'never_checked_in') {
+    filters.push(`NOT EXISTS (SELECT 1 FROM visitor_event_status ves WHERE ves.visitor_id = visitors.id AND ves.expo_id = $1 AND ves.status = 'checked_in')`);
   }
 
   return { whereClause: `WHERE ${filters.join(' AND ')}`, values, idx };
@@ -987,6 +998,7 @@ router.get('/export', authMiddleware, async (req, res) => {
       'Company': r.company || '',
       'Country': r.country || '',
       'Phone': r.phone || '',
+      'Phone (WhatsApp)': normalizePhone(r.phone),
       'Job Title': r.job_title || '',
       'Visitor Type': r.visitor_type || 'visitor',
       'Source': r.source || '',

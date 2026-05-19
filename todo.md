@@ -536,6 +536,11 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - COOL_PLUS_BLOCK_ANALYSIS_20260518.md
 - BULK_PRINT_DUAL_AUTH_DESIGN_20260518.md
 
+### Visitor Export / WhatsApp Sprint (19 May) — post-fair
+- [ ] Add `idx_checkins_visitor_id` index for correlated EXISTS performance on /export with checkin_status filters (low priority, admin path). Identified during v4.0.6 visitor export checkin filter sprint (2026-05-19).
+- [ ] **visitors.phone data quality** (identified during WhatsApp campaign prep, expo_id=7 verified 2026-05-19): ~95 rows with short numbers (len < 14 after normalize, missing digits); ~10 rows with junk/over-length numbers (len > 14 after normalize). Separate from normalize logic — require manual cleanup or form-layer input validation.
+- [ ] **phoneNormalize Nigeria-hardcoded**: uses `COUNTRY_CODE = '+234'`. Future: expo-aware country code (read from expos.country or similar). Currently sufficient for Mega Clima Nigeria 2026 (expo_id=7).
+
 ---
 
 ## 📌 Previous TODOs
