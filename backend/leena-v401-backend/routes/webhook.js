@@ -54,7 +54,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     const visitorSource = req.body.visitorSource ?? req.body.source ?? 'zoho';
     const jobTitle = req.body.jobTitle ?? req.body.job_title ?? '';
     const country = req.body.country ?? '';
-    const phone = req.body.phone ?? '';
+    const phone = req.body.phone ?? req.body.mobile ?? req.body.Mobile ?? '';
     const website = req.body.website ?? '';
     const origin = req.body.origin ?? '';
 
@@ -64,7 +64,7 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
       'badgeNumber', 'badge_id', 'sector', 'visitorCategory', 'visitor_category',
       'visitorStatus', 'visitor_status', 'visitorType', 'visitor_type',
       'visitorSource', 'source', 'jobTitle', 'job_title',
-      'country', 'phone', 'website', 'origin'
+      'country', 'phone', 'mobile', 'Mobile', 'website', 'origin'
     ]);
     const customFields = {};
     for (const [key, value] of Object.entries(req.body)) {

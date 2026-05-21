@@ -768,4 +768,125 @@ function calculateGrowthMetrics(period1, period2) {
   return metrics;
 }
 
+/**
+ * GET /api/reports/live
+ * Lightweight live-pulse data for main-panel-v2 dashboard auto-refresh.
+ * All time-bounded queries are Lagos TZ-aware ('Africa/Lagos').
+ * Cool Plus block ILIKE pattern only matches expo_id=7 data (other expos: 0).
+ */
+router.get('/live', authenticateToken, async (req, res) => {
+  const { expo_id } = req.query;
+
+  if (!expo_id) {
+    return res.status(400).json({ error: 'expo_id required' });
+  }
+
+  try {
+    const expoCheck = await pool.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expo_id, req.organizer_id]
+    );
+    if (expoCheck.rows.length === 0) {
+      return res.status(403).json({ error: 'Access denied to this expo' });
+    }
+
+    const [
+      hourlyToday,
+      hourlyYesterday,
+      sourceToday,
+      queuePending,
+      logsFailed24h,
+      phoneLeak,
+      coolPlus,
+      lastCheckin
+    ] = await Promise.all([
+      pool.query(`
+        SELECT EXTRACT(HOUR FROM (checkin_time AT TIME ZONE 'Africa/Lagos'))::int AS hour,
+               COUNT(*)::int AS count
+        FROM checkins
+        WHERE expo_id = $1
+          AND (checkin_time AT TIME ZONE 'Africa/Lagos')::date
+              = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date
+        GROUP BY hour ORDER BY hour
+      `, [expo_id]),
+
+      pool.query(`
+        SELECT EXTRACT(HOUR FROM (checkin_time AT TIME ZONE 'Africa/Lagos'))::int AS hour,
+               COUNT(*)::int AS count
+        FROM checkins
+        WHERE expo_id = $1
+          AND (checkin_time AT TIME ZONE 'Africa/Lagos')::date
+              = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date - INTERVAL '1 day'
+        GROUP BY hour ORDER BY hour
+      `, [expo_id]),
+
+      pool.query(`
+        SELECT source, COUNT(*)::int AS count
+        FROM visitors
+        WHERE expo_id = $1
+          AND (created_at AT TIME ZONE 'Africa/Lagos')::date
+              = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date
+        GROUP BY source ORDER BY count DESC LIMIT 10
+      `, [expo_id]),
+
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM email_queue
+        WHERE expo_id = $1 AND status = 'pending'
+      `, [expo_id]),
+
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM email_logs
+        WHERE expo_id = $1 AND status = 'failed'
+          AND sent_at >= NOW() - INTERVAL '24 hours'
+      `, [expo_id]),
+
+      pool.query(`
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE phone IS NULL OR TRIM(phone) = '')::int AS empty
+        FROM visitors
+        WHERE expo_id = $1
+          AND (created_at AT TIME ZONE 'Africa/Lagos')::date
+              = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date
+      `, [expo_id]),
+
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM conference_certificates
+        WHERE expo_id = $1
+          AND conference_topic ILIKE '%cool plus%'
+          AND created_at >= ((CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date) AT TIME ZONE 'Africa/Lagos'
+      `, [expo_id]),
+
+      pool.query(`
+        SELECT MAX(checkin_time) AS last_at
+        FROM checkins
+        WHERE expo_id = $1
+      `, [expo_id])
+    ]);
+
+    const phoneRow = phoneLeak.rows[0] || { total: 0, empty: 0 };
+    const total = phoneRow.total || 0;
+    const empty = phoneRow.empty || 0;
+    const pct = total > 0 ? Number(((empty / total) * 100).toFixed(2)) : 0;
+
+    res.json({
+      hourly_checkins_today: hourlyToday.rows,
+      hourly_checkins_yesterday: hourlyYesterday.rows,
+      source_breakdown_today: sourceToday.rows,
+      email_queue_pending: queuePending.rows[0]?.count || 0,
+      email_queue_failed_24h: logsFailed24h.rows[0]?.count || 0,
+      phone_leak_today: { total_today: total, phone_empty: empty, pct },
+      cool_plus_block_count_today: coolPlus.rows[0]?.count || 0,
+      last_checkin_at: lastCheckin.rows[0]?.last_at || null,
+      generated_at: new Date()
+    });
+  } catch (err) {
+    console.error('Error generating live report:', err);
+    res.status(500).json({ error: 'Failed to generate live report' });
+  }
+});
+
 module.exports = router;

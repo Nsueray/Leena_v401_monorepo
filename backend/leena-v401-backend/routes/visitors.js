@@ -205,7 +205,7 @@ router.post('/public', async (req, res) => {
       company: custom_fields?.company || '',
       country: custom_fields?.country || '',
       job_title: custom_fields?.job_title || custom_fields?.title || '',
-      phone: custom_fields?.phone || '',
+      phone: custom_fields?.phone || custom_fields?.mobile || custom_fields?.Mobile || '',
       source: source || 'public_form',
       origin: 'public',
       expo_id,
