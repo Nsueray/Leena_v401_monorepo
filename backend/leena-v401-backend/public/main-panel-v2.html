@@ -893,6 +893,14 @@
         .day-comparison-table th { color: #6b7280; font-weight: 500; font-size: 11px; text-transform: uppercase; }
         .day-comparison-table td { color: #374151; }
         .day-comparison-table tr.today td { font-weight: 600; background: #f0f7ff; }
+        .todays-incidents { background: #fef3c7; border: 1px solid #fcd34d; border-left: 4px solid #d97706; border-radius: 8px; padding: 14px 18px; margin: 0 0 20px; }
+        .todays-incidents .incident-header { font-weight: 600; font-size: 14px; color: #92400e; margin-bottom: 4px; }
+        .todays-incidents .incident-header i { margin-right: 6px; }
+        .todays-incidents .incident-note { font-size: 12px; color: #92400e; font-style: italic; margin-bottom: 10px; }
+        .todays-incidents .incident-rows { display: flex; flex-direction: column; gap: 6px; }
+        .todays-incidents .incident-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 4px 0; }
+        .todays-incidents .incident-label { color: #78350f; }
+        .todays-incidents .incident-value { font-weight: 600; }
         @media (max-width: 768px) {
             .live-grid { grid-template-columns: 1fr; }
             .live-chart-canvas { height: 160px; }
@@ -1206,6 +1214,8 @@
                         </div>
                     </section>
 
+                    <div class="todays-incidents" id="todaysIncidents" style="display: none;"></div>
+
                     <div class="dashboard-grid">
                         <div class="dashboard-card">
                             <div class="card-header">
@@ -1425,6 +1435,16 @@
         let lastLiveFetchAt = null;
         let lastUpdatedTimer = null;
         let liveCharts = {};
+        let liveRefreshFailCount = 0;
+
+        function markRefreshFailed() {
+            liveRefreshFailCount++;
+            const pill = document.getElementById('refreshPill');
+            if (pill && liveRefreshFailCount >= 2) {
+                pill.classList.add('stale');
+                pill.title = `${liveRefreshFailCount} consecutive failures — last success: ${lastLiveFetchAt ? new Date(lastLiveFetchAt).toLocaleTimeString() : 'never'}`;
+            }
+        }
 
         function getRefreshInterval() {
             const v = parseInt(localStorage.getItem('liveDashboardRefreshInterval') || '60', 10);
@@ -1461,22 +1481,37 @@
             }
         }
 
-        async function refreshLiveData() {
+        async function refreshLiveData(isRetry = false) {
             if (!currentExpoId) return;
             try {
-                const resp = await fetch(`${API_BASE_URL}/reports/live?expo_id=${currentExpoId}`, {
-                    headers: getAuthHeaders()
+                const url = `${API_BASE_URL}/reports/live?expo_id=${currentExpoId}&_t=${Date.now()}`;
+                const resp = await fetch(url, {
+                    headers: getAuthHeaders(),
+                    cache: 'no-store'
                 });
-                if (!resp.ok) return;
+                if (!resp.ok) {
+                    console.error('[liveRefresh] HTTP', resp.status);
+                    markRefreshFailed();
+                    return;
+                }
                 const data = await resp.json();
                 lastLiveFetchAt = Date.now();
-                renderHourlyTrend(data.hourly_checkins_today || [], data.hourly_checkins_yesterday || []);
-                renderDayByDay(data);
-                renderSourceBreakdown(data.source_breakdown_today || []);
-                renderSystemHealth(data);
+                liveRefreshFailCount = 0;
+                const pill = document.getElementById('refreshPill');
+                if (pill) { pill.classList.remove('stale'); pill.title = 'Auto-refresh'; }
+
+                try { renderHourlyTrend(data.hourly_checkins_today || [], data.hourly_checkins_yesterday || []); } catch (e) { console.error('[renderHourly]', e); }
+                try { renderDayByDay(data); } catch (e) { console.error('[renderDayByDay]', e); }
+                try { renderSourceBreakdown(data.source_breakdown_today || []); } catch (e) { console.error('[renderSource]', e); }
+                try { renderSystemHealth(data); } catch (e) { console.error('[renderHealth]', e); }
+                try { renderTodaysIncidents(data); } catch (e) { console.error('[renderIncidents]', e); }
                 updateLastUpdatedLabel();
             } catch (e) {
-                // soft fail — keep last data visible
+                console.error('[liveRefresh] network error:', e && e.message);
+                markRefreshFailed();
+                if (!isRetry) {
+                    setTimeout(() => refreshLiveData(true), 2000);
+                }
             }
         }
 
@@ -1509,6 +1544,9 @@
             Object.values(liveCharts).forEach(c => { try { c.destroy(); } catch (e) {} });
             liveCharts = {};
             lastLiveFetchAt = null;
+            liveRefreshFailCount = 0;
+            const pill = document.getElementById('refreshPill');
+            if (pill) { pill.classList.remove('stale'); pill.title = 'Auto-refresh'; }
         }
 
         // ====== RENDER HELPERS ======
@@ -1591,8 +1629,6 @@
             if (!body) return;
             const pending = data.email_queue_pending || 0;
             const failed = data.email_queue_failed_24h || 0;
-            const leak = data.phone_leak_today || { total_today: 0, phone_empty: 0, pct: 0 };
-            const coolPlus = data.cool_plus_block_count_today || 0;
             const lastAt = data.last_checkin_at;
 
             let emailRow;
@@ -1602,21 +1638,6 @@
                 emailRow = `<span class="sh-value health-status-bad">🔴 ${failed} failed (24h)</span>`;
             } else {
                 emailRow = `<span class="sh-value health-status-warn">🟡 ${pending} pending</span>`;
-            }
-
-            let leakRow;
-            if (!leak.pct) {
-                leakRow = `<span class="sh-value health-status-good">✅ No leaks today</span>`;
-            } else {
-                leakRow = `<span class="sh-value health-status-warn">⚠️ ${leak.pct}% (${leak.phone_empty}/${leak.total_today})</span>`;
-            }
-
-            const showCoolPlus = String(currentExpoId) === '7';
-            let coolPlusHtml = '';
-            if (showCoolPlus) {
-                coolPlusHtml = coolPlus === 0
-                    ? `<div class="system-health-row"><span class="sh-label">Cool Plus block</span><span class="sh-value health-status-good">🟢 Block active</span></div>`
-                    : `<div class="system-health-row"><span class="sh-label">Cool Plus block</span><span class="sh-value health-status-bad">🔴 LEAK: ${coolPlus}</span></div>`;
             }
 
             let lastCheckinRow;
@@ -1630,9 +1651,38 @@
 
             body.innerHTML = `
                 <div class="system-health-row"><span class="sh-label">Email queue</span>${emailRow}</div>
-                <div class="system-health-row"><span class="sh-label">Phone leak (today)</span>${leakRow}</div>
-                ${coolPlusHtml}
                 <div class="system-health-row"><span class="sh-label">Last check-in</span>${lastCheckinRow}</div>
+            `;
+        }
+
+        function renderTodaysIncidents(data) {
+            const container = document.getElementById('todaysIncidents');
+            if (!container) return;
+            const leak = data.phone_leak_today || { total_today: 0, phone_empty: 0, pct: 0 };
+            const coolPlus = data.cool_plus_block_count_today || 0;
+            const showCoolPlus = String(currentExpoId) === '7';
+            const leakActive = !!leak.pct;
+            const coolPlusActive = showCoolPlus && coolPlus > 0;
+
+            if (!leakActive && !coolPlusActive) {
+                container.style.display = 'none';
+                container.innerHTML = '';
+                return;
+            }
+
+            let rows = '';
+            if (leakActive) {
+                rows += `<div class="incident-row"><span class="incident-label">Phone leak (today)</span><span class="incident-value health-status-warn">⚠️ ${leak.pct}% (${leak.phone_empty}/${leak.total_today})</span></div>`;
+            }
+            if (coolPlusActive) {
+                rows += `<div class="incident-row"><span class="incident-label">Cool Plus block</span><span class="incident-value health-status-bad">🔴 LEAK: ${coolPlus}</span></div>`;
+            }
+
+            container.style.display = 'block';
+            container.innerHTML = `
+                <div class="incident-header"><i class="bi bi-exclamation-triangle"></i> Today's Incidents</div>
+                <div class="incident-note">Operational incidents for today. These auto-resolve at fair-end.</div>
+                <div class="incident-rows">${rows}</div>
             `;
         }
     </script>
