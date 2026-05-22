@@ -517,12 +517,21 @@
             });
         }
 
+        // Normalize key for grouping: TRIM + LOWER + Title Case (mirrors backend INITCAP)
+        // Interim before ELL dropdown — merges "Nigeria"/"NIGERIA"/" nigeria " into one bucket.
+        function normalizeKey(s) {
+            if (s === null || s === undefined) return '';
+            const t = String(s).trim().toLowerCase();
+            if (!t) return '';
+            return t.replace(/\b\w/g, c => c.toUpperCase());
+        }
+
         // ============ Country Chart ============
         function renderCountryChart() {
             const countries = {};
             const uniqueByCountry = {};
             allCheckins.forEach(c => {
-                const country = c.visitor_country || c.country || 'Unknown';
+                const country = normalizeKey(c.visitor_country || c.country) || 'Unknown';
                 countries[country] = (countries[country] || 0) + 1;
                 if (!uniqueByCountry[country]) uniqueByCountry[country] = new Set();
                 uniqueByCountry[country].add(c.visitor_id);
@@ -637,7 +646,7 @@
         function renderTopJobTitles() {
             const jobs = {};
             allCheckins.forEach(c => {
-                const job = c.visitor_job_title || c.job_title || '';
+                const job = normalizeKey(c.visitor_job_title || c.job_title);
                 if (job) jobs[job] = (jobs[job] || 0) + 1;
             });
             const sorted = Object.entries(jobs).sort((a,b) => b[1]-a[1]).slice(0, 15);
@@ -658,7 +667,7 @@
         function renderTopCountries() {
             const countries = {};
             allCheckins.forEach(c => {
-                const country = c.visitor_country || c.country || '';
+                const country = normalizeKey(c.visitor_country || c.country);
                 if (country) countries[country] = (countries[country] || 0) + 1;
             });
             const sorted = Object.entries(countries).sort((a,b) => b[1]-a[1]).slice(0, 15);

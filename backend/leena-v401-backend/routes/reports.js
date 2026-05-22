@@ -135,17 +135,23 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   `;
   const countriesResult = await pool.query(countriesQuery, params);
 
-  // Top companies
+  // Top companies (INITCAP+TRIM+LOWER normalize — interim before ELL dropdown)
   const companiesQuery = `
-    SELECT 
-      COALESCE(NULLIF(custom_fields->>'company', ''), company) as company,
+    WITH normalized AS (
+      SELECT
+        INITCAP(TRIM(LOWER(COALESCE(NULLIF(custom_fields->>'company', ''), company)))) AS company,
+        LOWER(TRIM(COALESCE(custom_fields->>'email', email))) AS email_key
+      FROM visitors
+      WHERE expo_id = $1
+        AND TRIM(COALESCE(NULLIF(custom_fields->>'company', ''), company, '')) <> ''
+        ${dateFilter}
+    )
+    SELECT
+      company,
       COUNT(*)::int as count,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_visitors
-    FROM visitors
-    WHERE expo_id = $1 
-    AND (custom_fields->>'company' IS NOT NULL OR company IS NOT NULL)
-    ${dateFilter}
-    GROUP BY COALESCE(NULLIF(custom_fields->>'company', ''), company)
+      COUNT(DISTINCT email_key)::int as unique_visitors
+    FROM normalized
+    GROUP BY company
     ORDER BY count DESC
     LIMIT 10
   `;
@@ -170,7 +176,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
     SELECT 
       DATE(created_at) as date,
       COUNT(*)::int as registrations,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_registrations
+      COUNT(DISTINCT LOWER(TRIM(COALESCE(custom_fields->>'email', email))))::int as unique_registrations
     FROM visitors
     WHERE expo_id = $1
     AND created_at >= CURRENT_DATE - INTERVAL '30 days'
@@ -450,16 +456,22 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
 
   // Top countries across all expos
   const countriesQuery = `
-    SELECT 
-      COALESCE(NULLIF(custom_fields->>'country', ''), country) as country,
+    WITH normalized AS (
+      SELECT
+        INITCAP(TRIM(LOWER(COALESCE(NULLIF(custom_fields->>'country', ''), country)))) AS country,
+        expo_id
+      FROM visitors
+      WHERE organizer_id = $1
+        AND TRIM(COALESCE(NULLIF(custom_fields->>'country', ''), country, '')) <> ''
+        ${dateFilter}
+    )
+    SELECT
+      country,
       COUNT(*)::int as count,
       COUNT(DISTINCT expo_id)::int as expo_count,
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE organizer_id = $1), 0)), 2) as percentage
-    FROM visitors
-    WHERE organizer_id = $1 
-    AND (custom_fields->>'country' IS NOT NULL OR country IS NOT NULL)
-    ${dateFilter}
-    GROUP BY COALESCE(NULLIF(custom_fields->>'country', ''), country)
+    FROM normalized
+    GROUP BY country
     ORDER BY count DESC
     LIMIT 15
   `;
@@ -467,16 +479,23 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
 
   // Top companies across all expos
   const companiesQuery = `
-    SELECT 
-      COALESCE(NULLIF(custom_fields->>'company', ''), company) as company,
+    WITH normalized AS (
+      SELECT
+        INITCAP(TRIM(LOWER(COALESCE(NULLIF(custom_fields->>'company', ''), company)))) AS company,
+        expo_id,
+        LOWER(TRIM(COALESCE(custom_fields->>'email', email))) AS email_key
+      FROM visitors
+      WHERE organizer_id = $1
+        AND TRIM(COALESCE(NULLIF(custom_fields->>'company', ''), company, '')) <> ''
+        ${dateFilter}
+    )
+    SELECT
+      company,
       COUNT(*)::int as count,
       COUNT(DISTINCT expo_id)::int as expo_count,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_visitors
-    FROM visitors
-    WHERE organizer_id = $1 
-    AND (custom_fields->>'company' IS NOT NULL OR company IS NOT NULL)
-    ${dateFilter}
-    GROUP BY COALESCE(NULLIF(custom_fields->>'company', ''), company)
+      COUNT(DISTINCT email_key)::int as unique_visitors
+    FROM normalized
+    GROUP BY company
     ORDER BY count DESC
     LIMIT 15
   `;
@@ -503,7 +522,7 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
       TO_CHAR(created_at, 'YYYY-MM') as month,
       COUNT(*)::int as registrations,
       COUNT(DISTINCT expo_id)::int as active_expos,
-      COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_visitors
+      COUNT(DISTINCT LOWER(TRIM(COALESCE(custom_fields->>'email', email))))::int as unique_visitors
     FROM visitors
     WHERE organizer_id = $1
     AND created_at >= CURRENT_DATE - INTERVAL '12 months'
@@ -804,7 +823,12 @@ router.get('/live', authenticateToken, async (req, res) => {
       coolPlus,
       lastCheckin,
       sameDayReg,
-      walkinSubset
+      walkinSubset,
+      fairTotalSameDay,
+      fairTotalWalkin,
+      fairTotalCheckins,
+      fairHourlyByDay,
+      fairSourceBreakdown
     ] = await Promise.all([
       pool.query(`
         SELECT EXTRACT(HOUR FROM (checkin_time AT TIME ZONE 'Africa/Lagos'))::int AS hour,
@@ -897,6 +921,65 @@ router.get('/live', authenticateToken, async (req, res) => {
           GROUP BY v.id, v.created_at
         ) sub
         WHERE sub.first_checkin - sub.created_at < INTERVAL '30 minutes'
+      `, [expo_id]),
+
+      // Fair-total: same-day registered + checked-in across full fair date range (Lagos TZ)
+      pool.query(`
+        SELECT COUNT(DISTINCT v.id)::int AS count
+        FROM visitors v
+        JOIN checkins c ON c.visitor_id = v.id AND c.expo_id = $1
+        JOIN expos e ON e.id = $1
+        WHERE v.expo_id = $1
+          AND (v.created_at AT TIME ZONE 'Africa/Lagos')::date BETWEEN e.start_date AND e.end_date
+          AND (c.checkin_time AT TIME ZONE 'Africa/Lagos')::date BETWEEN e.start_date AND e.end_date
+      `, [expo_id]),
+
+      // Fair-total walk-in (same-day during fair AND first check-in within 30 min)
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM (
+          SELECT v.id, v.created_at, MIN(c.checkin_time) AS first_checkin
+          FROM visitors v
+          JOIN checkins c ON c.visitor_id = v.id AND c.expo_id = $1
+          JOIN expos e ON e.id = $1
+          WHERE v.expo_id = $1
+            AND (v.created_at AT TIME ZONE 'Africa/Lagos')::date BETWEEN e.start_date AND e.end_date
+          GROUP BY v.id, v.created_at
+        ) sub
+        WHERE sub.first_checkin - sub.created_at < INTERVAL '30 minutes'
+      `, [expo_id]),
+
+      // Fair-total check-ins: distinct visitor check-ins across fair days
+      pool.query(`
+        SELECT COUNT(DISTINCT c.visitor_id)::int AS count
+        FROM checkins c
+        JOIN expos e ON e.id = $1
+        WHERE c.expo_id = $1
+          AND (c.checkin_time AT TIME ZONE 'Africa/Lagos')::date BETWEEN e.start_date AND e.end_date
+      `, [expo_id]),
+
+      // Fair hourly per day: [{fair_date, hour, count}] for multi-day chart
+      pool.query(`
+        SELECT
+          (c.checkin_time AT TIME ZONE 'Africa/Lagos')::date::text AS fair_date,
+          EXTRACT(HOUR FROM (c.checkin_time AT TIME ZONE 'Africa/Lagos'))::int AS hour,
+          COUNT(*)::int AS count
+        FROM checkins c
+        JOIN expos e ON e.id = $1
+        WHERE c.expo_id = $1
+          AND (c.checkin_time AT TIME ZONE 'Africa/Lagos')::date BETWEEN e.start_date AND e.end_date
+        GROUP BY fair_date, hour
+        ORDER BY fair_date, hour
+      `, [expo_id]),
+
+      // Fair source breakdown across full fair period
+      pool.query(`
+        SELECT source, COUNT(*)::int AS count
+        FROM visitors v
+        JOIN expos e ON e.id = $1
+        WHERE v.expo_id = $1
+          AND (v.created_at AT TIME ZONE 'Africa/Lagos')::date BETWEEN e.start_date AND e.end_date
+        GROUP BY source ORDER BY count DESC LIMIT 10
       `, [expo_id])
     ]);
 
@@ -916,6 +999,11 @@ router.get('/live', authenticateToken, async (req, res) => {
       last_checkin_at: lastCheckin.rows[0]?.last_at || null,
       same_day_registered_today: sameDayReg.rows[0]?.count || 0,
       walkin_today: walkinSubset.rows[0]?.count || 0,
+      fair_total_same_day_registered: fairTotalSameDay.rows[0]?.count || 0,
+      fair_total_walkins: fairTotalWalkin.rows[0]?.count || 0,
+      fair_total_checkins: fairTotalCheckins.rows[0]?.count || 0,
+      fair_hourly_by_day: fairHourlyByDay.rows,
+      fair_source_breakdown: fairSourceBreakdown.rows,
       generated_at: new Date()
     });
   } catch (err) {

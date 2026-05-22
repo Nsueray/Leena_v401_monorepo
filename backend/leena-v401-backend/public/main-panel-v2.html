@@ -914,6 +914,7 @@
         .day-row.non-fair-day { opacity: 0.5; }
         .day-row.non-fair-day .day-label { color: #6b7280; }
         .day-row.today { border-left: 3px solid #3b82f6; padding-left: 12px; background: #f0f7ff; }
+        .mode-badge { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; padding: 4px 10px; background: #dbeafe; color: #1e40af; border-radius: 999px; font-size: 11px; font-weight: 600; vertical-align: middle; }
         .todays-incidents { background: #fef3c7; border: 1px solid #fcd34d; border-left: 4px solid #d97706; border-radius: 8px; padding: 14px 18px; margin: 0 0 20px; }
         .todays-incidents .incident-header { font-weight: 600; font-size: 14px; color: #92400e; margin-bottom: 4px; }
         .todays-incidents .incident-header i { margin-right: 6px; }
@@ -991,6 +992,7 @@
                         </div>
                     </div>
                     <span class="expo-status" id="expo-status">Live</span>
+                    <span class="mode-badge" id="expo-mode-badge" style="display:none;"></span>
                 </div>
                 <div class="header-right">
                     <button class="header-btn" onclick="goToDashboard()">
@@ -1202,10 +1204,10 @@
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-icon today"><i class="bi bi-calendar-check"></i></div>
-                                <span class="kpi-trend up"><i class="bi bi-arrow-up"></i> Today</span>
+                                <span class="kpi-trend ${getFairMode() === 'fair_totals' ? 'neutral' : 'up'}" id="kpiCheckinsChip">${getFairMode() === 'fair_totals' ? 'Fair completed' : '<i class="bi bi-arrow-up"></i> Today'}</span>
                             </div>
-                            <div class="kpi-value">${(checkins.checkins_today || 0).toLocaleString()}</div>
-                            <div class="kpi-label">Today's Check-ins</div>
+                            <div class="kpi-value" id="kpiCheckinsValue">${getFairMode() === 'fair_totals' ? '—' : (checkins.checkins_today || 0).toLocaleString()}</div>
+                            <div class="kpi-label" id="kpiCheckinsLabel">${getFairMode() === 'fair_totals' ? 'Fair Total Check-ins' : "Today's Check-ins"}</div>
                         </div>
                         <div class="kpi-card">
                             <div class="kpi-header">
@@ -1221,18 +1223,18 @@
                         <div class="kpi-card">
                             <div class="kpi-header">
                                 <div class="kpi-icon visitors"><i class="bi bi-person-plus"></i></div>
-                                <span class="kpi-trend up">Today</span>
+                                <span class="kpi-trend up" id="sameDayChip">${getFairMode() === 'fair_totals' ? 'Fair completed' : 'Today'}</span>
                             </div>
                             <div class="kpi-value" id="sameDayValue">—</div>
-                            <div class="kpi-label">Same-day Registered &amp; Checked In</div>
+                            <div class="kpi-label" id="sameDayLabel">${getFairMode() === 'fair_totals' ? 'Total Same-day Registered (Fair)' : 'Same-day Registered &amp; Checked In'}</div>
                         </div>
                         <div class="kpi-card kpi-subset">
                             <div class="kpi-header">
                                 <div class="kpi-icon today"><i class="bi bi-stopwatch"></i></div>
-                                <span class="kpi-trend neutral">Subset · &lt;30 min</span>
+                                <span class="kpi-trend neutral" id="walkinChip">Subset · &lt;30 min</span>
                             </div>
                             <div class="kpi-value" id="walkinValue">—</div>
-                            <div class="kpi-label">Walk-ins</div>
+                            <div class="kpi-label" id="walkinLabel">${getFairMode() === 'fair_totals' ? 'Total Walk-ins (Fair)' : 'Walk-ins'}</div>
                         </div>
                     </div>
 
@@ -1248,7 +1250,7 @@
                             <div class="live-card-note">*Daily boundaries UTC-based</div>
                         </div>
                         <div class="live-card">
-                            <div class="live-card-header"><span><i class="bi bi-bar-chart-line"></i> Today's Source Breakdown</span></div>
+                            <div class="live-card-header"><span id="sourceWidgetTitle"><i class="bi bi-bar-chart-line"></i> Today's Source Breakdown</span></div>
                             <div class="live-card-body" id="sourceBreakdownBody"><div class="live-card-empty">Loading…</div></div>
                         </div>
                         <div class="live-card">
@@ -1482,6 +1484,19 @@
         let liveRefreshFailCount = 0;
         let currentExpoBounds = null;
 
+        function getFairMode() {
+            if (!currentExpoBounds || !currentExpoBounds.end) return 'today';
+            const endPlusOne = new Date(new Date(currentExpoBounds.end).getTime() + 86400000);
+            return new Date() > endPlusOne ? 'fair_totals' : 'today';
+        }
+
+        function getFairDayCount() {
+            if (!currentExpoBounds || !currentExpoBounds.start || !currentExpoBounds.end) return 0;
+            const start = new Date(currentExpoBounds.start);
+            const end = new Date(currentExpoBounds.end);
+            return Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+        }
+
         function markRefreshFailed() {
             liveRefreshFailCount++;
             const pill = document.getElementById('refreshPill');
@@ -1545,8 +1560,8 @@
                 const pill = document.getElementById('refreshPill');
                 if (pill) { pill.classList.remove('stale'); pill.title = 'Auto-refresh'; }
 
-                try { renderHourlyTrend(data.hourly_checkins_today || [], data.hourly_checkins_yesterday || []); } catch (e) { console.error('[renderHourly]', e); }
-                try { renderSourceBreakdown(data.source_breakdown_today || []); } catch (e) { console.error('[renderSource]', e); }
+                try { renderHourlyTrend(data); } catch (e) { console.error('[renderHourly]', e); }
+                try { renderSourceBreakdown(data); } catch (e) { console.error('[renderSource]', e); }
                 try { renderSystemHealth(data); } catch (e) { console.error('[renderHealth]', e); }
                 try { renderTodaysIncidents(data); } catch (e) { console.error('[renderIncidents]', e); }
                 try { renderSameDayCards(data); } catch (e) { console.error('[renderSameDay]', e); }
@@ -1606,35 +1621,59 @@
         }
 
         // ====== RENDER HELPERS ======
-        function renderHourlyTrend(today, yesterday) {
+        function renderHourlyTrend(data) {
             const canvas = document.getElementById('hourlyTrendChart');
             if (!canvas || typeof Chart === 'undefined') return;
             const hours = [];
             for (let h = 8; h <= 20; h++) hours.push(h);
-            const todayMap = {};
-            today.forEach(r => { todayMap[r.hour] = r.count; });
-            const ydayMap = {};
-            yesterday.forEach(r => { ydayMap[r.hour] = r.count; });
-            const todayData = hours.map(h => todayMap[h] || 0);
-            const ydayData = hours.map(h => ydayMap[h] || 0);
             const labels = hours.map(h => (h < 10 ? '0' + h : h) + ':00');
+            const mode = getFairMode();
+
+            let datasets;
+            if (mode === 'fair_totals' && Array.isArray(data.fair_hourly_by_day) && data.fair_hourly_by_day.length > 0) {
+                // Group rows by fair_date
+                const dayMap = {};
+                data.fair_hourly_by_day.forEach(r => {
+                    if (!dayMap[r.fair_date]) dayMap[r.fair_date] = {};
+                    dayMap[r.fair_date][r.hour] = r.count;
+                });
+                const fairDays = Object.keys(dayMap).sort();
+                const palette = ['#4a6fa5', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
+                const startTs = currentExpoBounds ? new Date(currentExpoBounds.start).getTime() : 0;
+                datasets = fairDays.slice(0, 5).map((d, i) => {
+                    const dayNum = startTs ? Math.floor((new Date(d).getTime() - startTs) / 86400000) + 1 : (i + 1);
+                    return {
+                        label: `Day ${dayNum}`,
+                        data: hours.map(h => dayMap[d][h] || 0),
+                        borderColor: palette[i % palette.length],
+                        backgroundColor: 'transparent',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: false
+                    };
+                });
+            } else {
+                const todayMap = {};
+                (data.hourly_checkins_today || []).forEach(r => { todayMap[r.hour] = r.count; });
+                const ydayMap = {};
+                (data.hourly_checkins_yesterday || []).forEach(r => { ydayMap[r.hour] = r.count; });
+                const todayData = hours.map(h => todayMap[h] || 0);
+                const ydayData = hours.map(h => ydayMap[h] || 0);
+                datasets = [
+                    { label: 'Today', data: todayData, borderColor: '#4a6fa5', backgroundColor: 'rgba(74,111,165,0.1)', borderWidth: 2.5, tension: 0.3, fill: true },
+                    { label: 'Yesterday', data: ydayData, borderColor: '#cbd5e1', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, fill: false }
+                ];
+            }
 
             if (liveCharts.hourlyTrend) {
                 liveCharts.hourlyTrend.data.labels = labels;
-                liveCharts.hourlyTrend.data.datasets[0].data = todayData;
-                liveCharts.hourlyTrend.data.datasets[1].data = ydayData;
+                liveCharts.hourlyTrend.data.datasets = datasets;
                 liveCharts.hourlyTrend.update('none');
                 return;
             }
             liveCharts.hourlyTrend = new Chart(canvas.getContext('2d'), {
                 type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'Today', data: todayData, borderColor: '#4a6fa5', backgroundColor: 'rgba(74,111,165,0.1)', borderWidth: 2.5, tension: 0.3, fill: true },
-                        { label: 'Yesterday', data: ydayData, borderColor: '#cbd5e1', backgroundColor: 'transparent', borderWidth: 1.5, borderDash: [4, 4], tension: 0.3, fill: false }
-                    ]
-                },
+                data: { labels, datasets },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -1678,11 +1717,23 @@
             body.innerHTML = `<div class="day-list">${html}</div>`;
         }
 
-        function renderSourceBreakdown(rows) {
+        function renderSourceBreakdown(data) {
             const body = document.getElementById('sourceBreakdownBody');
             if (!body) return;
+            const mode = getFairMode();
+            const rows = mode === 'fair_totals' && Array.isArray(data.fair_source_breakdown)
+                ? data.fair_source_breakdown
+                : (data.source_breakdown_today || []);
+
+            const titleEl = document.getElementById('sourceWidgetTitle');
+            if (titleEl) {
+                titleEl.innerHTML = mode === 'fair_totals'
+                    ? '<i class="bi bi-bar-chart-line"></i> Fair Source Breakdown'
+                    : '<i class="bi bi-bar-chart-line"></i> Today\'s Source Breakdown';
+            }
+
             if (!rows.length) {
-                body.innerHTML = '<div class="live-card-empty">No registrations today yet</div>';
+                body.innerHTML = `<div class="live-card-empty">${mode === 'fair_totals' ? 'No registrations during fair' : 'No registrations today yet'}</div>`;
                 return;
             }
             const top = rows.slice(0, 5);
@@ -1727,12 +1778,54 @@
         }
 
         function renderSameDayCards(data) {
-            const sameDay = data.same_day_registered_today || 0;
-            const walkin = data.walkin_today || 0;
+            const mode = getFairMode();
+            // Mode-aware values: fair_totals → fair_*, today → today fields
+            const checkinsVal = mode === 'fair_totals'
+                ? (data.fair_total_checkins || 0)
+                : null; // today mode keeps initial template value (from /summary)
+            const sameDayVal = mode === 'fair_totals'
+                ? (data.fair_total_same_day_registered || 0)
+                : (data.same_day_registered_today || 0);
+            const walkinVal = mode === 'fair_totals'
+                ? (data.fair_total_walkins || 0)
+                : (data.walkin_today || 0);
+
+            // KPI #3 (Today's Check-ins / Fair Total Check-ins)
+            if (checkinsVal !== null) {
+                const cv = document.getElementById('kpiCheckinsValue');
+                const cl = document.getElementById('kpiCheckinsLabel');
+                const cc = document.getElementById('kpiCheckinsChip');
+                if (cv) cv.textContent = checkinsVal.toLocaleString();
+                if (cl) cl.textContent = 'Fair Total Check-ins';
+                if (cc) { cc.className = 'kpi-trend neutral'; cc.textContent = 'Fair completed'; }
+            }
+
+            // Same-day + Walk-in cards
             const sdEl = document.getElementById('sameDayValue');
             const wkEl = document.getElementById('walkinValue');
-            if (sdEl) sdEl.textContent = sameDay.toLocaleString();
-            if (wkEl) wkEl.textContent = walkin.toLocaleString();
+            if (sdEl) sdEl.textContent = sameDayVal.toLocaleString();
+            if (wkEl) wkEl.textContent = walkinVal.toLocaleString();
+            if (mode === 'fair_totals') {
+                const sdL = document.getElementById('sameDayLabel');
+                const sdC = document.getElementById('sameDayChip');
+                const wkL = document.getElementById('walkinLabel');
+                if (sdL) sdL.textContent = 'Total Same-day Registered (Fair)';
+                if (sdC) sdC.textContent = 'Fair completed';
+                if (wkL) wkL.textContent = 'Total Walk-ins (Fair)';
+            }
+
+            // Mode badge in page header
+            const badge = document.getElementById('expo-mode-badge');
+            if (badge) {
+                if (mode === 'fair_totals') {
+                    const days = getFairDayCount();
+                    badge.innerHTML = `<i class="bi bi-bar-chart"></i> Fair Totals · ${days} day${days === 1 ? '' : 's'}`;
+                    badge.style.display = 'inline-flex';
+                } else {
+                    badge.style.display = 'none';
+                    badge.innerHTML = '';
+                }
+            }
         }
 
         function renderTodaysIncidents(data) {
