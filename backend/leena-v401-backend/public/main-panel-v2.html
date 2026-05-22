@@ -450,7 +450,19 @@
             gap: 16px;
             margin-bottom: 24px;
         }
-        
+
+        .kpi-grid-secondary {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card.kpi-subset {
+            background: #fafbff;
+            border-left: 3px solid #cbd5e1;
+        }
+
         .kpi-card {
             background: var(--bg-card);
             border: 1px solid var(--border-color);
@@ -850,6 +862,7 @@
             .sidebar .nav-section-title, .sidebar .nav-item span { display: none; }
             .main-wrapper { margin-left: var(--sidebar-collapsed); }
             .kpi-grid { grid-template-columns: 1fr; }
+            .kpi-grid-secondary { grid-template-columns: 1fr; }
             #content-area { padding: 16px; }
             .page-header { flex-direction: column; gap: 16px; }
             .forms-grid { grid-template-columns: 1fr; }
@@ -893,6 +906,14 @@
         .day-comparison-table th { color: #6b7280; font-weight: 500; font-size: 11px; text-transform: uppercase; }
         .day-comparison-table td { color: #374151; }
         .day-comparison-table tr.today td { font-weight: 600; background: #f0f7ff; }
+        .day-list { display: flex; flex-direction: column; gap: 4px; }
+        .day-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 8px; font-size: 13px; border-radius: 4px; }
+        .day-row .day-label { color: #374151; }
+        .day-row .day-count { font-weight: 600; color: #4a6fa5; }
+        .day-row.fair-day .day-label { font-weight: 600; color: #1f2937; }
+        .day-row.non-fair-day { opacity: 0.5; }
+        .day-row.non-fair-day .day-label { color: #6b7280; }
+        .day-row.today { border-left: 3px solid #3b82f6; padding-left: 12px; background: #f0f7ff; }
         .todays-incidents { background: #fef3c7; border: 1px solid #fcd34d; border-left: 4px solid #d97706; border-radius: 8px; padding: 14px 18px; margin: 0 0 20px; }
         .todays-incidents .incident-header { font-weight: 600; font-size: 14px; color: #92400e; margin-bottom: 4px; }
         .todays-incidents .incident-header i { margin-right: 6px; }
@@ -1096,10 +1117,13 @@
                 if (!response.ok) throw new Error('Could not fetch expo details');
                 const expo = await response.json();
                 currentExpoName = expo.name;
+                currentExpoBounds = { start: expo.start_date, end: expo.end_date };
                 document.getElementById('expo-title').textContent = expo.name;
                 
                 const startDate = new Date(expo.start_date);
-                const endDate = new Date(expo.end_date);
+                // End_date is DATE-only (no time). Treat as end-of-fair-day: +1 day before comparison.
+                // 21 May UTC 00:00 + 86400000ms = 22 May UTC 00:00 = 22 May 01:00 Lagos.
+                const endDate = new Date(new Date(expo.end_date).getTime() + 86400000);
                 const dateRange = `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
                 const location = expo.location ? ` • ${expo.location}` : '';
                 document.getElementById('expo-meta').textContent = dateRange + location;
@@ -1190,6 +1214,25 @@
                             </div>
                             <div class="kpi-value">${metrics.unique_countries || 0}</div>
                             <div class="kpi-label">Countries</div>
+                        </div>
+                    </div>
+
+                    <div class="kpi-grid-secondary">
+                        <div class="kpi-card">
+                            <div class="kpi-header">
+                                <div class="kpi-icon visitors"><i class="bi bi-person-plus"></i></div>
+                                <span class="kpi-trend up">Today</span>
+                            </div>
+                            <div class="kpi-value" id="sameDayValue">—</div>
+                            <div class="kpi-label">Same-day Registered &amp; Checked In</div>
+                        </div>
+                        <div class="kpi-card kpi-subset">
+                            <div class="kpi-header">
+                                <div class="kpi-icon today"><i class="bi bi-stopwatch"></i></div>
+                                <span class="kpi-trend neutral">Subset · &lt;30 min</span>
+                            </div>
+                            <div class="kpi-value" id="walkinValue">—</div>
+                            <div class="kpi-label">Walk-ins</div>
                         </div>
                     </div>
 
@@ -1305,6 +1348,7 @@
                         </div>
                     </div>
                 `;
+                renderDayByDay(report.daily_checkin_trend || []);
                 initLiveWidgets();
             } catch (error) {
                 showError('Could not load dashboard. Please try again.');
@@ -1436,6 +1480,7 @@
         let lastUpdatedTimer = null;
         let liveCharts = {};
         let liveRefreshFailCount = 0;
+        let currentExpoBounds = null;
 
         function markRefreshFailed() {
             liveRefreshFailCount++;
@@ -1501,10 +1546,10 @@
                 if (pill) { pill.classList.remove('stale'); pill.title = 'Auto-refresh'; }
 
                 try { renderHourlyTrend(data.hourly_checkins_today || [], data.hourly_checkins_yesterday || []); } catch (e) { console.error('[renderHourly]', e); }
-                try { renderDayByDay(data); } catch (e) { console.error('[renderDayByDay]', e); }
                 try { renderSourceBreakdown(data.source_breakdown_today || []); } catch (e) { console.error('[renderSource]', e); }
                 try { renderSystemHealth(data); } catch (e) { console.error('[renderHealth]', e); }
                 try { renderTodaysIncidents(data); } catch (e) { console.error('[renderIncidents]', e); }
+                try { renderSameDayCards(data); } catch (e) { console.error('[renderSameDay]', e); }
                 updateLastUpdatedLabel();
             } catch (e) {
                 console.error('[liveRefresh] network error:', e && e.message);
@@ -1518,11 +1563,20 @@
         function handleVisibilityChange() {
             if (document.visibilityState === 'hidden') {
                 if (liveRefreshTimer) { clearInterval(liveRefreshTimer); liveRefreshTimer = null; }
-            } else if (document.visibilityState === 'visible') {
-                if (!liveRefreshTimer && document.getElementById('hourlyTrendChart')) {
-                    refreshLiveData();
-                    liveRefreshTimer = setInterval(refreshLiveData, getRefreshInterval() * 1000);
-                }
+                if (lastUpdatedTimer) { clearInterval(lastUpdatedTimer); lastUpdatedTimer = null; }
+            } else if (document.visibilityState === 'visible' && document.getElementById('hourlyTrendChart')) {
+                // Never trust prior timer state — Chrome may silently pause setInterval on backgrounded tabs.
+                if (liveRefreshTimer) clearInterval(liveRefreshTimer);
+                if (lastUpdatedTimer) clearInterval(lastUpdatedTimer);
+                refreshLiveData();
+                liveRefreshTimer = setInterval(refreshLiveData, getRefreshInterval() * 1000);
+                lastUpdatedTimer = setInterval(updateLastUpdatedLabel, 5000);
+            }
+        }
+
+        function handleWindowFocus() {
+            if (document.getElementById('hourlyTrendChart')) {
+                refreshLiveData();
             }
         }
 
@@ -1535,12 +1589,14 @@
             liveRefreshTimer = setInterval(refreshLiveData, interval * 1000);
             lastUpdatedTimer = setInterval(updateLastUpdatedLabel, 5000);
             document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('focus', handleWindowFocus);
         }
 
         function destroyLiveWidgets() {
             if (liveRefreshTimer) { clearInterval(liveRefreshTimer); liveRefreshTimer = null; }
             if (lastUpdatedTimer) { clearInterval(lastUpdatedTimer); lastUpdatedTimer = null; }
             document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('focus', handleWindowFocus);
             Object.values(liveCharts).forEach(c => { try { c.destroy(); } catch (e) {} });
             liveCharts = {};
             lastLiveFetchAt = null;
@@ -1588,23 +1644,38 @@
             });
         }
 
-        function renderDayByDay(data) {
+        function renderDayByDay(dailyTrend) {
             const body = document.getElementById('dayByDayBody');
             if (!body) return;
-            const today = (data.hourly_checkins_today || []).reduce((s, r) => s + (r.count || 0), 0);
-            const yesterday = (data.hourly_checkins_yesterday || []).reduce((s, r) => s + (r.count || 0), 0);
-            const peakToday = (data.hourly_checkins_today || []).reduce((m, r) => (r.count > m.count ? r : m), { hour: null, count: 0 });
-            const peakY = (data.hourly_checkins_yesterday || []).reduce((m, r) => (r.count > m.count ? r : m), { hour: null, count: 0 });
-            const fmtHour = h => h === null || h === undefined ? '—' : (h < 10 ? '0' + h : h) + ':00';
-            body.innerHTML = `
-                <table class="day-comparison-table">
-                    <thead><tr><th>Day</th><th>Total Check-ins</th><th>Peak Hour</th></tr></thead>
-                    <tbody>
-                        <tr><td>Yesterday</td><td>${yesterday.toLocaleString()}</td><td>${fmtHour(peakY.hour)}</td></tr>
-                        <tr class="today"><td>Today</td><td>${today.toLocaleString()}</td><td>${fmtHour(peakToday.hour)}</td></tr>
-                    </tbody>
-                </table>
-            `;
+            if (!currentExpoBounds) {
+                body.innerHTML = '<div class="live-card-empty">Waiting for expo info…</div>';
+                return;
+            }
+            const rows = (dailyTrend || []).slice().filter(r => r.date && Number(r.count) > 0);
+            if (rows.length === 0) {
+                body.innerHTML = '<div class="live-card-empty">No check-ins yet</div>';
+                return;
+            }
+            const start = new Date(currentExpoBounds.start);
+            const end = new Date(currentExpoBounds.end);
+            const todayUTC = new Date().toISOString().slice(0, 10);
+            const fmtShort = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+            rows.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            const html = rows.map(r => {
+                const d = new Date(r.date);
+                const isFairDay = d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
+                const isToday = String(r.date).slice(0, 10) === todayUTC;
+                const dayNum = isFairDay ? Math.floor((d.getTime() - start.getTime()) / 86400000) + 1 : null;
+                const label = isFairDay ? `${fmtShort(d)} (Day ${dayNum})` : fmtShort(d);
+                const classes = ['day-row'];
+                if (isFairDay) classes.push('fair-day'); else classes.push('non-fair-day');
+                if (isToday && isFairDay) classes.push('today');
+                return `<div class="${classes.join(' ')}"><span class="day-label">${label}</span><span class="day-count">${Number(r.count).toLocaleString()}</span></div>`;
+            }).join('');
+
+            body.innerHTML = `<div class="day-list">${html}</div>`;
         }
 
         function renderSourceBreakdown(rows) {
@@ -1653,6 +1724,15 @@
                 <div class="system-health-row"><span class="sh-label">Email queue</span>${emailRow}</div>
                 <div class="system-health-row"><span class="sh-label">Last check-in</span>${lastCheckinRow}</div>
             `;
+        }
+
+        function renderSameDayCards(data) {
+            const sameDay = data.same_day_registered_today || 0;
+            const walkin = data.walkin_today || 0;
+            const sdEl = document.getElementById('sameDayValue');
+            const wkEl = document.getElementById('walkinValue');
+            if (sdEl) sdEl.textContent = sameDay.toLocaleString();
+            if (wkEl) wkEl.textContent = walkin.toLocaleString();
         }
 
         function renderTodaysIncidents(data) {

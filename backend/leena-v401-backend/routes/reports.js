@@ -71,9 +71,9 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
     WITH visitor_stats AS (
       SELECT 
         COUNT(*)::int as total_visitors,
-        COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_emails,
-        COUNT(DISTINCT COALESCE(custom_fields->>'company', company))::int as unique_companies,
-        COUNT(DISTINCT COALESCE(custom_fields->>'country', country))::int as unique_countries,
+        COUNT(DISTINCT LOWER(TRIM(COALESCE(custom_fields->>'email', email))))::int as unique_emails,
+        COUNT(DISTINCT INITCAP(TRIM(LOWER(COALESCE(custom_fields->>'company', company)))))::int as unique_companies,
+        COUNT(DISTINCT INITCAP(TRIM(LOWER(COALESCE(custom_fields->>'country', country)))))::int as unique_countries,
         COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END)::int as registrations_today,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END)::int as registrations_week,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '30 days' THEN 1 END)::int as registrations_month,
@@ -115,17 +115,21 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   const statsResult = await pool.query(statsQuery, params);
   const stats = statsResult.rows[0];
 
-  // Top countries
+  // Top countries (INITCAP + TRIM + LOWER normalize — interim before ELL dropdown)
   const countriesQuery = `
-    SELECT 
-      COALESCE(NULLIF(custom_fields->>'country', ''), country) as country,
+    WITH normalized AS (
+      SELECT INITCAP(TRIM(LOWER(COALESCE(NULLIF(custom_fields->>'country', ''), country)))) AS country
+      FROM visitors
+      WHERE expo_id = $1
+        AND TRIM(COALESCE(NULLIF(custom_fields->>'country', ''), country, '')) <> ''
+        ${dateFilter}
+    )
+    SELECT
+      country,
       COUNT(*)::int as count,
       ROUND((COUNT(*) * 100.0 / NULLIF((SELECT COUNT(*) FROM visitors WHERE expo_id = $1), 0)), 2) as percentage
-    FROM visitors
-    WHERE expo_id = $1 
-    AND (custom_fields->>'country' IS NOT NULL OR country IS NOT NULL)
-    ${dateFilter}
-    GROUP BY COALESCE(NULLIF(custom_fields->>'country', ''), country)
+    FROM normalized
+    GROUP BY country
     ORDER BY count DESC
     LIMIT 10
   `;
@@ -242,12 +246,12 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
   // Job title breakdown (top 15)
   const jobTitleQuery = `
     SELECT
-      job_title,
+      INITCAP(TRIM(LOWER(job_title))) as job_title,
       COUNT(*)::int as count
     FROM visitors
     WHERE expo_id = $1
-    AND job_title IS NOT NULL AND job_title != ''
-    GROUP BY job_title
+    AND TRIM(COALESCE(job_title, '')) <> ''
+    GROUP BY INITCAP(TRIM(LOWER(job_title)))
     ORDER BY count DESC
     LIMIT 15
   `;
@@ -376,9 +380,9 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
     visitor_stats AS (
       SELECT 
         COUNT(*)::int as total_visitors,
-        COUNT(DISTINCT COALESCE(custom_fields->>'email', email))::int as unique_emails,
-        COUNT(DISTINCT COALESCE(custom_fields->>'company', company))::int as unique_companies,
-        COUNT(DISTINCT COALESCE(custom_fields->>'country', country))::int as unique_countries,
+        COUNT(DISTINCT LOWER(TRIM(COALESCE(custom_fields->>'email', email))))::int as unique_emails,
+        COUNT(DISTINCT INITCAP(TRIM(LOWER(COALESCE(custom_fields->>'company', company)))))::int as unique_companies,
+        COUNT(DISTINCT INITCAP(TRIM(LOWER(COALESCE(custom_fields->>'country', country)))))::int as unique_countries,
         COUNT(DISTINCT expo_id)::int as expos_with_visitors,
         COUNT(CASE WHEN created_at >= CURRENT_DATE THEN 1 END)::int as registrations_today,
         COUNT(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN 1 END)::int as registrations_week,
@@ -798,7 +802,9 @@ router.get('/live', authenticateToken, async (req, res) => {
       logsFailed24h,
       phoneLeak,
       coolPlus,
-      lastCheckin
+      lastCheckin,
+      sameDayReg,
+      walkinSubset
     ] = await Promise.all([
       pool.query(`
         SELECT EXTRACT(HOUR FROM (checkin_time AT TIME ZONE 'Africa/Lagos'))::int AS hour,
@@ -864,6 +870,33 @@ router.get('/live', authenticateToken, async (req, res) => {
         SELECT MAX(checkin_time) AS last_at
         FROM checkins
         WHERE expo_id = $1
+      `, [expo_id]),
+
+      // Same-day registered + checked in today (DISTINCT visitor, Lagos TZ)
+      pool.query(`
+        SELECT COUNT(DISTINCT v.id)::int AS count
+        FROM visitors v
+        JOIN checkins c ON c.visitor_id = v.id AND c.expo_id = $1
+        WHERE v.expo_id = $1
+          AND (v.created_at AT TIME ZONE 'Africa/Lagos')::date
+              = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date
+          AND (c.checkin_time AT TIME ZONE 'Africa/Lagos')::date
+              = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date
+      `, [expo_id]),
+
+      // Walk-in subset: same-day AND first check-in within 30 min of creation
+      pool.query(`
+        SELECT COUNT(*)::int AS count
+        FROM (
+          SELECT v.id, v.created_at, MIN(c.checkin_time) AS first_checkin
+          FROM visitors v
+          JOIN checkins c ON c.visitor_id = v.id AND c.expo_id = $1
+          WHERE v.expo_id = $1
+            AND (v.created_at AT TIME ZONE 'Africa/Lagos')::date
+                = (CURRENT_TIMESTAMP AT TIME ZONE 'Africa/Lagos')::date
+          GROUP BY v.id, v.created_at
+        ) sub
+        WHERE sub.first_checkin - sub.created_at < INTERVAL '30 minutes'
       `, [expo_id])
     ]);
 
@@ -881,6 +914,8 @@ router.get('/live', authenticateToken, async (req, res) => {
       phone_leak_today: { total_today: total, phone_empty: empty, pct },
       cool_plus_block_count_today: coolPlus.rows[0]?.count || 0,
       last_checkin_at: lastCheckin.rows[0]?.last_at || null,
+      same_day_registered_today: sameDayReg.rows[0]?.count || 0,
+      walkin_today: walkinSubset.rows[0]?.count || 0,
       generated_at: new Date()
     });
   } catch (err) {
