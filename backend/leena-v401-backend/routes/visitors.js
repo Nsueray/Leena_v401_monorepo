@@ -220,16 +220,20 @@ router.post('/public', async (req, res) => {
     let organizerId = null;
     let formVisitorType = 'visitor';
     let expoName = '';
+    let formNotificationConfig = null;   // Sales notification config (Suer K1: forms.config.notification)
+    let formNameForNotif = '';
 
     if (form_id) {
       const formResult = await pool.query(
-        `SELECT email_template_id, organizer_id, visitor_type FROM forms WHERE id = $1`,
+        `SELECT email_template_id, organizer_id, visitor_type, config, name FROM forms WHERE id = $1`,
         [form_id]
       );
       if (formResult.rows.length) {
         emailTemplateId = formResult.rows[0].email_template_id;
         organizerId = formResult.rows[0].organizer_id;
         formVisitorType = formResult.rows[0].visitor_type || 'visitor';
+        formNotificationConfig = formResult.rows[0].config?.notification || null;
+        formNameForNotif = formResult.rows[0].name || '';
       }
     }
 
@@ -403,6 +407,47 @@ router.post('/public', async (req, res) => {
       }
     }
     // ========== END EMAIL QUEUE MIGRATION ==========
+
+    // ========== PER-FORM SALES NOTIFICATION (Suer K1: forms.config.notification jsonb) ==========
+    // Fires when form.config.notification.enabled === true and recipients set.
+    // Fail-open: visitor registration must succeed even if notification queue fails.
+    // Recipient cap (K3: 10), email validation (K5: simple regex), placeholders (K6).
+    try {
+      const notif = formNotificationConfig;
+      if (notif && notif.enabled === true && typeof notif.recipients === 'string' && notif.recipients.trim()) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const recipients = [...new Set(
+          notif.recipients
+            .split(',')
+            .map(s => s.trim().toLowerCase())
+            .filter(s => emailRegex.test(s))
+        )].slice(0, 10);
+
+        if (recipients.length > 0) {
+          const notifData = {
+            ...visitorData,
+            ...(custom_fields || {}),
+            expo_name: expoName,
+            form_name: formNameForNotif,
+            registration_date: new Date().toLocaleDateString('en-GB')
+          };
+          const notifSubject = processEmailTemplate(notif.subject || 'New registration', notifData);
+          const notifHtml = processEmailTemplate(notif.html || '', notifData);
+
+          for (const recipient of recipients) {
+            await pool.query(
+              `INSERT INTO email_queue (recipient_email, subject, html_content, expo_id, organizer_id, status, created_at)
+               VALUES ($1, $2, $3, $4, $5, 'pending', NOW())`,
+              [recipient, notifSubject, notifHtml, expo_id, organizerId]
+            );
+          }
+          console.log(`[NOTIFICATION] Form ${form_id}: ${recipients.length} sales notification(s) queued`);
+        }
+      }
+    } catch (notifErr) {
+      console.error('[NOTIFICATION] Failed to queue (non-fatal):', notifErr.message);
+    }
+    // ========== END PER-FORM SALES NOTIFICATION ==========
 
     // Campaign registration tracking: if _lc token present, log 'registered' event
     try {

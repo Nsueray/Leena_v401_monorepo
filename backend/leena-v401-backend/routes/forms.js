@@ -9,6 +9,52 @@ const bannerUpload = multer({ storage: multer.memoryStorage(), limits: { fileSiz
 
 // routes/forms.js - v402: EXHIBITOR = visitors.visitor_type (no separate exhibitors table)
 
+// ============================================================
+// Validate optional config.notification subtree (Suer AŞAMA 2).
+// Returns { ok: true } if absent/valid, { ok: false, error } if invalid.
+// Limits: subject ≤ 200 char, html ≤ 50000 char, html min 20 char when enabled.
+// ============================================================
+function validateNotificationConfig(config) {
+    if (!config || typeof config !== 'object') return { ok: true };
+    const notif = config.notification;
+    if (notif === undefined || notif === null) return { ok: true };
+    if (typeof notif !== 'object' || Array.isArray(notif)) {
+        return { ok: false, error: 'config.notification must be an object' };
+    }
+    if (notif.enabled !== undefined && typeof notif.enabled !== 'boolean') {
+        return { ok: false, error: 'notification.enabled must be a boolean' };
+    }
+    if (notif.recipients !== undefined && notif.recipients !== null && typeof notif.recipients !== 'string') {
+        return { ok: false, error: 'notification.recipients must be a string' };
+    }
+    if (notif.subject !== undefined && notif.subject !== null) {
+        if (typeof notif.subject !== 'string') {
+            return { ok: false, error: 'notification.subject must be a string' };
+        }
+        if (notif.subject.length > 200) {
+            return { ok: false, error: 'notification.subject exceeds 200 character limit' };
+        }
+    }
+    if (notif.html !== undefined && notif.html !== null) {
+        if (typeof notif.html !== 'string') {
+            return { ok: false, error: 'notification.html must be a string' };
+        }
+        if (notif.html.length > 50000) {
+            return { ok: false, error: 'notification.html exceeds 50000 character limit' };
+        }
+    }
+    // When enabled=true, recipients + html non-empty (html min 20 char)
+    if (notif.enabled === true) {
+        if (!notif.recipients || !notif.recipients.trim()) {
+            return { ok: false, error: 'notification.recipients required when enabled=true' };
+        }
+        if (!notif.html || notif.html.trim().length < 20) {
+            return { ok: false, error: 'notification.html required (minimum 20 characters) when enabled=true' };
+        }
+    }
+    return { ok: true };
+}
+
 // GET /api/forms - Get all forms for current organizer
 router.get('/', authMiddleware, async (req, res) => {
     try {
@@ -296,6 +342,15 @@ router.post('/', authMiddleware, async (req, res) => {
 
         const organizerId = req.organizer_id;
 
+        // Validate optional notification config (Suer AŞAMA 2 — per-form sales notification)
+        const notifValidationPost = validateNotificationConfig(config);
+        if (!notifValidationPost.ok) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid notification config: ${notifValidationPost.error}`
+            });
+        }
+
         const query = `
             INSERT INTO forms (
                 name, description, expo_id, organizer_id,
@@ -406,6 +461,15 @@ router.put('/:id', authMiddleware, async (req, res) => {
         } = req.body;
 
         const organizerId = req.organizer_id;
+
+        // Validate optional notification config (Suer AŞAMA 2 — per-form sales notification)
+        const notifValidationPut = validateNotificationConfig(config);
+        if (!notifValidationPut.ok) {
+            return res.status(400).json({
+                success: false,
+                message: `Invalid notification config: ${notifValidationPut.error}`
+            });
+        }
 
         // First check if form exists and belongs to this organizer
         const checkQuery = 'SELECT id FROM forms WHERE id = $1 AND organizer_id = $2';

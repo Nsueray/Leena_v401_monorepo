@@ -337,6 +337,7 @@
                         <div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:2px solid #e5e7eb;padding-bottom:8px;">
                             <button class="builder-tab" onclick="switchBuilderTab('fields')" id="tab-fields" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-weight:600;color:var(--primary);border-bottom:2px solid var(--primary);margin-bottom:-10px;font-family:inherit;font-size:13px;">Form Fields</button>
                             <button class="builder-tab" onclick="switchBuilderTab('design')" id="tab-design" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-weight:500;color:#6b7280;margin-bottom:-10px;font-family:inherit;font-size:13px;">Design</button>
+                            <button class="builder-tab" onclick="switchBuilderTab('notification')" id="tab-notification" style="padding:8px 16px;border:none;background:none;cursor:pointer;font-weight:500;color:#6b7280;margin-bottom:-10px;font-family:inherit;font-size:13px;">Notification</button>
                         </div>
 
                         <!-- Form Fields Section -->
@@ -424,6 +425,57 @@
                         </div>
                     </div>
                 </div>
+
+                        <!-- Notification Section (Suer AŞAMA 3) -->
+                        <div id="section-notification" style="display:none;">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5><i class="bi bi-bell"></i> Sales Notification</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="notifEnabled">
+                                        <label class="form-check-label" for="notifEnabled">
+                                            Send notification email when someone submits this form
+                                        </label>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Recipient emails (comma-separated, max 10)</label>
+                                        <input type="text" id="notifRecipients" class="form-control" placeholder="sales1@example.com, sales2@example.com">
+                                        <small class="text-muted">Duplicates removed automatically. Invalid emails skipped at runtime.</small>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">Subject (max 200 chars)</label>
+                                        <input type="text" id="notifSubject" class="form-control" maxlength="200" placeholder="New registration: {{name}} — {{expo_name}}">
+                                    </div>
+
+                                    <div class="mb-2 d-flex justify-content-between align-items-center">
+                                        <label class="form-label mb-0">Email body (HTML, min 20 chars when enabled)</label>
+                                        <div>
+                                            <button type="button" class="btn btn-sm btn-link p-0 me-3" onclick="fillDefaultNotifBody()">Use template</button>
+                                            <span class="dropdown">
+                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="bi bi-plus-circle"></i> Insert Placeholder
+                                                </button>
+                                                <ul class="dropdown-menu" id="placeholderDropdownMenu" style="max-height:400px;overflow-y:auto;"></ul>
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <textarea id="notifBody" class="form-control" rows="14" placeholder="<p>Hello team,</p><p>New registration: {{name}} from {{company}} ({{country}}).</p>"></textarea>
+
+                                    <div class="mt-3 d-flex gap-2">
+                                        <button type="button" class="btn btn-outline-primary btn-sm" onclick="previewNotification()">
+                                            <i class="bi bi-eye"></i> Preview
+                                        </button>
+                                        <small class="text-muted align-self-center">Placeholders rendered with sample data.</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- END Notification Section -->
+
             </main>
         </div>
     </div>
@@ -490,6 +542,24 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- Notification Preview Modal (Suer AŞAMA 3) -->
+    <div class="modal fade" id="notifPreviewModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-eye"></i> Notification Preview</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div class="mb-2"><strong>Subject:</strong> <span id="notifPreviewSubject" class="text-muted"></span></div>
+            <hr>
+            <iframe id="notifPreviewBody" sandbox="" style="width:100%;height:480px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;"></iframe>
+            <small class="text-muted d-block mt-2">Sample data: John Doe, john@example.com, Sample Engineering Ltd, Nigeria, CEO. Custom fields use field labels.</small>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script src="/leena-toast.js"></script>
@@ -649,6 +719,7 @@
                 
                 formFields = data.fields || [];
                 loadStyleConfig(data.config);
+                loadNotificationConfig(data.config);
                 renderFields();
                 updatePreview();
             } catch (error) {
@@ -692,7 +763,7 @@
                 fields: formFields, is_active: isActive,
                 email_template_id: emailTemplateId ? parseInt(emailTemplateId) : null,
                 visitor_type: visitorType, source: source || null, origin: origin,
-                config: { style: getStyleConfig() }
+                config: { style: getStyleConfig(), notification: getNotificationConfig() }
             };
             
             try {
@@ -963,12 +1034,17 @@
         function switchBuilderTab(tab) {
             document.getElementById('section-fields').style.display = tab === 'fields' ? '' : 'none';
             document.getElementById('section-design').style.display = tab === 'design' ? '' : 'none';
+            const notifSec = document.getElementById('section-notification');
+            if (notifSec) notifSec.style.display = tab === 'notification' ? '' : 'none';
             document.querySelectorAll('.builder-tab').forEach(btn => {
                 const isActive = btn.id === `tab-${tab}`;
                 btn.style.fontWeight = isActive ? '600' : '500';
                 btn.style.color = isActive ? 'var(--primary)' : '#6b7280';
                 btn.style.borderBottom = isActive ? '2px solid var(--primary)' : 'none';
             });
+            if (tab === 'notification' && typeof rebuildPlaceholderDropdown === 'function') {
+                rebuildPlaceholderDropdown();
+            }
         }
 
         function syncColorInput(textInput, colorInputId) {
@@ -1072,6 +1148,146 @@
             }
         }
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+
+        // ============================================================
+        // Per-form Notification Settings (Suer AŞAMA 3)
+        // ============================================================
+        const NOTIF_VISITOR_FIELDS = [
+            { key: 'name',       label: 'First name' },
+            { key: 'last_name',  label: 'Last name' },
+            { key: 'email',      label: 'Email' },
+            { key: 'phone',      label: 'Phone' },
+            { key: 'company',    label: 'Company' },
+            { key: 'country',    label: 'Country' },
+            { key: 'job_title',  label: 'Job title' }
+        ];
+        const NOTIF_CONTEXT_FIELDS = [
+            { key: 'expo_name',         label: 'Expo name' },
+            { key: 'form_name',         label: 'Form name' },
+            { key: 'registration_date', label: 'Registration date' }
+        ];
+        const NOTIF_SAMPLE_DATA = {
+            name: 'John', last_name: 'Doe', email: 'john@example.com',
+            phone: '+234 801 234 5678', company: 'Sample Engineering Ltd',
+            country: 'Nigeria', job_title: 'CEO',
+            expo_name: 'Mega Clima Nigeria 2027',
+            form_name: 'Visitor Registration Form',
+            registration_date: '4 June 2026'
+        };
+        const NOTIF_DEFAULT_BODY = `<p>Hello team,</p>
+<p>A new visitor has just registered for <strong>{{expo_name}}</strong>:</p>
+<ul>
+  <li><strong>Name:</strong> {{name}} {{last_name}}</li>
+  <li><strong>Email:</strong> {{email}}</li>
+  <li><strong>Phone:</strong> {{phone}}</li>
+  <li><strong>Company:</strong> {{company}}</li>
+  <li><strong>Country:</strong> {{country}}</li>
+  <li><strong>Job title:</strong> {{job_title}}</li>
+</ul>
+<p>Registered on {{registration_date}}.</p>`;
+
+        let lastFocusedNotifInput = 'notifBody';
+
+        function getNotificationConfig() {
+            const enabled = document.getElementById('notifEnabled')?.checked || false;
+            return {
+                enabled: enabled,
+                recipients: document.getElementById('notifRecipients')?.value?.trim() || '',
+                subject: document.getElementById('notifSubject')?.value || '',
+                html: document.getElementById('notifBody')?.value || ''
+            };
+        }
+
+        function loadNotificationConfig(config) {
+            const notif = (config && config.notification) || {};
+            const enabledEl = document.getElementById('notifEnabled');
+            const recipientsEl = document.getElementById('notifRecipients');
+            const subjectEl = document.getElementById('notifSubject');
+            const bodyEl = document.getElementById('notifBody');
+            if (enabledEl) enabledEl.checked = notif.enabled === true;
+            if (recipientsEl) recipientsEl.value = notif.recipients || '';
+            if (subjectEl) subjectEl.value = notif.subject || '';
+            if (bodyEl) bodyEl.value = notif.html || '';
+        }
+
+        function fillDefaultNotifBody() {
+            const el = document.getElementById('notifBody');
+            if (el) { el.value = NOTIF_DEFAULT_BODY; el.focus(); }
+        }
+
+        function rebuildPlaceholderDropdown() {
+            const menu = document.getElementById('placeholderDropdownMenu');
+            if (!menu) return;
+            const esc = (s) => String(s).replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+            const itemHtml = (key, label) =>
+                `<li><a class="dropdown-item" href="#" onclick="event.preventDefault(); insertPlaceholder('{{${esc(key)}}}')">` +
+                `<code>{{${esc(key)}}}</code> <small class="text-muted ms-2">${esc(label || key)}</small></a></li>`;
+
+            let html = '<li><h6 class="dropdown-header">Visitor Fields</h6></li>';
+            html += NOTIF_VISITOR_FIELDS.map(f => itemHtml(f.key, f.label)).join('');
+            html += '<li><hr class="dropdown-divider"></li>';
+            html += '<li><h6 class="dropdown-header">Context</h6></li>';
+            html += NOTIF_CONTEXT_FIELDS.map(f => itemHtml(f.key, f.label)).join('');
+
+            const standardKeys = new Set([
+                ...NOTIF_VISITOR_FIELDS.map(f => f.key),
+                ...NOTIF_CONTEXT_FIELDS.map(f => f.key)
+            ]);
+            const customs = (formFields || []).filter(f => f && f.name && !standardKeys.has(f.name));
+            if (customs.length > 0) {
+                html += '<li><hr class="dropdown-divider"></li>';
+                html += '<li><h6 class="dropdown-header">Custom Form Fields</h6></li>';
+                html += customs.map(f => itemHtml(f.name, f.label || f.name)).join('');
+            }
+
+            menu.innerHTML = html;
+        }
+
+        function insertPlaceholder(placeholder) {
+            const target = document.getElementById(lastFocusedNotifInput);
+            if (!target) return;
+            const start = target.selectionStart || 0;
+            const end = target.selectionEnd || 0;
+            target.value = target.value.substring(0, start) + placeholder + target.value.substring(end);
+            target.selectionStart = target.selectionEnd = start + placeholder.length;
+            target.focus();
+        }
+
+        function renderNotifTemplate(template, data) {
+            if (!template) return '';
+            return template.replace(/\{\{([^}]+)\}\}/g, (m, expr) => {
+                const parts = expr.split('|').map(p => p.trim());
+                for (const part of parts) {
+                    if (/^".*"$/.test(part)) return part.slice(1, -1);
+                    if (data[part] !== undefined && data[part] !== null && data[part] !== '') return data[part];
+                }
+                return '';
+            });
+        }
+
+        function previewNotification() {
+            const data = { ...NOTIF_SAMPLE_DATA };
+            (formFields || []).forEach(f => {
+                if (f && f.name && data[f.name] === undefined) {
+                    data[f.name] = `[${f.label || f.name}]`;
+                }
+            });
+            const subject = renderNotifTemplate(document.getElementById('notifSubject').value || '', data);
+            const html = renderNotifTemplate(document.getElementById('notifBody').value || '', data);
+            document.getElementById('notifPreviewSubject').textContent = subject || '(empty)';
+            const iframe = document.getElementById('notifPreviewBody');
+            iframe.srcdoc = html || '<p style="color:#9ca3af;font-family:sans-serif;padding:20px;">Email body is empty.</p>';
+            const modal = new bootstrap.Modal(document.getElementById('notifPreviewModal'));
+            modal.show();
+        }
+
+        // Focus tracking — last focused input is target for placeholder insertion
+        document.addEventListener('DOMContentLoaded', () => {
+            const subject = document.getElementById('notifSubject');
+            const body = document.getElementById('notifBody');
+            if (subject) subject.addEventListener('focus', () => lastFocusedNotifInput = 'notifSubject');
+            if (body) body.addEventListener('focus', () => lastFocusedNotifInput = 'notifBody');
+        });
     </script>
 </body>
 </html>
