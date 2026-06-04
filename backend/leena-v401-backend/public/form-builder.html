@@ -456,7 +456,7 @@
                                         <div>
                                             <button type="button" class="btn btn-sm btn-link p-0 me-3" onclick="fillDefaultNotifBody()">Use template</button>
                                             <span class="dropdown">
-                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                <button id="notifPlaceholderBtn" class="btn btn-sm btn-outline-secondary" type="button" onclick="toggleNotifPlaceholder(event)" aria-haspopup="true" aria-expanded="false">
                                                     <i class="bi bi-plus-circle"></i> Insert Placeholder
                                                 </button>
                                                 <ul class="dropdown-menu" id="placeholderDropdownMenu" style="max-height:400px;overflow-y:auto;"></ul>
@@ -544,13 +544,14 @@
         </div>
     </div>
 
-    <!-- Notification Preview Modal (Suer AŞAMA 3) -->
-    <div class="modal fade" id="notifPreviewModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-lg">
+    <!-- Notification Preview Modal (Suer AŞAMA 3, B3 vanilla — Field Modal pattern) -->
+    <div class="modal" id="notifPreviewModal">
+      <div class="modal-backdrop" onclick="hideNotifPreview()"></div>
+      <div class="modal-dialog" style="max-width: 800px;">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title"><i class="bi bi-eye"></i> Notification Preview</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <button type="button" class="btn-close" onclick="hideNotifPreview()" aria-label="Close">×</button>
           </div>
           <div class="modal-body">
             <div class="mb-2"><strong>Subject:</strong> <span id="notifPreviewSubject" class="text-muted"></span></div>
@@ -1243,6 +1244,26 @@
             menu.innerHTML = html;
         }
 
+        function toggleNotifPlaceholder(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('placeholderDropdownMenu');
+            const btn = document.getElementById('notifPlaceholderBtn');
+            if (!menu) return;
+            const willOpen = !menu.classList.contains('show');
+            menu.classList.toggle('show', willOpen);
+            if (btn) btn.setAttribute('aria-expanded', String(willOpen));
+        }
+
+        // Outside-click handler — close menu if click is outside button + menu
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('placeholderDropdownMenu');
+            const btn = document.getElementById('notifPlaceholderBtn');
+            if (!menu || !menu.classList.contains('show')) return;
+            if (menu.contains(e.target) || (btn && btn.contains(e.target))) return;
+            menu.classList.remove('show');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        });
+
         function insertPlaceholder(placeholder) {
             const target = document.getElementById(lastFocusedNotifInput);
             if (!target) return;
@@ -1251,6 +1272,19 @@
             target.value = target.value.substring(0, start) + placeholder + target.value.substring(end);
             target.selectionStart = target.selectionEnd = start + placeholder.length;
             target.focus();
+            // Auto-close dropdown after item click (UX standard)
+            const menu = document.getElementById('placeholderDropdownMenu');
+            const btn = document.getElementById('notifPlaceholderBtn');
+            if (menu) menu.classList.remove('show');
+            if (btn) btn.setAttribute('aria-expanded', 'false');
+        }
+
+        function showNotifPreview() {
+            document.getElementById('notifPreviewModal').classList.add('show');
+        }
+
+        function hideNotifPreview() {
+            document.getElementById('notifPreviewModal').classList.remove('show');
         }
 
         function renderNotifTemplate(template, data) {
@@ -1277,8 +1311,7 @@
             document.getElementById('notifPreviewSubject').textContent = subject || '(empty)';
             const iframe = document.getElementById('notifPreviewBody');
             iframe.srcdoc = html || '<p style="color:#9ca3af;font-family:sans-serif;padding:20px;">Email body is empty.</p>';
-            const modal = new bootstrap.Modal(document.getElementById('notifPreviewModal'));
-            modal.show();
+            showNotifPreview();
         }
 
         // Focus tracking — last focused input is target for placeholder insertion
