@@ -52,6 +52,8 @@ app.get('/health', (req, res) => {
 
 // --- Import Route Modules ---
 let authRoutes, organizerRoutes, expoRoutes, visitorRoutes;
+let referenceRoutes; // Expo Operations — reference data (countries/sectors dropdowns)
+let partnerRoutes, clusterRoutes; // Expo Operations — partners + clusters CRUD
 let formRoutes, checkinRoutes, emailTemplateRoutes, emailSendRoutes, reportRoutes, webhookRoutes;
 let terminalRoutes;
 let importCheckinsRoutes;
@@ -64,6 +66,9 @@ let reactivationRoutes; // ✅ v402 - Reactivation Campaigns
 try { authRoutes = require('./routes/auth'); console.log('✓ Auth routes loaded'); } catch (err) { console.error('✗ Failed to load auth routes:', err.message); }
 try { organizerRoutes = require('./routes/organizers'); console.log('✓ Organizer routes loaded'); } catch (err) { console.error('✗ Failed to load organizer routes:', err.message); }
 try { expoRoutes = require('./routes/expos'); console.log('✓ Expo routes loaded'); } catch (err) { console.error('✗ Failed to load expo routes:', err.message); }
+try { referenceRoutes = require('./routes/reference'); console.log('✓ Reference routes loaded'); } catch (err) { console.error('✗ Failed to load reference routes:', err.message); }
+try { partnerRoutes = require('./routes/partners'); console.log('✓ Partner routes loaded'); } catch (err) { console.error('✗ Failed to load partner routes:', err.message); }
+try { clusterRoutes = require('./routes/clusters'); console.log('✓ Cluster routes loaded'); } catch (err) { console.error('✗ Failed to load cluster routes:', err.message); }
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -99,6 +104,9 @@ try { conferenceCleanupRoutes = require('./routes/conferenceCleanup'); console.l
 if (authRoutes) app.use('/api/auth', authRoutes);
 if (organizerRoutes) app.use('/api/organizers', organizerRoutes);
 if (expoRoutes) app.use('/api/expos', expoRoutes);
+if (referenceRoutes) app.use('/api/reference', referenceRoutes);
+if (partnerRoutes) app.use('/api/partners', partnerRoutes);
+if (clusterRoutes) app.use('/api/clusters', clusterRoutes);
 if (visitorRoutes) app.use('/api/visitors', visitorRoutes);
 if (formRoutes) app.use('/api/forms', formRoutes);
 if (checkinRoutes) app.use('/api/checkins', checkinRoutes);

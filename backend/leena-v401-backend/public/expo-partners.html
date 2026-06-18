@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Expo Partners - Leena EMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root{--primary:#4a6fa5;--primary-hover:#3d5d8a;--primary-light:#eef2f7;--sidebar-bg:#1a1a2e;--sidebar-hover:#252542;--sidebar-active:#2d2d4a;--sidebar-text:#9ca3af;--sidebar-text-active:#fff;--sidebar-border:#252542;--bg:#f4f6fa;--surface:#fff;--border:#e5e7eb;--text:#1f2937;--text-muted:#6b7280;}
+        *{box-sizing:border-box;margin:0;padding:0;}
+        body{font-family:'Inter',-apple-system,sans-serif;background:var(--bg);color:var(--text);}
+        .app-shell{display:flex;min-height:100vh;}
+        .sidebar{width:260px;background:var(--sidebar-bg);flex-shrink:0;}
+        .sidebar-header{padding:24px 20px;border-bottom:1px solid var(--sidebar-border);}
+        .sidebar-logo{height:32px;}
+        .sidebar-nav{padding:16px 12px;}
+        .nav-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--sidebar-text);padding:8px 12px;}
+        .nav-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:8px;color:var(--sidebar-text);text-decoration:none;font-size:14px;font-weight:500;margin-bottom:2px;}
+        .nav-item:hover{background:var(--sidebar-hover);color:var(--sidebar-text-active);}
+        .nav-item.active{background:var(--sidebar-active);color:var(--sidebar-text-active);}
+        .nav-divider{height:1px;background:var(--sidebar-border);margin:12px 0;}
+        .main-wrapper{flex:1;display:flex;flex-direction:column;min-width:0;}
+        .main-header{display:flex;align-items:center;justify-content:space-between;padding:20px 28px;background:var(--surface);border-bottom:1px solid var(--border);}
+        .main-header h1{font-size:20px;font-weight:700;display:flex;align-items:center;gap:10px;}
+        .main-header .sub{font-size:13px;color:var(--text-muted);font-weight:500;}
+        .main-content{padding:24px 28px;max-width:1000px;}
+        .section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px 22px;margin-bottom:20px;}
+        .section h2{font-size:14px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-muted);margin-bottom:16px;}
+        .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;}
+        .field{display:flex;flex-direction:column;gap:5px;}
+        .field.full{grid-column:1/-1;}
+        .field label{font-size:12px;font-weight:600;}
+        .field input,.field select,.field textarea{font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);}
+        .chk{display:inline-flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;}
+        .btn{font-family:inherit;font-size:14px;font-weight:600;padding:9px 16px;border-radius:8px;border:1px solid transparent;cursor:pointer;display:inline-flex;align-items:center;gap:8px;}
+        .btn-primary{background:var(--primary);color:#fff;}.btn-primary:hover{background:var(--primary-hover);}
+        .btn-ghost{background:var(--surface);color:var(--text);border-color:var(--border);}.btn-ghost:hover{background:var(--primary-light);}
+        .btn-danger{background:#fff;color:#c0392b;border-color:#f0c7c2;}.btn-danger:hover{background:#fdecea;}
+        .btn-sm{padding:6px 12px;font-size:13px;}
+        table{width:100%;border-collapse:collapse;}
+        thead th{text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-muted);font-weight:600;padding:12px 14px;border-bottom:1px solid var(--border);background:#fafbfc;}
+        tbody td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:14px;}
+        tbody tr:last-child td{border-bottom:none;}
+        .role-badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;background:#eef2f7;color:#3d5d8a;}
+        .role-badge.op{background:#fff1e0;color:#c2710c;}
+        .primary-star{color:#e0a000;}
+        .row-actions{text-align:right;white-space:nowrap;}
+        .empty{padding:40px;text-align:center;color:var(--text-muted);}
+        .form-actions{display:flex;gap:10px;margin-top:14px;}
+        .muted{color:var(--text-muted);}
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header"><img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo"></div>
+            <div class="sidebar-nav">
+                <div class="nav-section-title">Operations</div>
+                <a class="nav-item" href="expo-list.html"><i class="bi bi-calendar-event"></i><span>Expo List</span></a>
+                <a class="nav-item active" href="#"><i class="bi bi-people"></i><span>Partners</span></a>
+                <a class="nav-item" href="expo-clusters.html"><i class="bi bi-diagram-3"></i><span>Clusters</span></a>
+                <div class="nav-divider"></div>
+                <a class="nav-item" href="dashboard_new.html"><i class="bi bi-collection"></i><span>My Expos</span></a>
+                <a class="nav-item" href="#" onclick="logout();return false;"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+            </div>
+        </nav>
+        <div class="main-wrapper">
+            <header class="main-header">
+                <div>
+                    <h1><i class="bi bi-people"></i> Partners</h1>
+                    <div class="sub" id="expoName">…</div>
+                </div>
+                <a class="btn btn-ghost" id="backBtn" href="expo-list.html"><i class="bi bi-arrow-left"></i> Back to Expo</a>
+            </header>
+            <main class="main-content">
+                <div class="section">
+                    <h2 id="formTitle">Add Partner</h2>
+                    <div class="grid">
+                        <div class="field">
+                            <label>Role</label>
+                            <select id="partner_role"></select>
+                        </div>
+                        <div class="field"><label>Company Name</label><input type="text" id="company_name"></div>
+                        <div class="field"><label>Contact Name</label><input type="text" id="contact_name"></div>
+                        <div class="field"><label>Phone</label><input type="text" id="phone"></div>
+                        <div class="field"><label>Email</label><input type="email" id="email"></div>
+                        <div class="field"><label>&nbsp;</label><label class="chk"><input type="checkbox" id="is_primary"> Primary contact for this role</label></div>
+                        <div class="field full"><label>Notes</label><textarea id="notes" rows="2"></textarea></div>
+                        <div class="field full" id="copyRow" style="display:none;">
+                            <label class="chk"><input type="checkbox" id="copy_to_siblings"> Copy to cluster siblings <span class="muted" style="font-weight:400;">— applies to stand contractor, hostess, catering, security only</span></label>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" id="saveBtn" onclick="savePartner()"><i class="bi bi-check-lg"></i> <span id="saveLabel">Add Partner</span></button>
+                        <button class="btn btn-ghost" id="cancelBtn" onclick="resetForm()" style="display:none;">Cancel</button>
+                    </div>
+                </div>
+
+                <div class="section">
+                    <h2>Partners on this expo</h2>
+                    <table>
+                        <thead><tr><th>Role</th><th>Company</th><th>Contact</th><th>Phone</th><th>Email</th><th class="row-actions">Actions</th></tr></thead>
+                        <tbody id="partnerBody"><tr><td colspan="6" class="empty">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
+    <script>
+        const API_URL='/api';
+        const expoId=new URLSearchParams(location.search).get('expo_id');
+        const ROLES=[
+            ['stand_contractor','Stand Contractor'],['travel','Travel'],['visa','Visa'],['forwarder','Forwarder'],
+            ['hostess','Hostess'],['catering','Catering'],['security','Security'],['venue_authority','Venue Authority'],
+            ['istanbul_hq','Istanbul HQ (Operation Team)'],['local_onsite','Local On-site (Operation Team)'],['other','Other']
+        ];
+        const OP_ROLES=['istanbul_hq','local_onsite'];
+        let editingId=null;
+        let hasCluster=false;
+        function updateCopyVisibility(){
+            document.getElementById('copyRow').style.display=(hasCluster && !editingId)?'':'none';
+        }
+
+        document.addEventListener('DOMContentLoaded',()=>{
+            if(!localStorage.getItem('token')){location.href='login.html';return;}
+            if(!expoId){document.getElementById('partnerBody').innerHTML='<tr><td colspan="6" class="empty">No expo selected.</td></tr>';return;}
+            document.getElementById('backBtn').href=`expo-form.html?id=${expoId}`;
+            document.getElementById('partner_role').innerHTML=ROLES.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+            loadExpoName();
+            loadPartners();
+        });
+
+        async function loadExpoName(){
+            try{const r=await leenaFetch(`${API_URL}/expos/${expoId}`);if(r.ok){const e=await r.json();document.getElementById('expoName').textContent=e.name;hasCluster=!!e.cluster_id;updateCopyVisibility();}}
+            catch(e){if(e.status===401||e.status===403)return;}
+        }
+        async function loadPartners(){
+            try{
+                const r=await leenaFetch(`${API_URL}/partners?expo_id=${expoId}`);
+                const {partners}=await r.json();
+                render(partners);
+            }catch(e){if(e.status===401||e.status===403)return;
+                document.getElementById('partnerBody').innerHTML='<tr><td colspan="6" class="empty">Error loading partners.</td></tr>';}
+        }
+        function roleLabel(v){const f=ROLES.find(r=>r[0]===v);return f?f[1]:v;}
+        function render(list){
+            const b=document.getElementById('partnerBody');
+            if(!list||!list.length){b.innerHTML='<tr><td colspan="6" class="empty">No partners yet. Add the first one above.</td></tr>';return;}
+            b.innerHTML=list.map(p=>`<tr>
+                <td><span class="role-badge ${OP_ROLES.includes(p.partner_role)?'op':''}">${roleLabel(p.partner_role)}</span></td>
+                <td>${p.is_primary?'<span class="primary-star" title="Primary">★</span> ':''}${esc(p.company_name)||'<span class="muted">—</span>'}</td>
+                <td>${esc(p.contact_name)||'<span class="muted">—</span>'}</td>
+                <td>${esc(p.phone)||'<span class="muted">—</span>'}</td>
+                <td>${esc(p.email)||'<span class="muted">—</span>'}</td>
+                <td class="row-actions">
+                    <button class="btn btn-ghost btn-sm" onclick='editPartner(${JSON.stringify(p)})'><i class="bi bi-pencil"></i></button>
+                    <button class="btn btn-danger btn-sm" onclick="deletePartner(${p.id})"><i class="bi bi-trash"></i></button>
+                </td></tr>`).join('');
+        }
+        function editPartner(p){
+            editingId=p.id;
+            document.getElementById('partner_role').value=p.partner_role;
+            document.getElementById('company_name').value=p.company_name||'';
+            document.getElementById('contact_name').value=p.contact_name||'';
+            document.getElementById('phone').value=p.phone||'';
+            document.getElementById('email').value=p.email||'';
+            document.getElementById('notes').value=p.notes||'';
+            document.getElementById('is_primary').checked=!!p.is_primary;
+            document.getElementById('formTitle').textContent='Edit Partner';
+            document.getElementById('saveLabel').textContent='Save Changes';
+            document.getElementById('cancelBtn').style.display='';
+            updateCopyVisibility();
+            window.scrollTo({top:0,behavior:'smooth'});
+        }
+        function resetForm(){
+            editingId=null;
+            ['company_name','contact_name','phone','email','notes'].forEach(id=>document.getElementById(id).value='');
+            document.getElementById('partner_role').selectedIndex=0;
+            document.getElementById('is_primary').checked=false;
+            document.getElementById('copy_to_siblings').checked=false;
+            document.getElementById('formTitle').textContent='Add Partner';
+            document.getElementById('saveLabel').textContent='Add Partner';
+            document.getElementById('cancelBtn').style.display='none';
+            updateCopyVisibility();
+        }
+        async function savePartner(){
+            const body={
+                expo_id:Number(expoId),
+                partner_role:document.getElementById('partner_role').value,
+                company_name:document.getElementById('company_name').value.trim(),
+                contact_name:document.getElementById('contact_name').value.trim(),
+                phone:document.getElementById('phone').value.trim(),
+                email:document.getElementById('email').value.trim(),
+                notes:document.getElementById('notes').value.trim(),
+                is_primary:document.getElementById('is_primary').checked
+            };
+            if(!editingId) body.copy_to_siblings=document.getElementById('copy_to_siblings').checked;
+            document.getElementById('saveBtn').disabled=true;
+            try{
+                const url=editingId?`${API_URL}/partners/${editingId}`:`${API_URL}/partners`;
+                const method=editingId?'PUT':'POST';
+                const r=await leenaFetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+                if(r.ok){const data=await r.json();const n=data.copied_to_siblings||0;showToast(n>0?`Saved — copied to ${n} sibling expo${n===1?'':'s'}`:'Saved','success');resetForm();loadPartners();}
+                else{const err=await r.json();showToast(err.error||'Save failed','error');}
+            }catch(e){if(!(e.status===401||e.status===403))showToast('Save failed','error');}
+            document.getElementById('saveBtn').disabled=false;
+        }
+        async function deletePartner(id){
+            if(!confirm('Delete this partner?'))return;
+            try{
+                const r=await leenaFetch(`${API_URL}/partners/${id}`,{method:'DELETE'});
+                if(r.ok){showToast('Deleted','success');loadPartners();}
+                else{showToast('Delete failed','error');}
+            }catch(e){if(!(e.status===401||e.status===403))showToast('Delete failed','error');}
+        }
+        function esc(s){return s==null?'':String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+        function logout(){localStorage.clear();location.href='login.html';}
+    </script>
+</body>
+</html>

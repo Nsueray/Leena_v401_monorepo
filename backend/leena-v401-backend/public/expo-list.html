@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Expo Operations - Leena EMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4a6fa5;
+            --primary-hover: #3d5d8a;
+            --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e;
+            --sidebar-hover: #252542;
+            --sidebar-active: #2d2d4a;
+            --sidebar-text: #9ca3af;
+            --sidebar-text-active: #ffffff;
+            --sidebar-border: #252542;
+            --bg: #f4f6fa;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); }
+        .app-shell { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--sidebar-bg); display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid var(--sidebar-border); }
+        .sidebar-logo { height: 32px; }
+        .sidebar-nav { padding: 16px 12px; flex: 1; }
+        .nav-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sidebar-text); padding: 8px 12px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); }
+        .nav-divider { height: 1px; background: var(--sidebar-border); margin: 12px 0; }
+
+        /* Main */
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .main-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--surface); border-bottom: 1px solid var(--border); }
+        .main-header h1 { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .main-content { padding: 24px 28px; }
+
+        /* Toolbar */
+        .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
+        .filter { display: flex; flex-direction: column; gap: 4px; }
+        .filter label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+        .filter select, .filter input { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 150px; }
+        .toolbar-spacer { flex: 1; }
+        .btn { font-family: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+        .btn-ghost:hover { background: var(--primary-light); }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+        /* Table */
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafbfc; }
+        tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        tbody tr { cursor: pointer; }
+        tbody tr:hover { background: var(--primary-light); }
+        tbody tr:last-child td { border-bottom: none; }
+        .expo-name { font-weight: 600; }
+        .muted { color: var(--text-muted); }
+        .row-actions { text-align: right; white-space: nowrap; }
+
+        /* Status badges */
+        .badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; text-transform: capitalize; }
+        .st-announcement { background: #eceff3; color: #51607a; }
+        .st-sales-open   { background: #e3f0ff; color: #1d6fd6; }
+        .st-build-up     { background: #fff1e0; color: #c2710c; }
+        .st-live         { background: #e3f8ea; color: #1f9d54; }
+        .st-accomplished { background: #efe9fb; color: #6b46c1; }
+
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-muted); }
+        .count-line { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Operations</div>
+                    <a class="nav-item active" href="expo-list.html">
+                        <i class="bi bi-calendar-event"></i><span>Expo List</span>
+                    </a>
+                    <a class="nav-item" href="expo-clusters.html">
+                        <i class="bi bi-diagram-3"></i><span>Clusters</span>
+                    </a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <a class="nav-item" href="dashboard_new.html">
+                        <i class="bi bi-collection"></i><span>My Expos</span>
+                    </a>
+                    <a class="nav-item" href="#" onclick="logout(); return false;">
+                        <i class="bi bi-box-arrow-right"></i><span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-calendar-event"></i> Expo Operations</h1>
+                <button class="btn btn-primary" onclick="newExpo()"><i class="bi bi-plus-lg"></i> New Expo</button>
+            </header>
+
+            <main class="main-content">
+                <div class="toolbar">
+                    <div class="filter">
+                        <label for="fRole">Organizer Role</label>
+                        <select id="fRole" onchange="applyFilters()">
+                            <option value="">All</option>
+                            <option value="main_organizer">Main Organizer</option>
+                            <option value="co_organizer">Co-Organizer</option>
+                            <option value="agent">Agent</option>
+                            <option value="consultant">Consultant</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fStatus">Status</label>
+                        <select id="fStatus" onchange="applyFilters()">
+                            <option value="">All</option>
+                            <option value="announcement">Announcement</option>
+                            <option value="sales-open">Sales Open</option>
+                            <option value="build-up">Build-Up</option>
+                            <option value="live">Live</option>
+                            <option value="accomplished">Accomplished</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fCountry">Country</label>
+                        <select id="fCountry" onchange="applyFilters()">
+                            <option value="">All</option>
+                        </select>
+                    </div>
+                    <div class="filter">
+                        <label for="fYear">Year</label>
+                        <input type="number" id="fYear" placeholder="e.g. 2026" oninput="applyFilters()" style="min-width:110px;">
+                    </div>
+                    <div class="toolbar-spacer"></div>
+                    <button class="btn btn-ghost" onclick="resetFilters()"><i class="bi bi-x-circle"></i> Clear</button>
+                </div>
+
+                <div class="count-line" id="countLine"></div>
+
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Country</th>
+                                <th>Dates</th>
+                                <th>Status</th>
+                                <th class="row-actions">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="expoBody">
+                            <tr><td colspan="5" class="empty-state">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
+    <script>
+        const API_URL = '/api';
+        let allExpos = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            if (!token) { window.location.href = 'login.html'; return; }
+            loadCountries();
+            loadExpos();
+        });
+
+        async function loadCountries() {
+            try {
+                const res = await leenaFetch(`${API_URL}/reference/countries`);
+                const countries = await res.json();
+                const sel = document.getElementById('fCountry');
+                countries.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.code; opt.textContent = c.name;
+                    sel.appendChild(opt);
+                });
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                // Country filter is optional; ignore load failure silently.
+            }
+        }
+
+        async function loadExpos() {
+            try {
+                const res = await leenaFetch(`${API_URL}/expos`);
+                allExpos = await res.json();
+                applyFilters();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                document.getElementById('expoBody').innerHTML =
+                    '<tr><td colspan="5" class="empty-state">Error loading expos. <button class="btn btn-ghost btn-sm" onclick="loadExpos()">Retry</button></td></tr>';
+            }
+        }
+
+        function expoYear(e) {
+            if (e.edition_year) return parseInt(e.edition_year, 10);
+            return e.start_date ? new Date(e.start_date).getFullYear() : null;
+        }
+
+        function applyFilters() {
+            const role = document.getElementById('fRole').value;
+            const status = document.getElementById('fStatus').value;
+            const country = document.getElementById('fCountry').value;
+            const year = document.getElementById('fYear').value
+                ? parseInt(document.getElementById('fYear').value, 10) : null;
+
+            const rows = allExpos.filter(e =>
+                (!role || e.organizer_role === role) &&
+                (!status || e.status === status) &&
+                (!country || e.country_code === country) &&
+                (!year || expoYear(e) === year)
+            );
+            render(rows);
+        }
+
+        function resetFilters() {
+            document.getElementById('fRole').value = '';
+            document.getElementById('fStatus').value = '';
+            document.getElementById('fCountry').value = '';
+            document.getElementById('fYear').value = '';
+            applyFilters();
+        }
+
+        function render(expos) {
+            const body = document.getElementById('expoBody');
+            document.getElementById('countLine').textContent =
+                `Showing ${expos.length} of ${allExpos.length} expos`;
+
+            if (!expos.length) {
+                body.innerHTML = '<tr><td colspan="5" class="empty-state">No expos match the current filters.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = expos.map(e => {
+                const status = e.status || 'announcement';
+                const statusLabel = status.replace(/-/g, ' ');
+                const country = e.country_name || '<span class="muted">—</span>';
+                const dates = `${formatDate(e.start_date)} – ${formatDate(e.end_date)}`;
+                return `<tr onclick="openExpo(${e.id})">
+                    <td class="expo-name">${escapeHtml(e.name)}</td>
+                    <td>${country}</td>
+                    <td>${dates}</td>
+                    <td><span class="badge st-${status}">${statusLabel}</span></td>
+                    <td class="row-actions" onclick="event.stopPropagation()">
+                        <button class="btn btn-ghost btn-sm" onclick="cloneExpo(${e.id})"><i class="bi bi-files"></i> Clone</button>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function openExpo(id)  { window.location.href = `expo-form.html?id=${id}`; }
+        function newExpo()     { window.location.href = 'expo-form.html'; }
+        async function cloneExpo(id) {
+            if (!confirm('Clone this expo into a new edition? The copy keeps sectors, offsets, partners and layout — dates are left blank for you to set.')) return;
+            try {
+                const res = await leenaFetch(`${API_URL}/expos/${id}/clone`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    window.location.href = `expo-form.html?id=${data.expo.id}`;
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Clone failed', 'error');
+                }
+            } catch (e) {
+                if (!(e.status === 401 || e.status === 403)) showToast('Clone failed', 'error');
+            }
+        }
+
+        function formatDate(d) {
+            if (!d) return '—';
+            return new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+    </script>
+</body>
+</html>

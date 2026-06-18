@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Expo Form - Leena EMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-active: #2d2d4a;
+            --sidebar-text: #9ca3af; --sidebar-text-active: #fff; --sidebar-border: #252542;
+            --bg: #f4f6fa; --surface: #fff; --border: #e5e7eb; --text: #1f2937; --text-muted: #6b7280;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: var(--sidebar-bg); flex-shrink: 0; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid var(--sidebar-border); }
+        .sidebar-logo { height: 32px; }
+        .sidebar-nav { padding: 16px 12px; }
+        .nav-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--sidebar-text); padding: 8px 12px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); }
+        .nav-divider { height: 1px; background: var(--sidebar-border); margin: 12px 0; }
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .main-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--surface); border-bottom: 1px solid var(--border); }
+        .main-header h1 { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .main-content { padding: 24px 28px; max-width: 980px; }
+        .header-actions { display: flex; gap: 10px; }
+
+        .section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 22px; margin-bottom: 20px; }
+        .section h2 { font-size: 14px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin-bottom: 16px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+        .field { display: flex; flex-direction: column; gap: 5px; }
+        .field.full { grid-column: 1 / -1; }
+        .field label { font-size: 12px; font-weight: 600; color: var(--text); }
+        .field .req { color: #c0392b; }
+        .field input, .field select, .field textarea { font-family: inherit; font-size: 14px; padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+        .field input:disabled { background: #f3f4f6; color: var(--text-muted); }
+        .hint { font-size: 11px; color: var(--text-muted); }
+
+        .sectors-box { display: flex; flex-wrap: wrap; gap: 8px; }
+        .chk { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; font-size: 13px; cursor: pointer; user-select: none; }
+        .chk input { accent-color: var(--primary); }
+
+        /* Deadline automation table */
+        .dl-table { width: 100%; border-collapse: collapse; }
+        .dl-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+        .dl-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 13px; vertical-align: middle; }
+        .dl-table td:last-child, .dl-table th:last-child { border-bottom: 1px solid var(--border); }
+        .dl-table input[type=number] { width: 80px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; }
+        .dl-table input[type=date] { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; }
+        .computed { font-weight: 600; color: var(--primary); }
+        .computed.overridden { color: var(--text-muted); text-decoration: line-through; }
+
+        .btn { font-family: inherit; font-size: 14px; font-weight: 600; padding: 10px 18px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+        .btn-ghost:hover { background: var(--primary-light); }
+        .ro-banner { font-size: 13px; color: var(--text-muted); background: #f3f4f6; border-radius: 8px; padding: 10px 14px; }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header"><img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo"></div>
+            <div class="sidebar-nav">
+                <div class="nav-section-title">Operations</div>
+                <a class="nav-item active" href="expo-list.html"><i class="bi bi-calendar-event"></i><span>Expo List</span></a>
+                <div class="nav-divider"></div>
+                <a class="nav-item" href="dashboard_new.html"><i class="bi bi-collection"></i><span>My Expos</span></a>
+                <a class="nav-item" href="#" onclick="logout(); return false;"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-calendar-event"></i> <span id="formTitle">New Expo</span></h1>
+                <div class="header-actions">
+                    <a class="btn btn-ghost" id="partnersBtn" href="#" style="display:none;"><i class="bi bi-people"></i> Partners</a>
+                    <a class="btn btn-ghost" href="expo-list.html"><i class="bi bi-arrow-left"></i> Back</a>
+                    <button class="btn btn-primary" id="saveBtn" onclick="save()"><i class="bi bi-check-lg"></i> Save</button>
+                </div>
+            </header>
+
+            <main class="main-content">
+                <!-- Identity -->
+                <div class="section">
+                    <h2>Identity</h2>
+                    <div class="grid">
+                        <div class="field full">
+                            <label>Expo Name <span class="req">*</span></label>
+                            <input type="text" id="name" placeholder="e.g. Mega Clima Nigeria 2026">
+                        </div>
+                        <div class="field">
+                            <label>Edition Year</label>
+                            <input type="number" id="edition_year" placeholder="e.g. 2026">
+                        </div>
+                        <div class="field">
+                            <label>Organizer Role</label>
+                            <select id="organizer_role">
+                                <option value="main_organizer">Main Organizer</option>
+                                <option value="co_organizer">Co-Organizer</option>
+                                <option value="agent">Agent</option>
+                                <option value="consultant">Consultant</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Country</label>
+                            <select id="country_code"><option value="">— Select —</option></select>
+                        </div>
+                        <div class="field">
+                            <label>City</label>
+                            <input type="text" id="city" placeholder="e.g. Lagos">
+                        </div>
+                        <div class="field">
+                            <label>Venue</label>
+                            <input type="text" id="venue" placeholder="e.g. Landmark Centre">
+                        </div>
+                        <div class="field">
+                            <label>Status</label>
+                            <select id="status">
+                                <option value="announcement">Announcement</option>
+                                <option value="sales-open">Sales Open</option>
+                                <option value="build-up">Build-Up</option>
+                                <option value="live">Live</option>
+                                <option value="accomplished">Accomplished</option>
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label>Start Date <span class="req">*</span></label>
+                            <input type="date" id="start_date" onchange="recompute()">
+                        </div>
+                        <div class="field">
+                            <label>End Date <span class="req">*</span></label>
+                            <input type="date" id="end_date" onchange="recompute()">
+                        </div>
+                        <div class="field full" id="dateHint" style="display:none;">
+                            <div class="ro-banner" style="background:#fff7e6; color:#92600a;">
+                                <i class="bi bi-info-circle"></i> Enter the Start and End dates — the 8 deadlines below fill in automatically from them.
+                            </div>
+                        </div>
+                        <div class="field full">
+                            <label>Show Open Hours</label>
+                            <input type="text" id="show_open_hours" placeholder="e.g. 10:00–17:00 (last day 16:00)">
+                        </div>
+                        <div class="field full" id="actualVisitorsWrap" style="display:none;">
+                            <label>Actual Visitors (read-only — live count)</label>
+                            <input type="text" id="actual_visitors" disabled>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cluster (edit mode only) -->
+                <div class="section" id="clusterSection" style="display:none;">
+                    <h2>Cluster (co-located expos)</h2>
+                    <div class="grid">
+                        <div class="field">
+                            <label>Cluster</label>
+                            <select id="cluster_select"><option value="">— Not in a cluster —</option></select>
+                        </div>
+                        <div class="field">
+                            <label>&nbsp;</label>
+                            <div style="display:flex; gap:10px;">
+                                <button type="button" class="btn btn-primary" onclick="linkCluster()"><i class="bi bi-link-45deg"></i> Link / Update</button>
+                                <button type="button" class="btn btn-ghost" onclick="unlinkCluster()">Unlink</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="siblingsWrap" style="margin-top:14px; display:none;">
+                        <div class="hint" style="margin-bottom:6px;">Sibling expos sharing this cluster:</div>
+                        <div class="sectors-box" id="siblingsList"></div>
+                    </div>
+                    <a class="hint" href="expo-clusters.html" style="display:inline-block; margin-top:12px;">Manage clusters →</a>
+                </div>
+
+                <!-- Sectors -->
+                <div class="section">
+                    <h2>Sectors</h2>
+                    <div class="sectors-box" id="sectorsBox"><span class="hint">Loading…</span></div>
+                </div>
+
+                <!-- Date automation -->
+                <div class="section">
+                    <h2>Deadlines (auto-calculated from Start/End — override any date directly)</h2>
+                    <div class="ro-banner" style="margin-bottom:14px;">
+                        Each deadline = Start date − “days before” (Breakdown = End date + “days after”).
+                        Leave the override blank to keep it automatic; enter a date to pin it.
+                    </div>
+                    <table class="dl-table">
+                        <thead>
+                            <tr><th>Deadline</th><th>Days</th><th>Auto date</th><th>Override (optional)</th></tr>
+                        </thead>
+                        <tbody id="deadlineRows"></tbody>
+                    </table>
+                </div>
+
+                <!-- Form URLs -->
+                <div class="section">
+                    <h2>Form URLs</h2>
+                    <div class="grid-3">
+                        <div class="field"><label>Catalogue Form</label><input type="url" id="catalogue_form_url" placeholder="https://…"></div>
+                        <div class="field"><label>Stand Design Form</label><input type="url" id="stand_design_form_url" placeholder="https://…"></div>
+                        <div class="field"><label>Visitor Pre-registration Form</label><input type="url" id="visitor_preregistration_form_url" placeholder="https://…"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
+    <script>
+        const API_URL = '/api';
+        const expoId = new URLSearchParams(location.search).get('id');
+
+        // 8 deadlines: [deadline override field, offset field, base ('start'|'end')]
+        const DEADLINES = [
+            ['buildup_day_1', 'buildup_1_days_before', 'start', 'Build-Up Day 1', 3],
+            ['buildup_day_2', 'buildup_2_days_before', 'start', 'Build-Up Day 2', 2],
+            ['standard_buildup_day', 'standard_buildup_days_before', 'start', 'Standard Build-Up', 1],
+            ['catalogue_submission_deadline', 'catalogue_deadline_days_before', 'start', 'Catalogue Submission', 25],
+            ['stand_design_confirmation_deadline', 'stand_design_deadline_days_before', 'start', 'Stand Design Confirmation', 25],
+            ['payment_deadline', 'payment_deadline_days_before', 'start', 'Payment', 30],
+            ['visa_support_deadline', 'visa_deadline_days_before', 'start', 'Visa Support', 40],
+            ['breakdown', 'breakdown_days_after', 'end', 'Breakdown', 0],
+        ];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('token')) { location.href = 'login.html'; return; }
+            buildDeadlineRows();
+            await Promise.all([loadCountries(), loadSectors()]);
+            if (expoId) { document.getElementById('formTitle').textContent = 'Edit Expo'; await loadExpo(); }
+            recompute();
+        });
+
+        function buildDeadlineRows() {
+            document.getElementById('deadlineRows').innerHTML = DEADLINES.map(([dl, off, base, label, def]) => `
+                <tr>
+                    <td>${label}<div class="hint">${base === 'end' ? 'End + days' : 'Start − days'}</div></td>
+                    <td><input type="number" id="${off}" value="${def}" min="0" oninput="recompute()"></td>
+                    <td><span class="computed" id="auto_${dl}">—</span></td>
+                    <td><input type="date" id="${dl}" oninput="recompute()"></td>
+                </tr>`).join('');
+        }
+
+        async function loadCountries() {
+            try {
+                const r = await leenaFetch(`${API_URL}/reference/countries`);
+                const list = await r.json();
+                const sel = document.getElementById('country_code');
+                list.forEach(c => { const o = document.createElement('option'); o.value = c.code; o.textContent = c.name; sel.appendChild(o); });
+            } catch (e) { if (e.status === 401 || e.status === 403) return; }
+        }
+
+        async function loadSectors() {
+            try {
+                const r = await leenaFetch(`${API_URL}/reference/sectors`);
+                const list = await r.json();
+                document.getElementById('sectorsBox').innerHTML = list.map(s =>
+                    `<label class="chk"><input type="checkbox" class="sector-chk" value="${s.id}"> ${escapeHtml(s.name)}</label>`).join('')
+                    || '<span class="hint">No sectors defined.</span>';
+            } catch (e) { if (e.status === 401 || e.status === 403) return; }
+        }
+
+        async function loadExpo() {
+            try {
+                const r = await leenaFetch(`${API_URL}/expos/${expoId}`);
+                if (!r.ok) { showToast('Expo not found', 'error'); return; }
+                const e = await r.json();
+                const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+                ['name','edition_year','organizer_role','country_code','city','venue','status','show_open_hours',
+                 'catalogue_form_url','stand_design_form_url','visitor_preregistration_form_url'].forEach(f => set(f, e[f]));
+                set('start_date', dateOnly(e.start_date));
+                set('end_date', dateOnly(e.end_date));
+                DEADLINES.forEach(([dl, off]) => { set(off, e[off]); set(dl, dateOnly(e[dl])); });
+                (e.sectors || []).forEach(s => {
+                    const cb = document.querySelector(`.sector-chk[value="${s.id}"]`); if (cb) cb.checked = true;
+                });
+                const av = document.getElementById('actualVisitorsWrap');
+                av.style.display = '';
+                document.getElementById('actual_visitors').value = (e.visitor_count ?? 0).toLocaleString();
+
+                // Edit-mode extras: Partners button + Cluster section
+                const pb = document.getElementById('partnersBtn');
+                pb.href = `expo-partners.html?expo_id=${expoId}`;
+                pb.style.display = '';
+                document.getElementById('clusterSection').style.display = '';
+                await setupCluster(e.cluster_id);
+            } catch (err) { if (err.status === 401 || err.status === 403) return; showToast('Error loading expo', 'error'); }
+        }
+
+        async function setupCluster(currentClusterId) {
+            const sel = document.getElementById('cluster_select');
+            try {
+                const r = await leenaFetch(`${API_URL}/clusters`);
+                const { clusters } = await r.json();
+                sel.innerHTML = '<option value="">— Not in a cluster —</option>' +
+                    clusters.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+            } catch (e) { if (e.status === 401 || e.status === 403) return; }
+            if (currentClusterId) { sel.value = String(currentClusterId); loadSiblings(currentClusterId); }
+            else { document.getElementById('siblingsWrap').style.display = 'none'; }
+        }
+        async function loadSiblings(clusterId) {
+            try {
+                const r = await leenaFetch(`${API_URL}/clusters/${clusterId}/expos`);
+                const { expos } = await r.json();
+                const others = expos.filter(x => String(x.id) !== String(expoId));
+                const wrap = document.getElementById('siblingsWrap');
+                if (!others.length) { wrap.style.display = 'none'; return; }
+                document.getElementById('siblingsList').innerHTML = others.map(x =>
+                    `<a class="chk" href="expo-form.html?id=${x.id}" style="text-decoration:none;color:inherit;">${escapeHtml(x.name)}</a>`).join('');
+                wrap.style.display = '';
+            } catch (e) { if (e.status === 401 || e.status === 403) return; }
+        }
+        async function linkCluster() {
+            const cid = document.getElementById('cluster_select').value;
+            if (!cid) { showToast('Pick a cluster, or use Unlink', 'info'); return; }
+            try {
+                const r = await leenaFetch(`${API_URL}/expos/${expoId}/cluster`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cluster_id: Number(cid) })
+                });
+                if (r.ok) { showToast('Linked to cluster', 'success'); loadSiblings(cid); }
+                else { const err = await r.json(); showToast(err.error || 'Link failed', 'error'); }
+            } catch (e) { if (!(e.status === 401 || e.status === 403)) showToast('Link failed', 'error'); }
+        }
+        async function unlinkCluster() {
+            try {
+                const r = await leenaFetch(`${API_URL}/expos/${expoId}/cluster`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cluster_id: null })
+                });
+                if (r.ok) {
+                    showToast('Unlinked from cluster', 'success');
+                    document.getElementById('cluster_select').value = '';
+                    document.getElementById('siblingsWrap').style.display = 'none';
+                } else { showToast('Unlink failed', 'error'); }
+            } catch (e) { if (!(e.status === 401 || e.status === 403)) showToast('Unlink failed', 'error'); }
+        }
+
+        function recompute() {
+            const start = document.getElementById('start_date').value;
+            const end = document.getElementById('end_date').value;
+            // Natural cue (no clone-mode flag): blank dates → show "enter dates" hint.
+            document.getElementById('dateHint').style.display = (!start || !end) ? '' : 'none';
+            DEADLINES.forEach(([dl, off, base]) => {
+                const baseDate = base === 'end' ? end : start;
+                const days = document.getElementById(off).value;
+                const auto = computeDate(baseDate, days, base === 'end');
+                const overEl = document.getElementById(dl);
+                const autoEl = document.getElementById('auto_' + dl);
+                autoEl.textContent = auto || '—';
+                autoEl.classList.toggle('overridden', !!overEl.value);
+            });
+        }
+
+        // TZ-safe: operate on local date components only (never toISOString, which is UTC).
+        function fmtLocal(d) {
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+        function computeDate(baseDate, days, isAfter) {
+            if (!baseDate || days === '' || days == null) return '';
+            const [y, m, dd] = baseDate.split('-').map(Number);
+            if (!y || !m || !dd) return '';
+            const d = new Date(y, m - 1, dd); // local midnight, no UTC drift
+            d.setDate(d.getDate() + (isAfter ? +days : -(+days)));
+            return fmtLocal(d);
+        }
+
+        async function save() {
+            const body = {};
+            const get = id => document.getElementById(id).value;
+            body.name = get('name').trim();
+            if (!body.name || !get('start_date') || !get('end_date')) { showToast('Name, Start and End dates are required', 'error'); return; }
+            ['edition_year','organizer_role','country_code','city','venue','status','show_open_hours',
+             'start_date','end_date','catalogue_form_url','stand_design_form_url','visitor_preregistration_form_url'].forEach(f => body[f] = get(f));
+            DEADLINES.forEach(([dl, off]) => { body[off] = get(off); body[dl] = get(dl); });
+            body.sectors = Array.from(document.querySelectorAll('.sector-chk:checked')).map(c => parseInt(c.value, 10));
+
+            document.getElementById('saveBtn').disabled = true;
+            try {
+                const url = expoId ? `${API_URL}/expos/${expoId}` : `${API_URL}/expos`;
+                const method = expoId ? 'PUT' : 'POST';
+                const r = await leenaFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (r.ok) { showToast('Saved', 'success'); setTimeout(() => location.href = 'expo-list.html', 700); }
+                else { const err = await r.json(); showToast(err.error || 'Save failed', 'error'); }
+            } catch (e) { if (!(e.status === 401 || e.status === 403)) showToast('Save failed', 'error'); }
+            document.getElementById('saveBtn').disabled = false;
+        }
+
+        // TZ-safe: convert an API date/timestamp into the local YYYY-MM-DD for <input type=date>.
+        function dateOnly(d) {
+            if (!d) return '';
+            const dt = new Date(d);
+            return isNaN(dt) ? '' : fmtLocal(dt);
+        }
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+        function logout() { localStorage.clear(); location.href = 'login.html'; }
+    </script>
+</body>
+</html>
