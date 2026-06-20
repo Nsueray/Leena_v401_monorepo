@@ -69,6 +69,8 @@ try { expoRoutes = require('./routes/expos'); console.log('✓ Expo routes loade
 try { referenceRoutes = require('./routes/reference'); console.log('✓ Reference routes loaded'); } catch (err) { console.error('✗ Failed to load reference routes:', err.message); }
 try { partnerRoutes = require('./routes/partners'); console.log('✓ Partner routes loaded'); } catch (err) { console.error('✗ Failed to load partner routes:', err.message); }
 try { clusterRoutes = require('./routes/clusters'); console.log('✓ Cluster routes loaded'); } catch (err) { console.error('✗ Failed to load cluster routes:', err.message); }
+let contractRoutes;
+try { contractRoutes = require('./routes/contracts'); console.log('✓ Contract routes loaded'); } catch (err) { console.error('✗ Failed to load contract routes:', err.message); }
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -129,6 +131,7 @@ if (exhibitorRoutes) app.use('/api/exhibitors', exhibitorRoutes); // ✅ Exhibit
 if (campaignRoutes) app.use('/api/campaigns', campaignRoutes); // ✅ v403 Email Campaigns
 if (emailTrackingRoutes) app.use('/api/email-track', emailTrackingRoutes); // ✅ v403 Email Tracking (public)
 if (conferenceCleanupRoutes) app.use('/api/conference-cleanup', conferenceCleanupRoutes); // ✅ Conference Topic Cleanup
+if (contractRoutes) app.use('/api/contracts', contractRoutes); // ✅ LEENA-native Convert endpoint
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
