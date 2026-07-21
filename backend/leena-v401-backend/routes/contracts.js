@@ -135,4 +135,109 @@ router.post('/convert', authMiddleware, async (req, res) => {
   }
 });
 
+// ----------------------------------------------------------------------------
+// GET /api/contracts
+// Liste — organizer_id scope zorunlu, filtreler opsiyonel (expos.js:52-80 deseni).
+// Liste YALIN kalır: türev alan (total_m2, paid vb.) burada hesaplanmaz.
+// ----------------------------------------------------------------------------
+router.get('/', authMiddleware, async (req, res) => {
+  const { expo_id, status } = req.query;
+
+  const conditions = ['c.organizer_id = $1'];
+  const values = [req.organizer_id];
+  let p = 2;
+
+  if (expo_id) { conditions.push(`c.expo_id = $${p++}`); values.push(expo_id); }
+  if (status)  { conditions.push(`c.status = $${p++}`);  values.push(status); }
+
+  try {
+    const result = await pool.query(
+      `SELECT c.id, c.af_number, c.company_name, c.contract_date, c.status,
+              c.revenue, c.currency, c.revenue_eur,
+              c.expo_id, e.name AS expo_name,
+              c.sqm, c.sales_group, c.created_at
+         FROM contracts c
+         LEFT JOIN expos e ON e.id = c.expo_id
+        WHERE ${conditions.join(' AND ')}
+        ORDER BY c.contract_date DESC NULLS LAST, c.id DESC`,
+      values
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Error fetching contracts:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ----------------------------------------------------------------------------
+// GET /api/contracts/:id
+// Detay — contracts.* (29 kolon) + expo adı + sales agent adı.
+// ----------------------------------------------------------------------------
+router.get('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      `SELECT c.*,
+              e.name  AS expo_name,
+              sa.name AS sales_agent_name
+         FROM contracts c
+         LEFT JOIN expos e         ON e.id  = c.expo_id
+         LEFT JOIN sales_agents sa ON sa.id = c.sales_agent_id
+        WHERE c.id = $1 AND c.organizer_id = $2`,
+      [id, req.organizer_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Error fetching contract:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ----------------------------------------------------------------------------
+// PUT /api/contracts/:id/status
+// Tek alan güncelleme (expos.js:500-515 deseni). Geçiş matrisi YOK — dört durum
+// arasında serbest hareket; iş kuralı gerekirse sonraki dilimde eklenir.
+// ----------------------------------------------------------------------------
+router.put('/:id/status', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const status = req.body && req.body.status;
+
+  // FAZ 4: status-change permission kontrolü buraya (user_permissions matrisi
+  // B21-B42 aktif olunca). Bugün organizer-scope + geçerli JWT yeterli.
+
+  // Uygulama whitelist'i — DB CHECK'e düşürmek yerine burada 400 döner
+  // (CHECK ihlali 23514 → mapWriteError'da da 400, ama mesajı jenerik olurdu).
+  if (!CONTRACT_STATUSES.includes(status)) {
+    return res.status(400).json({
+      error: `status must be one of: ${CONTRACT_STATUSES.join(', ')}`
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE contracts
+          SET status = $1, updated_at = NOW()
+        WHERE id = $2 AND organizer_id = $3
+        RETURNING id, status`,
+      [status, id, req.organizer_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+
+    res.json({ message: 'Contract status updated', contract: result.rows[0] });
+  } catch (err) {
+    console.error('Error updating contract status:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
