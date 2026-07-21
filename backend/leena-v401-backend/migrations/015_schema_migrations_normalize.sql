@@ -62,9 +62,12 @@ VALUES ('000a_reconcile_production_drift', NULL)
 ON CONFLICT (version) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
--- 3. Bu migration'ın kendi kaydı — applied_at gerçek (DEFAULT now())
+-- 3. Bu migration'ın kendi kaydı — applied_at AÇIKÇA yazılır
 -- ----------------------------------------------------------------------------
-INSERT INTO schema_migrations (version) VALUES ('015_schema_migrations_normalize')
+-- Canlı tabloda applied_at'te DEFAULT YOK (013 inline kurulumdan geldi).
+-- `(version)`-only INSERT bu yüzden NULL yazardı — açık now() zorunlu.
+INSERT INTO schema_migrations (version, applied_at)
+VALUES ('015_schema_migrations_normalize', now())
 ON CONFLICT (version) DO NOTHING;
 
 -- ----------------------------------------------------------------------------

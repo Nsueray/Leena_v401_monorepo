@@ -47,7 +47,9 @@ ALTER TABLE sales_agents
 -- ----------------------------------------------------------------------------
 -- Migration kaydı (013 deseni)
 -- ----------------------------------------------------------------------------
-INSERT INTO schema_migrations (version) VALUES ('014_sales_agents_invariants')
+-- applied_at AÇIKÇA yazılır — schema_migrations.applied_at'te DEFAULT yok.
+INSERT INTO schema_migrations (version, applied_at)
+VALUES ('014_sales_agents_invariants', now())
 ON CONFLICT (version) DO NOTHING;
 
 -- ----------------------------------------------------------------------------
