@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Contracts - Leena EMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4a6fa5;
+            --primary-hover: #3d5d8a;
+            --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e;
+            --sidebar-hover: #252542;
+            --sidebar-active: #2d2d4a;
+            --sidebar-text: #9ca3af;
+            --sidebar-text-active: #ffffff;
+            --sidebar-border: #252542;
+            --bg: #f4f6fa;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); }
+        .app-shell { display: flex; min-height: 100vh; }
+
+        /* Sidebar */
+        .sidebar { width: 260px; background: var(--sidebar-bg); display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid var(--sidebar-border); }
+        .sidebar-logo { height: 32px; }
+        .sidebar-nav { padding: 16px 12px; flex: 1; }
+        .nav-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sidebar-text); padding: 8px 12px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); }
+        .nav-divider { height: 1px; background: var(--sidebar-border); margin: 12px 0; }
+
+        /* Main */
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .main-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--surface); border-bottom: 1px solid var(--border); }
+        .main-header h1 { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .main-content { padding: 24px 28px; }
+
+        /* Toolbar */
+        .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
+        .filter { display: flex; flex-direction: column; gap: 4px; }
+        .filter label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+        .filter select, .filter input { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 150px; }
+        .toolbar-spacer { flex: 1; }
+        .btn { font-family: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+        .btn-ghost:hover { background: var(--primary-light); }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+        /* Table */
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafbfc; }
+        tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        tbody tr:hover { background: var(--primary-light); }
+        tbody tr:last-child td { border-bottom: none; }
+        .contract-af { font-weight: 600; }
+        .muted { color: var(--text-muted); }
+        .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+        /* Inline status select (detail page is a later slice — status is the only editable field here) */
+        .status-select { font-family: inherit; font-size: 13px; font-weight: 600; padding: 5px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; }
+        .status-select:disabled { opacity: 0.6; cursor: progress; }
+
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-muted); }
+        .count-line { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Finance</div>
+                    <a class="nav-item active" href="contract-list.html">
+                        <i class="bi bi-file-earmark-text"></i><span>Contracts</span>
+                    </a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <a class="nav-item" href="dashboard_new.html">
+                        <i class="bi bi-collection"></i><span>My Expos</span>
+                    </a>
+                    <a class="nav-item" href="#" onclick="logout(); return false;">
+                        <i class="bi bi-box-arrow-right"></i><span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-file-earmark-text"></i> Contracts</h1>
+            </header>
+
+            <main class="main-content">
+                <div class="toolbar">
+                    <div class="filter">
+                        <label for="fStatus">Status</label>
+                        <select id="fStatus" onchange="applyFilters()">
+                            <option value="">All</option>
+                            <option value="Active">Active</option>
+                            <option value="On Hold">On Hold</option>
+                            <option value="Transferred">Transferred</option>
+                            <option value="Cancelled">Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="toolbar-spacer"></div>
+                    <button class="btn btn-ghost" onclick="resetFilters()"><i class="bi bi-x-circle"></i> Clear</button>
+                </div>
+
+                <div class="count-line" id="countLine"></div>
+
+                <div class="card">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>AF No</th>
+                                <th>Company</th>
+                                <th>Expo</th>
+                                <th>Date</th>
+                                <th class="num">Revenue</th>
+                                <th class="num">EUR</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contractBody">
+                            <tr><td colspan="7" class="empty-state">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
+    <script>
+        const API_URL = '/api';
+        const CONTRACT_STATUSES = ['Active', 'On Hold', 'Transferred', 'Cancelled'];
+        let allContracts = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            if (!token) { window.location.href = 'login.html'; return; }
+            loadContracts();
+        });
+
+        async function loadContracts() {
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts`);
+                allContracts = await res.json();
+                applyFilters();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                document.getElementById('contractBody').innerHTML =
+                    '<tr><td colspan="7" class="empty-state">Error loading contracts. <button class="btn btn-ghost btn-sm" onclick="loadContracts()">Retry</button></td></tr>';
+            }
+        }
+
+        function applyFilters() {
+            const status = document.getElementById('fStatus').value;
+            const rows = allContracts.filter(c => (!status || c.status === status));
+            render(rows);
+        }
+
+        function resetFilters() {
+            document.getElementById('fStatus').value = '';
+            applyFilters();
+        }
+
+        function render(contracts) {
+            const body = document.getElementById('contractBody');
+            document.getElementById('countLine').textContent =
+                `Showing ${contracts.length} of ${allContracts.length} contracts`;
+
+            if (!allContracts.length) {
+                body.innerHTML = '<tr><td colspan="7" class="empty-state">No contracts yet.</td></tr>';
+                return;
+            }
+            if (!contracts.length) {
+                body.innerHTML = '<tr><td colspan="7" class="empty-state">No contracts match the current filters.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = contracts.map(c => {
+                const af      = c.af_number   ? escapeHtml(c.af_number)   : '<span class="muted">—</span>';
+                const company = c.company_name ? escapeHtml(c.company_name) : '<span class="muted">—</span>';
+                const expo    = c.expo_name   ? escapeHtml(c.expo_name)   : '<span class="muted">—</span>';
+                return `<tr>
+                    <td class="contract-af">${af}</td>
+                    <td>${company}</td>
+                    <td>${expo}</td>
+                    <td>${formatDate(c.contract_date)}</td>
+                    <td class="num">${formatMoney(c.revenue, c.currency)}</td>
+                    <td class="num">${formatMoney(c.revenue_eur, 'EUR')}</td>
+                    <td>${statusSelect(c)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        function statusSelect(c) {
+            const current = c.status || '';
+            const options = CONTRACT_STATUSES.map(s =>
+                `<option value="${escapeHtml(s)}"${s === current ? ' selected' : ''}>${escapeHtml(s)}</option>`
+            ).join('');
+            return `<select class="status-select" data-prev="${escapeHtml(current)}"
+                            onchange="changeStatus(${c.id}, this)">${options}</select>`;
+        }
+
+        // Inline status change — no confirmation dialog by design.
+        // On failure the select snaps back to its previous value so the row never
+        // shows a state the server did not accept.
+        async function changeStatus(id, sel) {
+            const next = sel.value;
+            const prev = sel.dataset.prev;
+            if (next === prev) return;
+
+            sel.disabled = true;
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${id}/status`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: next })
+                });
+
+                if (res.ok) {
+                    sel.dataset.prev = next;
+                    const row = allContracts.find(c => c.id === id);
+                    if (row) row.status = next;   // keep local list in sync with the filter
+                    showToast(`Status updated to ${next}`, 'success');
+                } else {
+                    let msg = 'Status update failed';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    sel.value = prev;
+                    showToast(msg, 'error');
+                }
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) {
+                    sel.value = prev;
+                    showToast('Status update failed', 'error');
+                }
+            } finally {
+                sel.disabled = false;
+            }
+        }
+
+        function formatDate(d) {
+            if (!d) return '<span class="muted">—</span>';
+            return new Date(d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+        // null/undefined/non-numeric → empty cell (never NaN)
+        function formatMoney(amount, currency) {
+            if (amount === null || amount === undefined || amount === '') return '';
+            const n = Number(amount);
+            if (!isFinite(n)) return '';
+            const formatted = n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            return currency ? `${formatted} ${escapeHtml(currency)}` : formatted;
+        }
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+    </script>
+</body>
+</html>
