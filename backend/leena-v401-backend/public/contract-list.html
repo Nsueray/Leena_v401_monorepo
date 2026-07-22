@@ -74,6 +74,13 @@
         .status-select { font-family: inherit; font-size: 13px; font-weight: 600; padding: 5px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); cursor: pointer; }
         .status-select:disabled { opacity: 0.6; cursor: progress; }
 
+        /* Inline add-payment form (row expansion — no modal/overlay in this page) */
+        .pay-row td { background: #fafbfc; }
+        .pay-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+        .pay-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+        .pay-form input, .pay-form select { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 130px; }
+        .pay-form input:disabled { background: var(--primary-light); }
+
         .empty-state { padding: 60px 20px; text-align: center; color: var(--text-muted); }
         .count-line { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
     </style>
@@ -136,11 +143,14 @@
                                 <th>Date</th>
                                 <th class="num">Revenue</th>
                                 <th class="num">EUR</th>
+                                <th class="num">Paid (EUR)</th>
+                                <th class="num">Balance (EUR)</th>
                                 <th>Status</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="contractBody">
-                            <tr><td colspan="7" class="empty-state">Loading…</td></tr>
+                            <tr><td colspan="10" class="empty-state">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -153,6 +163,7 @@
     <script>
         const API_URL = '/api';
         const CONTRACT_STATUSES = ['Active', 'On Hold', 'Transferred', 'Cancelled'];
+        const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
         let allContracts = [];
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -169,7 +180,7 @@
             } catch (err) {
                 if (err.status === 401 || err.status === 403) return;
                 document.getElementById('contractBody').innerHTML =
-                    '<tr><td colspan="7" class="empty-state">Error loading contracts. <button class="btn btn-ghost btn-sm" onclick="loadContracts()">Retry</button></td></tr>';
+                    '<tr><td colspan="10" class="empty-state">Error loading contracts. <button class="btn btn-ghost btn-sm" onclick="loadContracts()">Retry</button></td></tr>';
             }
         }
 
@@ -190,11 +201,11 @@
                 `Showing ${contracts.length} of ${allContracts.length} contracts`;
 
             if (!allContracts.length) {
-                body.innerHTML = '<tr><td colspan="7" class="empty-state">No contracts yet.</td></tr>';
+                body.innerHTML = '<tr><td colspan="10" class="empty-state">No contracts yet.</td></tr>';
                 return;
             }
             if (!contracts.length) {
-                body.innerHTML = '<tr><td colspan="7" class="empty-state">No contracts match the current filters.</td></tr>';
+                body.innerHTML = '<tr><td colspan="10" class="empty-state">No contracts match the current filters.</td></tr>';
                 return;
             }
 
@@ -202,6 +213,10 @@
                 const af      = c.af_number   ? escapeHtml(c.af_number)   : '<span class="muted">—</span>';
                 const company = c.company_name ? escapeHtml(c.company_name) : '<span class="muted">—</span>';
                 const expo    = c.expo_name   ? escapeHtml(c.expo_name)   : '<span class="muted">—</span>';
+                // balance_eur NULL (contract'ın revenue_eur'u yok) → 0 uydurma, "—" göster
+                const balance = c.balance_eur == null
+                    ? '<span class="muted">—</span>'
+                    : formatMoney(c.balance_eur, 'EUR');
                 return `<tr>
                     <td class="contract-af">${af}</td>
                     <td>${company}</td>
@@ -209,9 +224,89 @@
                     <td>${formatDate(c.contract_date)}</td>
                     <td class="num">${formatMoney(c.revenue, c.currency)}</td>
                     <td class="num">${formatMoney(c.revenue_eur, 'EUR')}</td>
+                    <td class="num">${formatMoney(c.paid_eur, 'EUR')}</td>
+                    <td class="num">${balance}</td>
                     <td>${statusSelect(c)}</td>
-                </tr>`;
+                    <td class="num"><button class="btn btn-ghost btn-sm" onclick="togglePayForm(${c.id})">+ Payment</button></td>
+                </tr>
+                ${payForm(c)}`;
             }).join('');
+        }
+
+        // Inline add-payment form — hidden row under each contract.
+        // Row expansion instead of a modal: this page has no overlay/dialog CSS,
+        // so a modal would mean new styling; the row reuses existing table styles.
+        // No client-side validation by design — the server's 400s are the contract.
+        function payForm(c) {
+            const methods = PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('');
+            return `<tr class="pay-row" id="payrow-${c.id}" style="display:none">
+                <td colspan="10">
+                    <form class="pay-form" onsubmit="submitPayment(event, ${c.id})">
+                        <label>Amount<input name="amount" type="text" autocomplete="off"></label>
+                        <label>Currency<input name="currency" type="text" maxlength="3" autocomplete="off"
+                                              oninput="lockRateIfEur(${c.id})"></label>
+                        <label>Exchange rate<input name="exchange_rate" type="text" autocomplete="off"></label>
+                        <label>Method<select name="payment_method">${methods}</select></label>
+                        <label>Date<input name="payment_date" type="date"></label>
+                        <label>Notes<input name="notes" type="text" autocomplete="off"></label>
+                        <button class="btn btn-primary btn-sm" type="submit">Save</button>
+                        <button class="btn btn-ghost btn-sm" type="button" onclick="togglePayForm(${c.id})">Cancel</button>
+                    </form>
+                </td>
+            </tr>`;
+        }
+
+        function togglePayForm(id) {
+            const row = document.getElementById(`payrow-${id}`);
+            if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
+        }
+
+        // EUR → rate is always 1 (server rejects anything else). Lock, don't validate.
+        function lockRateIfEur(id) {
+            const f = document.querySelector(`#payrow-${id} .pay-form`);
+            if (!f) return;
+            const isEur = f.currency.value.trim().toUpperCase() === 'EUR';
+            f.exchange_rate.disabled = isEur;
+            if (isEur) f.exchange_rate.value = '1';
+        }
+
+        async function submitPayment(ev, id) {
+            ev.preventDefault();
+            const f = ev.target;
+            const body = {
+                amount: f.amount.value,
+                currency: f.currency.value,
+                // disabled inputs are omitted from the form, so read the value directly
+                exchange_rate: f.exchange_rate.value,
+                payment_method: f.payment_method.value,
+                payment_date: f.payment_date.value,
+                notes: f.notes.value || null
+            };
+            const submitBtn = f.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${id}/payments`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    f.reset();
+                    f.exchange_rate.disabled = false;
+                    togglePayForm(id);
+                    showToast('Payment added', 'success');
+                    loadContracts();          // paid/balance refresh
+                } else {
+                    // show the server's message verbatim (400 / 404)
+                    let msg = 'Payment failed';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    showToast(msg, 'error');
+                }
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) showToast('Payment failed', 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
         }
 
         function statusSelect(c) {
