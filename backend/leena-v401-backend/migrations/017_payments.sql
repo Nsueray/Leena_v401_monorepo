@@ -53,11 +53,7 @@ CREATE INDEX idx_payments_contract_id ON payments (contract_id);
 -- ----------------------------------------------------------------------------
 -- Migration kaydı (013_schema_migrations.sql:65-67 şablonu)
 -- ----------------------------------------------------------------------------
--- ⚠️ SAPMA NOTU: version değeri burada '.sql' UZANTILI yazılmıştır (Suer kararı,
--- 2026-07-22). Mevcut 18 kaydın tamamı UZANTISIZ ('016_contract_operational_
--- columns' gibi) — bu kayıt tablodaki tek uzantılı satır olacaktır. Sonuç: 017
--- başka bir ortamda uzantısız yazılırsa ON CONFLICT çarpmaz ve çift kayıt oluşur.
--- applied_at açıkça yazılır; tabloda DEFAULT yoktur.
+-- version kaydı uzantısız — 015 normalizasyonu ve mevcut 18 kayıtla uyumlu
 INSERT INTO schema_migrations (version, applied_at)
-VALUES ('017_payments.sql', now())
+VALUES ('017_payments', now())
 ON CONFLICT (version) DO NOTHING;
