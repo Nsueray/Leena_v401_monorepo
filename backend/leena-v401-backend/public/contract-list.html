@@ -164,6 +164,10 @@
         const API_URL = '/api';
         const CONTRACT_STATUSES = ['Active', 'On Hold', 'Transferred', 'Cancelled'];
         const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
+        // Tahsilat birimleri: merkez İstanbul + Fas/Nijerya/Kenya ofisleri.
+        // UI konfigürasyonu — server'da whitelist YOK (3 harf format kontrolü yeterli).
+        // Ledger fazında core_currencies benzeri referans tablosu gelirse oradan beslenir.
+        const CURRENCIES = ['EUR', 'USD', 'TRY', 'MAD', 'NGN', 'KES'];
         let allContracts = [];
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -239,13 +243,15 @@
         // No client-side validation by design — the server's 400s are the contract.
         function payForm(c) {
             const methods = PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('');
+            // Default EUR → form açıldığında rate 1 ve kilitli başlar (markup'ta set edilir).
+            const currencies = CURRENCIES.map(cur => `<option value="${cur}">${cur}</option>`).join('');
             return `<tr class="pay-row" id="payrow-${c.id}" style="display:none">
                 <td colspan="10">
                     <form class="pay-form" onsubmit="submitPayment(event, ${c.id})">
                         <label>Amount<input name="amount" type="text" autocomplete="off"></label>
-                        <label>Currency<input name="currency" type="text" maxlength="3" autocomplete="off"
-                                              oninput="lockRateIfEur(${c.id})"></label>
-                        <label>Exchange rate<input name="exchange_rate" type="text" autocomplete="off"></label>
+                        <label>Currency<select name="currency"
+                                               onchange="lockRateIfEur(${c.id})">${currencies}</select></label>
+                        <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
                         <label>Method<select name="payment_method">${methods}</select></label>
                         <label>Date<input name="payment_date" type="date"></label>
                         <label>Notes<input name="notes" type="text" autocomplete="off"></label>
@@ -262,12 +268,15 @@
         }
 
         // EUR → rate is always 1 (server rejects anything else). Lock, don't validate.
+        // Non-EUR seçilince alan TEMİZLENİR: default EUR olduğu için alan 1 ile
+        // başlıyor; devralınan 1, USD/TRY için sessizce yanlış amount_eur üretirdi.
+        // Boş bırakınca server 400 döner — sessiz hata yerine görünür hata.
         function lockRateIfEur(id) {
             const f = document.querySelector(`#payrow-${id} .pay-form`);
             if (!f) return;
             const isEur = f.currency.value.trim().toUpperCase() === 'EUR';
             f.exchange_rate.disabled = isEur;
-            if (isEur) f.exchange_rate.value = '1';
+            f.exchange_rate.value = isEur ? '1' : '';
         }
 
         async function submitPayment(ev, id) {
@@ -291,8 +300,8 @@
                     body: JSON.stringify(body)
                 });
                 if (res.ok) {
-                    f.reset();
-                    f.exchange_rate.disabled = false;
+                    f.reset();              // currency → default EUR
+                    lockRateIfEur(id);      // ...dolayısıyla rate yeniden 1 ve kilitli
                     togglePayForm(id);
                     showToast('Payment added', 'success');
                     loadContracts();          // paid/balance refresh
