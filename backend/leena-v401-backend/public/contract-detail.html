@@ -79,6 +79,9 @@
         .pay-form input, .pay-form select { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 130px; }
         .pay-form input:disabled { background: var(--primary-light); }
 
+        /* Reversal rozetleri — düz metin, renk/stil oyunu yok */
+        .tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+
         .empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); }
     </style>
 </head>
@@ -142,10 +145,11 @@
                                 <th class="num">EUR</th>
                                 <th>Method</th>
                                 <th>Notes</th>
+                                <th></th>
                             </tr>
                         </thead>
                         <tbody id="paymentBody">
-                            <tr><td colspan="6" class="empty-state">Loading…</td></tr>
+                            <tr><td colspan="7" class="empty-state">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -219,7 +223,7 @@
             } catch (err) {
                 if (err.status === 401 || err.status === 403) return;
                 document.getElementById('paymentBody').innerHTML =
-                    '<tr><td colspan="6" class="empty-state">Error loading payments. <button class="btn btn-ghost btn-sm" onclick="loadPayments()">Retry</button></td></tr>';
+                    '<tr><td colspan="7" class="empty-state">Error loading payments. <button class="btn btn-ghost btn-sm" onclick="loadPayments()">Retry</button></td></tr>';
             }
         }
 
@@ -263,17 +267,59 @@
             const rows = (data && data.payments) || [];
             const body = document.getElementById('paymentBody');
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="6" class="empty-state">No payments yet.</td></tr>';
+                body.innerHTML = '<tr><td colspan="7" class="empty-state">No payments yet.</td></tr>';
                 return;
             }
-            body.innerHTML = rows.map(p => `<tr>
+            // Reverse edilmişlik client'ta hesaplanır: bu listede herhangi bir
+            // satırın reverses_payment_id'si bu satırın id'sine eşit mi?
+            // (backend'e ek alan eklenmedi)
+            const reversedIds = new Set(
+                rows.filter(p => p.reverses_payment_id != null).map(p => p.reverses_payment_id)
+            );
+
+            body.innerHTML = rows.map(p => {
+                const isReversal = p.reverses_payment_id != null;
+                const isReversed = reversedIds.has(p.id);
+                // Reverse yalnız "reversal olmayan VE reverse edilmemiş" satırlarda
+                const action = (!isReversal && !isReversed)
+                    ? `<button class="btn btn-ghost btn-sm"
+                               onclick="reversePayment(${p.id}, '${escapeHtml(String(p.amount))}', '${escapeHtml(p.currency || '')}')">Reverse</button>`
+                    : isReversal
+                        ? `<span class="tag">Reversal of #${escapeHtml(String(p.reverses_payment_id))}</span>`
+                        : '<span class="tag">Reversed</span>';
+                return `<tr>
                 <td>${formatDate(p.payment_date)}</td>
                 <td class="num">${money(p.amount, p.currency)}</td>
                 <td class="num">${p.exchange_rate == null ? dash() : escapeHtml(String(p.exchange_rate))}</td>
                 <td class="num">${money(p.amount_eur, 'EUR')}</td>
                 <td>${escapeHtml(p.payment_method || '')}</td>
                 <td>${p.notes ? escapeHtml(p.notes) : dash()}</td>
-            </tr>`).join('');
+                <td>${action}</td>
+            </tr>`;
+            }).join('');
+        }
+
+        // Storno: orijinal satır değişmez, negatif bir ters kayıt eklenir.
+        // Server notes'u kendi yazar; buradan body gönderilmez.
+        async function reversePayment(paymentId, amount, currency) {
+            if (!confirm(`Reverse payment #${paymentId} (${amount} ${currency})? This will add a negative entry.`)) return;
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${contractId}/payments/${paymentId}/reverse`, {
+                    method: 'POST'
+                });
+                if (res.ok) {
+                    showToast('Payment reversed', 'success');
+                    loadPayments();   // ödeme listesi
+                    loadContract();   // paid/balance özeti
+                } else {
+                    // show the server's message verbatim (400 / 404 / 409)
+                    let msg = 'Reverse failed';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    showToast(msg, 'error');
+                }
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) showToast('Reverse failed', 'error');
+            }
         }
 
         function kv(label, value) { return `<div>${escapeHtml(label)}</div><div>${value}</div>`; }

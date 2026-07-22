@@ -33,6 +33,11 @@ function mapWriteError(err) {
     if (err.constraint === 'idx_contracts_source_quote_id') {
       return { status: 409, body: { error: 'This quote has already been converted to a contract.' } };
     }
+    // 018 partial UNIQUE → bir ödeme yalnız bir kez terslenebilir.
+    // Yarış koşulunda 409 garantisi buradan gelir (DB seviyesi).
+    if (err.constraint === 'uq_payments_reverses_payment_id') {
+      return { status: 409, body: { error: 'Payment already reversed.' } };
+    }
     return { status: 409, body: { error: 'Duplicate value violates a unique constraint.' } };
   }
   if (err.code === '23503') {
@@ -431,6 +436,103 @@ router.get('/:id/payments', authMiddleware, async (req, res) => {
   } catch (err) {
     console.error('Error fetching payments:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ----------------------------------------------------------------------------
+// POST /api/contracts/:id/payments/:paymentId/reverse
+// Reversal = storno. Orijinal satıra DOKUNULMAZ (payments immutable event).
+//
+// Ters kayıt orijinali KOPYALAR — yeniden hesap YOK:
+//   currency / exchange_rate / payment_method / organizer_id / contract_id aynen,
+//   amount = -orijinal.amount, amount_eur = -orijinal.amount_eur.
+// İşaret çevrimi SQL'de yapılır (numeric üzerinde), JS'e uğramaz: round2 çağrılsa
+// negatif tarafta yuvarlama asimetrisi (round2(-x) ≠ -round2(x)) oluşabilirdi.
+// Böylece ters kayıt orijinali kuruşu kuruşuna sıfırlar.
+//
+// payment_date = reversal günü (CURRENT_DATE), orijinalin tarihi değil.
+// notes server tarafından yazılır; client'tan gelen body YOK SAYILIR.
+// created_by NULL (mevcut desen — Faz 4 kimlik).
+//
+// paid/balance hesaplarına dokunulmaz: SUM negatifi kendiliğinden netler (D2).
+// ----------------------------------------------------------------------------
+router.post('/:id/payments/:paymentId/reverse', authMiddleware, async (req, res) => {
+  const { id, paymentId } = req.params;
+
+  // FAZ 4: reversal-permission kontrolü buraya (user_permissions matrisi
+  // B21-B42 aktif olunca). Bugün organizer-scope + geçerli JWT yeterli.
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Organizer scope — contract bu organizer'a ait değilse hiç ilerleme.
+    const own = await client.query(
+      'SELECT id FROM contracts WHERE id = $1 AND organizer_id = $2',
+      [id, req.organizer_id]
+    );
+    if (own.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+
+    // Hedef ödeme bu contract'a ait olmalı.
+    const target = await client.query(
+      'SELECT id, amount, currency, reverses_payment_id FROM payments WHERE id = $1 AND contract_id = $2',
+      [paymentId, id]
+    );
+    if (target.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(404).json({ error: 'Payment not found' });
+    }
+
+    const orig = target.rows[0];
+
+    // Reversal-of-reversal engeli uygulama katmanında (018'de trigger YOK).
+    if (orig.reverses_payment_id !== null) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ error: 'Cannot reverse a reversal.' });
+    }
+
+    // Erken 409 — kesin garanti partial UNIQUE'ten gelir (aşağıdaki INSERT),
+    // bu kontrol yalnız yaygın durumda daha net bir yanıt verir.
+    const already = await client.query(
+      'SELECT 1 FROM payments WHERE reverses_payment_id = $1',
+      [orig.id]
+    );
+    if (already.rows.length > 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(409).json({ error: 'Payment already reversed.' });
+    }
+
+    const notes = `Reversal of payment #${orig.id} (${orig.amount} ${orig.currency})`;
+
+    // Kopyalama + işaret çevrimi tek INSERT ... SELECT içinde (numeric korunur).
+    const result = await client.query(
+      `INSERT INTO payments (
+         organizer_id, contract_id, amount, currency, exchange_rate,
+         amount_eur, payment_method, payment_date, notes, created_by,
+         reverses_payment_id
+       )
+       SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
+              -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
+              id
+         FROM payments
+        WHERE id = $1
+       RETURNING *`,
+      [orig.id, notes]
+    );
+
+    await client.query('COMMIT');
+    return res.status(201).json({ payment: result.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const mapped = mapWriteError(err);
+    if (mapped) return res.status(mapped.status).json(mapped.body);
+    console.error('Payment reverse failed:', err);
+    return res.status(500).json({ error: 'Failed to reverse payment.' });
+  } finally {
+    client.release();
   }
 });
 
