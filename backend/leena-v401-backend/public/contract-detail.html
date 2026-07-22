@@ -236,7 +236,8 @@
                 + kv('Expo', c.expo_name ? escapeHtml(c.expo_name) : dash())
                 + kv('Sales agent', c.sales_agent_name ? escapeHtml(c.sales_agent_name) : dash())
                 + kv('Contract date', formatDate(c.contract_date))
-                + kv('Status', statusSelect(c));
+                + kv('Status', statusSelect(c))
+                + transferRows(c);
 
             document.getElementById('money').innerHTML =
                   kv('Revenue', money(c.revenue, c.currency))
@@ -256,9 +257,85 @@
                 + kv('SQM', c.sqm == null ? dash() : escapeHtml(String(c.sqm)))
                 + kv('Free SQM', c.free_sqm == null ? dash() : escapeHtml(String(c.free_sqm)))
                 + kv('Sales group', c.sales_group ? escapeHtml(c.sales_group) : dash())
-                + kv('Transportation', c.transportation ? escapeHtml(c.transportation) : dash())
-                + kv('Transferred from', c.transferred_from_contract_id == null
-                     ? dash() : `#${escapeHtml(String(c.transferred_from_contract_id))}`);
+                + kv('Transportation', c.transportation ? escapeHtml(c.transportation) : dash());
+            // NOT: "Transferred from" artık künye bölümünde af linki olarak gösteriliyor
+            // (ham id gösterimi 3a-5'te kaldırıldı) — bkz. transferRows().
+        }
+
+        // Transfer zinciri + Transfer aksiyonu — künye bölümünün sonuna eklenir.
+        function transferRows(c) {
+            let out = '';
+            if (c.transferred_from_af || c.transferred_from_contract_id != null) {
+                const label = c.transferred_from_af ? escapeHtml(c.transferred_from_af) : `#${escapeHtml(String(c.transferred_from_contract_id))}`;
+                out += kv('Transferred from',
+                    `<a href="contract-detail.html?id=${escapeHtml(String(c.transferred_from_contract_id))}">${label}</a>`);
+            }
+            if (c.transferred_to_id != null) {
+                const label = c.transferred_to_af ? escapeHtml(c.transferred_to_af) : `#${escapeHtml(String(c.transferred_to_id))}`;
+                out += kv('Transferred to',
+                    `<a href="contract-detail.html?id=${escapeHtml(String(c.transferred_to_id))}">${label}</a>`);
+            }
+            // Transfer aksiyonu yalnız Active/On Hold VE henüz devri yokken.
+            const canTransfer = (c.status === 'Active' || c.status === 'On Hold') && c.transferred_to_id == null;
+            if (canTransfer) {
+                out += kv('Transfer',
+                    `<button class="btn btn-ghost btn-sm" onclick="openTransferForm()">Transfer to another expo</button>
+                     <div id="transferBox" style="display:none;margin-top:10px"></div>`);
+            }
+            return out;
+        }
+
+        // Inline mini form (pay-form deseni) — modal yok.
+        async function openTransferForm() {
+            const box = document.getElementById('transferBox');
+            if (!box) return;
+            if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+            box.style.display = '';
+            box.innerHTML = '<span class="muted">Loading expos…</span>';
+            try {
+                const res = await leenaFetch(`${API_URL}/expos`);
+                if (!res.ok) { box.innerHTML = '<span class="muted">Could not load expos.</span>'; return; }
+                const expos = await res.json();
+                if (!expos.length) { box.innerHTML = '<span class="muted">No expos.</span>'; return; }
+                const opts = expos.map(e =>
+                    `<option value="${escapeHtml(String(e.id))}">${escapeHtml(e.name || ('#' + e.id))}</option>`).join('');
+                box.innerHTML = `<form class="pay-form" style="padding:0" onsubmit="submitTransfer(event)">
+                    <label>Target expo<select name="expo_id">${opts}</select></label>
+                    <button class="btn btn-primary btn-sm" type="submit">Confirm</button>
+                    <button class="btn btn-ghost btn-sm" type="button" onclick="openTransferForm()">Cancel</button>
+                </form>`;
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) box.innerHTML = '<span class="muted">Could not load expos.</span>';
+            }
+        }
+
+        // 201 → yeni contract'ın detayına yönlendir (klon yeni bir kayıttır).
+        async function submitTransfer(ev) {
+            ev.preventDefault();
+            const f = ev.target;
+            const btn = f.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${contractId}/transfer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expo_id: Number(f.expo_id.value) })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    showToast('Contract transferred', 'success');
+                    window.location.href = `contract-detail.html?id=${data.contract.id}`;
+                } else {
+                    // show the server's message verbatim (400 / 404 / 409)
+                    let msg = 'Transfer failed';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    showToast(msg, 'error');
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) showToast('Transfer failed', 'error');
+                btn.disabled = false;
+            }
         }
 
         // Payments are immutable events — no edit/delete here by design

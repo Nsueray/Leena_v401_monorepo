@@ -38,6 +38,14 @@ function mapWriteError(err) {
     if (err.constraint === 'uq_payments_reverses_payment_id') {
       return { status: 409, body: { error: 'Payment already reversed.' } };
     }
+    // 019 partial UNIQUE → bir contract'ın en fazla bir devamı olur.
+    if (err.constraint === 'uq_contracts_transferred_from') {
+      return { status: 409, body: { error: 'Contract already transferred.' } };
+    }
+    // 019 partial UNIQUE → üretilen transfer af_number'ı çakıştı.
+    if (err.constraint === 'uq_contracts_af_number') {
+      return { status: 409, body: { error: 'Contract already transferred.' } };
+    }
     return { status: 409, body: { error: 'Duplicate value violates a unique constraint.' } };
   }
   if (err.code === '23503') {
@@ -197,6 +205,10 @@ router.get('/:id', authMiddleware, async (req, res) => {
       `SELECT c.*,
               e.name  AS expo_name,
               sa.name AS sales_agent_name,
+              -- Transfer zinciri (3a-5): ham id yerine af_number gösterilir.
+              tf.af_number AS transferred_from_af,
+              tt.id        AS transferred_to_id,
+              tt.af_number AS transferred_to_af,
               -- D2: paid/balance HESAPLANIR, saklanmaz.
               p.paid_eur,
               CASE WHEN c.revenue_eur IS NULL THEN NULL
@@ -204,6 +216,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
          FROM contracts c
          LEFT JOIN expos e         ON e.id  = c.expo_id
          LEFT JOIN sales_agents sa ON sa.id = c.sales_agent_id
+         LEFT JOIN contracts tf    ON tf.id = c.transferred_from_contract_id
+         -- uq_contracts_transferred_from sayesinde en fazla 1 satır → çoğalma yok
+         LEFT JOIN contracts tt    ON tt.transferred_from_contract_id = c.id
          LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(pm.amount_eur), 0)::numeric(14,2) AS paid_eur
              FROM payments pm
@@ -226,8 +241,13 @@ router.get('/:id', authMiddleware, async (req, res) => {
 
 // ----------------------------------------------------------------------------
 // PUT /api/contracts/:id/status
-// Tek alan güncelleme (expos.js:500-515 deseni). Geçiş matrisi YOK — dört durum
-// arasında serbest hareket; iş kuralı gerekirse sonraki dilimde eklenir.
+// Tek alan güncelleme (expos.js:500-515 deseni).
+//
+// Geçiş matrisi hâlâ YOK, tek istisna 'Transferred' (3a-5):
+//   - Transferred'A elle geçiş KAPALI — o durumu yalnız Transfer aksiyonu
+//     yazar (aksi hâlde devamı olmayan "transfer edilmiş" contract oluşurdu).
+//   - Transferred'DAN çıkış SERBEST — hatalı transferin kaçış kapısı;
+//     transfer geri alma (undo) yok, durum elle düzeltilebilir kalmalı.
 // ----------------------------------------------------------------------------
 router.put('/:id/status', authMiddleware, async (req, res) => {
   const { id } = req.params;
@@ -241,6 +261,13 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
   if (!CONTRACT_STATUSES.includes(status)) {
     return res.status(400).json({
       error: `status must be one of: ${CONTRACT_STATUSES.join(', ')}`
+    });
+  }
+
+  // 'Transferred'ı yalnız Transfer aksiyonu yazar (yukarıdaki nota bak).
+  if (status === 'Transferred') {
+    return res.status(400).json({
+      error: 'Use the Transfer action to mark a contract as Transferred.'
     });
   }
 
@@ -531,6 +558,161 @@ router.post('/:id/payments/:paymentId/reverse', authMiddleware, async (req, res)
     if (mapped) return res.status(mapped.status).json(mapped.body);
     console.error('Payment reverse failed:', err);
     return res.status(500).json({ error: 'Failed to reverse payment.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ----------------------------------------------------------------------------
+// TRANSFER (Faz 3a-5) — contract devri
+// ----------------------------------------------------------------------------
+// Transfer YENİ bir contract yaratır (klon); var olan bir contract'a bağlanmaz.
+// Zincir append-only olduğu için A→B→A döngüsü yapısal olarak imkânsız
+// (019 başlık yorumu). Kaynak 'Transferred'a çekilir, devamı yeni satırdır.
+//
+// AF SONEK KURALI: kaynak 'X' → 'X-T'; 'X-T' → 'X-T2'; 'X-T2' → 'X-T3' …
+// Kök korunur, sayaç artar. Kaynağın af_number'ı NULL ise yeni af da NULL
+// (uq_contracts_af_number partial olduğu için sorun değil).
+function nextTransferAf(af) {
+  if (af == null || af === '') return null;
+  const m = String(af).match(/-T(\d*)$/);
+  if (!m) return `${af}-T`;
+  const root = String(af).replace(/-T(\d*)$/, '');
+  const n = m[1] === '' ? 1 : parseInt(m[1], 10);
+  return `${root}-T${n + 1}`;
+}
+
+// ----------------------------------------------------------------------------
+// POST /api/contracts/:id/transfer
+// Body: { expo_id }  — başka alan yok sayılır.
+//
+// ÖDEME TAŞIMA (storno-taşıma): kaynaktaki TERSLENMEMİŞ normal ödemeler için
+// ödeme başına iki INSERT — kaynakta kapama (negatif, reverses set) + yenide
+// pozitif kopya (orijinal payment_date korunur → ödeme geçmişi taşınır).
+// Terslenmiş çiftler ve reversal satırları YERİNDE KALIR.
+// round2 hiçbir yerde çağrılmaz; kopya ve işaret çevrimi SQL'de (numeric korunur).
+// paid/balance koduna dokunulmaz — SUM her iki tarafı da kendiliğinden netler (D2).
+// ----------------------------------------------------------------------------
+router.post('/:id/transfer', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const expo_id = req.body && req.body.expo_id;
+
+  // FAZ 4: transfer-permission kontrolü buraya (user_permissions matrisi
+  // B21-B42 aktif olunca). Bugün organizer-scope + geçerli JWT yeterli.
+
+  if (expo_id == null || expo_id === '') {
+    return res.status(400).json({ error: 'expo_id is required.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const src = await client.query(
+      'SELECT id, af_number, status FROM contracts WHERE id = $1 AND organizer_id = $2',
+      [id, req.organizer_id]
+    );
+    if (src.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    const source = src.rows[0];
+
+    // Yalnız yaşayan sözleşmeler devredilebilir. Transferred da buraya düşer —
+    // çifte transfer 409'a gelmeden, daha anlamlı bir 400 ile durur.
+    if (source.status !== 'Active' && source.status !== 'On Hold') {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ error: 'Only Active or On Hold contracts can be transferred.' });
+    }
+
+    // Hedef expo aynı organizer'a ait olmalı.
+    const expo = await client.query(
+      'SELECT id FROM expos WHERE id = $1 AND organizer_id = $2',
+      [expo_id, req.organizer_id]
+    );
+    if (expo.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ error: 'Target expo not found.' });
+    }
+
+    const newAf = nextTransferAf(source.af_number);
+
+    // Klon — kopyalanan alanlar SELECT'ten gelir (numeric bozulmaz).
+    // Operasyonel 9 kolon, source_quote_id, sales_owner_user_id, audit → NULL.
+    const created = await client.query(
+      `INSERT INTO contracts (
+         organizer_id, company_name, sales_agent_id,
+         revenue, currency, exchange_rate, revenue_eur, company_id,
+         expo_id, status, contract_date, transferred_from_contract_id, af_number
+       )
+       SELECT organizer_id, company_name, sales_agent_id,
+              revenue, currency, exchange_rate, revenue_eur, company_id,
+              $2, 'Active', CURRENT_DATE, id, $3
+         FROM contracts
+        WHERE id = $1
+       RETURNING *`,
+      [source.id, expo_id, newAf]
+    );
+    const newContract = created.rows[0];
+
+    // Taşınacak ödemeler: normal (reversal değil) VE üzerine reversal yazılmamış.
+    // Önce listelenir, sonra yazılır — döngü içinde NOT EXISTS kayması olmasın.
+    const carry = await client.query(
+      `SELECT p.id
+         FROM payments p
+        WHERE p.contract_id = $1
+          AND p.reverses_payment_id IS NULL
+          AND NOT EXISTS (SELECT 1 FROM payments r WHERE r.reverses_payment_id = p.id)
+        ORDER BY p.id`,
+      [source.id]
+    );
+
+    for (const row of carry.rows) {
+      // 1) Kaynakta kapama satırı — 3a-4 INSERT..SELECT deseni birebir.
+      await client.query(
+        `INSERT INTO payments (
+           organizer_id, contract_id, amount, currency, exchange_rate,
+           amount_eur, payment_method, payment_date, notes, created_by,
+           reverses_payment_id
+         )
+         SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
+                -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
+                id
+           FROM payments
+          WHERE id = $1`,
+        [row.id, `Transferred to ${newAf} (payment #${row.id})`]
+      );
+
+      // 2) Yeni contract'ta pozitif kopya — orijinal payment_date KORUNUR.
+      await client.query(
+        `INSERT INTO payments (
+           organizer_id, contract_id, amount, currency, exchange_rate,
+           amount_eur, payment_method, payment_date, notes, created_by
+         )
+         SELECT organizer_id, $2, amount, currency, exchange_rate,
+                amount_eur, payment_method, payment_date, $3, NULL
+           FROM payments
+          WHERE id = $1`,
+        [row.id, newContract.id, `Transferred from ${source.af_number} (payment #${row.id})`]
+      );
+    }
+
+    await client.query(
+      `UPDATE contracts SET status = 'Transferred', updated_at = NOW() WHERE id = $1`,
+      [source.id]
+    );
+
+    await client.query('COMMIT');
+    return res.status(201).json({
+      contract: newContract,
+      transferred_payments: carry.rows.length
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const mapped = mapWriteError(err);
+    if (mapped) return res.status(mapped.status).json(mapped.body);
+    console.error('Contract transfer failed:', err);
+    return res.status(500).json({ error: 'Failed to transfer contract.' });
   } finally {
     client.release();
   }
