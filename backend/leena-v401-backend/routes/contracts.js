@@ -155,9 +155,19 @@ router.get('/', authMiddleware, async (req, res) => {
       `SELECT c.id, c.af_number, c.company_name, c.contract_date, c.status,
               c.revenue, c.currency, c.revenue_eur,
               c.expo_id, e.name AS expo_name,
-              c.sqm, c.sales_group, c.created_at
+              c.sqm, c.sales_group, c.created_at,
+              -- D2: paid/balance HESAPLANIR, saklanmaz. revenue_eur NULL ise
+              -- balance_eur de NULL (uydurma 0 yok).
+              p.paid_eur,
+              CASE WHEN c.revenue_eur IS NULL THEN NULL
+                   ELSE c.revenue_eur - p.paid_eur END AS balance_eur
          FROM contracts c
          LEFT JOIN expos e ON e.id = c.expo_id
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(pm.amount_eur), 0)::numeric(14,2) AS paid_eur
+             FROM payments pm
+            WHERE pm.contract_id = c.id
+         ) p ON TRUE
         WHERE ${conditions.join(' AND ')}
         ORDER BY c.contract_date DESC NULLS LAST, c.id DESC`,
       values
@@ -181,10 +191,19 @@ router.get('/:id', authMiddleware, async (req, res) => {
     const result = await pool.query(
       `SELECT c.*,
               e.name  AS expo_name,
-              sa.name AS sales_agent_name
+              sa.name AS sales_agent_name,
+              -- D2: paid/balance HESAPLANIR, saklanmaz.
+              p.paid_eur,
+              CASE WHEN c.revenue_eur IS NULL THEN NULL
+                   ELSE c.revenue_eur - p.paid_eur END AS balance_eur
          FROM contracts c
          LEFT JOIN expos e         ON e.id  = c.expo_id
          LEFT JOIN sales_agents sa ON sa.id = c.sales_agent_id
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(pm.amount_eur), 0)::numeric(14,2) AS paid_eur
+             FROM payments pm
+            WHERE pm.contract_id = c.id
+         ) p ON TRUE
         WHERE c.id = $1 AND c.organizer_id = $2`,
       [id, req.organizer_id]
     );
@@ -236,6 +255,181 @@ router.put('/:id/status', authMiddleware, async (req, res) => {
     res.json({ message: 'Contract status updated', contract: result.rows[0] });
   } catch (err) {
     console.error('Error updating contract status:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ----------------------------------------------------------------------------
+// PAYMENTS (Faz 3a-2) — fiili tahsilat kayıtları
+// ----------------------------------------------------------------------------
+// Model (req :1002): "each actual payment event is one Revenue record,
+// attributed to the originating contract" — bir contract çok ödeme alır.
+// D2 (req :1004, :519, :1543): contract'ın toplam tahsilatı payments'ın
+// SUM'ıdır; contracts'a denormalize alan YAZILMAZ.
+//
+// ⚠️ amount_eur FORMÜLÜ: convert endpoint'i revenue_eur'u HESAPLAMAZ — quote
+// payload'ından okur (no-recompute, :9-10 / :116). Bu yüzden yön oradan
+// alınamadı; üç bağımsız kaynaktan doğrulandı:
+//   1. LIFFY quotes.js computeTotals: grand_total_eur = round2(total * rate)
+//   2. Defter :992 — "EUR-equivalent = toplam × donmuş kur"
+//   3. Canlı contract id=1: 15000 USD × 0.92 = 13800 EUR
+// → amount_eur = round2(amount × exchange_rate). Client'tan gelen amount_eur
+//   YOK SAYILIR (server otoritesi).
+const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
+
+// LIFFY quotes.js:71-73 ile aynı yuvarlama
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+// YYYY-MM-DD + takvimde gerçekten var olan gün (2026-02-31 reddedilir)
+function isValidDate(s) {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+}
+
+// ----------------------------------------------------------------------------
+// POST /api/contracts/:id/payments
+// Body: amount, currency, exchange_rate, payment_method, payment_date, notes?
+// ----------------------------------------------------------------------------
+router.post('/:id/payments', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const b = req.body || {};
+
+  // FAZ 4: payment-create permission kontrolü buraya (user_permissions matrisi
+  // B21-B42 aktif olunca). Bugün organizer-scope + geçerli JWT yeterli.
+
+  // --- Guard: amount ---
+  const amount = Number(b.amount);
+  if (b.amount == null || b.amount === '' || !isFinite(amount) || amount <= 0) {
+    return res.status(400).json({ error: 'amount must be a number greater than 0.' });
+  }
+
+  // --- Guard: currency (3 harf, uppercase'e normalize edilir) ---
+  // NOT: convert endpoint'i currency'yi normalize ETMEZ (:114, payload'ı aynen
+  // yazar). Normalizasyon burada bilinçli olarak uygulanıyor.
+  if (typeof b.currency !== 'string' || !/^[A-Za-z]{3}$/.test(b.currency.trim())) {
+    return res.status(400).json({ error: 'currency is required and must be a 3-letter code.' });
+  }
+  const currency = b.currency.trim().toUpperCase();
+
+  // --- Guard: exchange_rate ---
+  const exchange_rate = Number(b.exchange_rate);
+  if (b.exchange_rate == null || b.exchange_rate === '' || !isFinite(exchange_rate) || exchange_rate <= 0) {
+    return res.status(400).json({ error: 'exchange_rate must be a number greater than 0.' });
+  }
+
+  // --- Guard: EUR ise kur 1.0 olmalı (req :1519 — EUR'da rate 1.0, özel durum yok) ---
+  if (currency === 'EUR' && exchange_rate !== 1) {
+    return res.status(400).json({ error: 'exchange_rate must be 1 when currency is EUR.' });
+  }
+
+  // --- Guard: payment_method ---
+  if (!PAYMENT_METHODS.includes(b.payment_method)) {
+    return res.status(400).json({
+      error: `payment_method must be one of: ${PAYMENT_METHODS.join(', ')}`
+    });
+  }
+
+  // --- Guard: payment_date ---
+  if (!isValidDate(b.payment_date)) {
+    return res.status(400).json({ error: 'payment_date is required and must be a valid YYYY-MM-DD date.' });
+  }
+
+  // Server otoritesi: client'ın gönderdiği amount_eur yok sayılır.
+  const amount_eur = round2(amount * exchange_rate);
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Organizer scope + varlık kontrolü tek sorguda.
+    // Contract status kontrolü YOK — her status'ta ödeme girilebilir (bilinçli
+    // karar: iptal/askıdaki sözleşmeye de geçmiş tahsilat işlenebilmeli).
+    const own = await client.query(
+      'SELECT id FROM contracts WHERE id = $1 AND organizer_id = $2',
+      [id, req.organizer_id]
+    );
+    if (own.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+
+    const result = await client.query(
+      `INSERT INTO payments (
+         organizer_id, contract_id, amount, currency, exchange_rate,
+         amount_eur, payment_method, payment_date, notes, created_by
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       RETURNING *`,
+      [
+        req.organizer_id,
+        id,
+        amount,
+        currency,
+        exchange_rate,
+        amount_eur,
+        b.payment_method,
+        b.payment_date,
+        b.notes || null,
+        null,   // created_by: LEENA JWT'sinde user id YOK (authMiddleware:17
+                // yalnız organizer_id veriyor) → Faz 4 kimlik birleşmesinde dolar
+      ]
+    );
+
+    await client.query('COMMIT');
+    return res.status(201).json({ payment: result.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const mapped = mapWriteError(err);
+    if (mapped) return res.status(mapped.status).json(mapped.body);
+    console.error('Payment create failed:', err);
+    return res.status(500).json({ error: 'Failed to create payment.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ----------------------------------------------------------------------------
+// GET /api/contracts/:id/payments
+// Dönüş: { payments: [...], paid_eur, balance_eur } — ikisi de SORGUDA
+// hesaplanır, hiçbir yere yazılmaz (D2).
+// ----------------------------------------------------------------------------
+router.get('/:id/payments', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const own = await pool.query(
+      'SELECT revenue_eur FROM contracts WHERE id = $1 AND organizer_id = $2',
+      [id, req.organizer_id]
+    );
+    if (own.rows.length === 0) {
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+
+    const list = await pool.query(
+      `SELECT * FROM payments
+        WHERE contract_id = $1
+        ORDER BY payment_date DESC, created_at DESC`,
+      [id]
+    );
+
+    const totals = await pool.query(
+      `SELECT COALESCE(SUM(amount_eur), 0)::numeric(14,2) AS paid_eur
+         FROM payments WHERE contract_id = $1`,
+      [id]
+    );
+
+    const paid_eur = totals.rows[0].paid_eur;
+    const revenue_eur = own.rows[0].revenue_eur;
+    // revenue_eur NULL ise balance hesaplanamaz — uydurma 0 yok.
+    const balance_eur = revenue_eur == null
+      ? null
+      : (Number(revenue_eur) - Number(paid_eur)).toFixed(2);
+
+    res.json({ payments: list.rows, paid_eur, balance_eur });
+  } catch (err) {
+    console.error('Error fetching payments:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
