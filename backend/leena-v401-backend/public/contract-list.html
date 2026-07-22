@@ -66,7 +66,9 @@
         tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
         tbody tr:hover { background: var(--primary-light); }
         tbody tr:last-child td { border-bottom: none; }
+        tbody tr.clickable { cursor: pointer; }
         .contract-af { font-weight: 600; }
+        .contract-af a { color: var(--primary); }
         .muted { color: var(--text-muted); }
         .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
@@ -214,14 +216,17 @@
             }
 
             body.innerHTML = contracts.map(c => {
-                const af      = c.af_number   ? escapeHtml(c.af_number)   : '<span class="muted">—</span>';
+                // AF No görünür link; satırın tamamı da tıklanabilir (openContract)
+                const af      = c.af_number
+                    ? `<a href="contract-detail.html?id=${c.id}">${escapeHtml(c.af_number)}</a>`
+                    : '<span class="muted">—</span>';
                 const company = c.company_name ? escapeHtml(c.company_name) : '<span class="muted">—</span>';
                 const expo    = c.expo_name   ? escapeHtml(c.expo_name)   : '<span class="muted">—</span>';
                 // balance_eur NULL (contract'ın revenue_eur'u yok) → 0 uydurma, "—" göster
                 const balance = c.balance_eur == null
                     ? '<span class="muted">—</span>'
                     : formatMoney(c.balance_eur, 'EUR');
-                return `<tr>
+                return `<tr class="clickable" onclick="openContract(${c.id}, event)">
                     <td class="contract-af">${af}</td>
                     <td>${company}</td>
                     <td>${expo}</td>
@@ -235,6 +240,15 @@
                 </tr>
                 ${payForm(c)}`;
             }).join('');
+        }
+
+        // expo-list.html:276 openExpo deseni.
+        // Satırda zaten tıklanabilirler var (+ Payment, status select, inline form).
+        // Her birine ayrı ayrı stopPropagation eklemek yerine tek yerde hedef
+        // kontrolü yapılıyor — mevcut koda daha az dokunuyor.
+        function openContract(id, ev) {
+            if (ev.target.closest('button, select, input, a, form')) return;
+            window.location.href = `contract-detail.html?id=${id}`;
         }
 
         // Inline add-payment form — hidden row under each contract.
