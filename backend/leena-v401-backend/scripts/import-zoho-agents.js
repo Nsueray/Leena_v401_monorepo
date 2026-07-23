@@ -29,21 +29,22 @@ const { Pool } = require('pg');
 // Alan adı TAHMİNİYLE import imkânsız olsun: probe çıktısına bakıp aşağıyı
 // doldurun, sonra MAPPING_SEALED = true yapın. Değerler '?' iken --dry-run ve
 // --import reddeder.
-const MAPPING_SEALED = false;
+// MÜHÜRLÜ — probe (150 kayıt, 2026-07-23) kanıtıyla Sentez tarafından dolduruldu.
+const MAPPING_SEALED = true;
 const FIELDS = {
-  name:     '?',   // Zoho alan adı → sales_agents.name
-  type:     '?',   // → TYPE_MAP ile agent_type
-  pct:      '?',   // → default_commission_pct
-  email:    '?',   // → email
-  group:    '?',   // → sales_group
-  currency: '?',   // → commission_currency
-  active:   '?',   // → is_active (aşağıdaki ACTIVE_TRUE_VALUES ile)
-  company:  '?',   // → agent_company
-  id:       'id',  // Zoho kayıt id'si → zoho_record_id (v2'de her zaman 'id')
+  name:         'Name',                // → sales_agents.name
+  type:         'Sales_Agent_Type',    // → TYPE_MAP ile agent_type
+  pct:          'Commission_Rate',     // → default_commission_pct
+  director_pct: 'Director_Comm_Rate',  // → default_director_pct (022)
+  email:        'Email',               // → email (probe: null olabilir)
+  group:        'Sales_Group',         // → sales_group
+  team:         'Sales_Team',          // → sales_team (022)
+  currency:     'Currency',            // → commission_currency
+  active:       'Active',              // → is_active (GERÇEK BOOLEAN)
+  company:      'Agent_Company_Name',  // lookup → pick(.name) → agent_company
+  country:      'Country',             // → country (022)
+  id:           'id',                  // → zoho_record_id (v2'de her zaman 'id')
 };
-// Zoho'daki hangi "active" değerleri true sayılır (probe DISTINCT'inden doldurun).
-// Boolean true daima aktif kabul edilir; string değerler buraya (küçük harf).
-const ACTIVE_TRUE_VALUES = ['true', 'active', 'yes', 'aktif'];
 
 // ── DÖNÜŞÜM SABİTLERİ (Sentez kilitli — TYPE_MAP dışında değiştirmeyin) ──────
 const TYPE_MAP = {
@@ -194,7 +195,7 @@ async function runProbe(token, moduleArg) {
   Object.keys(first).sort().forEach(k => { masked[k] = maskValue(k, first[k]); });
   console.log(JSON.stringify(masked, null, 2));
 
-  console.log('\n=== PROBE SONU — FIELDS ve ACTIVE_TRUE_VALUES\'ı doldurup MAPPING_SEALED=true yapın ===');
+  console.log('\n=== PROBE SONU — FIELDS mühürlü (2026-07-23). Yeniden mühür gerekirse FIELDS güncellenir. ===');
 }
 
 // ── DÖNÜŞÜM (Sentez kilitli) ─────────────────────────────────────────────────
@@ -223,45 +224,35 @@ function transform(records) {
       continue;
     }
 
-    // pct
-    let pct = null;
-    const rawPct = pick(rec, FIELDS.pct);
-    if (rawPct != null && rawPct !== '') {
-      const n = Number(rawPct);
-      if (!isFinite(n) || n < 0 || n > 100) notes.pctNulled.push(`${name}: ${rawPct}`);
-      else pct = n;
-    }
+    // pct + director_pct — 0 GEÇERLİDİR (yazılır); yalnız NaN / <0 / >100 → NULL + rapor.
+    const pct = parsePct(pick(rec, FIELDS.pct), 'Commission_Rate', name, notes);
+    const director_pct = parsePct(pick(rec, FIELDS.director_pct), 'Director_Comm_Rate', name, notes);
 
-    // email / group / company
-    const email = FIELDS.email !== '?' ? normStr(pick(rec, FIELDS.email), true) : null;
-    const sales_group = FIELDS.group !== '?' ? normStr(pick(rec, FIELDS.group)) : null;
-    const agent_company = FIELDS.company !== '?' ? normStr(pick(rec, FIELDS.company)) : null;
+    // email (null olabilir, rapora girmez) / group / company (lookup .name) / team / country
+    const email = normStr(pick(rec, FIELDS.email), true);
+    const sales_group = normStr(pick(rec, FIELDS.group));
+    const agent_company = normStr(pick(rec, FIELDS.company));
+    const sales_team = normStr(pick(rec, FIELDS.team));
+    const country = normStr(pick(rec, FIELDS.country));
 
     // currency: 3 harf uppercase, değilse NULL + rapor
     let currency = null;
-    if (FIELDS.currency !== '?') {
-      const rawCur = pick(rec, FIELDS.currency);
-      if (rawCur != null && rawCur !== '') {
-        const c = String(rawCur).trim().toUpperCase();
-        if (/^[A-Z]{3}$/.test(c)) currency = c;
-        else notes.currencyNulled.push(`${name}: ${rawCur}`);
-      }
+    const rawCur = pick(rec, FIELDS.currency);
+    if (rawCur != null && rawCur !== '') {
+      const c = String(rawCur).trim().toUpperCase();
+      if (/^[A-Z]{3}$/.test(c)) currency = c;
+      else notes.currencyNulled.push(`${name}: ${rawCur}`);
     }
 
-    // active: truthy eşleme
-    let is_active = true;
-    if (FIELDS.active !== '?') {
-      const rawAct = pick(rec, FIELDS.active);
-      if (rawAct === true) is_active = true;
-      else if (rawAct === false) is_active = false;
-      else if (rawAct != null) is_active = ACTIVE_TRUE_VALUES.includes(String(rawAct).trim().toLowerCase());
-    }
+    // active: GERÇEK BOOLEAN (probe kanıtı) — yalnız true aktiftir.
+    const is_active = pick(rec, FIELDS.active) === true;
 
     rows.push({
       organizer_id: 1,
       name, agent_type,
       default_commission_pct: pct,
-      email, sales_group, agent_company,
+      default_director_pct: director_pct,
+      email, sales_group, sales_team, agent_company, country,
       commission_currency: currency,
       is_active,
       zoho_record_id: String(pick(rec, FIELDS.id)),
@@ -274,6 +265,13 @@ function normStr(v, lower) {
   const s = String(v).trim();
   if (!s) return null;
   return lower ? s.toLowerCase() : s;
+}
+// 0 GEÇERLİDİR (yazılır); yalnız boş / NaN / <0 / >100 → NULL (+ rapor).
+function parsePct(raw, label, name, notes) {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  if (!isFinite(n) || n < 0 || n > 100) { notes.pctNulled.push(`${name} ${label}: ${raw}`); return null; }
+  return n;
 }
 
 // ── DRY-RUN / IMPORT ────────────────────────────────────────────────────────
@@ -312,13 +310,13 @@ async function runImport(token, moduleArg, write) {
     for (const r of rows) {
       const res = await client.query(
         `INSERT INTO sales_agents
-           (organizer_id, name, agent_type, default_commission_pct,
-            email, sales_group, agent_company, commission_currency,
+           (organizer_id, name, agent_type, default_commission_pct, default_director_pct,
+            email, sales_group, sales_team, agent_company, country, commission_currency,
             is_active, zoho_record_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
          ON CONFLICT (zoho_record_id) WHERE zoho_record_id IS NOT NULL DO NOTHING`,
-        [r.organizer_id, r.name, r.agent_type, r.default_commission_pct,
-         r.email, r.sales_group, r.agent_company, r.commission_currency,
+        [r.organizer_id, r.name, r.agent_type, r.default_commission_pct, r.default_director_pct,
+         r.email, r.sales_group, r.sales_team, r.agent_company, r.country, r.commission_currency,
          r.is_active, r.zoho_record_id]
       );
       if (res.rowCount === 1) inserted++; else conflicted++;
