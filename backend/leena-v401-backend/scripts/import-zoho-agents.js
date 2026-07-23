@@ -17,6 +17,8 @@
  *   --import   Gerçek yazım (tek transaction). Mühür şart.
  *
  * Bağımsız: harici npm bağımlılığı yok (native fetch, Node 18+; pg zaten repoda).
+ * Render Shell'den koşarken: export DATABASE_URL="$DATABASE_INTERNAL_URL"
+ *   (dış URL Shell'den erişilemez).
  * ENV — Zoho: ZOHO_CLIENT_ID, ZOHO_CLIENT_SECRET, ZOHO_REFRESH_TOKEN
  *       DB  : DATABASE_URL || DATABASE_INTERNAL_URL || PG* (utils/db.js deseni)
  * .env DEĞERLERİ burada okunmaz/basılmaz.
