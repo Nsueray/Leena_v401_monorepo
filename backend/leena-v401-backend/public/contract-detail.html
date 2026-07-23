@@ -82,6 +82,12 @@
         /* Reversal rozetleri — düz metin, renk/stil oyunu yok */
         .tag { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
 
+        /* Commission assignment rows */
+        .assign-row { display: grid; grid-template-columns: 90px 1fr 120px; gap: 12px; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .assign-row label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+        .assign-row select, .assign-row input { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+        .assign-row select:disabled, .assign-row input:disabled { background: var(--primary-light); opacity: 0.7; }
+
         .empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); }
     </style>
 </head>
@@ -135,6 +141,14 @@
                 </div>
 
                 <div class="card">
+                    <div class="card-title">Commission</div>
+                    <form class="assign-form" id="assignForm" onsubmit="submitAssignment(event)">
+                        <div id="assignRows"><span class="muted" style="padding:16px;display:block">Loading agents…</span></div>
+                        <div style="padding:0 16px 16px"><button class="btn btn-primary btn-sm" type="submit">Save</button></div>
+                    </form>
+                </div>
+
+                <div class="card">
                     <div class="card-title">Payments</div>
                     <table>
                         <thead>
@@ -182,15 +196,29 @@
         // expo-form.html:222 deseni — id querystring'den
         const contractId = new URLSearchParams(location.search).get('id');
 
+        let salesAgents = [];   // GET /api/sales-agents
+        let lastContract = null; // son yüklenen contract (assignment render'ı için)
+
         // contract-list.html:174-175 guard deseni
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('token');
             if (!token) { window.location.href = 'login.html'; return; }
             if (!contractId) { window.location.href = 'contract-list.html'; return; }
             fillFormOptions();
+            await loadSalesAgents();   // dropdown verisi contract render'ından önce
             loadContract();
             loadPayments();
         });
+
+        async function loadSalesAgents() {
+            try {
+                const res = await leenaFetch(`${API_URL}/sales-agents`);
+                if (res.ok) salesAgents = await res.json();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                // Liste boş kalırsa dropdown yalnız "—" gösterir; atama yapılamaz ama sayfa çalışır.
+            }
+        }
 
         function fillFormOptions() {
             const f = document.getElementById('payForm');
@@ -228,13 +256,14 @@
         }
 
         function render(c) {
+            lastContract = c;
             document.getElementById('pageTitle').textContent = c.af_number || `Contract #${c.id}`;
+            renderAssignment(c);
 
             document.getElementById('identity').innerHTML =
                   kv('AF No', c.af_number ? escapeHtml(c.af_number) : dash())
                 + kv('Company', c.company_name ? escapeHtml(c.company_name) : dash())
                 + kv('Expo', c.expo_name ? escapeHtml(c.expo_name) : dash())
-                + kv('Sales agent', c.sales_agent_name ? escapeHtml(c.sales_agent_name) : dash())
                 + kv('Contract date', formatDate(c.contract_date))
                 + kv('Status', statusSelect(c))
                 + transferRows(c);
@@ -263,6 +292,117 @@
         }
 
         // Transfer zinciri + Transfer aksiyonu — künye bölümünün sonuna eklenir.
+        // Komisyon atama bölümü — üç satır (Agent / SR / SD).
+        // SUER İLKESİ: oran default'tan otomatik gelir; pct input'u BOŞ bırakılırsa
+        // motor default_commission_pct'i kullanır (input'a otomatik YAZILMAZ,
+        // placeholder'da gösterilir). Override ancak bilinçle yazılır.
+        const AGENT_ROLES = [
+            { key: 'agent', label: 'Agent', fk: 'agent_sales_agent_id', pct: 'agent_pct', name: 'agent_name' },
+            { key: 'sr',    label: 'SR',    fk: 'sr_sales_agent_id',    pct: 'sr_pct',    name: 'sr_name' },
+            { key: 'sd',    label: 'SD',    fk: 'sd_sales_agent_id',    pct: 'sd_pct',    name: 'sd_name' }
+        ];
+
+        function renderAssignment(c) {
+            const box = document.getElementById('assignRows');
+            if (!box) return;
+            box.innerHTML = AGENT_ROLES.map(r => {
+                const selId = c[r.fk];
+                const options = ['<option value="">—</option>'].concat(
+                    salesAgents.map(a =>
+                        `<option value="${a.id}"${String(a.id) === String(selId) ? ' selected' : ''}>${escapeHtml(a.name)}</option>`)
+                ).join('');
+                const pctVal = c[r.pct] == null ? '' : escapeHtml(String(c[r.pct]));
+                const assignedName = c[r.name] ? ` <span class="muted">(${escapeHtml(c[r.name])})</span>` : '';
+                return `<div class="assign-row">
+                    <label>${r.label}${assignedName}</label>
+                    <select data-role="${r.key}" onchange="onAgentChange()">${options}</select>
+                    <input data-pct="${r.key}" type="text" autocomplete="off" value="${pctVal}" placeholder="default %">
+                </div>`;
+            }).join('');
+            onAgentChange();   // dışlayıcılık + placeholder ilk durum
+        }
+
+        function assignEl(role, kind) {
+            return document.querySelector(`#assignRows [data-${kind}="${role}"]`);
+        }
+
+        // Dışlayıcılık UI'da: Agent seçilince SR disable+temizlenir (ve tersi);
+        // SR boşsa SD disable. Placeholder: seçilen agent'ın default_commission_pct'i.
+        function onAgentChange() {
+            const agentSel = assignEl('agent', 'role');
+            const srSel    = assignEl('sr', 'role');
+            const sdSel    = assignEl('sd', 'role');
+            if (!agentSel || !srSel || !sdSel) return;
+
+            const agentSet = !!agentSel.value;
+            const srSet    = !!srSel.value;
+
+            // Agent ↔ SR dışlayıcılık
+            srSel.disabled = agentSet;
+            if (agentSet) { srSel.value = ''; }
+            agentSel.disabled = srSet;
+            if (srSet) { agentSel.value = ''; }
+
+            // SD yalnız SR varken
+            const srNowSet = !!srSel.value;
+            sdSel.disabled = !srNowSet;
+            if (!srNowSet) { sdSel.value = ''; }
+
+            // pct input'ları: FK boşsa disable+temizle; doluysa placeholder = default
+            AGENT_ROLES.forEach(r => {
+                const sel = assignEl(r.key, 'role');
+                const pctIn = assignEl(r.key, 'pct');
+                if (!sel || !pctIn) return;
+                if (!sel.value) {
+                    pctIn.value = '';
+                    pctIn.disabled = true;
+                    pctIn.placeholder = 'default %';
+                } else {
+                    pctIn.disabled = false;
+                    const a = salesAgents.find(x => String(x.id) === String(sel.value));
+                    // Placeholder default'u gösterir; input'a YAZMAZ (override bilinçli).
+                    pctIn.placeholder = (a && a.default_commission_pct != null)
+                        ? `default ${a.default_commission_pct}` : 'default %';
+                }
+            });
+        }
+
+        async function submitAssignment(ev) {
+            ev.preventDefault();
+            const num = (v) => (v === '' || v == null) ? null : Number(v);
+            // TAM SET — disabled alanlar da NULL olarak gider.
+            const body = {
+                agent_sales_agent_id: assignEl('agent', 'role').value ? Number(assignEl('agent', 'role').value) : null,
+                sr_sales_agent_id:    assignEl('sr', 'role').value ? Number(assignEl('sr', 'role').value) : null,
+                sd_sales_agent_id:    assignEl('sd', 'role').value ? Number(assignEl('sd', 'role').value) : null,
+                agent_pct: num(assignEl('agent', 'pct').value),
+                sr_pct:    num(assignEl('sr', 'pct').value),
+                sd_pct:    num(assignEl('sd', 'pct').value)
+            };
+            const btn = ev.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${contractId}/assignment`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    showToast('Assignment saved', 'success');
+                    render(data.contract);   // refetch yerine dönen güncel satırla çiz
+                } else {
+                    let msg = 'Assignment failed';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    showToast(msg, 'error');
+                }
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) showToast('Assignment failed', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         function transferRows(c) {
             let out = '';
             if (c.transferred_from_af || c.transferred_from_contract_id != null) {

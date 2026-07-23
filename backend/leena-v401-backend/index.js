@@ -71,6 +71,8 @@ try { partnerRoutes = require('./routes/partners'); console.log('✓ Partner rou
 try { clusterRoutes = require('./routes/clusters'); console.log('✓ Cluster routes loaded'); } catch (err) { console.error('✗ Failed to load cluster routes:', err.message); }
 let contractRoutes;
 try { contractRoutes = require('./routes/contracts'); console.log('✓ Contract routes loaded'); } catch (err) { console.error('✗ Failed to load contract routes:', err.message); }
+let salesAgentRoutes;
+try { salesAgentRoutes = require('./routes/salesAgents'); console.log('✓ Sales agent routes loaded'); } catch (err) { console.error('✗ Failed to load sales agent routes:', err.message); }
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -132,6 +134,7 @@ if (campaignRoutes) app.use('/api/campaigns', campaignRoutes); // ✅ v403 Email
 if (emailTrackingRoutes) app.use('/api/email-track', emailTrackingRoutes); // ✅ v403 Email Tracking (public)
 if (conferenceCleanupRoutes) app.use('/api/conference-cleanup', conferenceCleanupRoutes); // ✅ Conference Topic Cleanup
 if (contractRoutes) app.use('/api/contracts', contractRoutes); // ✅ LEENA-native Convert endpoint
+if (salesAgentRoutes) app.use('/api/sales-agents', salesAgentRoutes);
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');

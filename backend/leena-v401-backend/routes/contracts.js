@@ -14,8 +14,9 @@
 //     quote ikinci kez convert edilirse 23505 → 409.
 //   - Scope: organizer_id JWT'den (authMiddleware). Role-gate Faz 4'e ertelendi
 //     (single-tenant, sadece iç ekip; user_permissions matrisi B21-B42 Faz 4'te).
-//   - Bu dilimde NULL kalan: expo_id (Convert-1 dilimi), sales_agent_id (Faz 3b),
-//     audit created_by/converted_by/converted_at (Faz 4 kimlik).
+//   - Bu dilimde NULL kalan: expo_id (Convert-1 dilimi), komisyon agent/sr/sd
+//     (assignment endpoint'i doldurur), audit created_by/converted_by/converted_at
+//     (Faz 4 kimlik).
 // ============================================================================
 
 const express = require('express');
@@ -131,7 +132,7 @@ router.post('/convert', authMiddleware, async (req, res) => {
         b.quote_id,                       // source_quote_id (idempotency anahtarı)
         b.sales_owner_user_id || null,    // LIFFY soft-ref
         b.company_id || null,             // LIFFY soft-ref
-        // expo_id, sales_agent_id, audit → bu dilimde NULL (sonraki dilimler)
+        // expo_id, komisyon agent/sr/sd, audit → bu dilimde NULL (sonraki dilimler)
       ]
     );
 
@@ -195,16 +196,16 @@ router.get('/', authMiddleware, async (req, res) => {
 
 // ----------------------------------------------------------------------------
 // GET /api/contracts/:id
-// Detay — contracts.* (29 kolon) + expo adı + sales agent adı.
+// Detay — contracts.* + expo adı + üçlü komisyon agent adları + transfer zinciri.
 // ----------------------------------------------------------------------------
-router.get('/:id', authMiddleware, async (req, res) => {
-  const { id } = req.params;
-
-  try {
-    const result = await pool.query(
+// contractDetailSql: assignment PUT dönüşü de aynı join'li şekli verir.
+const CONTRACT_DETAIL_SQL =
       `SELECT c.*,
-              e.name  AS expo_name,
-              sa.name AS sales_agent_name,
+              e.name   AS expo_name,
+              -- Üçlü komisyon atfı (3b): agent / sr / sd.
+              ag.name  AS agent_name,
+              sr.name  AS sr_name,
+              sd.name  AS sd_name,
               -- Transfer zinciri (3a-5): ham id yerine af_number gösterilir.
               tf.af_number AS transferred_from_af,
               tt.id        AS transferred_to_id,
@@ -214,11 +215,20 @@ router.get('/:id', authMiddleware, async (req, res) => {
               CASE WHEN c.revenue_eur IS NULL THEN NULL
                    ELSE c.revenue_eur - p.paid_eur END AS balance_eur
          FROM contracts c
-         LEFT JOIN expos e         ON e.id  = c.expo_id
-         LEFT JOIN sales_agents sa ON sa.id = c.sales_agent_id
-         LEFT JOIN contracts tf    ON tf.id = c.transferred_from_contract_id
+         LEFT JOIN expos e          ON e.id  = c.expo_id
+         LEFT JOIN sales_agents ag  ON ag.id = c.agent_sales_agent_id
+         LEFT JOIN sales_agents sr  ON sr.id = c.sr_sales_agent_id
+         LEFT JOIN sales_agents sd  ON sd.id = c.sd_sales_agent_id
+         LEFT JOIN contracts tf     ON tf.id = c.transferred_from_contract_id
          -- uq_contracts_transferred_from sayesinde en fazla 1 satır → çoğalma yok
-         LEFT JOIN contracts tt    ON tt.transferred_from_contract_id = c.id
+         LEFT JOIN contracts tt     ON tt.transferred_from_contract_id = c.id`;
+
+router.get('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      CONTRACT_DETAIL_SQL + `
          LEFT JOIN LATERAL (
            SELECT COALESCE(SUM(pm.amount_eur), 0)::numeric(14,2) AS paid_eur
              FROM payments pm
@@ -638,14 +648,19 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
     const newAf = nextTransferAf(source.af_number);
 
     // Klon — kopyalanan alanlar SELECT'ten gelir (numeric bozulmaz).
+    // Komisyon atfı taşınır (req :402/:414, K8): agent/sr/sd FK + pct kopyalanır.
     // Operasyonel 9 kolon, source_quote_id, sales_owner_user_id, audit → NULL.
     const created = await client.query(
       `INSERT INTO contracts (
-         organizer_id, company_name, sales_agent_id,
+         organizer_id, company_name,
+         agent_sales_agent_id, sr_sales_agent_id, sd_sales_agent_id,
+         agent_pct, sr_pct, sd_pct,
          revenue, currency, exchange_rate, revenue_eur, company_id,
          expo_id, status, contract_date, transferred_from_contract_id, af_number
        )
-       SELECT organizer_id, company_name, sales_agent_id,
+       SELECT organizer_id, company_name,
+              agent_sales_agent_id, sr_sales_agent_id, sd_sales_agent_id,
+              agent_pct, sr_pct, sd_pct,
               revenue, currency, exchange_rate, revenue_eur, company_id,
               $2, 'Active', CURRENT_DATE, id, $3
          FROM contracts
@@ -713,6 +728,123 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
     if (mapped) return res.status(mapped.status).json(mapped.body);
     console.error('Contract transfer failed:', err);
     return res.status(500).json({ error: 'Failed to transfer contract.' });
+  } finally {
+    client.release();
+  }
+});
+
+// ----------------------------------------------------------------------------
+// PUT /api/contracts/:id/assignment
+// Komisyon atama — üçlü agent/sr/sd FK + override pct'ler.
+//
+// TAM SET semantiği (partial patch DEĞİL): atama tek ekrandan tam gönderilir,
+// body'de olmayan alan NULL yazılır. Kısmi patch karmaşası bilinçli olarak yok.
+//
+// Doğrulama CHECK'e düşmeden anlaşılır 400'e çevrilir (DB CHECK son emniyet):
+//   - FK'ler organizer scope'unda var mı → 400
+//   - agent XOR sr → 400 · sd sr'sız → 400 · pct FK'siz → 400 · pct 0-100 → 400
+//
+// Status kısıtı YOK — atama her status'ta düzeltilebilir (Transferred'da bile;
+// bilinçli: yanlış atama sonradan düzeltilebilmeli).
+//
+// Komisyon HESABI burada YOK — yalnız atama. Oran çözümü (override → yoksa
+// sales_agents.default_commission_pct) motor diliminin işi.
+// ----------------------------------------------------------------------------
+function isPct(v) {
+  if (v === null || v === undefined) return true; // nullable
+  const n = Number(v);
+  return isFinite(n) && n >= 0 && n <= 100;
+}
+
+router.put('/:id/assignment', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const b = req.body || {};
+
+  // FAZ 4: assignment-permission kontrolü buraya (user_permissions B21-B42).
+
+  // Tam set — gönderilmeyen alanlar NULL.
+  const agent = b.agent_sales_agent_id != null ? b.agent_sales_agent_id : null;
+  const sr    = b.sr_sales_agent_id != null ? b.sr_sales_agent_id : null;
+  const sd    = b.sd_sales_agent_id != null ? b.sd_sales_agent_id : null;
+  const agentPct = b.agent_pct != null && b.agent_pct !== '' ? b.agent_pct : null;
+  const srPct    = b.sr_pct != null && b.sr_pct !== '' ? b.sr_pct : null;
+  const sdPct    = b.sd_pct != null && b.sd_pct !== '' ? b.sd_pct : null;
+
+  // --- Kural: agent XOR sr ---
+  if (agent != null && sr != null) {
+    return res.status(400).json({ error: 'Agent and SR are mutually exclusive.' });
+  }
+  // --- Kural: sd yalnız sr varken ---
+  if (sd != null && sr == null) {
+    return res.status(400).json({ error: 'SD requires an SR.' });
+  }
+  // --- Kural: pct ancak ilgili FK doluyken ---
+  if (agentPct != null && agent == null) {
+    return res.status(400).json({ error: 'Percentage requires an agent.' });
+  }
+  if (srPct != null && sr == null) {
+    return res.status(400).json({ error: 'Percentage requires an agent.' });
+  }
+  if (sdPct != null && sd == null) {
+    return res.status(400).json({ error: 'Percentage requires an agent.' });
+  }
+  // --- Kural: pct 0-100 ---
+  if (!isPct(agentPct) || !isPct(srPct) || !isPct(sdPct)) {
+    return res.status(400).json({ error: 'Percentage must be a number between 0 and 100.' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const own = await client.query(
+      'SELECT id FROM contracts WHERE id = $1 AND organizer_id = $2',
+      [id, req.organizer_id]
+    );
+    if (own.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+
+    // FK'ler organizer scope'unda gerçekten var mı — CHECK'e düşmeden 400.
+    const ids = [agent, sr, sd].filter(v => v != null);
+    if (ids.length > 0) {
+      const found = await client.query(
+        'SELECT id FROM sales_agents WHERE organizer_id = $1 AND id = ANY($2::int[])',
+        [req.organizer_id, ids]
+      );
+      if (found.rows.length !== new Set(ids).size) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'Unknown sales agent.' });
+      }
+    }
+
+    await client.query(
+      `UPDATE contracts SET
+         agent_sales_agent_id = $1, sr_sales_agent_id = $2, sd_sales_agent_id = $3,
+         agent_pct = $4, sr_pct = $5, sd_pct = $6, updated_at = NOW()
+       WHERE id = $7 AND organizer_id = $8`,
+      [agent, sr, sd, agentPct, srPct, sdPct, id, req.organizer_id]
+    );
+
+    // Detay SELECT'iyle aynı join'li şekil.
+    const detail = await client.query(
+      CONTRACT_DETAIL_SQL + ` LEFT JOIN LATERAL (
+           SELECT COALESCE(SUM(pm.amount_eur), 0)::numeric(14,2) AS paid_eur
+             FROM payments pm WHERE pm.contract_id = c.id
+         ) p ON TRUE
+        WHERE c.id = $1 AND c.organizer_id = $2`,
+      [id, req.organizer_id]
+    );
+
+    await client.query('COMMIT');
+    return res.json({ contract: detail.rows[0] });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const mapped = mapWriteError(err);
+    if (mapped) return res.status(mapped.status).json(mapped.body);
+    console.error('Assignment update failed:', err);
+    return res.status(500).json({ error: 'Failed to update assignment.' });
   } finally {
     client.release();
   }
