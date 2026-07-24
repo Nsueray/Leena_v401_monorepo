@@ -152,6 +152,28 @@
                 </div>
 
                 <div class="card">
+                    <div class="card-title">Line Items</div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Product Code</th>
+                                <th>Description</th>
+                                <th class="num">Qty</th>
+                                <th class="num">Unit Price</th>
+                                <th class="num">Disc %</th>
+                                <th>RF</th>
+                                <th class="num">Line Total</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lineItemBody">
+                            <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+                        </tbody>
+                    </table>
+                    <div id="commBase" style="padding: 14px 16px; border-top: 1px solid var(--border); font-size: 14px;"></div>
+                </div>
+
+                <div class="card">
                     <div class="card-title">Payments</div>
                     <table>
                         <thead>
@@ -262,6 +284,7 @@
             lastContract = c;
             document.getElementById('pageTitle').textContent = c.af_number || `Contract #${c.id}`;
             renderAssignment(c);
+            renderLineItems(c);
 
             document.getElementById('identity').innerHTML =
                   kv('AF No', c.af_number ? escapeHtml(c.af_number) : dash())
@@ -479,6 +502,37 @@
                 if (!(err.status === 401 || err.status === 403)) showToast('Transfer failed', 'error');
                 btn.disabled = false;
             }
+        }
+
+        // Line items are immutable (born at convert; no edit/delete UI).
+        // Order comes from the API (ORDER BY line_no) — not re-sorted here.
+        function renderLineItems(c) {
+            const body = document.getElementById('lineItemBody');
+            const summary = document.getElementById('commBase');
+            const rows = c.line_items || [];
+            if (!rows.length) {
+                // Satırsız contract: commissionable_base null + reason (backend).
+                body.innerHTML = '<tr><td colspan="8" class="empty-state">No line items</td></tr>';
+                summary.innerHTML = '<strong>Commissionable Base:</strong> <span class="muted">— (line items missing)</span>';
+                return;
+            }
+            body.innerHTML = rows.map(li => {
+                // Line Total UI'da hesaplanır (D2 — server saklamaz/göndermez).
+                // money() → formatMoney zaten 2 haneye yuvarlar (round2 eşdeğeri).
+                const total = Number(li.quantity) * Number(li.unit_price) * (1 - Number(li.discount_percent) / 100);
+                return `<tr>
+                    <td>${escapeHtml(String(li.line_no))}</td>
+                    <td>${li.product_code ? escapeHtml(li.product_code) : dash()}</td>
+                    <td>${escapeHtml(li.description)}</td>
+                    <td class="num">${escapeHtml(String(li.quantity))}</td>
+                    <td class="num">${money(li.unit_price, li.currency)}</td>
+                    <td class="num">${escapeHtml(String(li.discount_percent))}</td>
+                    <td>${li.is_registration_fee ? '<span class="tag">RF</span>' : ''}</td>
+                    <td class="num">${money(total, li.currency)}</td>
+                </tr>`;
+            }).join('');
+            // Commissionable base backend'den gelir (RF hariç, D2 hesap); currency = contract.
+            summary.innerHTML = `<strong>Commissionable Base:</strong> ${money(c.commissionable_base, c.currency)}`;
         }
 
         // Payments are immutable events — no edit/delete here by design
