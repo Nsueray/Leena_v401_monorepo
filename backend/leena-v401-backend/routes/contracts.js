@@ -96,6 +96,62 @@ router.post('/convert', authMiddleware, async (req, res) => {
     return res.status(400).json({ error: 'Only a signed quote can be converted to a contract.' });
   }
 
+  // --- Guard 3: line_items (opsiyonel, L3/L4) ---
+  // YOKSA veya [] boşsa: satırsız contract (bugünkü davranış birebir korunur).
+  // VARSA: her eleman doğrulanır; line_no + currency server tarafından yazılır.
+  const rawItems = Array.isArray(b.line_items) ? b.line_items : [];
+  if (b.line_items !== undefined && !Array.isArray(b.line_items)) {
+    return res.status(400).json({ error: 'line_items must be an array.' });
+  }
+  const items = [];
+  if (rawItems.length > 0) {
+    // Satır varken contract currency zorunlu (server her satıra kopyalar; NOT NULL).
+    if (!b.currency) {
+      return res.status(400).json({ error: 'currency is required when line_items are present.' });
+    }
+    for (let i = 0; i < rawItems.length; i++) {
+      const li = rawItems[i] || {};
+      const n = i + 1; // line_no server atar (1'den)
+      if (typeof li.description !== 'string' || li.description.trim() === '') {
+        return res.status(400).json({ error: `line_items[${n}].description is required.` });
+      }
+      const qty = Number(li.quantity);
+      if (li.quantity == null || !isFinite(qty) || qty <= 0) {
+        return res.status(400).json({ error: `line_items[${n}].quantity must be a number greater than 0.` });
+      }
+      const price = Number(li.unit_price);
+      if (li.unit_price == null || !isFinite(price) || price < 0) {
+        return res.status(400).json({ error: `line_items[${n}].unit_price must be a number >= 0.` });
+      }
+      let disc = 0;
+      if (li.discount_percent != null && li.discount_percent !== '') {
+        disc = Number(li.discount_percent);
+        if (!isFinite(disc) || disc < 0 || disc > 100) {
+          return res.status(400).json({ error: `line_items[${n}].discount_percent must be between 0 and 100.` });
+        }
+      }
+      const is_rf = li.is_registration_fee === true;
+      // Satır toplamı — round2 yalnız pozitif girdilerle (ev kuralı; hepsi >=0).
+      const line_total = round2(qty * price * (1 - disc / 100));
+      items.push({ line_no: n, product_code: li.product_code || null,
+                   description: li.description.trim(), quantity: qty, unit_price: price,
+                   discount_percent: disc, is_registration_fee: is_rf, line_total });
+    }
+
+    // --- L4: grand_total ↔ revenue toleransı (INSERT'lerden ÖNCE) ---
+    // grand_total tüm kalemleri kapsar (RF satırlar DAHİL — revenue hepsini içerir).
+    const grand_total = round2(items.reduce((s, it) => s + it.line_total, 0));
+    const revenue = Number(b.revenue);
+    if (b.revenue == null || !isFinite(revenue)) {
+      return res.status(400).json({ error: 'revenue is required (numeric) when line_items are present.' });
+    }
+    if (Math.abs(grand_total - revenue) > 0.01) {
+      return res.status(400).json({
+        error: `line_items total (${grand_total.toFixed(2)}) does not match revenue (${revenue.toFixed(2)}).`
+      });
+    }
+  }
+
   // contract_date: payload'dan (signed_at) ya da bugün
   const contract_date = b.contract_date || new Date().toISOString().slice(0, 10);
 
@@ -135,9 +191,24 @@ router.post('/convert', authMiddleware, async (req, res) => {
         // expo_id, komisyon agent/sr/sd, audit → bu dilimde NULL (sonraki dilimler)
       ]
     );
+    const newContract = result.rows[0];
+
+    // Satır INSERT'leri AYNI transaction'da — kısmi yazma imkânsız (atomik).
+    // currency server tarafından contract'tan kopyalanır; CHECK ihlalleri (23514)
+    // mapWriteError → 400 (aşağıdaki catch).
+    for (const it of items) {
+      await client.query(
+        `INSERT INTO contract_line_items
+           (contract_id, line_no, product_code, description, quantity,
+            unit_price, discount_percent, is_registration_fee, currency)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+        [newContract.id, it.line_no, it.product_code, it.description, it.quantity,
+         it.unit_price, it.discount_percent, it.is_registration_fee, b.currency]
+      );
+    }
 
     await client.query('COMMIT');
-    return res.status(201).json({ contract: result.rows[0] });
+    return res.status(201).json({ contract: newContract });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     const mapped = mapWriteError(err);
@@ -241,8 +312,40 @@ router.get('/:id', authMiddleware, async (req, res) => {
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Contract not found' });
     }
+    const contract = result.rows[0];
 
-    res.json(result.rows[0]);
+    // Satır kalemleri (L1) — ORDER BY line_no. CONTRACT_DETAIL_SQL paylaşımlı
+    // (assignment da kullanıyor) olduğu için ayrı sorgu; hesap yine SQL'de (D2).
+    const li = await pool.query(
+      `SELECT id, line_no, product_code, description, quantity, unit_price,
+              discount_percent, is_registration_fee, currency
+         FROM contract_line_items
+        WHERE contract_id = $1
+        ORDER BY line_no`,
+      [id]
+    );
+    contract.line_items = li.rows;
+
+    // commissionable_base (K7b) — türetilmiş, SAKLANMAZ (D2). RF satırlar hariç.
+    // Satır hiç yoksa: null + reason (yalnız bu durumda reason alanı eklenir).
+    if (li.rows.length === 0) {
+      contract.commissionable_base = null;
+      contract.commissionable_base_reason = 'line items missing';
+    } else {
+      const base = await pool.query(
+        `SELECT SUM(ROUND(quantity * unit_price * (1 - discount_percent / 100), 2))
+                  FILTER (WHERE is_registration_fee = false) AS commissionable_base
+           FROM contract_line_items
+          WHERE contract_id = $1`,
+        [id]
+      );
+      // Yalnız RF satırları varsa FILTER boş → NULL; COALESCE ile 0.00'a çekilmez
+      // (kalem VAR ama komisyona konu tutar 0 olabilir → 0.00 döndür).
+      const cb = base.rows[0].commissionable_base;
+      contract.commissionable_base = cb == null ? '0.00' : cb;
+    }
+
+    res.json(contract);
   } catch (err) {
     console.error('Error fetching contract:', err);
     res.status(500).json({ error: 'Internal server error' });
