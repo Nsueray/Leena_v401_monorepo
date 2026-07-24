@@ -416,9 +416,12 @@
                     body: JSON.stringify(body)
                 });
                 if (res.ok) {
-                    const data = await res.json();
                     showToast('Assignment saved', 'success');
-                    render(data.contract);   // refetch yerine dönen güncel satırla çiz
+                    // TAM yenileme (add-payment deseni): PUT cevabı paylaşımlı
+                    // CONTRACT_DETAIL_SQL'den döner ve line_items/commission TAŞIMAZ
+                    // (onlar GET /:id'de ayrı sorgularla eklenir). data.contract ile
+                    // render edersek o kartlar "yok" sanılır → loadContract() ile tam GET.
+                    loadContract();
                 } else {
                     let msg = 'Assignment failed';
                     try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
