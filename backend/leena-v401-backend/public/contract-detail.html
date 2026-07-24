@@ -145,6 +145,7 @@
 
                 <div class="card">
                     <div class="card-title">Commission</div>
+                    <div id="commissionCalc"></div>
                     <form class="assign-form" id="assignForm" onsubmit="submitAssignment(event)">
                         <div id="assignRows"><span class="muted" style="padding:16px;display:block">Loading agents…</span></div>
                         <div style="padding:0 16px 16px"><button class="btn btn-primary btn-sm" type="submit">Save</button></div>
@@ -284,6 +285,7 @@
             lastContract = c;
             document.getElementById('pageTitle').textContent = c.af_number || `Contract #${c.id}`;
             renderAssignment(c);
+            renderCommission(c);
             renderLineItems(c);
 
             document.getElementById('identity').innerHTML =
@@ -502,6 +504,55 @@
                 if (!(err.status === 401 || err.status === 403)) showToast('Transfer failed', 'error');
                 btn.disabled = false;
             }
+        }
+
+        // Commission hesap görünümü (M1) — salt-okunur; atama formu ayrı (aşağıda).
+        // Tutarlar backend'den (D2, saklanmaz); "427.50 MAD (38.48 EUR)" deseni.
+        function renderCommission(c) {
+            const box = document.getElementById('commissionCalc');
+            if (!box) return;
+            const cm = c.commission;
+            if (cm == null) {
+                // Satırsız → matrah yok, komisyon hesaplanamaz.
+                box.innerHTML = `<div class="kv"><div>Commission</div><div class="muted">— (line items missing)</div></div>`;
+                return;
+            }
+            // Üst satır: Base + Collection % (+ overpaid notu).
+            const ratioPct = cm.ratio == null ? dash() : `${(Number(cm.ratio) * 100).toFixed(0)}%`;
+            const over = cm.overpayment ? ' <span class="tag">overpaid</span>' : '';
+            let head = `<div class="kv">
+                <div>Base</div><div>${money(cm.base, c.currency)}</div>
+                <div>Collection</div><div>${ratioPct}${over}</div>
+            </div>`;
+            const roles = cm.roles || [];
+            if (!roles.length) {
+                box.innerHTML = head + `<div class="empty-state" style="padding:20px">No commission roles assigned</div>`;
+                return;
+            }
+            // Rol tablosu: Role · Agent · Rate (oran+kaynak) · Full · Earned to Date.
+            const rows = roles.map(r => {
+                const rate = r.reason === 'rate missing'
+                    ? '<span class="muted">rate missing</span>'
+                    : (r.pct_used == null ? dash()
+                        : `${escapeHtml(String(r.pct_used))}% (${escapeHtml(r.pct_source || '')})`);
+                // pair(): contract parası + EUR ("427.50 MAD (38.48 EUR)"); *_eur null → yalnız contract parası.
+                const pair = (amt, amtEur) => {
+                    if (amt == null) return dash();
+                    const main = money(amt, c.currency);
+                    return amtEur == null ? main : `${main} (${money(amtEur, 'EUR')})`;
+                };
+                return `<tr>
+                    <td>${escapeHtml(r.role)}</td>
+                    <td>${r.agent_name ? escapeHtml(r.agent_name) : dash()}</td>
+                    <td>${rate}</td>
+                    <td class="num">${pair(r.full, r.full_eur)}</td>
+                    <td class="num">${pair(r.earned, r.earned_eur)}</td>
+                </tr>`;
+            }).join('');
+            box.innerHTML = head + `<table>
+                <thead><tr><th>Role</th><th>Agent</th><th>Rate</th><th class="num">Full</th><th class="num">Earned to Date</th></tr></thead>
+                <tbody>${rows}</tbody>
+            </table>`;
         }
 
         // Line items are immutable (born at convert; no edit/delete UI).

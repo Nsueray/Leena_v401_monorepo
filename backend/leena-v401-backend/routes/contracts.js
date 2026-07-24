@@ -294,6 +294,122 @@ const CONTRACT_DETAIL_SQL =
          -- uq_contracts_transferred_from sayesinde en fazla 1 satır → çoğalma yok
          LEFT JOIN contracts tt     ON tt.transferred_from_contract_id = c.id`;
 
+// ----------------------------------------------------------------------------
+// KOMİSYON MOTORU SABİTLERİ (M1) — tek-kaynak SQL ifadeleri
+// ----------------------------------------------------------------------------
+// Matrah (K7b): RF-hariç satır toplamı. GET /:id'deki commissionable_base ile
+// AYNI ifade (yeniden icat yok).
+const COMMISSIONABLE_BASE_EXPR =
+  `SUM(ROUND(quantity * unit_price * (1 - discount_percent / 100), 2))
+     FILTER (WHERE is_registration_fee = false)`;
+
+// DİLİM ifadesi (M-c) — ödeme başına ham komisyon dilimi (YUVARLANMAZ, M-e):
+//   pot_eur × amount_eur / revenue_eur
+// Reversal, payments'ta NEGATİF amount_eur satırıyla temsil edilir (018 storno)
+// → negatif dilim; SUM kendiliğinden netler (K7d), özel kod yok.
+// ⚠️ TEK-KAYNAK: M2 kesim raporu bu ifadeyi PENCEREYLE (kümülatif-marjinal)
+// kullanır; M1 contract görünümü ise ratio yolu (tavan LEAST) kullanır —
+// overpayment'ta ikisi ayrışır (M-d tavan yalnız kesip atar). Bkz. computeCommission.
+const SLICE_EUR_EXPR =
+  `(pot_eur * pm.amount_eur / NULLIF(ctx.revenue_eur, 0))`;
+
+// computeCommission — contract görünümü (M1). Tüm aritmetik SQL'de; JS round2
+// komisyon için HİÇ çağrılmaz (M-e). base VAR (satır var) varsayımıyla çağrılır.
+async function computeCommission(contractId, organizerId) {
+  // Meta: base + paid_eur + ratio (M-d tavan) + overpayment (L4 toleransı).
+  const meta = await pool.query(
+    `SELECT
+        (SELECT ${COMMISSIONABLE_BASE_EXPR}
+           FROM contract_line_items WHERE contract_id = c.id) AS base,
+        COALESCE((SELECT SUM(amount_eur) FROM payments WHERE contract_id = c.id), 0)::numeric AS paid_eur,
+        c.revenue_eur,
+        CASE WHEN c.revenue_eur IS NULL OR c.revenue_eur = 0 THEN NULL
+             ELSE LEAST(COALESCE((SELECT SUM(amount_eur) FROM payments WHERE contract_id = c.id), 0)
+                        / c.revenue_eur, 1) END AS ratio,
+        (c.revenue_eur IS NOT NULL
+          AND COALESCE((SELECT SUM(amount_eur) FROM payments WHERE contract_id = c.id), 0)
+              - c.revenue_eur > 0.01) AS overpayment
+       FROM contracts c
+      WHERE c.id = $1 AND c.organizer_id = $2`,
+    [contractId, organizerId]
+  );
+  const m = meta.rows[0];
+
+  // Roller (agent XOR sr, sd). Oran çözümü (M-b): override > default; SD default
+  // = default_director_pct, agent/sr default = default_commission_pct.
+  // SD HÜKMÜ (kilitli): bağımsız, aynı matrah (sd_pct/100 × base). Kademeli değil.
+  // pot = pct/100 × base [contract parası] · pot_eur = pot × exchange_rate [donmuş kur].
+  // earned = ROUND(pot × ratio, 2) · earned_eur = ROUND(pot_eur × ratio, 2) [tek final ROUND, M-e].
+  const roles = await pool.query(
+    `WITH ctx AS (
+       SELECT c.revenue_eur, c.exchange_rate,
+              (SELECT ${COMMISSIONABLE_BASE_EXPR}
+                 FROM contract_line_items WHERE contract_id = c.id) AS base,
+              CASE WHEN c.revenue_eur IS NULL OR c.revenue_eur = 0 THEN NULL
+                   ELSE LEAST(COALESCE((SELECT SUM(amount_eur) FROM payments WHERE contract_id = c.id), 0)
+                              / c.revenue_eur, 1) END AS ratio,
+              c.agent_sales_agent_id, c.sr_sales_agent_id, c.sd_sales_agent_id,
+              c.agent_pct, c.sr_pct, c.sd_pct
+         FROM contracts c
+        WHERE c.id = $1 AND c.organizer_id = $2
+     ),
+     r AS (
+       SELECT 'agent' AS role, 1 AS ord, agent_sales_agent_id AS fk, agent_pct AS override_pct FROM ctx
+       UNION ALL SELECT 'sr', 2, sr_sales_agent_id, sr_pct FROM ctx
+       UNION ALL SELECT 'sd', 3, sd_sales_agent_id, sd_pct FROM ctx
+     ),
+     resolved AS (
+       SELECT r.role, r.ord, r.fk AS sales_agent_id, sa.name AS agent_name,
+              r.override_pct,
+              CASE WHEN r.role = 'sd' THEN sa.default_director_pct ELSE sa.default_commission_pct END AS default_pct
+         FROM r LEFT JOIN sales_agents sa ON sa.id = r.fk
+        WHERE r.fk IS NOT NULL
+     ),
+     computed AS (
+       SELECT res.role, res.ord, res.sales_agent_id, res.agent_name,
+              COALESCE(res.override_pct, res.default_pct) AS pct_used,
+              CASE WHEN res.override_pct IS NOT NULL THEN 'override'
+                   WHEN res.default_pct IS NOT NULL THEN 'default'
+                   ELSE NULL END AS pct_source,
+              -- pot (contract parası); pct_used NULL → NULL (rate missing)
+              CASE WHEN COALESCE(res.override_pct, res.default_pct) IS NULL THEN NULL
+                   ELSE COALESCE(res.override_pct, res.default_pct) / 100 * ctx.base END AS pot,
+              ctx.exchange_rate, ctx.ratio, ctx.revenue_eur
+         FROM resolved res CROSS JOIN ctx
+     )
+     SELECT role, sales_agent_id, agent_name, pct_used, pct_source,
+            ROUND(pot, 2) AS full,
+            CASE WHEN exchange_rate IS NULL OR pot IS NULL THEN NULL
+                 ELSE ROUND(pot * exchange_rate, 2) END AS full_eur,
+            -- earned: ratio NULL (revenue_eur missing) veya pot NULL → NULL
+            CASE WHEN ratio IS NULL OR pot IS NULL THEN NULL
+                 ELSE ROUND(pot * ratio, 2) END AS earned,
+            CASE WHEN ratio IS NULL OR pot IS NULL OR exchange_rate IS NULL THEN NULL
+                 ELSE ROUND(pot * exchange_rate * ratio, 2) END AS earned_eur,
+            CASE WHEN pct_used IS NULL THEN 'rate missing'
+                 WHEN revenue_eur IS NULL OR revenue_eur = 0 THEN 'revenue missing'
+                 ELSE NULL END AS reason
+       FROM computed
+      ORDER BY ord`,
+    [contractId, organizerId]
+  );
+
+  return {
+    base: m.base,
+    ratio: m.ratio,
+    ...(m.overpayment ? { overpayment: true } : {}),
+    roles: roles.rows.map(r => {
+      const row = {
+        role: r.role, sales_agent_id: r.sales_agent_id, agent_name: r.agent_name,
+        pct_used: r.pct_used, pct_source: r.pct_source,
+        full: r.full, full_eur: r.full_eur, earned: r.earned, earned_eur: r.earned_eur,
+      };
+      if (r.reason) row.reason = r.reason;
+      return row;
+    }),
+  };
+}
+
 router.get('/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
 
@@ -331,10 +447,11 @@ router.get('/:id', authMiddleware, async (req, res) => {
     if (li.rows.length === 0) {
       contract.commissionable_base = null;
       contract.commissionable_base_reason = 'line items missing';
+      contract.commission = null;
+      contract.commission_reason = 'line items missing';
     } else {
       const base = await pool.query(
-        `SELECT SUM(ROUND(quantity * unit_price * (1 - discount_percent / 100), 2))
-                  FILTER (WHERE is_registration_fee = false) AS commissionable_base
+        `SELECT ${COMMISSIONABLE_BASE_EXPR} AS commissionable_base
            FROM contract_line_items
           WHERE contract_id = $1`,
         [id]
@@ -343,6 +460,9 @@ router.get('/:id', authMiddleware, async (req, res) => {
       // (kalem VAR ama komisyona konu tutar 0 olabilir → 0.00 döndür).
       const cb = base.rows[0].commissionable_base;
       contract.commissionable_base = cb == null ? '0.00' : cb;
+
+      // KOMİSYON MOTORU (M1, K7 + Sentez M-a..e) — türetilmiş, SAKLANMAZ (D2).
+      contract.commission = await computeCommission(id, req.organizer_id);
     }
 
     res.json(contract);
