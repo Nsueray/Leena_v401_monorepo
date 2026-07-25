@@ -1074,3 +1074,10 @@ router.put('/:id/assignment', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+// Tek-kaynak SQL fragment'ları — M2 kesim raporu (routes/commissions.js) matrahı
+// AYNI ifadeden türetir (yeniden icat yok). SLICE_EUR_EXPR M1 contract görünümü
+// içindir (amount_eur); M2 pencereli marjinal effective_pay kullanır (M-c/U1a) —
+// bu yüzden fragment'ı referans/belge olarak export ediyoruz, matrah fragment'ı
+// (COMMISSIONABLE_BASE_EXPR) ise M2'de birebir kullanılır.
+module.exports.COMMISSIONABLE_BASE_EXPR = COMMISSIONABLE_BASE_EXPR;
+module.exports.SLICE_EUR_EXPR = SLICE_EUR_EXPR;
