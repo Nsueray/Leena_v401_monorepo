@@ -75,6 +75,8 @@ let salesAgentRoutes;
 try { salesAgentRoutes = require('./routes/salesAgents'); console.log('✓ Sales agent routes loaded'); } catch (err) { console.error('✗ Failed to load sales agent routes:', err.message); }
 let commissionRoutes;
 try { commissionRoutes = require('./routes/commissions'); console.log('✓ Commission routes loaded'); } catch (err) { console.error('✗ Failed to load commission routes:', err.message); }
+let payoutRoutes;
+try { payoutRoutes = require('./routes/payouts'); console.log('✓ Payout routes loaded'); } catch (err) { console.error('✗ Failed to load payout routes:', err.message); }
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -138,6 +140,7 @@ if (conferenceCleanupRoutes) app.use('/api/conference-cleanup', conferenceCleanu
 if (contractRoutes) app.use('/api/contracts', contractRoutes); // ✅ LEENA-native Convert endpoint
 if (salesAgentRoutes) app.use('/api/sales-agents', salesAgentRoutes);
 if (commissionRoutes) app.use('/api/commissions', commissionRoutes); // ✅ M2 cut-period commission report
+if (payoutRoutes) app.use('/api/agents', payoutRoutes); // ✅ PAYOUT P1 agent payout + statement
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
