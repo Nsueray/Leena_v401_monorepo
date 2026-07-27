@@ -212,7 +212,7 @@
                 <td class="num">${a.default_commission_pct == null ? dash() : escapeHtml(String(a.default_commission_pct))}</td>
                 <td class="num">${a.default_director_pct == null ? dash() : escapeHtml(String(a.default_director_pct))}</td>
                 <td>${a.is_active ? '✓' : dash()}</td>
-                <td class="num"><button class="btn btn-ghost btn-sm" onclick="editAgent(${a.id})">Edit</button></td>
+                <td class="num"><button class="btn btn-ghost btn-sm" onclick="window.location.href='agent-statement.html?agent_id=${a.id}'">Statement</button> <button class="btn btn-ghost btn-sm" onclick="editAgent(${a.id})">Edit</button></td>
             </tr>`).join('');
         }
 

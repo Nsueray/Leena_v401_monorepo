@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- TODO Faz 4: role gate (B21-B42) — Finance ekranları rol kontrolsüz görünüyor, kabul edilmiş borç -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Agent Statement - Leena EMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4a6fa5;
+            --primary-hover: #3d5d8a;
+            --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e;
+            --sidebar-hover: #252542;
+            --sidebar-active: #2d2d4a;
+            --sidebar-text: #9ca3af;
+            --sidebar-text-active: #ffffff;
+            --sidebar-border: #252542;
+            --bg: #f4f6fa;
+            --surface: #ffffff;
+            --border: #e5e7eb;
+            --text: #1f2937;
+            --text-muted: #6b7280;
+            --danger: #b91c1c;
+            --warn: #92400e;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); }
+        .app-shell { display: flex; min-height: 100vh; }
+
+        .sidebar { width: 260px; background: var(--sidebar-bg); display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid var(--sidebar-border); }
+        .sidebar-logo { height: 32px; }
+        .sidebar-nav { padding: 16px 12px; flex: 1; }
+        .nav-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sidebar-text); padding: 8px 12px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); }
+        .nav-divider { height: 1px; background: var(--sidebar-border); margin: 12px 0; }
+
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .main-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--surface); border-bottom: 1px solid var(--border); }
+        .main-header h1 { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .main-header .sub { font-size: 13px; color: var(--text-muted); font-weight: 500; }
+        .main-content { padding: 24px 28px; }
+
+        .btn { font-family: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+
+        /* Stat boxes */
+        .stats { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+        .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; min-width: 180px; }
+        .stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+        .stat .val { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 6px; }
+        .stat .val.neg { color: var(--danger); }
+
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 24px; }
+        .card-title { font-size: 14px; font-weight: 700; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--border); background: #fafbfc; }
+        tbody td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        tbody tr:last-child td { border-bottom: none; }
+        .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+        .muted { color: var(--text-muted); }
+        .reversal-row td { background: #fdf6f6; }
+        .neg { color: var(--danger); }
+
+        /* Record payout form */
+        .payout-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 16px; }
+        .payout-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+        .payout-form input, .payout-form select { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 130px; }
+        .payout-form input:disabled { background: var(--primary-light); }
+
+        .error-line { display: none; background: #fdecec; color: var(--danger); border: 1px solid #f5c2c2; border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 14px; font-weight: 600; }
+        .error-line.show { display: block; }
+        .empty-state { padding: 40px 20px; text-align: center; color: var(--text-muted); }
+        .select-agent { max-width: 360px; margin-top: 12px; }
+        .select-agent select { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo">
+            </div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Finance</div>
+                    <a class="nav-item" href="contract-list.html">
+                        <i class="bi bi-file-earmark-text"></i><span>Contracts</span>
+                    </a>
+                    <a class="nav-item" href="sales-agents.html">
+                        <i class="bi bi-person-badge"></i><span>Sales Agents</span>
+                    </a>
+                    <a class="nav-item" href="commissions.html">
+                        <i class="bi bi-cash-coin"></i><span>Commissions</span>
+                    </a>
+                    <a class="nav-item active" href="agent-statement.html">
+                        <i class="bi bi-wallet2"></i><span>Agent Statement</span>
+                    </a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <a class="nav-item" href="dashboard_new.html">
+                        <i class="bi bi-collection"></i><span>My Expos</span>
+                    </a>
+                    <a class="nav-item" href="#" onclick="logout(); return false;">
+                        <i class="bi bi-box-arrow-right"></i><span>Logout</span>
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-wallet2"></i> <span id="headerTitle">Agent Statement</span></h1>
+                <span class="sub" id="headerSub"></span>
+            </header>
+
+            <main class="main-content">
+                <div class="error-line" id="errorLine"></div>
+                <div id="content"><div class="empty-state">Loading…</div></div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
+    <script>
+        const API_URL = '/api';
+        let AGENT_ID = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            if (!token) { window.location.href = 'login.html'; return; }
+            AGENT_ID = new URLSearchParams(window.location.search).get('agent_id');
+            if (!AGENT_ID) { showAgentPicker(); return; }
+            loadStatement();
+        });
+
+        // --- No agent_id: simple picker from /api/sales-agents (Ö5 list endpoint) ---
+        async function showAgentPicker() {
+            document.getElementById('headerSub').textContent = 'Select an agent';
+            try {
+                const res = await leenaFetch(`${API_URL}/sales-agents?include_inactive=1`);
+                if (!res.ok) { document.getElementById('content').innerHTML = '<div class="empty-state">Missing agent_id parameter.</div>'; return; }
+                const agents = await res.json();
+                const opts = ['<option value="">— Select an agent —</option>']
+                    .concat(agents.map(a => `<option value="${a.id}">${escapeHtml(a.name)} (#${a.id})</option>`)).join('');
+                document.getElementById('content').innerHTML =
+                    `<div class="select-agent"><select onchange="if(this.value)window.location.href='agent-statement.html?agent_id='+this.value">${opts}</select></div>`;
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                document.getElementById('content').innerHTML = '<div class="empty-state">Missing agent_id parameter.</div>';
+            }
+        }
+
+        async function loadStatement() {
+            hideError();
+            document.getElementById('content').innerHTML = '<div class="empty-state">Loading…</div>';
+            try {
+                const res = await leenaFetch(`${API_URL}/agents/${AGENT_ID}/statement`);
+                if (!res.ok) {
+                    let msg = 'Failed to load statement';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    document.getElementById('content').innerHTML = `<div class="empty-state">${escapeHtml(msg)}</div>`;
+                    return;
+                }
+                render(await res.json());
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                document.getElementById('content').innerHTML =
+                    '<div class="empty-state">Error loading statement. <button class="btn btn-primary btn-sm" onclick="loadStatement()">Retry</button></div>';
+            }
+        }
+
+        function render(s) {
+            // Header (Section A)
+            document.getElementById('headerTitle').textContent = s.agent_name || 'Agent Statement';
+            document.getElementById('headerSub').textContent = `Agent #${s.sales_agent_id}`;
+
+            // Balance negative → red (D2: server values printed as-is, no client math)
+            const balNeg = Number(s.balance_eur) < 0 ? ' neg' : '';
+
+            // Section B — three figures (server-provided, printed verbatim)
+            const stats = `<div class="stats">
+                <div class="stat"><div class="lbl">Earned (EUR)</div><div class="val">${money(s.earned_eur)}</div></div>
+                <div class="stat"><div class="lbl">Paid (EUR)</div><div class="val">${money(s.paid_eur)}</div></div>
+                <div class="stat"><div class="lbl">Balance (EUR)</div><div class="val${balNeg}">${money(s.balance_eur)}</div></div>
+            </div>`;
+
+            // Which payouts are already reversed (a row's id appears as another row's reverses_payout_id)
+            const reversedIds = new Set((s.payouts || []).filter(p => p.reverses_payout_id != null).map(p => Number(p.reverses_payout_id)));
+
+            // Section C — payouts table (server order preserved)
+            const rows = (s.payouts || []).map(p => payoutRow(p, reversedIds)).join('');
+            const table = `<div class="card">
+                <div class="card-title">Payouts</div>
+                <table>
+                    <thead><tr>
+                        <th>Date</th><th class="num">Amount</th><th>Currency</th><th class="num">Rate</th>
+                        <th class="num">Amount (EUR)</th><th>Notes</th><th>Reverses</th><th></th>
+                    </tr></thead>
+                    <tbody>${rows || '<tr><td colspan="8" class="empty-state">No payouts yet.</td></tr>'}</tbody>
+                </table>
+            </div>`;
+
+            // Section D — record payout form
+            const today = new Date().toISOString().slice(0, 10);
+            const form = `<div class="card">
+                <div class="card-title">Record payout</div>
+                <form class="payout-form" onsubmit="submitPayout(event)">
+                    <label>Amount<input name="amount" type="text" autocomplete="off"></label>
+                    <label>Currency<select name="currency" onchange="lockRateIfEur()">
+                        <option value="EUR">EUR</option><option value="USD">USD</option><option value="TRY">TRY</option>
+                        <option value="MAD">MAD</option><option value="NGN">NGN</option><option value="KES">KES</option>
+                    </select></label>
+                    <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
+                    <label>Payout date<input name="payout_date" type="date" value="${today}"></label>
+                    <label>Notes<input name="notes" type="text" autocomplete="off"></label>
+                    <button class="btn btn-primary" type="submit">Save payout</button>
+                </form>
+            </div>`;
+
+            document.getElementById('content').innerHTML = stats + table + form;
+        }
+
+        function payoutRow(p, reversedIds) {
+            const neg = Number(p.amount_eur) < 0 ? ' neg' : '';
+            const rowCls = p.reverses_payout_id != null ? ' class="reversal-row"' : '';
+            // Reverse button only when: amount > 0 AND not already reversed.
+            let action = '';
+            if (Number(p.amount) > 0 && !reversedIds.has(Number(p.id))) {
+                action = `<button class="btn btn-ghost btn-sm" onclick="reversePayout(${p.id}, '${escapeAttr(p.amount)}', '${escapeAttr(p.currency)}', '${escapeAttr(p.exchange_rate)}')">Reverse</button>`;
+            } else if (Number(p.amount) > 0 && reversedIds.has(Number(p.id))) {
+                action = '<span class="muted">reversed</span>';
+            }
+            return `<tr${rowCls}>
+                <td>${escapeHtml(dateOnly(p.payout_date))}</td>
+                <td class="num${neg}">${money(p.amount)}</td>
+                <td>${escapeHtml(p.currency)}</td>
+                <td class="num">${escapeHtml(String(p.exchange_rate))}</td>
+                <td class="num${neg}">${money(p.amount_eur)}</td>
+                <td>${p.notes ? escapeHtml(p.notes) : '<span class="muted">—</span>'}</td>
+                <td>${p.reverses_payout_id != null ? '#' + escapeHtml(String(p.reverses_payout_id)) : '<span class="muted">—</span>'}</td>
+                <td class="num">${action}</td>
+            </tr>`;
+        }
+
+        // Section D submit — amount_eur NOT computed/sent (server authority)
+        async function submitPayout(ev) {
+            ev.preventDefault();
+            hideError();
+            const f = ev.target;
+            const body = {
+                amount: f.amount.value,
+                currency: f.currency.value,
+                exchange_rate: f.exchange_rate.value,
+                payout_date: f.payout_date.value,
+                notes: f.notes.value || undefined,
+            };
+            await postPayout(body, f.querySelector('button[type=submit]'));
+        }
+
+        // Section E — reverse flow
+        async function reversePayout(id, amount, currency, exchange_rate) {
+            if (!confirm(`Reverse payout #${id}? This records a negative offsetting entry.`)) return;
+            hideError();
+            await postPayout({
+                amount: -Number(amount),
+                currency: currency,
+                exchange_rate: Number(exchange_rate),
+                payout_date: new Date().toISOString().slice(0, 10),
+                reverses_payout_id: id,
+                notes: `Reversal of #${id}`,
+            }, null);
+        }
+
+        async function postPayout(body, btn) {
+            if (btn) btn.disabled = true;
+            try {
+                const res = await leenaFetch(`${API_URL}/agents/${AGENT_ID}/payouts`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) {
+                    // Section F — surface server error, never swallow (400/409/500)
+                    let msg = 'Failed to record payout';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    showError(msg);
+                    return;
+                }
+                if (typeof showToast === 'function') showToast('Payout saved', 'success');
+                loadStatement();   // re-fetch; no client-side totalling (D2)
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                showError('Failed to record payout.');
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        function lockRateIfEur() {
+            const f = document.querySelector('.payout-form');
+            if (!f) return;
+            const isEur = f.currency.value.trim().toUpperCase() === 'EUR';
+            f.exchange_rate.disabled = isEur;
+            f.exchange_rate.value = isEur ? '1' : '';
+        }
+
+        function showError(msg) { const el = document.getElementById('errorLine'); el.textContent = msg; el.classList.add('show'); }
+        function hideError() { const el = document.getElementById('errorLine'); el.textContent = ''; el.classList.remove('show'); }
+
+        // Server values printed as-is (D2 — no rounding/recompute). null → empty.
+        function money(v) {
+            if (v === null || v === undefined || v === '') return '';
+            const n = Number(v);
+            if (!isFinite(n)) return escapeHtml(String(v));
+            return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+        // ISO timestamp (…T00:00:00.000Z) → YYYY-MM-DD (string slice, no date lib)
+        function dateOnly(d) { return d ? String(d).slice(0, 10) : ''; }
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function escapeAttr(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+    </script>
+</body>
+</html>
