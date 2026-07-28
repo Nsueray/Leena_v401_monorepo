@@ -17,7 +17,7 @@ const AGENT_TYPES = ['internal', 'external_freelance', 'external_agency'];
 const SELECT_COLS =
   `id, name, agent_type, sales_group, sales_team, country, email,
    agent_company, commission_currency, default_commission_pct,
-   default_director_pct, is_active, zoho_record_id`;
+   default_director_pct, is_active, zoho_record_id, office_id`;
 
 // pct: null geçerli; 0-100 sayı (0 dahil) → değer; aksi → hata sinyali (undefined).
 function normPct(v) {

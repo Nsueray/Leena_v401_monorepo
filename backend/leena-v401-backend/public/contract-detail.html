@@ -202,7 +202,7 @@
                         <label>Currency<select name="currency" onchange="lockRateIfEur()"></select></label>
                         <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
                         <label>Method<select name="payment_method"></select></label>
-                        <label>Office<select name="received_office_id"></select></label>
+                        <label>Office *<select name="received_office_id"></select></label>
                         <label>Date<input name="payment_date" type="date"></label>
                         <label>Notes<input name="notes" type="text" autocomplete="off"></label>
                         <button class="btn btn-primary btn-sm" type="submit">Save</button>
@@ -276,6 +276,18 @@
             const f = document.getElementById('payForm');
             f.currency.innerHTML = CURRENCIES.map(c => `<option value="${c}">${c}</option>`).join('');
             f.payment_method.innerHTML = PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('');
+            f.payment_date.value = new Date().toISOString().slice(0, 10);   // default bugün (W-9)
+        }
+
+        // Ofis ön-doldurma (W-7, Z-3 kilit değil): kontratın agent'ı → yoksa SR → o agent'ın
+        // office_id'si (loadSalesAgents listesinden). Bulunamazsa boş kalır, kullanıcı seçer.
+        function prefillPaymentOffice() {
+            const f = document.getElementById('payForm');
+            if (!f || !f.received_office_id || !lastContract) return;
+            const aid = lastContract.agent_sales_agent_id || lastContract.sr_sales_agent_id;
+            if (!aid) return;
+            const a = salesAgents.find(x => String(x.id) === String(aid));
+            if (a && a.office_id != null) f.received_office_id.value = String(a.office_id);
         }
 
         async function loadContract() {
@@ -309,6 +321,7 @@
 
         function render(c) {
             lastContract = c;
+            prefillPaymentOffice();   // ofis ön-doldurma (agent/SR ofisi)
             document.getElementById('pageTitle').textContent = c.af_number || `Contract #${c.id}`;
             renderAssignment(c);
             renderCommission(c);
@@ -750,6 +763,8 @@
         async function submitPayment(ev) {
             ev.preventDefault();
             const f = ev.target;
+            // Ofis ZORUNLU (W-6): seçilmeden istek atılmaz (server de 400 döner — çift güvenlik).
+            if (!f.received_office_id.value) { showToast('Office is required', 'error'); return; }
             const body = {
                 amount: f.amount.value,
                 currency: f.currency.value,

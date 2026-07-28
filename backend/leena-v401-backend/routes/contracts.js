@@ -626,16 +626,20 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Contract not found' });
     }
 
-    // received_office_id verildiyse offices'ta VAR + is_active olmalı (payment_method guard emsali).
-    if (received_office_id != null) {
-      const off = await client.query(
-        'SELECT id FROM offices WHERE id = $1 AND is_active = true',
-        [received_office_id]
-      );
-      if (off.rows.length === 0) {
-        await client.query('ROLLBACK').catch(() => {});
-        return res.status(400).json({ error: 'invalid office' });
-      }
+    // Ofis ZORUNLU (PS2-C, W-6). Bu POST yalnız normal ödeme kurar; reverse (:737) ve
+    // transfer (:929/947) AYRI bloklar, ofisi orijinalden devralır → MUAF (dokunulmadı).
+    // NOT NULL DB'de yok (Z-1); zorunluluk yalnız API katmanında.
+    if (received_office_id == null) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ error: 'office required' });
+    }
+    const off = await client.query(
+      'SELECT id FROM offices WHERE id = $1 AND is_active = true',
+      [received_office_id]
+    );
+    if (off.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ error: 'invalid office' });
     }
 
     const result = await client.query(

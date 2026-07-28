@@ -119,8 +119,13 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Agent not found' });
     }
 
-    // Normal payout: paid_office_id verildiyse offices'ta VAR + is_active olmalı.
-    if (!isReversal && paidOfficeIn != null) {
+    // Normal payout: ofis ZORUNLU (PS2-C, W-6). Reversal MUAF — ofisi orijinalden
+    // devralır (aşağıda). NOT NULL DB'de yok (Z-1); zorunluluk yalnız API katmanında.
+    if (!isReversal) {
+      if (paidOfficeIn == null) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'office required' });
+      }
       const off = await client.query(
         'SELECT id FROM offices WHERE id = $1 AND is_active = true',
         [paidOfficeIn]
@@ -202,9 +207,9 @@ router.get('/:id/statement', authMiddleware, async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Agent organizer scope + varlık.
+    // Agent organizer scope + varlık. office_id ön-doldurma için döner (W-7, ek sorgu yok).
     const agent = await pool.query(
-      'SELECT id, name FROM sales_agents WHERE id = $1 AND organizer_id = $2',
+      'SELECT id, name, office_id FROM sales_agents WHERE id = $1 AND organizer_id = $2',
       [id, req.organizer_id]
     );
     if (agent.rows.length === 0) {
@@ -247,6 +252,7 @@ ${SLICE_CTES}
     res.json({
       sales_agent_id: Number(id),
       agent_name: agent.rows[0].name,
+      agent_office_id: agent.rows[0].office_id,   // ön-doldurma kaynağı (W-7)
       earned_eur,
       paid_eur,
       balance_eur,

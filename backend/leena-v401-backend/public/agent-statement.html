@@ -237,8 +237,10 @@
             // Section D — record payout form
             const today = new Date().toISOString().slice(0, 10);
             // Office/Method seçenekleri — ofis listesi bellekten (X-1), method beş değerden (X-2).
+            // Ofis ön-doldurma (W-7, Z-3): agent'ın office_id'si seçili gelir; kullanıcı ezebilir.
+            const preOffice = s.agent_office_id;
             const officeOpts = ['<option value="">—</option>']
-                .concat(offices.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`)).join('');
+                .concat(offices.map(o => `<option value="${o.id}"${String(o.id) === String(preOffice) ? ' selected' : ''}>${escapeHtml(o.name)}</option>`)).join('');
             const methodOpts = ['<option value="">—</option>']
                 .concat(PAYOUT_METHODS.map(m => `<option value="${m}">${m}</option>`)).join('');
             const form = `<div class="card">
@@ -250,7 +252,7 @@
                         <option value="MAD">MAD</option><option value="NGN">NGN</option><option value="KES">KES</option>
                     </select></label>
                     <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
-                    <label>Office<select name="paid_office_id">${officeOpts}</select></label>
+                    <label>Office *<select name="paid_office_id">${officeOpts}</select></label>
                     <label>Method<select name="payout_method">${methodOpts}</select></label>
                     <label>Payout date<input name="payout_date" type="date" value="${today}"></label>
                     <label>Notes<input name="notes" type="text" autocomplete="off"></label>
@@ -290,6 +292,8 @@
             ev.preventDefault();
             hideError();
             const f = ev.target;
+            // Ofis ZORUNLU (W-6): seçilmeden istek atılmaz (server de 400 döner).
+            if (!f.paid_office_id.value) { showError('Office is required'); return; }
             const body = {
                 amount: f.amount.value,
                 currency: f.currency.value,
