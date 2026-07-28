@@ -1073,6 +1073,276 @@ router.put('/:id/assignment', authMiddleware, async (req, res) => {
   }
 });
 
+// ============================================================================
+// PAYMENT SCHEDULE (PS1) — plan kalemleri. Schedule PLAN, payments OLAY (S-6/S-13r):
+// eşleştirme mantığı YOK. Kur dondurulmaz (S-4). Revizyon = superseded damgası +
+// yeni satır (S-5). "matches_revenue" TÜRETİLİR, saklanmaz (S-7). Ofis listesi
+// koda gömülmez (S-16r). Komisyon motoruna DOKUNULMAZ (S-8).
+// ============================================================================
+const SCHED_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
+
+// Aktif planı süpersede edip yeni revizyon kalemlerini ekler (çağıranın tx'i içinde).
+async function applyScheduleRevision(client, contractId, organizerId, items, currency, source, createdBy) {
+  const maxRev = (await client.query(
+    'SELECT COALESCE(MAX(revision), 0) AS m FROM payment_schedule_items WHERE contract_id = $1',
+    [contractId]
+  )).rows[0].m;
+  const newRev = Number(maxRev) + 1;
+  if (Number(maxRev) > 0) {
+    // S-5: eski satır UPDATE/SİLİNMEZ — yalnız superseded_at damgalanır.
+    await client.query(
+      'UPDATE payment_schedule_items SET superseded_at = now() WHERE contract_id = $1 AND superseded_at IS NULL',
+      [contractId]
+    );
+  }
+  const inserted = [];
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    const row = await client.query(
+      `INSERT INTO payment_schedule_items
+         (organizer_id, contract_id, revision, item_no, due_date, amount, currency,
+          percent, source, expected_office_id, expected_method, notes, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [organizerId, contractId, newRev, i + 1, it.due_date, it.amount, currency,
+       it.percent ?? null, source, it.expected_office_id ?? null, it.expected_method ?? null,
+       it.notes ?? null, createdBy]
+    );
+    inserted.push(row.rows[0]);
+  }
+  return inserted;
+}
+
+// expected_office_id'ler offices'ta VE aktif mi (tx içinde).
+async function validateOffices(client, items) {
+  const ids = [...new Set(items.map(it => it.expected_office_id).filter(v => v != null))];
+  if (ids.length === 0) return true;
+  const found = await client.query(
+    'SELECT id FROM offices WHERE id = ANY($1::int[]) AND is_active = true',
+    [ids]
+  );
+  return found.rows.length === ids.length;
+}
+
+// GET /api/contracts/:id/schedule — aktif plan + history + türetilmiş totals (D2).
+router.get('/:id/schedule', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  // TODO Faz 4: role gate (B21-B42)
+  try {
+    const own = await pool.query(
+      'SELECT revenue, currency FROM contracts WHERE id = $1 AND organizer_id = $2',
+      [id, req.organizer_id]
+    );
+    if (own.rows.length === 0) return res.status(404).json({ error: 'Contract not found' });
+
+    const active = await pool.query(
+      'SELECT * FROM payment_schedule_items WHERE contract_id = $1 AND superseded_at IS NULL ORDER BY item_no',
+      [id]
+    );
+    const history = await pool.query(
+      'SELECT * FROM payment_schedule_items WHERE contract_id = $1 AND superseded_at IS NOT NULL ORDER BY revision DESC, item_no',
+      [id]
+    );
+    const tot = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0)::numeric(14,2) AS scheduled_total
+         FROM payment_schedule_items WHERE contract_id = $1 AND superseded_at IS NULL`,
+      [id]
+    );
+    const scheduled_total = tot.rows[0].scheduled_total;
+    const revenue = own.rows[0].revenue;
+    // matches_revenue TÜRETİLİR (S-7); aktif kalem yoksa false.
+    const matches_revenue = active.rows.length > 0 && revenue != null
+      && Number(scheduled_total) === Number(revenue);
+
+    res.json({
+      active: active.rows,
+      history: history.rows,
+      totals: { scheduled_total, contract_revenue: revenue, currency: own.rows[0].currency, matches_revenue },
+    });
+  } catch (err) {
+    console.error('Error fetching schedule:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/contracts/:id/schedule — ELLE plan (yüzde XOR tutar).
+router.post('/:id/schedule', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const b = req.body || {};
+  // TODO Faz 4: role gate (B21-B42)
+
+  const items = Array.isArray(b.items) ? b.items : null;
+  if (!items || items.length === 0) return res.status(400).json({ error: 'items required' });
+
+  const hasPercent = items.some(it => it.percent != null && it.percent !== '');
+  const hasAmount = items.some(it => it.amount != null && it.amount !== '');
+  if (hasPercent && hasAmount) return res.status(400).json({ error: 'use either percent or amount for all items' });
+  if (!hasPercent && !hasAmount) return res.status(400).json({ error: 'each item requires percent or amount' });
+
+  for (const it of items) {
+    if (!isValidDate(it.due_date)) return res.status(400).json({ error: 'valid due_date required for each item' });
+    if (it.expected_method != null && it.expected_method !== '' && !SCHED_METHODS.includes(it.expected_method))
+      return res.status(400).json({ error: 'invalid method' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const own = await client.query(
+      'SELECT revenue, currency FROM contracts WHERE id = $1 AND organizer_id = $2',
+      [id, req.organizer_id]
+    );
+    if (own.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    const revenue = own.rows[0].revenue;
+    const currency = own.rows[0].currency;
+    // Defensif: currency NOT NULL — kontratta NULL ise raw 500 yerine net 400.
+    if (currency == null) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ error: 'contract currency required' });
+    }
+
+    if (!(await validateOffices(client, items))) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(400).json({ error: 'invalid office' });
+    }
+
+    // due_date sırasına göre — item_no 1..n.
+    const sorted = items.slice().sort((a, c) => (a.due_date < c.due_date ? -1 : a.due_date > c.due_date ? 1 : 0));
+
+    const computed = [];
+    let source, warning;
+    if (hasPercent) {
+      if (revenue == null) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'contract revenue required' });
+      }
+      let ptot = 0;
+      for (const it of sorted) {
+        const p = Number(it.percent);
+        if (!isFinite(p) || p < 0 || p > 100) {
+          await client.query('ROLLBACK').catch(() => {});
+          return res.status(400).json({ error: 'percent must be between 0 and 100' });
+        }
+        ptot += p;
+      }
+      if (round2(ptot) !== 100) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'percent total must be 100' });
+      }
+      source = 'manual_percent';
+      const rev = Number(revenue);
+      let acc = 0;
+      for (let i = 0; i < sorted.length; i++) {
+        const it = sorted[i];
+        // SON KALEM kalanı emer → Σ ≡ revenue TAM (S-3).
+        const amt = (i === sorted.length - 1) ? round2(rev - acc) : round2(rev * Number(it.percent) / 100);
+        if (i !== sorted.length - 1) acc = round2(acc + amt);
+        if (!(amt > 0)) {
+          await client.query('ROLLBACK').catch(() => {});
+          return res.status(400).json({ error: 'each amount must be greater than 0' });
+        }
+        computed.push({ due_date: it.due_date, amount: amt, percent: it.percent,
+          expected_office_id: it.expected_office_id, expected_method: it.expected_method || null, notes: it.notes });
+      }
+    } else {
+      source = 'manual_amount';
+      let sum = 0;
+      for (const it of sorted) {
+        const a = Number(it.amount);
+        if (!isFinite(a) || !(a > 0)) {
+          await client.query('ROLLBACK').catch(() => {});
+          return res.status(400).json({ error: 'each amount must be greater than 0' });
+        }
+        const amt = round2(a);
+        sum = round2(sum + amt);
+        computed.push({ due_date: it.due_date, amount: amt, percent: null,
+          expected_office_id: it.expected_office_id, expected_method: it.expected_method || null, notes: it.notes });
+      }
+      // S-9: Σ ≠ revenue KABUL edilir, uyarı döner (engellenmez).
+      if (revenue == null || Number(sum) !== Number(revenue)) {
+        warning = 'scheduled total does not match contract revenue';
+      }
+    }
+
+    const active = await applyScheduleRevision(client, id, req.organizer_id, computed, currency, source, null);
+    await client.query('COMMIT');
+    const resp = { active };
+    if (warning) resp.warning = warning;
+    return res.status(201).json(resp);
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const mapped = mapWriteError(err);
+    if (mapped) return res.status(mapped.status).json(mapped.body);
+    console.error('Schedule create failed:', err);
+    return res.status(500).json({ error: 'Failed to create schedule.' });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/contracts/:id/schedule/default — DEFAULT üretici (imza+7 / expo−30).
+router.post('/:id/schedule/default', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  // TODO Faz 4: role gate (B21-B42)
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    // Tarihleri string olarak al (TZ kayması önleme).
+    const own = await client.query(
+      `SELECT to_char(c.contract_date, 'YYYY-MM-DD') AS contract_date, c.expo_id,
+              c.revenue, c.currency, to_char(e.start_date, 'YYYY-MM-DD') AS expo_start
+         FROM contracts c LEFT JOIN expos e ON e.id = c.expo_id
+        WHERE c.id = $1 AND c.organizer_id = $2`,
+      [id, req.organizer_id]
+    );
+    if (own.rows.length === 0) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(404).json({ error: 'Contract not found' });
+    }
+    const r = own.rows[0];
+    // ÖN KOŞUL — biri eksikse 400 + 0 satır (yarım plan YASAK, S-1).
+    if (r.contract_date == null) { await client.query('ROLLBACK').catch(() => {}); return res.status(400).json({ error: 'contract_date required' }); }
+    if (r.expo_id == null) { await client.query('ROLLBACK').catch(() => {}); return res.status(400).json({ error: 'expo required' }); }
+    if (r.expo_start == null) { await client.query('ROLLBACK').catch(() => {}); return res.status(400).json({ error: 'expo start date required' }); }
+    if (r.revenue == null) { await client.query('ROLLBACK').catch(() => {}); return res.status(400).json({ error: 'contract revenue required' }); }
+    if (r.currency == null) { await client.query('ROLLBACK').catch(() => {}); return res.status(400).json({ error: 'contract currency required' }); }
+
+    const d = await client.query(
+      `SELECT to_char($1::date + 7, 'YYYY-MM-DD') AS d1, to_char($2::date - 30, 'YYYY-MM-DD') AS d2`,
+      [r.contract_date, r.expo_start]
+    );
+    const d1 = d.rows[0].d1, d2 = d.rows[0].d2;
+    const revenue = Number(r.revenue);
+
+    let computed;
+    if (d2 <= d1) {
+      // S-2 çekme+birleştirme tek ifadesi: TEK kalem %100 @ d1.
+      computed = [{ due_date: d1, amount: round2(revenue), percent: 100, expected_office_id: null, expected_method: null, notes: null }];
+    } else {
+      const a1 = round2(revenue * 0.40);
+      const a2 = round2(revenue - a1);
+      computed = [
+        { due_date: d1, amount: a1, percent: 40, expected_office_id: null, expected_method: null, notes: null },
+        { due_date: d2, amount: a2, percent: 60, expected_office_id: null, expected_method: null, notes: null },
+      ];
+    }
+
+    const active = await applyScheduleRevision(client, id, req.organizer_id, computed, r.currency, 'default', null);
+    await client.query('COMMIT');
+    return res.status(201).json({ active });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    const mapped = mapWriteError(err);
+    if (mapped) return res.status(mapped.status).json(mapped.body);
+    console.error('Schedule default failed:', err);
+    return res.status(500).json({ error: 'Failed to generate default schedule.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
 // Tek-kaynak SQL fragment'ları — M2 kesim raporu (routes/commissions.js) matrahı
 // AYNI ifadeden türetir (yeniden icat yok). SLICE_EUR_EXPR M1 contract görünümü
