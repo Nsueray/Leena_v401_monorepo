@@ -168,11 +168,8 @@
     <script>
         const API_URL = '/api';
         const CONTRACT_STATUSES = ['Active', 'On Hold', 'Transferred', 'Cancelled'];
-        const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
-        // Tahsilat birimleri: merkez İstanbul + Fas/Nijerya/Kenya ofisleri.
-        // UI konfigürasyonu — server'da whitelist YOK (3 harf format kontrolü yeterli).
-        // Ledger fazında core_currencies benzeri referans tablosu gelirse oradan beslenir.
-        const CURRENCIES = ['EUR', 'USD', 'TRY', 'MAD', 'NGN', 'KES'];
+        // PS2-B2: PAYMENT_METHODS + CURRENCIES kaldırıldı (yalnız kaldırılan satır-içi
+        // ödeme formu kullanıyordu). Ödeme girişi artık contract-detail.html'de.
         let allContracts = [];
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -239,9 +236,8 @@
                     <td class="num">${formatMoney(c.paid_eur, 'EUR')}</td>
                     <td class="num">${balance}</td>
                     <td>${statusSelect(c)}</td>
-                    <td class="num"><button class="btn btn-ghost btn-sm" onclick="togglePayForm(${c.id})">+ Payment</button></td>
-                </tr>
-                ${payForm(c)}`;
+                    <td class="num"><button class="btn btn-ghost btn-sm" onclick="window.location.href='contract-detail.html?id=${c.id}'">+ Payment</button></td>
+                </tr>`;
             }).join('');
         }
 
@@ -254,86 +250,8 @@
             window.location.href = `contract-detail.html?id=${id}`;
         }
 
-        // Inline add-payment form — hidden row under each contract.
-        // Row expansion instead of a modal: this page has no overlay/dialog CSS,
-        // so a modal would mean new styling; the row reuses existing table styles.
-        // No client-side validation by design — the server's 400s are the contract.
-        function payForm(c) {
-            const methods = PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('');
-            // Default EUR → form açıldığında rate 1 ve kilitli başlar (markup'ta set edilir).
-            const currencies = CURRENCIES.map(cur => `<option value="${cur}">${cur}</option>`).join('');
-            return `<tr class="pay-row" id="payrow-${c.id}" style="display:none">
-                <td colspan="10">
-                    <form class="pay-form" onsubmit="submitPayment(event, ${c.id})">
-                        <label>Amount<input name="amount" type="text" autocomplete="off"></label>
-                        <label>Currency<select name="currency"
-                                               onchange="lockRateIfEur(${c.id})">${currencies}</select></label>
-                        <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
-                        <label>Method<select name="payment_method">${methods}</select></label>
-                        <label>Date<input name="payment_date" type="date"></label>
-                        <label>Notes<input name="notes" type="text" autocomplete="off"></label>
-                        <button class="btn btn-primary btn-sm" type="submit">Save</button>
-                        <button class="btn btn-ghost btn-sm" type="button" onclick="togglePayForm(${c.id})">Cancel</button>
-                    </form>
-                </td>
-            </tr>`;
-        }
-
-        function togglePayForm(id) {
-            const row = document.getElementById(`payrow-${id}`);
-            if (row) row.style.display = row.style.display === 'none' ? '' : 'none';
-        }
-
-        // EUR → rate is always 1 (server rejects anything else). Lock, don't validate.
-        // Non-EUR seçilince alan TEMİZLENİR: default EUR olduğu için alan 1 ile
-        // başlıyor; devralınan 1, USD/TRY için sessizce yanlış amount_eur üretirdi.
-        // Boş bırakınca server 400 döner — sessiz hata yerine görünür hata.
-        function lockRateIfEur(id) {
-            const f = document.querySelector(`#payrow-${id} .pay-form`);
-            if (!f) return;
-            const isEur = f.currency.value.trim().toUpperCase() === 'EUR';
-            f.exchange_rate.disabled = isEur;
-            f.exchange_rate.value = isEur ? '1' : '';
-        }
-
-        async function submitPayment(ev, id) {
-            ev.preventDefault();
-            const f = ev.target;
-            const body = {
-                amount: f.amount.value,
-                currency: f.currency.value,
-                // disabled inputs are omitted from the form, so read the value directly
-                exchange_rate: f.exchange_rate.value,
-                payment_method: f.payment_method.value,
-                payment_date: f.payment_date.value,
-                notes: f.notes.value || null
-            };
-            const submitBtn = f.querySelector('button[type="submit"]');
-            submitBtn.disabled = true;
-            try {
-                const res = await leenaFetch(`${API_URL}/contracts/${id}/payments`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                if (res.ok) {
-                    f.reset();              // currency → default EUR
-                    lockRateIfEur(id);      // ...dolayısıyla rate yeniden 1 ve kilitli
-                    togglePayForm(id);
-                    showToast('Payment added', 'success');
-                    loadContracts();          // paid/balance refresh
-                } else {
-                    // show the server's message verbatim (400 / 404)
-                    let msg = 'Payment failed';
-                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
-                    showToast(msg, 'error');
-                }
-            } catch (err) {
-                if (!(err.status === 401 || err.status === 403)) showToast('Payment failed', 'error');
-            } finally {
-                submitBtn.disabled = false;
-            }
-        }
+        // PS2-B2: satır içi ödeme formu KALDIRILDI. Tek ödeme giriş noktası =
+        // contract-detail.html (Add payment kartı). "+ Payment" butonu oraya yönlendirir.
 
         function statusSelect(c) {
             const current = c.status || '';

@@ -137,14 +137,35 @@
     <script>
         const API_URL = '/api';
         let AGENT_ID = null;
+        let offices = [];   // GET /api/offices (PS2-B2: "para nereye çıktı"; koda gömülmez)
+        // payments.payment_method ile AYNI beş değer (H7 tek sözlük). Tek yerde tanımlı.
+        const PAYOUT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('token');
             if (!token) { window.location.href = 'login.html'; return; }
             AGENT_ID = new URLSearchParams(window.location.search).get('agent_id');
             if (!AGENT_ID) { showAgentPicker(); return; }
+            await loadOffices();   // dropdown/kolon verisi (fail-soft)
             loadStatement();
         });
+
+        // GET /api/offices — contract-detail.html:255 loadOffices deseni. FAIL-SOFT.
+        // Ofis listesi frontend'de sabit DEĞİL — tablodan gelir (X-1).
+        async function loadOffices() {
+            try {
+                const res = await leenaFetch(`${API_URL}/offices`);
+                if (res.ok) offices = await res.json();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+            }
+        }
+        // paid_office_id → ada eşle (JOIN yok; bellekten). Yoksa "—" (X-5).
+        function officeName(id) {
+            if (id == null) return '<span class="muted">—</span>';
+            const o = offices.find(x => String(x.id) === String(id));
+            return o ? escapeHtml(o.name) : '<span class="muted">—</span>';
+        }
 
         // --- No agent_id: simple picker from /api/sales-agents (Ö5 list endpoint) ---
         async function showAgentPicker() {
@@ -207,14 +228,19 @@
                 <table>
                     <thead><tr>
                         <th>Date</th><th class="num">Amount</th><th>Currency</th><th class="num">Rate</th>
-                        <th class="num">Amount (EUR)</th><th>Notes</th><th>Reverses</th><th></th>
+                        <th class="num">Amount (EUR)</th><th>Office</th><th>Method</th><th>Notes</th><th>Reverses</th><th></th>
                     </tr></thead>
-                    <tbody>${rows || '<tr><td colspan="8" class="empty-state">No payouts yet.</td></tr>'}</tbody>
+                    <tbody>${rows || '<tr><td colspan="10" class="empty-state">No payouts yet.</td></tr>'}</tbody>
                 </table>
             </div>`;
 
             // Section D — record payout form
             const today = new Date().toISOString().slice(0, 10);
+            // Office/Method seçenekleri — ofis listesi bellekten (X-1), method beş değerden (X-2).
+            const officeOpts = ['<option value="">—</option>']
+                .concat(offices.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`)).join('');
+            const methodOpts = ['<option value="">—</option>']
+                .concat(PAYOUT_METHODS.map(m => `<option value="${m}">${m}</option>`)).join('');
             const form = `<div class="card">
                 <div class="card-title">Record payout</div>
                 <form class="payout-form" onsubmit="submitPayout(event)">
@@ -224,6 +250,8 @@
                         <option value="MAD">MAD</option><option value="NGN">NGN</option><option value="KES">KES</option>
                     </select></label>
                     <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
+                    <label>Office<select name="paid_office_id">${officeOpts}</select></label>
+                    <label>Method<select name="payout_method">${methodOpts}</select></label>
                     <label>Payout date<input name="payout_date" type="date" value="${today}"></label>
                     <label>Notes<input name="notes" type="text" autocomplete="off"></label>
                     <button class="btn btn-primary" type="submit">Save payout</button>
@@ -249,6 +277,8 @@
                 <td>${escapeHtml(p.currency)}</td>
                 <td class="num">${escapeHtml(String(p.exchange_rate))}</td>
                 <td class="num${neg}">${money(p.amount_eur)}</td>
+                <td>${officeName(p.paid_office_id)}</td>
+                <td>${p.payout_method ? escapeHtml(p.payout_method) : '<span class="muted">—</span>'}</td>
                 <td>${p.notes ? escapeHtml(p.notes) : '<span class="muted">—</span>'}</td>
                 <td>${p.reverses_payout_id != null ? '#' + escapeHtml(String(p.reverses_payout_id)) : '<span class="muted">—</span>'}</td>
                 <td class="num">${action}</td>
@@ -266,6 +296,8 @@
                 exchange_rate: f.exchange_rate.value,
                 payout_date: f.payout_date.value,
                 notes: f.notes.value || undefined,
+                paid_office_id: f.paid_office_id.value || null,   // boş → null (X-1)
+                payout_method: f.payout_method.value || null,     // boş → null (X-2)
             };
             await postPayout(body, f.querySelector('button[type=submit]'));
         }
