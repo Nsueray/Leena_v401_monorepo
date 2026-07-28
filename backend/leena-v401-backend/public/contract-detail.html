@@ -175,6 +175,11 @@
                 </div>
 
                 <div class="card">
+                    <div class="card-title">Payment Schedule</div>
+                    <div id="scheduleBody"><div class="empty-state" style="padding:20px">Loading…</div></div>
+                </div>
+
+                <div class="card">
                     <div class="card-title">Payments</div>
                     <table>
                         <thead>
@@ -238,6 +243,7 @@
             await loadOffices();       // ofis dropdown'ı (fail-soft)
             loadContract();
             loadPayments();
+            loadSchedule();            // PS3-A: vade planı kartı
         });
 
         async function loadSalesAgents() {
@@ -318,6 +324,198 @@
                     '<tr><td colspan="7" class="empty-state">Error loading payments. <button class="btn btn-ghost btn-sm" onclick="loadPayments()">Retry</button></td></tr>';
             }
         }
+
+        // ── PS3-A: PAYMENT SCHEDULE KARTI ──────────────────────────────────────
+        // Plan PLANDIR (S-13r): schedule ile Payments AYRI kalır — kalem↔ödeme bağı,
+        // "ödendi/gecikti" işareti YOK (P-4). Her değişiklik yeni revizyon (P-3).
+        let scheduleState = { active: [], history: [], totals: null };
+
+        async function loadSchedule() {
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${contractId}/schedule`);
+                if (!res.ok) return;
+                renderSchedule(await res.json());
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                document.getElementById('scheduleBody').innerHTML =
+                    '<div class="empty-state" style="padding:20px">Error loading schedule. <button class="btn btn-ghost btn-sm" onclick="loadSchedule()">Retry</button></div>';
+            }
+        }
+
+        function renderSchedule(s) {
+            scheduleState = s;
+            const body = document.getElementById('scheduleBody');
+            const active = s.active || [];
+            const buttons = `<div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
+                <button class="btn btn-ghost btn-sm" onclick="generateDefault()">Generate default</button>
+                <button class="btn btn-ghost btn-sm" onclick="toggleManualForm()">Add manually</button>
+            </div>`;
+            let html;
+            if (!active.length) {
+                html = `<div class="empty-state" style="padding:20px">No payment schedule</div>` + buttons;
+            } else {
+                const t = s.totals || {};
+                const rev = active[0].revision;
+                const rows = active.map(scheduleRow).join('');
+                // matches_revenue backend'den TÜRETİLİR (P-8) — istemcide toplama yok.
+                const matchTxt = t.matches_revenue
+                    ? 'matches revenue'
+                    : '<span style="color:#b91c1c;font-weight:600">does not match revenue</span>';
+                html = `<table>
+                    <thead><tr><th>#</th><th>Due date</th><th class="num">Amount</th><th>Currency</th><th class="num">%</th><th>Expected office</th><th>Expected method</th><th>Notes</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+                <div style="padding:14px 16px;border-top:1px solid var(--border);font-size:14px">
+                    <strong>Revision ${escapeHtml(String(rev))}</strong> · Scheduled: ${money(t.scheduled_total, t.currency)} · Revenue: ${money(t.contract_revenue, t.currency)} · ${matchTxt}
+                </div>` + buttons + historyBlock(s.history);
+            }
+            body.innerHTML = html + `<div id="manualFormBox" style="display:none"></div>`;
+        }
+
+        function scheduleRow(it) {
+            return `<tr>
+                <td>${escapeHtml(String(it.item_no))}</td>
+                <td>${formatDate(it.due_date)}</td>
+                <td class="num">${money(it.amount, it.currency)}</td>
+                <td>${escapeHtml(it.currency || '')}</td>
+                <td class="num">${it.percent == null ? dash() : escapeHtml(String(it.percent))}</td>
+                <td>${officeName(it.expected_office_id)}</td>
+                <td>${it.expected_method ? escapeHtml(it.expected_method) : dash()}</td>
+                <td>${it.notes ? escapeHtml(it.notes) : dash()}</td>
+            </tr>`;
+        }
+
+        // History native <details> (sayfada accordion deseni yok). Boşsa render edilmez.
+        function historyBlock(history) {
+            const h = history || [];
+            if (!h.length) return '';
+            const rows = h.map(it => `<tr>
+                <td>${escapeHtml(String(it.revision))}</td>
+                <td>${escapeHtml(String(it.item_no))}</td>
+                <td>${formatDate(it.due_date)}</td>
+                <td class="num">${money(it.amount, it.currency)}</td>
+                <td class="num">${it.percent == null ? dash() : escapeHtml(String(it.percent))}</td>
+                <td>${officeName(it.expected_office_id)}</td>
+                <td>${it.expected_method ? escapeHtml(it.expected_method) : dash()}</td>
+                <td>${formatDate(it.superseded_at)}</td>
+            </tr>`).join('');
+            return `<details style="padding:12px 16px;border-top:1px solid var(--border)">
+                <summary>History (${h.length} rows)</summary>
+                <table style="margin-top:10px">
+                    <thead><tr><th>Rev</th><th>#</th><th>Due date</th><th class="num">Amount</th><th class="num">%</th><th>Expected office</th><th>Expected method</th><th>Superseded</th></tr></thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            </details>`;
+        }
+
+        // Aktif plan varsa süperse etmeden ÖNCE onay (P-5). Sessiz supersede yasak.
+        function confirmReplace() {
+            const rev = (scheduleState.active && scheduleState.active[0]) ? scheduleState.active[0].revision : 0;
+            return confirm(`This will replace the active plan (revision ${rev} → ${rev + 1}). The previous plan is kept in history.`);
+        }
+
+        async function generateDefault() {
+            if ((scheduleState.active || []).length && !confirmReplace()) return;
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${contractId}/schedule/default`, { method: 'POST' });
+                if (res.ok) { showToast('Default schedule generated', 'success'); loadSchedule(); }
+                else { let msg = 'Could not generate schedule'; try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {} showToast(msg, 'error'); }
+            } catch (err) { if (!(err.status === 401 || err.status === 403)) showToast('Could not generate schedule', 'error'); }
+        }
+
+        // Manuel plan formu — kart içinde açılır. Ofis dropdown'ı /api/offices'ten,
+        // method PAYMENT_METHODS'tan (yeni liste yok). Plan ofisi ZORUNLU DEĞİL (P-9).
+        function toggleManualForm() {
+            const box = document.getElementById('manualFormBox');
+            if (!box) return;
+            if (box.style.display !== 'none') { box.style.display = 'none'; box.innerHTML = ''; return; }
+            box.style.display = '';
+            box.innerHTML = `<form style="padding:16px;border-top:1px solid var(--border)" onsubmit="submitSchedule(event)">
+                <div id="scheduleRows"></div>
+                <div style="display:flex;gap:8px;margin-top:12px">
+                    <button class="btn btn-ghost btn-sm" type="button" onclick="addScheduleRow()">+ Add row</button>
+                    <button class="btn btn-primary btn-sm" type="submit">Save plan</button>
+                    <button class="btn btn-ghost btn-sm" type="button" onclick="toggleManualForm()">Cancel</button>
+                </div>
+            </form>`;
+            addScheduleRow();   // 1 satırla başla
+        }
+
+        // Kontratın agent/SR ofisi (ön-doldurma; kilit değil, kullanıcı ezebilir).
+        function resolvedPlanOffice() {
+            if (!lastContract) return null;
+            const aid = lastContract.agent_sales_agent_id || lastContract.sr_sales_agent_id;
+            if (!aid) return null;
+            const a = salesAgents.find(x => String(x.id) === String(aid));
+            return (a && a.office_id != null) ? a.office_id : null;
+        }
+
+        function scheduleFormRow() {
+            const officeOpts = ['<option value="">—</option>']
+                .concat(offices.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`)).join('');
+            const methodOpts = ['<option value="">—</option>']
+                .concat(PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`)).join('');
+            const pre = resolvedPlanOffice();
+            const officeSel = pre != null ? officeOpts.replace(`value="${pre}"`, `value="${pre}" selected`) : officeOpts;
+            return `<div class="pay-form sched-row" style="border-top:1px solid var(--border);padding-top:8px;margin-top:8px">
+                <label>Due date<input name="due_date" type="date"></label>
+                <label>Percent<input name="percent" type="text" autocomplete="off"></label>
+                <label>Amount<input name="amount" type="text" autocomplete="off"></label>
+                <label>Office<select name="expected_office_id">${officeSel}</select></label>
+                <label>Method<select name="expected_method">${methodOpts}</select></label>
+                <label>Notes<input name="notes" type="text" autocomplete="off"></label>
+                <button class="btn btn-ghost btn-sm" type="button" onclick="this.closest('.sched-row').remove()">Remove</button>
+            </div>`;
+        }
+
+        function addScheduleRow() {
+            const box = document.getElementById('scheduleRows');
+            if (box) box.insertAdjacentHTML('beforeend', scheduleFormRow());
+        }
+
+        async function submitSchedule(ev) {
+            ev.preventDefault();
+            const rows = [...ev.target.querySelectorAll('.sched-row')];
+            const items = rows.map(r => {
+                const g = (n) => r.querySelector(`[name="${n}"]`).value;
+                const it = { due_date: g('due_date') };
+                if (g('percent') !== '') it.percent = Number(g('percent'));
+                if (g('amount') !== '') it.amount = Number(g('amount'));
+                if (g('expected_office_id') !== '') it.expected_office_id = Number(g('expected_office_id'));
+                if (g('expected_method') !== '') it.expected_method = g('expected_method');
+                if (g('notes') !== '') it.notes = g('notes');
+                return it;
+            });
+            // Percent XOR Amount — istemci uyarısı (server da 400 döner, çift koruma).
+            const hasP = items.some(it => it.percent != null);
+            const hasA = items.some(it => it.amount != null);
+            if (hasP && hasA) { showToast('Use either percent or amount for all items', 'error'); return; }
+            if ((scheduleState.active || []).length && !confirmReplace()) return;
+            const btn = ev.target.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            try {
+                const res = await leenaFetch(`${API_URL}/contracts/${contractId}/schedule`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    // P-7: warning yutulmaz — görünür, kayıt engellenmez.
+                    if (data.warning) showToast(data.warning, 'error');
+                    else showToast('Schedule saved', 'success');
+                    loadSchedule();
+                } else {
+                    // P-6: backend mesajı AYNEN.
+                    let msg = 'Schedule failed';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    showToast(msg, 'error');
+                }
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) showToast('Schedule failed', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+        // ── /PS3-A ─────────────────────────────────────────────────────────────
 
         function render(c) {
             lastContract = c;

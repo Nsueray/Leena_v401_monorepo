@@ -1313,11 +1313,18 @@ router.post('/:id/schedule/default', authMiddleware, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Tarihleri string olarak al (TZ kayması önleme).
+    // Tarihleri string olarak al (TZ kayması önleme). Plan ofisi SUNUCUDA çözülür
+    // (PS3-A): kontratın agent'ı → yoksa SR → o agent'ın office_id'si. is_active
+    // KONTROL EDİLMEZ (plan tahmindir, P-9); çözülemezse NULL kalır, hata dönmez.
+    // TODO Faz 4: role gate + actor (B21-B42)
     const own = await client.query(
       `SELECT to_char(c.contract_date, 'YYYY-MM-DD') AS contract_date, c.expo_id,
-              c.revenue, c.currency, to_char(e.start_date, 'YYYY-MM-DD') AS expo_start
-         FROM contracts c LEFT JOIN expos e ON e.id = c.expo_id
+              c.revenue, c.currency, to_char(e.start_date, 'YYYY-MM-DD') AS expo_start,
+              COALESCE(ag.office_id, sr.office_id) AS resolved_office_id
+         FROM contracts c
+         LEFT JOIN expos e        ON e.id = c.expo_id
+         LEFT JOIN sales_agents ag ON ag.id = c.agent_sales_agent_id
+         LEFT JOIN sales_agents sr ON sr.id = c.sr_sales_agent_id
         WHERE c.id = $1 AND c.organizer_id = $2`,
       [id, req.organizer_id]
     );
@@ -1340,16 +1347,18 @@ router.post('/:id/schedule/default', authMiddleware, async (req, res) => {
     const d1 = d.rows[0].d1, d2 = d.rows[0].d2;
     const revenue = Number(r.revenue);
 
+    // Plan ofisi: kontratın agent/SR ofisi (çözülemezse NULL — zorunlu değil, P-9).
+    const planOffice = r.resolved_office_id;
     let computed;
     if (d2 <= d1) {
       // S-2 çekme+birleştirme tek ifadesi: TEK kalem %100 @ d1.
-      computed = [{ due_date: d1, amount: round2(revenue), percent: 100, expected_office_id: null, expected_method: null, notes: null }];
+      computed = [{ due_date: d1, amount: round2(revenue), percent: 100, expected_office_id: planOffice, expected_method: null, notes: null }];
     } else {
       const a1 = round2(revenue * 0.40);
       const a2 = round2(revenue - a1);
       computed = [
-        { due_date: d1, amount: a1, percent: 40, expected_office_id: null, expected_method: null, notes: null },
-        { due_date: d2, amount: a2, percent: 60, expected_office_id: null, expected_method: null, notes: null },
+        { due_date: d1, amount: a1, percent: 40, expected_office_id: planOffice, expected_method: null, notes: null },
+        { due_date: d2, amount: a2, percent: 60, expected_office_id: planOffice, expected_method: null, notes: null },
       ];
     }
 
