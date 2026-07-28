@@ -790,11 +790,11 @@ router.post('/:id/payments/:paymentId/reverse', authMiddleware, async (req, res)
       `INSERT INTO payments (
          organizer_id, contract_id, amount, currency, exchange_rate,
          amount_eur, payment_method, payment_date, notes, created_by,
-         reverses_payment_id
+         reverses_payment_id, received_office_id
        )
        SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
               -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
-              id
+              id, received_office_id
          FROM payments
         WHERE id = $1
        RETURNING *`,
@@ -929,11 +929,11 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
         `INSERT INTO payments (
            organizer_id, contract_id, amount, currency, exchange_rate,
            amount_eur, payment_method, payment_date, notes, created_by,
-           reverses_payment_id
+           reverses_payment_id, received_office_id
          )
          SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
                 -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
-                id
+                id, received_office_id
            FROM payments
           WHERE id = $1`,
         [row.id, `Transferred to ${newAf} (payment #${row.id})`]
@@ -943,10 +943,12 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
       await client.query(
         `INSERT INTO payments (
            organizer_id, contract_id, amount, currency, exchange_rate,
-           amount_eur, payment_method, payment_date, notes, created_by
+           amount_eur, payment_method, payment_date, notes, created_by,
+           received_office_id
          )
          SELECT organizer_id, $2, amount, currency, exchange_rate,
-                amount_eur, payment_method, payment_date, $3, NULL
+                amount_eur, payment_method, payment_date, $3, NULL,
+                received_office_id
            FROM payments
           WHERE id = $1`,
         [row.id, newContract.id, `Transferred from ${source.af_number} (payment #${row.id})`]

@@ -94,6 +94,17 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
   // Server otoritesi: client'ın gönderdiği amount_eur yok sayılır.
   const amount_eur = round2(amount * exchange_rate);
 
+  // TODO Faz 4: actor (B21-B42)
+  // paid_office_id (para ÇIKTI) + payout_method — OPSİYONEL/nullable (PS2-B1).
+  // W-3: REVERSAL'da istemci değeri YOK SAYILIR; ofis/method orijinalden devralınır.
+  // Normal payout'ta doğrulanır. Sözlük payments.payment_method ile AYNI (H7).
+  const PAYOUT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
+  const paidOfficeIn = (b.paid_office_id != null && b.paid_office_id !== '') ? b.paid_office_id : null;
+  const payoutMethodIn = (b.payout_method != null && b.payout_method !== '') ? b.payout_method : null;
+  if (!isReversal && payoutMethodIn != null && !PAYOUT_METHODS.includes(payoutMethodIn)) {
+    return res.status(400).json({ error: 'invalid method' });
+  }
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -108,10 +119,24 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Agent not found' });
     }
 
+    // Normal payout: paid_office_id verildiyse offices'ta VAR + is_active olmalı.
+    if (!isReversal && paidOfficeIn != null) {
+      const off = await client.query(
+        'SELECT id FROM offices WHERE id = $1 AND is_active = true',
+        [paidOfficeIn]
+      );
+      if (off.rows.length === 0) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'invalid office' });
+      }
+    }
+
     // Reversal hedefi doğrulaması: aynı agent + aynı organizer + orijinal (pozitif).
+    // W-3: ofis/method da OKUNUR → reversal satırına orijinalden yazılır.
+    let tgtRow = null;
     if (isReversal) {
       const tgt = await client.query(
-        'SELECT id, sales_agent_id, amount FROM commission_payouts WHERE id = $1 AND organizer_id = $2',
+        'SELECT id, sales_agent_id, amount, payout_method, paid_office_id FROM commission_payouts WHERE id = $1 AND organizer_id = $2',
         [b.reverses_payout_id, req.organizer_id]
       );
       if (tgt.rows.length === 0) {
@@ -126,13 +151,19 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
         await client.query('ROLLBACK').catch(() => {});
         return res.status(400).json({ error: 'Cannot reverse a reversal.' });
       }
+      tgtRow = tgt.rows[0];
     }
+
+    // W-3: reversal → orijinalden devral; normal → doğrulanmış istemci değeri.
+    const finalOffice = isReversal ? tgtRow.paid_office_id : paidOfficeIn;
+    const finalMethod = isReversal ? tgtRow.payout_method : payoutMethodIn;
 
     const result = await client.query(
       `INSERT INTO commission_payouts (
          organizer_id, sales_agent_id, amount, currency, exchange_rate,
-         amount_eur, payout_date, notes, reverses_payout_id, created_by
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         amount_eur, payout_date, notes, reverses_payout_id, created_by,
+         paid_office_id, payout_method
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         req.organizer_id,
@@ -145,6 +176,8 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
         b.notes || null,
         isReversal ? b.reverses_payout_id : null,
         null, // created_by: LEENA JWT'sinde user id yok (Faz 4 kimlik birleşmesinde dolar)
+        finalOffice,
+        finalMethod,
       ]
     );
 
