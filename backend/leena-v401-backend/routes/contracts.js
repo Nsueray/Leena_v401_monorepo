@@ -605,6 +605,11 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
   // Server otoritesi: client'ın gönderdiği amount_eur yok sayılır.
   const amount_eur = round2(amount * exchange_rate);
 
+  // TODO Faz 4: role gate (B21-B42)
+  // received_office_id OPSİYONEL/nullable (PS2-A: "para nereye geldi"). Boş → NULL.
+  const received_office_id = (b.received_office_id != null && b.received_office_id !== '')
+    ? b.received_office_id : null;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -621,11 +626,23 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: 'Contract not found' });
     }
 
+    // received_office_id verildiyse offices'ta VAR + is_active olmalı (payment_method guard emsali).
+    if (received_office_id != null) {
+      const off = await client.query(
+        'SELECT id FROM offices WHERE id = $1 AND is_active = true',
+        [received_office_id]
+      );
+      if (off.rows.length === 0) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'invalid office' });
+      }
+    }
+
     const result = await client.query(
       `INSERT INTO payments (
          organizer_id, contract_id, amount, currency, exchange_rate,
-         amount_eur, payment_method, payment_date, notes, created_by
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+         amount_eur, payment_method, payment_date, notes, created_by, received_office_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        RETURNING *`,
       [
         req.organizer_id,
@@ -639,6 +656,7 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
         b.notes || null,
         null,   // created_by: LEENA JWT'sinde user id YOK (authMiddleware:17
                 // yalnız organizer_id veriyor) → Faz 4 kimlik birleşmesinde dolar
+        received_office_id,
       ]
     );
 

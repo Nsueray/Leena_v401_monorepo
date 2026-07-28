@@ -184,12 +184,13 @@
                                 <th class="num">Rate</th>
                                 <th class="num">EUR</th>
                                 <th>Method</th>
+                                <th>Office</th>
                                 <th>Notes</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody id="paymentBody">
-                            <tr><td colspan="7" class="empty-state">Loading…</td></tr>
+                            <tr><td colspan="8" class="empty-state">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -201,6 +202,7 @@
                         <label>Currency<select name="currency" onchange="lockRateIfEur()"></select></label>
                         <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
                         <label>Method<select name="payment_method"></select></label>
+                        <label>Office<select name="received_office_id"></select></label>
                         <label>Date<input name="payment_date" type="date"></label>
                         <label>Notes<input name="notes" type="text" autocomplete="off"></label>
                         <button class="btn btn-primary btn-sm" type="submit">Save</button>
@@ -223,6 +225,7 @@
         const contractId = new URLSearchParams(location.search).get('id');
 
         let salesAgents = [];   // GET /api/sales-agents
+        let offices = [];       // GET /api/offices (PS2-A: ödeme "para nereye geldi"; koda gömülmez)
         let lastContract = null; // son yüklenen contract (assignment render'ı için)
 
         // contract-list.html:174-175 guard deseni
@@ -232,6 +235,7 @@
             if (!contractId) { window.location.href = 'contract-list.html'; return; }
             fillFormOptions();
             await loadSalesAgents();   // dropdown verisi contract render'ından önce
+            await loadOffices();       // ofis dropdown'ı (fail-soft)
             loadContract();
             loadPayments();
         });
@@ -244,6 +248,28 @@
                 if (err.status === 401 || err.status === 403) return;
                 // Liste boş kalırsa dropdown yalnız "—" gösterir; atama yapılamaz ama sayfa çalışır.
             }
+        }
+
+        // GET /api/offices — loadSalesAgents deseni. FAIL-SOFT: hata olsa da form/liste çalışır
+        // (dropdown boş, kolonda "—"). Ofis listesi frontend'de sabit DEĞİL — tablodan gelir.
+        async function loadOffices() {
+            try {
+                const res = await leenaFetch(`${API_URL}/offices`);
+                if (res.ok) offices = await res.json();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+            }
+            const f = document.getElementById('payForm');
+            if (f && f.received_office_id) {
+                f.received_office_id.innerHTML = ['<option value="">—</option>']
+                    .concat(offices.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`)).join('');
+            }
+        }
+        // Ödeme satırındaki received_office_id → ada eşle (JOIN yok; liste bellekten). Yoksa "—".
+        function officeName(id) {
+            if (id == null) return dash();
+            const o = offices.find(x => String(x.id) === String(id));
+            return o ? escapeHtml(o.name) : dash();
         }
 
         function fillFormOptions() {
@@ -595,7 +621,7 @@
             const rows = (data && data.payments) || [];
             const body = document.getElementById('paymentBody');
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="7" class="empty-state">No payments yet.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" class="empty-state">No payments yet.</td></tr>';
                 return;
             }
             // Reverse edilmişlik client'ta hesaplanır: bu listede herhangi bir
@@ -621,6 +647,7 @@
                 <td class="num">${p.exchange_rate == null ? dash() : escapeHtml(String(p.exchange_rate))}</td>
                 <td class="num">${money(p.amount_eur, 'EUR')}</td>
                 <td>${escapeHtml(p.payment_method || '')}</td>
+                <td>${officeName(p.received_office_id)}</td>
                 <td>${p.notes ? escapeHtml(p.notes) : dash()}</td>
                 <td>${action}</td>
             </tr>`;
@@ -730,7 +757,8 @@
                 exchange_rate: f.exchange_rate.value,
                 payment_method: f.payment_method.value,
                 payment_date: f.payment_date.value,
-                notes: f.notes.value || null
+                notes: f.notes.value || null,
+                received_office_id: f.received_office_id.value || null   // boş → null (boş string gönderme)
             };
             const submitBtn = f.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
