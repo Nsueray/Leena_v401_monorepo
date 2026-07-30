@@ -320,10 +320,12 @@
         }
 
         function renderCounters(data) {
+            // K16 + K15: sıfır olsa bile GÖRÜNÜR (sessiz kaybolma yok).
             const parts = [];
-            parts.push(`<span>${Number(data.contracts_without_schedule || 0)}</span> contracts without a payment schedule`);
-            // K15: On Hold sayacı N=0 olsa bile GÖRÜNÜR (sessiz kaybolma yok).
+            parts.push(`<span>${Number(data.contracts_without_schedule || 0)}</span> contracts without a payment schedule &mdash; ${formatMoney(data.without_schedule_revenue_eur)} EUR of revenue not scheduled`);
+            parts.push(`<span>${Number(data.contracts_incomplete_schedule || 0)}</span> contracts have incomplete schedules &mdash; ${formatMoney(data.incomplete_schedule_revenue_eur)} EUR of revenue not scheduled`);
             parts.push(`<span>${Number(data.contracts_on_hold || 0)}</span> contracts on hold &mdash; ${formatMoney(data.on_hold_excluded_eur)} EUR excluded from forecast`);
+            parts.push(`<span>${Number(data.contracts_missing_revenue_eur || 0)}</span> contracts have no EUR revenue value`);
             if (Number(data.contracts_unconvertible || 0) > 0) {
                 parts.push(`<span>${Number(data.contracts_unconvertible)}</span> contracts excluded (no exchange rate)`);
             }

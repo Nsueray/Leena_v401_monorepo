@@ -1,3 +1,7 @@
+// K1-K16 = bu dilime ait GEÇİCİ etiketlerdir. Kalıcı ID tahsisi kütükte
+// yapılacaktır (KK1 kuralı: numara tahsisi YALNIZ kütükte).
+// ⚠️ Buradaki K4 ve K7, defterdeki kilitli K4 (default_commission_pct,
+// defter:440) ve K7 (komisyon motor kuralları, defter:457) DEĞİLDİR.
 // ----------------------------------------------------------------------------
 // GET /api/cash-forecast — Nakit öngörü raporu (PS3-B): ofis × vade, EUR.
 // Tamamen TÜRETİLMİŞ (K2/S-11r) — migration YOK, saklama YOK. Tüm aritmetik
@@ -30,6 +34,23 @@
 //  - K9 Eksen = ofis × vade, toplamlar EUR. Para birimi satır bilgisi.
 //  - K13 Plansız kontrat (dışlanmamış statü, aktif satır yok) sayacı görünür.
 //  - K12 organizer scope: tüm sorgular organizer_id filtreli.
+//  - K16 PLANLANMAMIŞ GELİR sayaçları (banner DEĞİŞMEZ — o tarihli planlanmış nakit;
+//    bu sayaçlar planlanmamış geliri AYRI gösterir, birleştirilmez):
+//      Y without_schedule_revenue_eur = plansız kontratların Σ revenue_eur
+//      M/X incomplete_schedule_revenue_eur = planlı ama plan_total_eur<revenue_eur
+//         olanların Σ(revenue_eur−plan_total_eur)
+//    Y ve X BÖLÜNMEDİR (her kontrat tekinde; E2 ayrıklık). K10 kara listesini uygular.
+//    ⚠️ E1 BİLİNÇLİ ASİMETRİ: X yalnız EKSİK planlı (revenue>plan) toplar. FAZLA
+//    planlı (plan>revenue) X'e GİRMEZ, X'i AZALTMAZ — netleşme yasak (S-9). Fazla
+//    planlı kontrat matches_revenue ⚠ ile görünür. 4. sayaç AÇILMAZ (farklı anomali).
+//    ⚠️ NULL KUR: plan_total_eur=amount×exchange_rate; exchange_rate NULL → plan_total
+//    NULL → 'revenue>NULL' unknown → kontrat X'e GİREMEZ. KABUL EDİLMİŞ: o kontrat
+//    contracts_unconvertible'da görünür. (Plansız kontratın kura ihtiyacı yok; Y
+//    revenue_eur'dan doğrudan gelir.)
+//    ⚠️ TEŞHİS EKSENİ: contracts_unconvertible + contracts_missing_revenue_eur
+//    (revenue_eur IS NULL, yalnız SAYI — tutar bilinmiyor, uydurma EUR yok) X/Y ile
+//    ÖRTÜŞEBİLİR; bu tasarım gereği, çifte sayım DEĞİL. Örn: plansız+revenue_eur NULL
+//    kontrat → without_schedule sayısına girer, Y'ye 0 katkı, missing_revenue'da görünür.
 // ----------------------------------------------------------------------------
 const express = require('express');
 const router = express.Router();
@@ -88,6 +109,11 @@ const FORECAST_CTES = `
            (c.plan_eur - c.covered_eur) AS remaining_raw,
            (c.due_date < CURRENT_DATE AND (c.plan_eur - c.covered_eur) > 0) AS is_overdue  -- K14
       FROM calc c
+  ),
+  -- K16: kontrat başına tek satır (plan_total_eur pencere değeri satırlarda aynı).
+  -- Yalnız çevrilebilir (exchange_rate NOT NULL) kontratlar — NULL kur burada yok.
+  ct AS (
+    SELECT DISTINCT contract_id, status, plan_total_eur, revenue_eur FROM calc2
   )
 `;
 
@@ -170,6 +196,24 @@ router.get('/', authMiddleware, async (req, res) => {
             AND NOT EXISTS (SELECT 1 FROM payment_schedule_items s
                              WHERE s.contract_id = c.id AND s.superseded_at IS NULL)
         ) AS contracts_without_schedule,                                       -- K13
+        -- K16 Y: plansız kontratların Σ revenue_eur (NULL revenue_eur SUM'da atlanır → K16 missing sayacı yakalar).
+        (SELECT COALESCE(SUM(c.revenue_eur), 0)::numeric(14,2) FROM contracts c
+          WHERE c.organizer_id = $1 AND c.status NOT IN ('Transferred', 'Cancelled', 'On Hold')
+            AND NOT EXISTS (SELECT 1 FROM payment_schedule_items s
+                             WHERE s.contract_id = c.id AND s.superseded_at IS NULL)
+        ) AS without_schedule_revenue_eur,                                     -- K16 (Y)
+        -- K16 M/X: planlı ama eksik (plan_total_eur < revenue_eur). E1 asimetri: yalnız EKSİK.
+        (SELECT count(*) FROM ct
+          WHERE ct.status <> 'On Hold' AND ct.plan_total_eur < ct.revenue_eur
+        ) AS contracts_incomplete_schedule,                                    -- K16 (M)
+        (SELECT COALESCE(ROUND(SUM(ct.revenue_eur - ct.plan_total_eur), 2), 0)::numeric(14,2) FROM ct
+          WHERE ct.status <> 'On Hold' AND ct.plan_total_eur < ct.revenue_eur
+        ) AS incomplete_schedule_revenue_eur,                                  -- K16 (X)
+        -- K16 Q: revenue_eur IS NULL (yalnız SAYI; tutar bilinmiyor, uydurma EUR yok). Teşhis ekseni, X/Y ile örtüşebilir.
+        (SELECT count(*) FROM contracts c
+          WHERE c.organizer_id = $1 AND c.status NOT IN ('Transferred', 'Cancelled', 'On Hold')
+            AND c.revenue_eur IS NULL
+        ) AS contracts_missing_revenue_eur,                                    -- K16 (Q)
         (SELECT count(DISTINCT c.id) FROM contracts c
            JOIN payment_schedule_items s ON s.contract_id = c.id AND s.superseded_at IS NULL
           WHERE c.organizer_id = $1 AND c.status NOT IN ('Transferred', 'Cancelled')
@@ -227,6 +271,10 @@ router.get('/', authMiddleware, async (req, res) => {
       grand_overdue_remaining_eur: meta.grand_overdue_remaining_eur ?? 0,
       grand_upcoming_remaining_eur: meta.grand_upcoming_remaining_eur ?? 0,
       contracts_without_schedule: Number(meta.contracts_without_schedule ?? 0),
+      without_schedule_revenue_eur: meta.without_schedule_revenue_eur ?? 0,          // K16 Y
+      contracts_incomplete_schedule: Number(meta.contracts_incomplete_schedule ?? 0), // K16 M
+      incomplete_schedule_revenue_eur: meta.incomplete_schedule_revenue_eur ?? 0,     // K16 X
+      contracts_missing_revenue_eur: Number(meta.contracts_missing_revenue_eur ?? 0), // K16 Q
       contracts_unconvertible: Number(meta.contracts_unconvertible ?? 0),
       contracts_on_hold: Number(meta.contracts_on_hold ?? 0),
       on_hold_excluded_eur: meta.on_hold_excluded_eur ?? 0,
