@@ -79,6 +79,8 @@ let payoutRoutes;
 try { payoutRoutes = require('./routes/payouts'); console.log('✓ Payout routes loaded'); } catch (err) { console.error('✗ Failed to load payout routes:', err.message); }
 let officeRoutes;
 try { officeRoutes = require('./routes/offices'); console.log('✓ Office routes loaded'); } catch (err) { console.error('✗ Failed to load office routes:', err.message); }
+let cashForecastRoutes;
+try { cashForecastRoutes = require('./routes/cashForecast'); console.log('✓ Cash forecast routes loaded'); } catch (err) { console.error('✗ Failed to load cash forecast routes:', err.message); }
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -144,6 +146,7 @@ if (salesAgentRoutes) app.use('/api/sales-agents', salesAgentRoutes);
 if (commissionRoutes) app.use('/api/commissions', commissionRoutes); // ✅ M2 cut-period commission report
 if (payoutRoutes) app.use('/api/agents', payoutRoutes); // ✅ PAYOUT P1 agent payout + statement
 if (officeRoutes) app.use('/api/offices', officeRoutes); // ✅ PS1 offices reference (read-only)
+if (cashForecastRoutes) app.use('/api/cash-forecast', cashForecastRoutes); // ✅ PS3-B cash forecast (office x due, EUR, derived)
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');
