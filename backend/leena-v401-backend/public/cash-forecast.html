@@ -80,6 +80,16 @@
         .status-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 999px; background: var(--primary-light); color: var(--primary); }
         .paid-full { color: var(--ok); font-weight: 600; }
 
+        /* Overdue vs upcoming split (K14) */
+        .office-subtotals { display: flex; gap: 16px; align-items: baseline; }
+        .subtotal { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .subtotal .lbl { color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 6px; }
+        .subtotal.overdue { color: var(--danger); }
+        .group-subhead { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; background: #fafbfc; border-top: 1px solid var(--border); }
+        .group-subhead.overdue { color: var(--danger); background: #fdf6f6; }
+        .group-subhead .amt { font-variant-numeric: tabular-nums; }
+        .overdue-group tbody td { background: #fdf6f6; }
+
         /* Contracts summary */
         .section-title { font-size: 16px; font-weight: 700; margin: 32px 0 12px; display: flex; align-items: center; gap: 8px; }
         .section-title i { color: var(--primary); }
@@ -201,6 +211,10 @@
             const grand = `<div class="grand">
                 <span class="lbl">Total Outstanding</span>
                 <span class="val">${formatMoney(data.grand_total_remaining_eur)} EUR</span>
+                <span class="office-subtotals">
+                    <span class="subtotal overdue"><span class="lbl">Overdue</span>${formatMoney(data.grand_overdue_remaining_eur)} EUR</span>
+                    <span class="subtotal"><span class="lbl">Upcoming</span>${formatMoney(data.grand_upcoming_remaining_eur)} EUR</span>
+                </span>
             </div>`;
             const officeHtml = offices.length
                 ? offices.map(renderOffice).join('')
@@ -208,29 +222,41 @@
             root.innerHTML = grand + officeHtml + renderContracts(contracts) + renderCounters(data);
         }
 
+        const LINE_HEAD = `<thead>
+            <tr>
+                <th>Contract</th>
+                <th>Status</th>
+                <th>Due Date</th>
+                <th class="num">Amount</th>
+                <th class="num">Amount (EUR)</th>
+                <th class="num">Collected (EUR)</th>
+                <th class="num">Outstanding (EUR)</th>
+            </tr>
+        </thead>`;
+
         function renderOffice(o) {
-            const rows = o.lines.map(renderLine).join('');
+            // K14: gecikmiş satırlar ÜSTTE ayrı blokta, kendi alt toplamıyla; gelecek altta.
+            const overdue = o.lines.filter(l => l.is_overdue);
+            const upcoming = o.lines.filter(l => !l.is_overdue);
+            let body = '';
+            if (overdue.length) {
+                body += `<div class="group-subhead overdue"><span><i class="bi bi-exclamation-triangle-fill"></i> Overdue</span><span class="amt">${formatMoney(o.overdue_remaining_eur)} EUR</span></div>
+                    <div class="overdue-group"><table>${LINE_HEAD}<tbody>${overdue.map(renderLine).join('')}</tbody></table></div>`;
+            }
+            if (upcoming.length) {
+                body += `<div class="group-subhead"><span>Upcoming</span><span class="amt">${formatMoney(o.upcoming_remaining_eur)} EUR</span></div>
+                    <table>${LINE_HEAD}<tbody>${upcoming.map(renderLine).join('')}</tbody></table>`;
+            }
             return `<div class="office">
                 <div class="office-head">
                     <span class="office-name"><i class="bi bi-building"></i> ${escapeHtml(o.office_name)}</span>
-                    <span class="office-total"><span class="lbl">Outstanding</span>${formatMoney(o.total_remaining_eur)} EUR</span>
+                    <span class="office-subtotals">
+                        <span class="subtotal overdue"><span class="lbl">Overdue</span>${formatMoney(o.overdue_remaining_eur)}</span>
+                        <span class="subtotal"><span class="lbl">Upcoming</span>${formatMoney(o.upcoming_remaining_eur)}</span>
+                        <span class="office-total"><span class="lbl">Total</span>${formatMoney(o.total_remaining_eur)} EUR</span>
+                    </span>
                 </div>
-                <div class="card">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Contract</th>
-                                <th>Status</th>
-                                <th>Due Date</th>
-                                <th class="num">Amount</th>
-                                <th class="num">Amount (EUR)</th>
-                                <th class="num">Collected (EUR)</th>
-                                <th class="num">Outstanding (EUR)</th>
-                            </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                    </table>
-                </div>
+                <div class="card">${body}</div>
             </div>`;
         }
 
@@ -296,6 +322,8 @@
         function renderCounters(data) {
             const parts = [];
             parts.push(`<span>${Number(data.contracts_without_schedule || 0)}</span> contracts without a payment schedule`);
+            // K15: On Hold sayacı N=0 olsa bile GÖRÜNÜR (sessiz kaybolma yok).
+            parts.push(`<span>${Number(data.contracts_on_hold || 0)}</span> contracts on hold &mdash; ${formatMoney(data.on_hold_excluded_eur)} EUR excluded from forecast`);
             if (Number(data.contracts_unconvertible || 0) > 0) {
                 parts.push(`<span>${Number(data.contracts_unconvertible)}</span> contracts excluded (no exchange rate)`);
             }
