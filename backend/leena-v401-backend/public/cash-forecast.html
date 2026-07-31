@@ -80,7 +80,7 @@
         .status-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 999px; background: var(--primary-light); color: var(--primary); }
         .paid-full { color: var(--ok); font-weight: 600; }
 
-        /* Overdue vs upcoming split (K14) */
+        /* Overdue vs upcoming split (PLN-11) */
         .office-subtotals { display: flex; gap: 16px; align-items: baseline; }
         .subtotal { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .subtotal .lbl { color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; margin-right: 6px; }
@@ -235,7 +235,7 @@
         </thead>`;
 
         function renderOffice(o) {
-            // K14: gecikmiş satırlar ÜSTTE ayrı blokta, kendi alt toplamıyla; gelecek altta.
+            // PLN-11: gecikmiş satırlar ÜSTTE ayrı blokta, kendi alt toplamıyla; gelecek altta.
             const overdue = o.lines.filter(l => l.is_overdue);
             const upcoming = o.lines.filter(l => !l.is_overdue);
             let body = '';
@@ -320,7 +320,7 @@
         }
 
         function renderCounters(data) {
-            // K16 + K15: sıfır olsa bile GÖRÜNÜR (sessiz kaybolma yok).
+            // RAP-02 + RAP-02: sıfır olsa bile GÖRÜNÜR (sessiz kaybolma yok).
             const parts = [];
             parts.push(`<span>${Number(data.contracts_without_schedule || 0)}</span> contracts without a payment schedule &mdash; ${formatMoney(data.without_schedule_revenue_eur)} EUR of revenue not scheduled`);
             parts.push(`<span>${Number(data.contracts_incomplete_schedule || 0)}</span> contracts have incomplete schedules &mdash; ${formatMoney(data.incomplete_schedule_revenue_eur)} EUR of revenue not scheduled`);

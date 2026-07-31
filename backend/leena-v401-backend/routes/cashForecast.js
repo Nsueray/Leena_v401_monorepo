@@ -1,45 +1,45 @@
-// K1-K16 = bu dilime ait GEÇİCİ etiketlerdir. Kalıcı ID tahsisi kütükte
-// yapılacaktır (KK1 kuralı: numara tahsisi YALNIZ kütükte).
-// ⚠️ Buradaki K4 ve K7, defterdeki kilitli K4 (default_commission_pct,
-// defter:440) ve K7 (komisyon motor kuralları, defter:457) DEĞİLDİR.
+// Bu dosyadaki kural etiketleri KALICI kütük ID'leridir (ELL_LOCKED_KARARLAR_OZET.md).
+// Tahsis YALNIZ kütükte yapılır; burada yalnız atıf var. İlgili gruplar:
+//   RAP-01/02/03 (raporlama) · PLN-05/06/07/09/10/11 (vade planı) · OFS-06 (ofis).
+// PS3-B dilimi geçici sayısal etiketler kullanmıştı; 2026-07-31'de kalıcı ID'lere çevrildi.
 // ----------------------------------------------------------------------------
 // GET /api/cash-forecast — Nakit öngörü raporu (PS3-B): ofis × vade, EUR.
-// Tamamen TÜRETİLMİŞ (K2/S-11r) — migration YOK, saklama YOK. Tüm aritmetik
+// Tamamen TÜRETİLMİŞ (D2/S-11r) — migration YOK, saklama YOK. Tüm aritmetik
 // SQL'de; JS'te round/toplama YOK (D2). Komisyon motoruna DOKUNULMAZ.
 //
 // MODEL (kilit — Sentez + DÜZELTME turu):
-//  - K3 Aktif plan = superseded_at IS NULL. MAX(revision) aktif seçmez.
-//  - K7 EUR çevrimi: plan_eur = amount × contracts.exchange_rate (kontratın KENDİ
+//  - PLN-05 Aktif plan = superseded_at IS NULL. MAX(revision) aktif seçmez.
+//  - PLN-09 EUR çevrimi: plan_eur = amount × contracts.exchange_rate (kontratın KENDİ
 //    kilitli kuru). Ö0b: exchange_rate nullable → NULL kur çevrilemez, DIŞLANIR +
 //    contracts_unconvertible sayacında GÖRÜNÜR.
-//  - K8 Tahsilat düşümü: Σpayments.amount_eur (NET, reversal dahil, status filtresi
+//  - PLN-10 Tahsilat düşümü: Σpayments.amount_eur (NET, reversal dahil, status filtresi
 //    YOK) aktif satırlara due_date ASC, item_no ASC teleskopuyla düşülür
 //    (commissionSlices effective_pay deseni; ikinci formül YOK). remaining < 0 olmaz.
 //    FAZLA tahsilat = GREATEST(paid−Σplan,0) kontrat satırında ayrı sütun.
 //    ⚠️ Hangi taksitin kapandığı KAYITLI DEĞİL (S-6) → sıra VARSAYIM; toplam kalan
 //    doğru, ay dağılımı varsayıma dayalı (ekran dipnotu zorunlu).
 //  - DÜZELTME 1: DEFAULT tarih filtresi YOK — from/to verilmezse TÜM aktif satırlar
-//    gelir (vadesi geçmiş + kalanı>0 satır gizlenmez; K1 gizleme yasağı). from/to
+//    gelir (vadesi geçmiş + kalanı>0 satır gizlenmez; OFS-06 gizleme yasağı). from/to
 //    verilirse due_date aralığı uygulanır.
-//  - K14 OVERDUE (satır bayrağı, ayrı üst grup DEĞİL — eksen OFİS kalır):
+//  - PLN-11 OVERDUE (satır bayrağı, ayrı üst grup DEĞİL — eksen OFİS kalır):
 //    is_overdue = (due_date < CURRENT_DATE AND remaining > 0). remaining=0 geçmiş
 //    satır OVERDUE değildir ama gizlenmez. Ofis/grand toplamı overdue+upcoming'e
 //    AYRILIR; total (mevcut alan) korunur = ikisinin toplamı.
-//  - K10 Dışlama (KARA LİSTE, beyaz DEĞİL): Transferred + Cancelled + On Hold girmez
+//  - RAP-03 Dışlama (KARA LİSTE, beyaz DEĞİL): Transferred + Cancelled + On Hold girmez
 //    (Ö0a). Bugün fiilen "yalnız Active" ama 5. statü eklenirse otomatik görünür.
-//  - K15 On Hold DIŞLANIR AMA SAYILIR: contracts_on_hold + on_hold_excluded_eur
-//    (aynı K7/K8 mantığıyla kalan). NULL kur On Hold: sayıya girer, EUR toplamına
+//  - RAP-02 On Hold DIŞLANIR AMA SAYILIR: contracts_on_hold + on_hold_excluded_eur
+//    (aynı PLN-09/PLN-10 mantığıyla kalan). NULL kur On Hold: sayıya girer, EUR toplamına
 //    girmez, contracts_unconvertible'da da görünür.
-//  - K1 NULL ofis gizlenmez, kendi kovasında ("(No office)"). Ofis TAHMİN edilmez.
-//  - K9 Eksen = ofis × vade, toplamlar EUR. Para birimi satır bilgisi.
-//  - K13 Plansız kontrat (dışlanmamış statü, aktif satır yok) sayacı görünür.
-//  - K12 organizer scope: tüm sorgular organizer_id filtreli.
-//  - K16 PLANLANMAMIŞ GELİR sayaçları (banner DEĞİŞMEZ — o tarihli planlanmış nakit;
+//  - OFS-06 NULL ofis gizlenmez, kendi kovasında ("(No office)"). Ofis TAHMİN edilmez.
+//  - RAP-01 Eksen = ofis × vade, toplamlar EUR. Para birimi satır bilgisi.
+//  - RAP-02 Plansız kontrat (dışlanmamış statü, aktif satır yok) sayacı görünür.
+//  - organizer scope (mimari, çok-kiracı invaryantı): tüm sorgular organizer_id filtreli.
+//  - RAP-02 PLANLANMAMIŞ GELİR sayaçları (banner DEĞİŞMEZ — o tarihli planlanmış nakit;
 //    bu sayaçlar planlanmamış geliri AYRI gösterir, birleştirilmez):
 //      Y without_schedule_revenue_eur = plansız kontratların Σ revenue_eur
 //      M/X incomplete_schedule_revenue_eur = planlı ama plan_total_eur<revenue_eur
 //         olanların Σ(revenue_eur−plan_total_eur)
-//    Y ve X BÖLÜNMEDİR (her kontrat tekinde; E2 ayrıklık). K10 kara listesini uygular.
+//    Y ve X BÖLÜNMEDİR (her kontrat tekinde; E2 ayrıklık). RAP-03 kara listesini uygular.
 //    ⚠️ E1 BİLİNÇLİ ASİMETRİ: X yalnız EKSİK planlı (revenue>plan) toplar. FAZLA
 //    planlı (plan>revenue) X'e GİRMEZ, X'i AZALTMAZ — netleşme yasak (S-9). Fazla
 //    planlı kontrat matches_revenue ⚠ ile görünür. 4. sayaç AÇILMAZ (farklı anomali).
@@ -65,7 +65,7 @@ function isValidDate(s) {
 
 // Ortak CTE bloğu (S-8 emsali). $1=organizer · $2=from (nullable) · $3=to (nullable).
 // plan: aktif + çevrilebilir + terminal-olmayan (Transferred/Cancelled dışı) satırlar.
-//   On Hold BURADA kalır (K15 kalanını hesaplamak için); ana gruplarda status<>'On Hold'
+//   On Hold BURADA kalır (RAP-02 kalanını hesaplamak için); ana gruplarda status<>'On Hold'
 //   ile elenir. NULL kur burada elenir (Ö0b).
 const FORECAST_CTES = `
   WITH params AS (
@@ -75,15 +75,15 @@ const FORECAST_CTES = `
     SELECT s.id, s.contract_id, s.item_no, s.due_date, s.amount, s.currency,
            c.exchange_rate, c.status, c.af_number, c.revenue_eur,
            s.expected_office_id,
-           s.amount * c.exchange_rate AS plan_eur      -- K7
+           s.amount * c.exchange_rate AS plan_eur      -- PLN-09
       FROM payment_schedule_items s
       JOIN contracts c ON c.id = s.contract_id AND c.organizer_id = $1
-     WHERE s.superseded_at IS NULL                     -- K3
-       AND c.status NOT IN ('Transferred', 'Cancelled')-- terminal (On Hold hariç: K15)
+     WHERE s.superseded_at IS NULL                     -- PLN-05
+       AND c.status NOT IN ('Transferred', 'Cancelled')-- terminal (On Hold hariç: RAP-02)
        AND c.exchange_rate IS NOT NULL                 -- Ö0b
   ),
   paid AS (
-    SELECT p.contract_id, COALESCE(SUM(p.amount_eur), 0) AS paid_net_eur  -- K8: NET
+    SELECT p.contract_id, COALESCE(SUM(p.amount_eur), 0) AS paid_net_eur  -- PLN-10: NET
       FROM payments p
       JOIN contracts c ON c.id = p.contract_id AND c.organizer_id = $1
      GROUP BY p.contract_id
@@ -107,10 +107,10 @@ const FORECAST_CTES = `
   calc2 AS (
     SELECT c.*,
            (c.plan_eur - c.covered_eur) AS remaining_raw,
-           (c.due_date < CURRENT_DATE AND (c.plan_eur - c.covered_eur) > 0) AS is_overdue  -- K14
+           (c.due_date < CURRENT_DATE AND (c.plan_eur - c.covered_eur) > 0) AS is_overdue  -- PLN-11
       FROM calc c
   ),
-  -- K16: kontrat başına tek satır (plan_total_eur pencere değeri satırlarda aynı).
+  -- RAP-02: kontrat başına tek satır (plan_total_eur pencere değeri satırlarda aynı).
   -- Yalnız çevrilebilir (exchange_rate NOT NULL) kontratlar — NULL kur burada yok.
   ct AS (
     SELECT DISTINCT contract_id, status, plan_total_eur, revenue_eur FROM calc2
@@ -155,7 +155,7 @@ router.get('/', authMiddleware, async (req, res) => {
     const lineSql = `${FORECAST_CTES}
       SELECT c.expected_office_id AS office_id, o.name AS office_name,
              c.contract_id, c.af_number, c.status,
-             to_char(c.due_date, 'YYYY-MM-DD') AS due_date,   -- K11: TZ-güvenli
+             to_char(c.due_date, 'YYYY-MM-DD') AS due_date,   -- to_char: TZ-güvenli okuma (teknik)
              c.amount, c.currency,
              ROUND(c.plan_eur, 2)      AS amount_eur,
              ROUND(c.covered_eur, 2)   AS covered_eur,
@@ -172,9 +172,9 @@ router.get('/', authMiddleware, async (req, res) => {
       SELECT DISTINCT c.contract_id, c.af_number, c.status,
              ROUND(c.plan_total_eur, 2) AS plan_total_eur,
              c.revenue_eur,
-             (ROUND(c.plan_total_eur, 2) = c.revenue_eur) AS matches_revenue,  -- K4
+             (ROUND(c.plan_total_eur, 2) = c.revenue_eur) AS matches_revenue,  -- PLN-07
              ROUND(c.paid_net_eur, 2) AS paid_net_eur,
-             GREATEST(ROUND(c.paid_net_eur - c.plan_total_eur, 2), 0)::numeric(14,2) AS excess_eur  -- K8
+             GREATEST(ROUND(c.paid_net_eur - c.plan_total_eur, 2), 0)::numeric(14,2) AS excess_eur  -- PLN-10
         FROM calc2 c
        WHERE c.status <> 'On Hold'
        ORDER BY c.contract_id`;
@@ -195,25 +195,25 @@ router.get('/', authMiddleware, async (req, res) => {
           WHERE c.organizer_id = $1 AND c.status NOT IN ('Transferred', 'Cancelled', 'On Hold')
             AND NOT EXISTS (SELECT 1 FROM payment_schedule_items s
                              WHERE s.contract_id = c.id AND s.superseded_at IS NULL)
-        ) AS contracts_without_schedule,                                       -- K13
-        -- K16 Y: plansız kontratların Σ revenue_eur (NULL revenue_eur SUM'da atlanır → K16 missing sayacı yakalar).
+        ) AS contracts_without_schedule,                                       -- RAP-02
+        -- RAP-02 Y: plansız kontratların Σ revenue_eur (NULL revenue_eur SUM'da atlanır → RAP-02 missing sayacı yakalar).
         (SELECT COALESCE(SUM(c.revenue_eur), 0)::numeric(14,2) FROM contracts c
           WHERE c.organizer_id = $1 AND c.status NOT IN ('Transferred', 'Cancelled', 'On Hold')
             AND NOT EXISTS (SELECT 1 FROM payment_schedule_items s
                              WHERE s.contract_id = c.id AND s.superseded_at IS NULL)
-        ) AS without_schedule_revenue_eur,                                     -- K16 (Y)
-        -- K16 M/X: planlı ama eksik (plan_total_eur < revenue_eur). E1 asimetri: yalnız EKSİK.
+        ) AS without_schedule_revenue_eur,                                     -- RAP-02 (Y)
+        -- RAP-02 M/X: planlı ama eksik (plan_total_eur < revenue_eur). E1 asimetri: yalnız EKSİK.
         (SELECT count(*) FROM ct
           WHERE ct.status <> 'On Hold' AND ct.plan_total_eur < ct.revenue_eur
-        ) AS contracts_incomplete_schedule,                                    -- K16 (M)
+        ) AS contracts_incomplete_schedule,                                    -- RAP-02 (M)
         (SELECT COALESCE(ROUND(SUM(ct.revenue_eur - ct.plan_total_eur), 2), 0)::numeric(14,2) FROM ct
           WHERE ct.status <> 'On Hold' AND ct.plan_total_eur < ct.revenue_eur
-        ) AS incomplete_schedule_revenue_eur,                                  -- K16 (X)
-        -- K16 Q: revenue_eur IS NULL (yalnız SAYI; tutar bilinmiyor, uydurma EUR yok). Teşhis ekseni, X/Y ile örtüşebilir.
+        ) AS incomplete_schedule_revenue_eur,                                  -- RAP-02 (X)
+        -- RAP-02 Q: revenue_eur IS NULL (yalnız SAYI; tutar bilinmiyor, uydurma EUR yok). Teşhis ekseni, X/Y ile örtüşebilir.
         (SELECT count(*) FROM contracts c
           WHERE c.organizer_id = $1 AND c.status NOT IN ('Transferred', 'Cancelled', 'On Hold')
             AND c.revenue_eur IS NULL
-        ) AS contracts_missing_revenue_eur,                                    -- K16 (Q)
+        ) AS contracts_missing_revenue_eur,                                    -- RAP-02 (Q)
         (SELECT count(DISTINCT c.id) FROM contracts c
            JOIN payment_schedule_items s ON s.contract_id = c.id AND s.superseded_at IS NULL
           WHERE c.organizer_id = $1 AND c.status NOT IN ('Transferred', 'Cancelled')
@@ -222,9 +222,9 @@ router.get('/', authMiddleware, async (req, res) => {
         (SELECT count(DISTINCT c.id) FROM contracts c
            JOIN payment_schedule_items s ON s.contract_id = c.id AND s.superseded_at IS NULL
           WHERE c.organizer_id = $1 AND c.status = 'On Hold'
-        ) AS contracts_on_hold,                                                -- K15
+        ) AS contracts_on_hold,                                                -- RAP-02
         (SELECT COALESCE(ROUND(SUM(c.remaining_raw), 2), 0)::numeric(14,2)
-           FROM calc2 c WHERE c.status = 'On Hold') AS on_hold_excluded_eur`;   // K15
+           FROM calc2 c WHERE c.status = 'On Hold') AS on_hold_excluded_eur`;   // RAP-02
 
     const [offRes, lineRes, conRes, metaRes] = await Promise.all([
       pool.query(officeSql, args),
@@ -234,7 +234,7 @@ router.get('/', authMiddleware, async (req, res) => {
     ]);
 
     // Ofis kovalarını kur, satırları içine yerleştir (JS yalnız gruplar — toplamaz).
-    const NO_OFFICE = '(No office)';   // K1
+    const NO_OFFICE = '(No office)';   // OFS-06
     const officeMap = new Map();
     const officeOrder = [];
     for (const r of offRes.rows) {
@@ -271,10 +271,10 @@ router.get('/', authMiddleware, async (req, res) => {
       grand_overdue_remaining_eur: meta.grand_overdue_remaining_eur ?? 0,
       grand_upcoming_remaining_eur: meta.grand_upcoming_remaining_eur ?? 0,
       contracts_without_schedule: Number(meta.contracts_without_schedule ?? 0),
-      without_schedule_revenue_eur: meta.without_schedule_revenue_eur ?? 0,          // K16 Y
-      contracts_incomplete_schedule: Number(meta.contracts_incomplete_schedule ?? 0), // K16 M
-      incomplete_schedule_revenue_eur: meta.incomplete_schedule_revenue_eur ?? 0,     // K16 X
-      contracts_missing_revenue_eur: Number(meta.contracts_missing_revenue_eur ?? 0), // K16 Q
+      without_schedule_revenue_eur: meta.without_schedule_revenue_eur ?? 0,          // RAP-02 Y
+      contracts_incomplete_schedule: Number(meta.contracts_incomplete_schedule ?? 0), // RAP-02 M
+      incomplete_schedule_revenue_eur: meta.incomplete_schedule_revenue_eur ?? 0,     // RAP-02 X
+      contracts_missing_revenue_eur: Number(meta.contracts_missing_revenue_eur ?? 0), // RAP-02 Q
       contracts_unconvertible: Number(meta.contracts_unconvertible ?? 0),
       contracts_on_hold: Number(meta.contracts_on_hold ?? 0),
       on_hold_excluded_eur: meta.on_hold_excluded_eur ?? 0,
