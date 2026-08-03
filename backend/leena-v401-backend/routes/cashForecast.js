@@ -148,9 +148,13 @@ const FORECAST_CTES = `
   ct AS (
     SELECT DISTINCT contract_id, status, plan_total_eur, revenue_eur FROM calc2
   ),
-  -- TAH-04/C1: NON-REVERSAL ödemelerin eşleşme durumu (matched aktif / unmatched NULL /
+  -- TAH-04/C1: CANLI ödemelerin eşleşme durumu (matched aktif / unmatched NULL /
   -- dropped = superseded kaleme, C8). Üç durum tek sayaçta TOPLANMAZ (RAP-02). Kara liste
   -- UYGULANMAZ: contract 1 (Transferred, plansız) ödemeleri de unmatched sayılır (C9).
+  -- ⚠️ CANLI = reversal DEĞİL (reverses_payment_id IS NULL) VE TERSLENMEMİŞ (üzerine reversal
+  -- yazılmamış). Terslenmiş ödeme net iptaldir → SAYILMAZ. Bu predicate sayaç ile satır/banner'ı
+  -- AYNI net tanımından besler (terslenmiş çift buradan da, matched CTE'de de net 0). Sayı VE EUR
+  -- bu tek kaynaktan gelir — RAP-02: pano tabloyla çelişemez.
   paystat AS (
     SELECT p.amount_eur,
            CASE WHEN p.schedule_item_id IS NULL THEN 'unmatched'
@@ -160,6 +164,7 @@ const FORECAST_CTES = `
       FROM payments p
       JOIN contracts c ON c.id = p.contract_id AND c.organizer_id = $1
      WHERE p.reverses_payment_id IS NULL
+       AND NOT EXISTS (SELECT 1 FROM payments r WHERE r.reverses_payment_id = p.id)
   )
 `;
 
