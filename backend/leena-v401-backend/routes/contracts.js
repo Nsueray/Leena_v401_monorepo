@@ -610,6 +610,11 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
   const received_office_id = (b.received_office_id != null && b.received_office_id !== '')
     ? b.received_office_id : null;
 
+  // TAH-04: opsiyonel taksit eşleştirmesi (nullable). Boş eşleştirme GEÇERLİ (C5);
+  // form zorlamaz. schedule_item_id 026'da var; bu POST onu ilk kez yazan yer.
+  const schedule_item_id = (b.schedule_item_id != null && b.schedule_item_id !== '')
+    ? b.schedule_item_id : null;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -642,11 +647,25 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
       return res.status(400).json({ error: 'invalid office' });
     }
 
+    // TAH-04: taksit verildiyse BU kontrata ait VE aktif (superseded_at IS NULL) olmalı.
+    // Eşleştirme planın O ANKİ haline aittir (C8); superseded kaleme yeni eşleşme yazılmaz.
+    if (schedule_item_id != null) {
+      const si = await client.query(
+        'SELECT id FROM payment_schedule_items WHERE id = $1 AND contract_id = $2 AND superseded_at IS NULL',
+        [schedule_item_id, id]
+      );
+      if (si.rows.length === 0) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: 'invalid schedule item' });
+      }
+    }
+
     const result = await client.query(
       `INSERT INTO payments (
          organizer_id, contract_id, amount, currency, exchange_rate,
-         amount_eur, payment_method, payment_date, notes, created_by, received_office_id
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+         amount_eur, payment_method, payment_date, notes, created_by, received_office_id,
+         schedule_item_id
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING *`,
       [
         req.organizer_id,
@@ -661,6 +680,7 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
         null,   // created_by: LEENA JWT'sinde user id YOK (authMiddleware:17
                 // yalnız organizer_id veriyor) → Faz 4 kimlik birleşmesinde dolar
         received_office_id,
+        schedule_item_id,
       ]
     );
 
@@ -794,14 +814,16 @@ router.post('/:id/payments/:paymentId/reverse', authMiddleware, async (req, res)
       `INSERT INTO payments (
          organizer_id, contract_id, amount, currency, exchange_rate,
          amount_eur, payment_method, payment_date, notes, created_by,
-         reverses_payment_id, received_office_id
+         reverses_payment_id, received_office_id, schedule_item_id
        )
        SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
               -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
-              id, received_office_id
+              id, received_office_id, schedule_item_id
          FROM payments
         WHERE id = $1
        RETURNING *`,
+      // TAH-04: schedule_item_id orijinalden DEVRALINIR (received_office_id ile aynı
+      // TAH-01 deseni) → net sıfırlama taksidin İÇİNDE gerçekleşir (matched_i = 0).
       [orig.id, notes]
     );
 
@@ -929,21 +951,28 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
 
     for (const row of carry.rows) {
       // 1) Kaynakta kapama satırı — 3a-4 INSERT..SELECT deseni birebir.
+      // TAH-04: schedule_item_id kaynağın item'ından DEVRALINIR (reversal deseni) →
+      // net sıfırlama kaynağın taksidinde gerçekleşir.
       await client.query(
         `INSERT INTO payments (
            organizer_id, contract_id, amount, currency, exchange_rate,
            amount_eur, payment_method, payment_date, notes, created_by,
-           reverses_payment_id, received_office_id
+           reverses_payment_id, received_office_id, schedule_item_id
          )
          SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
                 -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
-                id, received_office_id
+                id, received_office_id, schedule_item_id
            FROM payments
           WHERE id = $1`,
         [row.id, `Transferred to ${newAf} (payment #${row.id})`]
       );
 
       // 2) Yeni contract'ta pozitif kopya — orijinal payment_date KORUNUR.
+      // TAH-04: schedule_item_id KOPYALANMAZ → klonda NULL. KAÇINILMAZ: klonun planı
+      // YOK (A4: transfer payment_schedule_items'a dokunmaz), bağlanacak satır yok.
+      // Klon planı sonradan üretilince kullanıcı elle eşleştirir.
+      // ⚠️ OFS-05 SINIFI BORÇ: aynı schedule_item_id devralma kuralı reversal + transfer
+      // bloklarında AYRI yazılıyor (ortak kod yok) — kural değişirse İKİ yer de güncellenir.
       await client.query(
         `INSERT INTO payments (
            organizer_id, contract_id, amount, currency, exchange_rate,
@@ -1112,7 +1141,17 @@ async function applyScheduleRevision(client, contractId, organizerId, items, cur
     [contractId]
   )).rows[0].m;
   const newRev = Number(maxRev) + 1;
+  let droppedMatchCount = 0;
   if (Number(maxRev) > 0) {
+    // C8: bu revizyon aktif kalemlere eşleşmiş ödemeleri DÜŞÜRÜR. Ödeme DEĞİŞMEZ (C4),
+    // schedule_item_id boşaltılmaz — "düşmüş" = FK'nın gösterdiği satırın superseded_at'i
+    // (türetilir, D2). Kullanıcı UYARILIR (PLN-07 deseni, ENGELLEME YOK).
+    droppedMatchCount = Number((await client.query(
+      `SELECT count(*) AS n FROM payments
+        WHERE schedule_item_id IN
+              (SELECT id FROM payment_schedule_items WHERE contract_id = $1 AND superseded_at IS NULL)`,
+      [contractId]
+    )).rows[0].n);
     // S-5: eski satır UPDATE/SİLİNMEZ — yalnız superseded_at damgalanır.
     await client.query(
       'UPDATE payment_schedule_items SET superseded_at = now() WHERE contract_id = $1 AND superseded_at IS NULL',
@@ -1133,7 +1172,7 @@ async function applyScheduleRevision(client, contractId, organizerId, items, cur
     );
     inserted.push(row.rows[0]);
   }
-  return inserted;
+  return { active: inserted, dropped_match_count: droppedMatchCount };
 }
 
 // expected_office_id'ler offices'ta VE aktif mi (tx içinde).
@@ -1290,10 +1329,15 @@ router.post('/:id/schedule', authMiddleware, async (req, res) => {
       }
     }
 
-    const active = await applyScheduleRevision(client, id, req.organizer_id, computed, currency, source, null);
+    const rev = await applyScheduleRevision(client, id, req.organizer_id, computed, currency, source, null);
     await client.query('COMMIT');
-    const resp = { active };
+    const resp = { active: rev.active };
     if (warning) resp.warning = warning;
+    // C8: bu revizyon eşleşmiş ödemeleri düşürdüyse uyar (ENGELLEME YOK, PLN-07 deseni).
+    if (rev.dropped_match_count > 0) {
+      resp.dropped_match_count = rev.dropped_match_count;
+      resp.matched_warning = `${rev.dropped_match_count} matched payment(s) dropped by this revision; re-match manually.`;
+    }
     return res.status(201).json(resp);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
@@ -1362,9 +1406,15 @@ router.post('/:id/schedule/default', authMiddleware, async (req, res) => {
       ];
     }
 
-    const active = await applyScheduleRevision(client, id, req.organizer_id, computed, r.currency, 'default', null);
+    const rev = await applyScheduleRevision(client, id, req.organizer_id, computed, r.currency, 'default', null);
     await client.query('COMMIT');
-    return res.status(201).json({ active });
+    const resp = { active: rev.active };
+    // C8: default üretici de revizyon üretir; eşleşmiş ödeme düştüyse uyar (ENGELLEME YOK).
+    if (rev.dropped_match_count > 0) {
+      resp.dropped_match_count = rev.dropped_match_count;
+      resp.matched_warning = `${rev.dropped_match_count} matched payment(s) dropped by this revision; re-match manually.`;
+    }
+    return res.status(201).json(resp);
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     const mapped = mapWriteError(err);

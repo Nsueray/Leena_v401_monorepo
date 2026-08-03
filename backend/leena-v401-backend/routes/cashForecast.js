@@ -82,38 +82,84 @@ const FORECAST_CTES = `
        AND c.status NOT IN ('Transferred', 'Cancelled')-- terminal (On Hold hariç: RAP-02)
        AND c.exchange_rate IS NOT NULL                 -- Ö0b
   ),
+  -- TAH-04 matched_i: her AKTİF plan kalemine eşleşmiş ödeme toplamı (NET, reversal dahil).
+  -- plan JOIN'i eşleşmeyi yalnız AKTİF kaleme sınırlar; superseded kaleme eşleşme buraya GİRMEZ.
+  matched AS (
+    SELECT p.schedule_item_id AS item_id, SUM(p.amount_eur) AS matched_eur
+      FROM payments p
+      JOIN plan pl ON pl.id = p.schedule_item_id
+     GROUP BY p.schedule_item_id
+  ),
+  -- TAH-04 U: eşleşmemiş (schedule_item_id IS NULL) + DÜŞMÜŞ (superseded kaleme eşleşmiş,
+  -- C8) ödemeler. Teleskoba bunlar döner → matched_active + U = paid_net (C3 korunur).
+  unmatched AS (
+    SELECT p.contract_id, COALESCE(SUM(p.amount_eur), 0) AS u_eur
+      FROM payments p
+      JOIN contracts c ON c.id = p.contract_id AND c.organizer_id = $1
+     WHERE p.schedule_item_id IS NULL
+        OR NOT EXISTS (SELECT 1 FROM payment_schedule_items s
+                        WHERE s.id = p.schedule_item_id AND s.superseded_at IS NULL)
+     GROUP BY p.contract_id
+  ),
+  -- Kontrat başına toplam tahsilat (özet için — değişmedi).
   paid AS (
-    SELECT p.contract_id, COALESCE(SUM(p.amount_eur), 0) AS paid_net_eur  -- PLN-10: NET
+    SELECT p.contract_id, COALESCE(SUM(p.amount_eur), 0) AS paid_net_eur  -- NET
       FROM payments p
       JOIN contracts c ON c.id = p.contract_id AND c.organizer_id = $1
      GROUP BY p.contract_id
   ),
-  tele AS (
+  -- Ö0b cap_i = LEAST(GREATEST(plan − matched, 0), plan) — alt VE üst kırpma.
+  -- Üst kırpma: matched NEGATİF (yalnız reversal eşleşmiş) ise cap plan'ı aşmaz.
+  capped AS (
     SELECT pl.*,
-           COALESCE(pd.paid_net_eur, 0) AS paid_net_eur,
-           SUM(pl.plan_eur) OVER (PARTITION BY pl.contract_id
-                                  ORDER BY pl.due_date, pl.item_no
-                                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_after,
-           SUM(pl.plan_eur) OVER (PARTITION BY pl.contract_id) AS plan_total_eur
+           COALESCE(m.matched_eur, 0) AS matched_eur,
+           LEAST(GREATEST(pl.plan_eur - COALESCE(m.matched_eur, 0), 0), pl.plan_eur) AS cap_eur
       FROM plan pl
-      LEFT JOIN paid pd ON pd.contract_id = pl.contract_id
+      LEFT JOIN matched m ON m.item_id = pl.id
+  ),
+  -- Teleskop cap ÜZERİNDE çalışır; havuz = U (yalnız eşleşmemiş, çifte sayım yok).
+  tele AS (
+    SELECT cp.*,
+           COALESCE(u.u_eur, 0) AS u_eur,
+           COALESCE(pd.paid_net_eur, 0) AS paid_net_eur,
+           SUM(cp.cap_eur) OVER (PARTITION BY cp.contract_id
+                                 ORDER BY cp.due_date, cp.item_no
+                                 ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS cum_after,
+           SUM(cp.plan_eur) OVER (PARTITION BY cp.contract_id) AS plan_total_eur
+      FROM capped cp
+      LEFT JOIN unmatched u ON u.contract_id = cp.contract_id
+      LEFT JOIN paid pd ON pd.contract_id = cp.contract_id
   ),
   calc AS (
     SELECT t.*,
-           LEAST(t.paid_net_eur, t.cum_after)
-             - LEAST(t.paid_net_eur, t.cum_after - t.plan_eur) AS covered_eur
+           LEAST(t.u_eur, t.cum_after)
+             - LEAST(t.u_eur, t.cum_after - t.cap_eur) AS covered_eur   -- PLN-10 üst katmanı (C2)
       FROM tele t
   ),
   calc2 AS (
     SELECT c.*,
-           (c.plan_eur - c.covered_eur) AS remaining_raw,
-           (c.due_date < CURRENT_DATE AND (c.plan_eur - c.covered_eur) > 0) AS is_overdue  -- PLN-11
+           (c.cap_eur - c.covered_eur) AS remaining_raw,
+           GREATEST(c.matched_eur - c.plan_eur, 0) AS excess_item_eur,   -- kalem aşırı tahsis (A7)
+           (c.due_date < CURRENT_DATE AND (c.cap_eur - c.covered_eur) > 0) AS is_overdue  -- PLN-11
       FROM calc c
   ),
   -- RAP-02: kontrat başına tek satır (plan_total_eur pencere değeri satırlarda aynı).
   -- Yalnız çevrilebilir (exchange_rate NOT NULL) kontratlar — NULL kur burada yok.
   ct AS (
     SELECT DISTINCT contract_id, status, plan_total_eur, revenue_eur FROM calc2
+  ),
+  -- TAH-04/C1: NON-REVERSAL ödemelerin eşleşme durumu (matched aktif / unmatched NULL /
+  -- dropped = superseded kaleme, C8). Üç durum tek sayaçta TOPLANMAZ (RAP-02). Kara liste
+  -- UYGULANMAZ: contract 1 (Transferred, plansız) ödemeleri de unmatched sayılır (C9).
+  paystat AS (
+    SELECT p.amount_eur,
+           CASE WHEN p.schedule_item_id IS NULL THEN 'unmatched'
+                WHEN EXISTS (SELECT 1 FROM payment_schedule_items s
+                              WHERE s.id = p.schedule_item_id AND s.superseded_at IS NULL) THEN 'matched'
+                ELSE 'dropped' END AS mstatus
+      FROM payments p
+      JOIN contracts c ON c.id = p.contract_id AND c.organizer_id = $1
+     WHERE p.reverses_payment_id IS NULL
   )
 `;
 
@@ -157,9 +203,11 @@ router.get('/', authMiddleware, async (req, res) => {
              c.contract_id, c.af_number, c.status,
              to_char(c.due_date, 'YYYY-MM-DD') AS due_date,   -- to_char: TZ-güvenli okuma (teknik)
              c.amount, c.currency,
-             ROUND(c.plan_eur, 2)      AS amount_eur,
-             ROUND(c.covered_eur, 2)   AS covered_eur,
-             ROUND(c.remaining_raw, 2) AS remaining_eur,
+             ROUND(c.plan_eur, 2)        AS amount_eur,
+             ROUND(c.matched_eur, 2)     AS matched_eur,     -- TAH-04: kaleme eşleşmiş (NET)
+             ROUND(c.covered_eur, 2)     AS covered_eur,     -- teleskop fallback (C1: ayırt et)
+             ROUND(c.remaining_raw, 2)   AS remaining_eur,
+             ROUND(c.excess_item_eur, 2) AS excess_eur,      -- kalem aşırı tahsis (A7)
              c.is_overdue
         FROM calc2 c
         LEFT JOIN offices o ON o.id = c.expected_office_id
@@ -224,7 +272,14 @@ router.get('/', authMiddleware, async (req, res) => {
           WHERE c.organizer_id = $1 AND c.status = 'On Hold'
         ) AS contracts_on_hold,                                                -- RAP-02
         (SELECT COALESCE(ROUND(SUM(c.remaining_raw), 2), 0)::numeric(14,2)
-           FROM calc2 c WHERE c.status = 'On Hold') AS on_hold_excluded_eur`;   // RAP-02
+           FROM calc2 c WHERE c.status = 'On Hold') AS on_hold_excluded_eur,   -- RAP-02
+        -- TAH-04 C1: eşleşme durumu sayaçları (non-reversal ödemeler). Üç durum AYRI.
+        (SELECT count(*) FROM paystat WHERE mstatus = 'matched')   AS payments_matched,
+        (SELECT count(*) FROM paystat WHERE mstatus = 'unmatched') AS payments_unmatched,
+        (SELECT count(*) FROM paystat WHERE mstatus = 'dropped')   AS payments_unmatched_after_revision,  -- C8
+        (SELECT COALESCE(ROUND(SUM(amount_eur), 2), 0)::numeric(14,2) FROM paystat WHERE mstatus = 'matched')   AS matched_payments_eur,
+        (SELECT COALESCE(ROUND(SUM(amount_eur), 2), 0)::numeric(14,2) FROM paystat WHERE mstatus = 'unmatched') AS unmatched_payments_eur,
+        (SELECT COALESCE(ROUND(SUM(amount_eur), 2), 0)::numeric(14,2) FROM paystat WHERE mstatus = 'dropped')   AS unmatched_after_revision_eur`;   // C8
 
     const [offRes, lineRes, conRes, metaRes] = await Promise.all([
       pool.query(officeSql, args),
@@ -257,8 +312,8 @@ router.get('/', authMiddleware, async (req, res) => {
       b.lines.push({
         contract_id: r.contract_id, af_number: r.af_number, status: r.status,
         due_date: r.due_date, amount: r.amount, currency: r.currency,
-        amount_eur: r.amount_eur, covered_eur: r.covered_eur, remaining_eur: r.remaining_eur,
-        is_overdue: r.is_overdue,
+        amount_eur: r.amount_eur, matched_eur: r.matched_eur, covered_eur: r.covered_eur,
+        remaining_eur: r.remaining_eur, excess_eur: r.excess_eur, is_overdue: r.is_overdue,
       });
     }
     const offices = officeOrder.map(k => officeMap.get(k));
@@ -278,6 +333,13 @@ router.get('/', authMiddleware, async (req, res) => {
       contracts_unconvertible: Number(meta.contracts_unconvertible ?? 0),
       contracts_on_hold: Number(meta.contracts_on_hold ?? 0),
       on_hold_excluded_eur: meta.on_hold_excluded_eur ?? 0,
+      // TAH-04 C1/C8: eşleşme durumu sayaçları (non-reversal ödemeler), sıfırken bile görünür.
+      payments_matched: Number(meta.payments_matched ?? 0),
+      matched_payments_eur: meta.matched_payments_eur ?? 0,
+      payments_unmatched: Number(meta.payments_unmatched ?? 0),
+      unmatched_payments_eur: meta.unmatched_payments_eur ?? 0,
+      payments_unmatched_after_revision: Number(meta.payments_unmatched_after_revision ?? 0),
+      unmatched_after_revision_eur: meta.unmatched_after_revision_eur ?? 0,
     });
   } catch (err) {
     console.error('Error building cash forecast:', err);

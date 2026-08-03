@@ -209,6 +209,7 @@
                         <label>Method<select name="payment_method"></select></label>
                         <label>Office *<select name="received_office_id"></select></label>
                         <label>Date<input name="payment_date" type="date"></label>
+                        <label>Installment<select name="schedule_item_id"></select></label>
                         <label>Notes<input name="notes" type="text" autocomplete="off"></label>
                         <button class="btn btn-primary btn-sm" type="submit">Save</button>
                     </form>
@@ -346,6 +347,7 @@
             scheduleState = s;
             const body = document.getElementById('scheduleBody');
             const active = s.active || [];
+            populateInstallments(active);   // TAH-04: ödeme formu taksit seçicisi
             const buttons = `<div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap;border-top:1px solid var(--border)">
                 <button class="btn btn-ghost btn-sm" onclick="generateDefault()">Generate default</button>
                 <button class="btn btn-ghost btn-sm" onclick="toggleManualForm()">Add manually</button>
@@ -958,6 +960,21 @@
 
         // contract-list.html:282-319 deseni. Farkı: başarıda ödeme listesi +
         // para özeti refetch edilir (form kapanmaz — sayfada kalıcı bölüm).
+        // TAH-04: ödeme formu taksit seçicisi. Öneri = EN ESKİ taksit (ilk); sıra due_date ASC,
+        // item_no ASC — GET /schedule zaten item_no sırasında (rapor PLN-10 ile AYNI sıra). remaining
+        // sunucuda hesaplanır (rapor); form kendi hesabını YAPMAZ (D2). Boş seçenek geçerli (C5).
+        function populateInstallments(active) {
+            const sel = document.querySelector('#payForm select[name="schedule_item_id"]');
+            if (!sel) return;
+            const opts = ['<option value="">— No installment —</option>'];
+            (active || []).forEach((it, i) => {
+                const d = it.due_date ? String(it.due_date).slice(0, 10) : '';
+                const label = `#${it.item_no} · ${d} · ${money(it.amount, it.currency)}`;
+                opts.push(`<option value="${it.id}"${i === 0 ? ' selected' : ''}>${escapeHtml(label)}</option>`);
+            });
+            sel.innerHTML = opts.join('');
+        }
+
         async function submitPayment(ev) {
             ev.preventDefault();
             const f = ev.target;
@@ -971,7 +988,9 @@
                 payment_method: f.payment_method.value,
                 payment_date: f.payment_date.value,
                 notes: f.notes.value || null,
-                received_office_id: f.received_office_id.value || null   // boş → null (boş string gönderme)
+                received_office_id: f.received_office_id.value || null,  // boş → null (boş string gönderme)
+                // TAH-04: taksit eşleştirmesi (boş → null; C5 boş eşleştirme geçerli, zorlanmaz)
+                schedule_item_id: (f.schedule_item_id && f.schedule_item_id.value) || null
             };
             const submitBtn = f.querySelector('button[type="submit"]');
             submitBtn.disabled = true;

@@ -79,6 +79,8 @@
 
         .status-badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 7px; border-radius: 999px; background: var(--primary-light); color: var(--primary); }
         .paid-full { color: var(--ok); font-weight: 600; }
+        .matched { color: var(--primary); font-weight: 700; }   /* C1: eşleşmiş, teleskoptan ayrı */
+        .cap-note { color: var(--warn); font-size: 12px; font-weight: 600; }
 
         /* Overdue vs upcoming split (PLN-11) */
         .office-subtotals { display: flex; gap: 16px; align-items: baseline; }
@@ -229,6 +231,7 @@
                 <th>Due Date</th>
                 <th class="num">Amount</th>
                 <th class="num">Amount (EUR)</th>
+                <th class="num">Matched (EUR)</th>
                 <th class="num">Collected (EUR)</th>
                 <th class="num">Outstanding (EUR)</th>
             </tr>
@@ -269,13 +272,23 @@
                 ? `<span class="paid-full">${formatMoney(l.remaining_eur)}</span>`
                 : formatMoney(l.remaining_eur);
             const orig = `${formatMoney(l.amount)}${l.currency ? ' ' + escapeHtml(l.currency) : ''}`;
+            // C1: eşleşmiş (matched) tahsilat, teleskop fallback (collected) ile GÖRSEL AYRI.
+            const matched = Number(l.matched_eur || 0);
+            const matchedCell = matched !== 0
+                ? `<span class="matched">${formatMoney(l.matched_eur)}</span>`
+                : `<span class="muted">—</span>`;
+            const excess = Number(l.excess_eur || 0);
+            const excessNote = excess > 0 ? ` <span class="cap-note">+${formatMoney(l.excess_eur)} over</span>` : '';
+            const covered = Number(l.covered_eur || 0);
+            const coveredCell = covered !== 0 ? formatMoney(l.covered_eur) : `<span class="muted">—</span>`;
             return `<tr>
                 <td class="af">${af}</td>
                 <td><span class="status-badge">${escapeHtml(l.status)}</span></td>
                 <td>${formatDate(l.due_date)}</td>
                 <td class="num">${orig}</td>
                 <td class="num">${formatMoney(l.amount_eur)}</td>
-                <td class="num">${formatMoney(l.covered_eur)}</td>
+                <td class="num">${matchedCell}${excessNote}</td>
+                <td class="num">${coveredCell}</td>
                 <td class="num">${remCell}</td>
             </tr>`;
         }
@@ -329,7 +342,13 @@
             if (Number(data.contracts_unconvertible || 0) > 0) {
                 parts.push(`<span>${Number(data.contracts_unconvertible)}</span> contracts excluded (no exchange rate)`);
             }
-            return `<div class="counters">${parts.join(' &middot; ')}</div>`;
+            // TAH-04 C1/C8: ödeme eşleşme durumu (non-reversal), ayrı satır, sıfırken bile görünür.
+            const pay = [];
+            pay.push(`<span>${Number(data.payments_matched || 0)}</span> payments matched &mdash; ${formatMoney(data.matched_payments_eur)} EUR`);
+            pay.push(`<span>${Number(data.payments_unmatched || 0)}</span> payments unmatched &mdash; ${formatMoney(data.unmatched_payments_eur)} EUR (distributed by earliest-due)`);
+            pay.push(`<span>${Number(data.payments_unmatched_after_revision || 0)}</span> payments unmatched after revision &mdash; ${formatMoney(data.unmatched_after_revision_eur)} EUR`);
+            return `<div class="counters">${parts.join(' &middot; ')}</div>` +
+                   `<div class="counters">${pay.join(' &middot; ')}</div>`;
         }
 
         function formatDate(d) {
