@@ -5,6 +5,57 @@
 
 ---
 
+## ⚡ ELL FİNANS MODÜLÜ — ÖNCE BUNU OKU
+
+Bu dosyanın geri kalanı **Leena EMS**'i anlatır (fuar/ziyaretçi/e-posta/
+konferans) ve o taraf için geçerlidir. **ELL finans/komisyon modülü**
+(contracts · payments · sales_agents · commission_payouts ·
+payment_schedule_items · offices; migrations 012-028) BU DOSYADA
+ANLATILMAZ — kaynakları aşağıdadır.
+
+### Kanonik kaynaklar (finans işi için)
+- `~/Projects/ell-docs/ELL_DURUM_DEFTERI_v2.md` — defter, kronolojik,
+  tek gerçek kaynak
+- `~/Projects/ell-docs/ELL_LOCKED_KARARLAR_OZET.md` — kütük, kural
+  indeksi (GRUP-NN)
+- Çelişkide **DEFTER kazanır**. Kütük yalnız indekstir.
+- ⚠️ **KURAL 4 (:42) finans işi için GEÇERSİZ:** finans değişiklikleri
+  CLAUDE.md'ye değil **deftere** işlenir. EMS tarafı için KURAL 4 aynen geçerli.
+
+### Davranış kuralları (istisnasız)
+- **VARSAYIM YASAK.** Bu turda ölçmediğin hiçbir şeyi iddia etme.
+- **YON-01:** tarihsel kayıt ≠ güncel durum. Defterden okunan bugün
+  geçerli sanılmaz.
+- **BULAMADIM:** bulunamayan yazılır, çıkarım yapılmaz. Her iddia
+  `file:line` veya komut çıktısıyla gelir.
+- **Repo/git beyanı:** her beyan AYNI yanıtta `git status --short` +
+  `git log --oneline -3` + `git status --branch` çıktısıyla gelir.
+- "Talimat verildi" ≠ "talimat uygulandı."
+
+### Sabit sınırlar
+- Migration **YAZILIR, ÇALIŞTIRILMAZ** — Suer koşar.
+- **PUSH YOK** — Suer atar. Commit serbest.
+- Canlı LEENA DB'ye **YAZILMAZ**.
+- **TABAN: contract 4 sr earned = 342.00 EUR.** Her turda korunur.
+- UI/UX bilinçle iskelet — cila yok, tasarım fazı en sonda.
+- **ELIZA EMEKLİ.** (`ell-docs/eliza/CLAUDE.md` onu canlı sanıyor —
+  o dosya bayat, referans alınmaz.)
+
+### Test
+- `npm run test:setup && npm test` (backend/leena-v401-backend) —
+  beklenen **67/67**.
+- Testler `tests/` altında yaşar. Test mantığı/assertion değiştirilmez;
+  kapsam genişletme AYRI dilim işidir.
+
+### Defter kaydı
+- İşle **AYNI turda, aynı commit'te** yazılır. Ayrı tur açılmaz.
+- Yerleşim: kronolojik-artan, son kayıttan sonra, `★ SIRADAKİ ADAYLAR`
+  bloğundan önce. Format için son 3 kaydı örnek al.
+- Zorunlu başlıklar: ne yapıldı · commit · ölçülenler ·
+  `⚠️ ÖLÇÜLMEDİ / GÖZLENEMEDİ` · bilinçle yapılmayanlar.
+
+---
+
 ## ELL Cross-System Rules
 Before making architectural decisions, read: `docs/ELL_RULES.md`
 If in doubt, mark with 🔶 ELL onayı gerek and ask the user to check with ELIZA chat.
