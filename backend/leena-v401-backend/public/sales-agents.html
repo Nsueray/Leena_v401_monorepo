@@ -126,6 +126,7 @@
                                 <th>Group</th>
                                 <th>Team</th>
                                 <th>Country</th>
+                                <th>Office</th>
                                 <th class="num">Comm %</th>
                                 <th class="num">Dir %</th>
                                 <th>Active</th>
@@ -133,7 +134,7 @@
                             </tr>
                         </thead>
                         <tbody id="agentBody">
-                            <tr><td colspan="9" class="empty-state">Loading…</td></tr>
+                            <tr><td colspan="10" class="empty-state">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -154,6 +155,7 @@
         // contract-list.html:167-170 ile aynı para birimi listesi.
         const CURRENCIES = ['EUR', 'USD', 'TRY', 'MAD', 'NGN', 'KES'];
         let allAgents = [];
+        let allOffices = [];   // M5: GET /api/offices'ten (OFS-01: koda gömülmez)
 
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('token');
@@ -163,15 +165,19 @@
 
         async function loadAgents() {
             try {
-                // Liste sayfası hepsini çeker; filtre client-side.
-                const res = await leenaFetch(`${API_URL}/sales-agents?include_inactive=1`);
-                allAgents = await res.json();
+                // Liste sayfası hepsini çeker; filtre client-side. Ofisler dropdown + ad çözümü için.
+                const [aRes, oRes] = await Promise.all([
+                    leenaFetch(`${API_URL}/sales-agents?include_inactive=1`),
+                    leenaFetch(`${API_URL}/offices`)
+                ]);
+                allAgents = await aRes.json();
+                allOffices = await oRes.json();
                 buildDatalists();
                 applyFilter();
             } catch (err) {
                 if (err.status === 401 || err.status === 403) return;
                 document.getElementById('agentBody').innerHTML =
-                    '<tr><td colspan="9" class="empty-state">Error loading agents. <button class="btn btn-ghost btn-sm" onclick="loadAgents()">Retry</button></td></tr>';
+                    '<tr><td colspan="10" class="empty-state">Error loading agents. <button class="btn btn-ghost btn-sm" onclick="loadAgents()">Retry</button></td></tr>';
             }
         }
 
@@ -196,11 +202,11 @@
             document.getElementById('countLine').textContent =
                 `Showing ${agents.length} of ${allAgents.length} agents`;
             if (!allAgents.length) {
-                body.innerHTML = '<tr><td colspan="9" class="empty-state">No agents yet.</td></tr>';
+                body.innerHTML = '<tr><td colspan="10" class="empty-state">No agents yet.</td></tr>';
                 return;
             }
             if (!agents.length) {
-                body.innerHTML = '<tr><td colspan="9" class="empty-state">No agents match the filter.</td></tr>';
+                body.innerHTML = '<tr><td colspan="10" class="empty-state">No agents match the filter.</td></tr>';
                 return;
             }
             body.innerHTML = agents.map(a => `<tr class="${a.is_active ? '' : 'inactive'}">
@@ -209,6 +215,7 @@
                 <td>${a.sales_group ? escapeHtml(a.sales_group) : dash()}</td>
                 <td>${a.sales_team ? escapeHtml(a.sales_team) : dash()}</td>
                 <td>${a.country ? escapeHtml(a.country) : dash()}</td>
+                <td>${officeName(a.office_id)}</td>
                 <td class="num">${a.default_commission_pct == null ? dash() : escapeHtml(String(a.default_commission_pct))}</td>
                 <td class="num">${a.default_director_pct == null ? dash() : escapeHtml(String(a.default_director_pct))}</td>
                 <td>${a.is_active ? '✓' : dash()}</td>
@@ -222,15 +229,19 @@
             const types = AGENT_TYPES.map(t => `<option value="${t}"${a.agent_type === t ? ' selected' : ''}>${t}</option>`).join('');
             const curs = ['<option value="">—</option>'].concat(
                 CURRENCIES.map(c => `<option value="${c}"${a.commission_currency === c ? ' selected' : ''}>${c}</option>`)).join('');
+            // M5: ofis seçenekleri API'den (OFS-01). Boş = "— No office —" (OFS-04: zorunlu değil).
+            const offs = ['<option value="">— No office —</option>'].concat(
+                allOffices.map(o => `<option value="${o.id}"${a.office_id === o.id ? ' selected' : ''}>${escapeHtml(o.name)}</option>`)).join('');
             const val = (k) => a[k] == null ? '' : escapeHtml(String(a[k]));
             const activeChecked = (agent && !a.is_active) ? '' : 'checked';
-            return `<tr class="agent-row"><td colspan="9">
+            return `<tr class="agent-row"><td colspan="10">
                 <form class="agent-form" onsubmit="submitAgent(event, ${agent ? a.id : 'null'})">
                     <label>Name<input name="name" type="text" value="${val('name')}" autocomplete="off"></label>
                     <label>Type<select name="agent_type">${types}</select></label>
                     <label>Group<input name="sales_group" list="dlGroup" value="${val('sales_group')}" autocomplete="off"></label>
                     <label>Team<input name="sales_team" list="dlTeam" value="${val('sales_team')}" autocomplete="off"></label>
                     <label>Country<input name="country" list="dlCountry" value="${val('country')}" autocomplete="off"></label>
+                    <label>Office<select name="office_id">${offs}</select></label>
                     <label>Email<input name="email" type="text" value="${val('email')}" autocomplete="off"></label>
                     <label>Company<input name="agent_company" type="text" value="${val('agent_company')}" autocomplete="off"></label>
                     <label>Currency<select name="commission_currency">${curs}</select></label>
@@ -271,6 +282,7 @@
                 sales_group: str(f.sales_group.value),
                 sales_team: str(f.sales_team.value),
                 country: str(f.country.value),
+                office_id: num(f.office_id.value),
                 email: str(f.email.value),
                 agent_company: str(f.agent_company.value),
                 commission_currency: str(f.commission_currency.value),
@@ -303,6 +315,12 @@
         }
 
         function dash() { return '<span class="muted">—</span>'; }
+        // M5: office_id → ad (allOffices'ten, contract-detail officeName emsali). Boş → —.
+        function officeName(id) {
+            if (id == null) return dash();
+            const o = allOffices.find(x => x.id === id);
+            return o ? escapeHtml(o.name) : '#' + id;
+        }
         function escapeHtml(s) {
             return String(s == null ? '' : s)
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

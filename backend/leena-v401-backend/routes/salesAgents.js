@@ -73,6 +73,15 @@ function validateBody(b) {
   const currency = normCurrency(b.commission_currency);
   if (currency === undefined) return { error: 'commission_currency must be a 3-letter code.' };
 
+  // M5: office_id opsiyonel (NULL kabul, OFS-04 ruhu). Format kontrolü burada (sync);
+  // offices'ta VARLIK kontrolü POST/PUT'ta (async DB — payment emsali contracts.js).
+  let office_id = null;
+  if (b.office_id !== null && b.office_id !== undefined && b.office_id !== '') {
+    const oid = Number(b.office_id);
+    if (!Number.isInteger(oid) || oid <= 0) return { error: 'office_id must be a positive integer.' };
+    office_id = oid;
+  }
+
   return {
     ok: true,
     v: {
@@ -86,8 +95,17 @@ function validateBody(b) {
       commission_currency: currency,
       default_commission_pct: pct,
       default_director_pct: dirPct,
+      office_id,
     },
   };
+}
+
+// M5: office_id verilmişse offices'ta var mı (is_active şartı YOK — düzenlemede
+// pasifleşmiş ofisi koruyabilmek için varlık yeter). Payment ofis kontrolü emsali.
+async function officeExists(office_id) {
+  if (office_id == null) return true;
+  const off = await pool.query('SELECT id FROM offices WHERE id = $1', [office_id]);
+  return off.rows.length > 0;
 }
 
 // ----------------------------------------------------------------------------
@@ -99,16 +117,17 @@ router.post('/', authMiddleware, async (req, res) => {
   if (r.error) return res.status(400).json({ error: r.error });
   const v = r.v;
   try {
+    if (!(await officeExists(v.office_id))) return res.status(400).json({ error: 'invalid office' });
     const result = await pool.query(
       `INSERT INTO sales_agents
          (organizer_id, name, agent_type, email, sales_group, sales_team,
           country, agent_company, commission_currency,
-          default_commission_pct, default_director_pct)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+          default_commission_pct, default_director_pct, office_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
        RETURNING ${SELECT_COLS}`,
       [req.organizer_id, v.name, v.agent_type, v.email, v.sales_group, v.sales_team,
        v.country, v.agent_company, v.commission_currency,
-       v.default_commission_pct, v.default_director_pct]
+       v.default_commission_pct, v.default_director_pct, v.office_id]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -133,17 +152,18 @@ router.put('/:id', authMiddleware, async (req, res) => {
   const is_active = b.is_active === false ? false : true; // boolean; default true
 
   try {
+    if (!(await officeExists(v.office_id))) return res.status(400).json({ error: 'invalid office' });
     const result = await pool.query(
       `UPDATE sales_agents SET
          name = $1, agent_type = $2, email = $3, sales_group = $4, sales_team = $5,
          country = $6, agent_company = $7, commission_currency = $8,
-         default_commission_pct = $9, default_director_pct = $10, is_active = $11,
-         updated_at = NOW()
-       WHERE id = $12 AND organizer_id = $13
+         default_commission_pct = $9, default_director_pct = $10, office_id = $11,
+         is_active = $12, updated_at = NOW()
+       WHERE id = $13 AND organizer_id = $14
        RETURNING ${SELECT_COLS}`,
       [v.name, v.agent_type, v.email, v.sales_group, v.sales_team, v.country,
        v.agent_company, v.commission_currency, v.default_commission_pct,
-       v.default_director_pct, is_active, id, req.organizer_id]
+       v.default_director_pct, v.office_id, is_active, id, req.organizer_id]
     );
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Sales agent not found' });
