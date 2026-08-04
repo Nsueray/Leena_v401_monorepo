@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node tests/test_cash_forecast.js",
+    "test:setup": "node tests/setup_test_db.js"
   },
   "keywords": [],
   "author": "",
