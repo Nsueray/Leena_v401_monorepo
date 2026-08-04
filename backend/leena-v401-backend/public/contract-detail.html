@@ -261,7 +261,9 @@
         // (dropdown boş, kolonda "—"). Ofis listesi frontend'de sabit DEĞİL — tablodan gelir.
         async function loadOffices() {
             try {
-                const res = await leenaFetch(`${API_URL}/offices`);
+                // M2: ad çözümü TÜM ofislerden (kapalı ofis geçmiş kayıtta adını korur);
+                // dropdown YALNIZ aktiflerden (kapalı ofis yeni kayıtta seçilemez).
+                const res = await leenaFetch(`${API_URL}/offices?include_inactive=1`);
                 if (res.ok) offices = await res.json();
             } catch (err) {
                 if (err.status === 401 || err.status === 403) return;
@@ -269,7 +271,7 @@
             const f = document.getElementById('payForm');
             if (f && f.received_office_id) {
                 f.received_office_id.innerHTML = ['<option value="">—</option>']
-                    .concat(offices.map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`)).join('');
+                    .concat(offices.filter(o => o.is_active).map(o => `<option value="${o.id}">${escapeHtml(o.name)}</option>`)).join('');
             }
         }
         // Ödeme satırındaki received_office_id → ada eşle (JOIN yok; liste bellekten). Yoksa "—".

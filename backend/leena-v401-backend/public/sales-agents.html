@@ -168,7 +168,7 @@
                 // Liste sayfası hepsini çeker; filtre client-side. Ofisler dropdown + ad çözümü için.
                 const [aRes, oRes] = await Promise.all([
                     leenaFetch(`${API_URL}/sales-agents?include_inactive=1`),
-                    leenaFetch(`${API_URL}/offices`)
+                    leenaFetch(`${API_URL}/offices?include_inactive=1`)   // M2: ad tümünden (kapalı korunur)
                 ]);
                 allAgents = await aRes.json();
                 allOffices = await oRes.json();
@@ -230,8 +230,9 @@
             const curs = ['<option value="">—</option>'].concat(
                 CURRENCIES.map(c => `<option value="${c}"${a.commission_currency === c ? ' selected' : ''}>${c}</option>`)).join('');
             // M5: ofis seçenekleri API'den (OFS-01). Boş = "— No office —" (OFS-04: zorunlu değil).
+            // M2: dropdown YALNIZ aktif ofisler; mevcut değer kapalıysa da seçili kalsın (edit'te kaybolmasın).
             const offs = ['<option value="">— No office —</option>'].concat(
-                allOffices.map(o => `<option value="${o.id}"${a.office_id === o.id ? ' selected' : ''}>${escapeHtml(o.name)}</option>`)).join('');
+                allOffices.filter(o => o.is_active || o.id === a.office_id).map(o => `<option value="${o.id}"${a.office_id === o.id ? ' selected' : ''}>${escapeHtml(o.name)}${o.is_active ? '' : ' (closed)'}</option>`)).join('');
             const val = (k) => a[k] == null ? '' : escapeHtml(String(a[k]));
             const activeChecked = (agent && !a.is_active) ? '' : 'checked';
             return `<tr class="agent-row"><td colspan="10">

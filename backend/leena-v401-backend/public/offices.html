@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Offices - Leena EMS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <style>
+        :root {
+            --primary: #4a6fa5; --primary-hover: #3d5d8a; --primary-light: #eef2f7;
+            --sidebar-bg: #1a1a2e; --sidebar-hover: #252542; --sidebar-active: #2d2d4a;
+            --sidebar-text: #9ca3af; --sidebar-text-active: #ffffff; --sidebar-border: #252542;
+            --bg: #f4f6fa; --surface: #ffffff; --border: #e5e7eb; --text: #1f2937;
+            --text-muted: #6b7280; --ok: #166534; --danger: #b91c1c;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); }
+        .app-shell { display: flex; min-height: 100vh; }
+        .sidebar { width: 260px; background: var(--sidebar-bg); display: flex; flex-direction: column; flex-shrink: 0; }
+        .sidebar-header { padding: 24px 20px; border-bottom: 1px solid var(--sidebar-border); }
+        .sidebar-logo { height: 32px; }
+        .sidebar-nav { padding: 16px 12px; flex: 1; }
+        .nav-section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--sidebar-text); padding: 8px 12px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 8px; color: var(--sidebar-text); text-decoration: none; font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+        .nav-item:hover { background: var(--sidebar-hover); color: var(--sidebar-text-active); }
+        .nav-item.active { background: var(--sidebar-active); color: var(--sidebar-text-active); }
+        .nav-divider { height: 1px; background: var(--sidebar-border); margin: 12px 0; }
+        .main-wrapper { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+        .main-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 28px; background: var(--surface); border-bottom: 1px solid var(--border); }
+        .main-header h1 { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .main-content { padding: 24px 28px; }
+        .btn { font-family: inherit; font-size: 14px; font-weight: 600; padding: 9px 16px; border-radius: 8px; border: 1px solid transparent; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-ghost { background: var(--surface); color: var(--text); border-color: var(--border); }
+        .btn-ghost:hover { background: var(--primary-light); }
+        .btn-sm { padding: 6px 12px; font-size: 13px; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; }
+        thead th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; padding: 14px 16px; border-bottom: 1px solid var(--border); background: #fafbfc; }
+        tbody td { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        tbody tr:last-child td { border-bottom: none; }
+        .muted { color: var(--text-muted); }
+        .office-name { font-weight: 600; }
+        tr.closed td { opacity: 0.5; }
+        .badge { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px; border-radius: 999px; }
+        .badge.active { background: #dcfce7; color: var(--ok); }
+        .badge.closed { background: #fee2e2; color: var(--danger); }
+        .office-row td { background: #fafbfc; }
+        .office-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+        .office-form label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-muted); font-weight: 600; }
+        .office-form input, .office-form select { font-family: inherit; font-size: 14px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); min-width: 150px; }
+        .office-form .check { align-self: center; margin-top: 14px; flex-direction: row; align-items: center; gap: 8px; }
+        .empty-state { padding: 60px 20px; text-align: center; color: var(--text-muted); }
+        .count-line { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+        <nav class="sidebar">
+            <div class="sidebar-header"><img src="assets/Leena_logo_white_nobg.png" alt="Leena" class="sidebar-logo"></div>
+            <div class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Finance</div>
+                    <a class="nav-item" href="contract-list.html"><i class="bi bi-file-earmark-text"></i><span>Contracts</span></a>
+                    <a class="nav-item" href="sales-agents.html"><i class="bi bi-person-badge"></i><span>Sales Agents</span></a>
+                    <a class="nav-item" href="commissions.html"><i class="bi bi-cash-coin"></i><span>Commissions</span></a>
+                    <a class="nav-item" href="cash-forecast.html"><i class="bi bi-graph-up-arrow"></i><span>Cash Forecast</span></a>
+                    <a class="nav-item active" href="offices.html"><i class="bi bi-building"></i><span>Offices</span></a>
+                </div>
+                <div class="nav-divider"></div>
+                <div class="nav-section">
+                    <a class="nav-item" href="dashboard_new.html"><i class="bi bi-collection"></i><span>My Expos</span></a>
+                    <a class="nav-item" href="#" onclick="logout(); return false;"><i class="bi bi-box-arrow-right"></i><span>Logout</span></a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="main-wrapper">
+            <header class="main-header">
+                <h1><i class="bi bi-building"></i> Offices</h1>
+                <button class="btn btn-primary" onclick="toggleNewForm()"><i class="bi bi-plus-lg"></i> New office</button>
+            </header>
+            <main class="main-content">
+                <div class="count-line" id="countLine"></div>
+                <div class="card">
+                    <table>
+                        <thead><tr><th>Name</th><th>Country</th><th>Status</th><th></th></tr></thead>
+                        <tbody id="officeBody"><tr><td colspan="4" class="empty-state">Loading…</td></tr></tbody>
+                    </table>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/leena-toast.js"></script>
+    <script src="/leena-fetch.js"></script>
+    <script>
+        const API_URL = '/api';
+        let allOffices = [];
+        let countries = [];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            if (!token) { window.location.href = 'login.html'; return; }
+            load();
+        });
+
+        async function load() {
+            try {
+                const [oRes, cRes] = await Promise.all([
+                    leenaFetch(`${API_URL}/offices?include_inactive=1`),   // yönetim: hepsi (kapalı dahil)
+                    leenaFetch(`${API_URL}/reference/countries`)           // country dropdown (OFS-01: koda gömülmez)
+                ]);
+                allOffices = await oRes.json();
+                countries = await cRes.json();
+                render();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+                document.getElementById('officeBody').innerHTML =
+                    '<tr><td colspan="4" class="empty-state">Error loading offices. <button class="btn btn-ghost btn-sm" onclick="load()">Retry</button></td></tr>';
+            }
+        }
+
+        const countryName = (code) => { const c = countries.find(x => x.code === code); return c ? c.name : code; };
+
+        function render() {
+            const body = document.getElementById('officeBody');
+            document.getElementById('countLine').textContent =
+                `${allOffices.length} offices (${allOffices.filter(o => o.is_active).length} active)`;
+            if (!allOffices.length) { body.innerHTML = '<tr><td colspan="4" class="empty-state">No offices yet.</td></tr>'; return; }
+            body.innerHTML = allOffices.map(o => `<tr class="${o.is_active ? '' : 'closed'}">
+                <td class="office-name">${escapeHtml(o.name)}</td>
+                <td>${escapeHtml(countryName(o.country_code))} <span class="muted">(${escapeHtml(o.country_code)})</span></td>
+                <td><span class="badge ${o.is_active ? 'active' : 'closed'}">${o.is_active ? 'Active' : 'Closed'}</span></td>
+                <td class="num"><button class="btn btn-ghost btn-sm" onclick="editOffice(${o.id})">Edit</button></td>
+            </tr>`).join('');
+        }
+
+        function formHtml(office) {
+            const o = office || {};
+            const countryOpts = ['<option value="">— Select country —</option>'].concat(
+                countries.map(c => `<option value="${c.code}"${o.country_code === c.code ? ' selected' : ''}>${escapeHtml(c.name)}</option>`)).join('');
+            const activeChecked = (office && !o.is_active) ? '' : 'checked';
+            return `<tr class="office-row"><td colspan="4">
+                <form class="office-form" onsubmit="submitOffice(event, ${office ? o.id : 'null'}, ${office ? o.is_active : 'null'})">
+                    <label>Name<input name="name" type="text" value="${o.name ? escapeHtml(o.name) : ''}" autocomplete="off"></label>
+                    <label>Country<select name="country_code">${countryOpts}</select></label>
+                    ${office ? `<label class="check"><input type="checkbox" name="is_active" ${activeChecked}> Active</label>` : ''}
+                    <button class="btn btn-primary btn-sm" type="submit">Save</button>
+                    <button class="btn btn-ghost btn-sm" type="button" onclick="load()">Cancel</button>
+                </form>
+            </td></tr>`;
+        }
+
+        function toggleNewForm() {
+            const body = document.getElementById('officeBody');
+            if (body.querySelector('.new-form')) { render(); return; }
+            render();
+            body.insertAdjacentHTML('afterbegin', formHtml(null).replace('office-row', 'office-row new-form'));
+        }
+
+        function editOffice(id) {
+            const office = allOffices.find(o => o.id === id);
+            if (!office) return;
+            render();
+            const rows = [...document.querySelectorAll('#officeBody tr')];
+            const idx = rows.findIndex(r => r.querySelector(`button[onclick="editOffice(${id})"]`));
+            if (idx >= 0) rows[idx].insertAdjacentHTML('afterend', formHtml(office));
+        }
+
+        async function submitOffice(ev, id, wasActive) {
+            ev.preventDefault();
+            const f = ev.target;
+            const isEdit = id !== null;
+            const is_active = f.is_active ? f.is_active.checked : true;
+            // KAPATMA ONAY (engelleme değil): aktif → kapalı geçişinde uyar.
+            if (isEdit && wasActive === true && is_active === false) {
+                if (!confirm(`Close office '${f.name.value}'? It will no longer be selectable for new records. Existing records keep their office.`)) return;
+            }
+            const body = { name: f.name.value, country_code: f.country_code.value };
+            if (isEdit) body.is_active = is_active;
+            const url = isEdit ? `${API_URL}/offices/${id}` : `${API_URL}/offices`;
+            const method = isEdit ? 'PUT' : 'POST';
+            const btn = f.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            try {
+                const res = await leenaFetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+                if (res.ok) { showToast(isEdit ? 'Office updated' : 'Office created', 'success'); load(); }
+                else {
+                    let msg = 'Save failed';
+                    try { const e = await res.json(); if (e && e.error) msg = e.error; } catch (_) {}
+                    showToast(msg, 'error'); btn.disabled = false;
+                }
+            } catch (err) {
+                if (!(err.status === 401 || err.status === 403)) { showToast('Save failed', 'error'); btn.disabled = false; }
+            }
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+        function logout() { localStorage.clear(); window.location.href = 'login.html'; }
+    </script>
+</body>
+</html>
