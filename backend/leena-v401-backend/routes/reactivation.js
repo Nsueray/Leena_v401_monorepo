@@ -24,6 +24,34 @@ function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
+/**
+ * Record a campaign 'registered' event when an activation arrives from a campaign email.
+ *
+ * reactivate.html forwards the _lc token it was opened with (appended by
+ * appendCampaignTokenToFormLinks in the worker). Without this, the campaign
+ * scheduler's 'not_registered' condition can never see a reactivation activation,
+ * so follow-up steps would keep firing at people who already activated.
+ *
+ * Mirrors routes/visitors.js:452-468. Non-fatal by design: a tracking failure must
+ * never break an activation.
+ */
+async function recordCampaignRegistration(lcToken, ctx) {
+  if (!lcToken) return;
+  try {
+    const { verifyUnsubscribeToken } = require('../utils/trackingPixel');
+    const parsed = verifyUnsubscribeToken(lcToken);
+    if (!parsed) return;
+    await pool.query(
+      `INSERT INTO email_events (campaign_id, recipient_id, email, event_type, metadata)
+       VALUES ($1, $2, $3, 'registered', $4)`,
+      [parsed.campaignId, parsed.recipientId, parsed.email, JSON.stringify(ctx)]
+    );
+    console.log(`[TRACKING] Reactivation registration recorded: campaign=${parsed.campaignId}, email=${parsed.email}`);
+  } catch (trackErr) {
+    console.warn(`[TRACKING] Reactivation registration tracking failed (non-fatal): ${trackErr.message}`);
+  }
+}
+
 // ============================================================
 // BACKGROUND JOB HELPERS (async, called via setImmediate)
 // ============================================================
@@ -528,7 +556,7 @@ router.get('/verify/:token', async (req, res) => {
  */
 router.post('/activate', async (req, res) => {
   try {
-    const { token, name, last_name, company, country, job_title, phone } = req.body;
+    const { token, name, last_name, company, country, job_title, phone, _lc } = req.body;
 
     if (!token) {
       return res.status(400).json({ success: false, error: 'Token is required' });
@@ -565,6 +593,12 @@ router.post('/activate', async (req, res) => {
         'UPDATE reactivation_tokens SET status = $1, activated_at = NOW(), new_visitor_id = $2 WHERE id = $3',
         ['activated', existingCheck.rows[0].id, tokenData.id]
       );
+
+      await recordCampaignRegistration(_lc, {
+        visitor_id: existingCheck.rows[0].id,
+        target_expo_id: tokenData.target_expo_id,
+        via: 'reactivation_activate_existing'
+      });
 
       return res.json({
         success: true,
@@ -613,6 +647,12 @@ router.post('/activate', async (req, res) => {
       'UPDATE reactivation_tokens SET status = $1, activated_at = NOW(), new_visitor_id = $2 WHERE id = $3',
       ['activated', newVisitor.id, tokenData.id]
     );
+
+    await recordCampaignRegistration(_lc, {
+      visitor_id: newVisitor.id,
+      target_expo_id: tokenData.target_expo_id,
+      via: 'reactivation_activate_new'
+    });
 
     // Get form's email template for badge email
     // Use token's form_id (set during campaign creation) for correct template selection

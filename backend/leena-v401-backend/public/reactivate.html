@@ -437,10 +437,15 @@
     <script>
         const API_URL = '/api/reactivation';
         let currentToken = null;
+        // Campaign attribution token, when the visitor arrived from a campaign email.
+        // Mirrors form-public.html:375-377 — forwarded to /activate so the activation
+        // is recorded as a 'registered' event against the campaign recipient.
+        let campaignToken = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             const urlParams = new URLSearchParams(window.location.search);
             currentToken = urlParams.get('token');
+            campaignToken = urlParams.get('_lc');
 
             if (!currentToken) {
                 showError('No activation token provided. Please use the link from your email.');
@@ -514,6 +519,7 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         token: currentToken,
+                        _lc: campaignToken || undefined,
                         name: document.getElementById('name').value.trim(),
                         last_name: document.getElementById('lastName').value.trim(),
                         company: document.getElementById('company').value.trim(),

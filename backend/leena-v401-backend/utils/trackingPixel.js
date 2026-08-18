@@ -142,13 +142,16 @@ function wrapClickLinks(html, eventId) {
 
 /**
  * Append _lc campaign token to links pointing to Leena form pages.
- * Detects: URLs containing 'form-public.html' or '/form/' on the same domain.
+ * Detects: URLs containing 'form-public.html', '/form/', or 'reactivate.html'.
+ * reactivate.html carries its own ?token=X; the separator logic below appends
+ * _lc as an additional param, and wrapClickLinks (called after) base64-encodes
+ * the whole URL, so both survive the click redirect.
  */
 function appendCampaignTokenToFormLinks(html, campaignToken) {
   if (!html || !campaignToken) return html || '';
 
   return html.replace(/<a\s([^>]*?)href=["']([^"']+)["']/gi, (match, before, url) => {
-    if (url.includes('form-public.html') || url.includes('/form/')) {
+    if (url.includes('form-public.html') || url.includes('/form/') || url.includes('reactivate.html')) {
       const separator = url.includes('?') ? '&' : '?';
       return `<a ${before}href="${url}${separator}_lc=${campaignToken}"`;
     }
