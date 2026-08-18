@@ -542,8 +542,54 @@ Render Shell'den manuel SQL migration çalıştırıldı (campaign completion bu
 - [ ] **phoneNormalize Nigeria-hardcoded**: uses `COUNTRY_CODE = '+234'`. Future: expo-aware country code (read from expos.country or similar). Currently sufficient for Mega Clima Nigeria 2026 (expo_id=7).
 
 ### Zoho Webhook Phone Mapping (19 May) — post-fair
-- [ ] **Forward-only fix**: `routes/webhook.js:57` değiştir: `const phone = req.body.phone ?? req.body.mobile ?? req.body.Mobile ?? '';` + `knownFields` Set'e `'mobile'`, `'Mobile'` ekle. `routes/visitors.js:208` paralel fix: `phone: custom_fields?.phone || custom_fields?.mobile || custom_fields?.Mobile || '',`. 2 satır additive değişiklik. Identified 2026-05-19, root cause: Zoho `mobile` lowercase gönderiyor, handler sadece `phone` okuyor. Backfill (6,214 rows) applied; new Zoho payloads still drop phone until this fix lands.
+- [x] **Forward-only fix** ✅ APPLIED 21 May 2026 (commit `3f68411`) — verified 18 Aug 2026: `webhook.js:57` has the mobile/Mobile fallbacks and `knownFields` includes them; 99.9% phone fill on 1,910 post-fix zohoform rows. Original note: `routes/webhook.js:57` değiştir: `const phone = req.body.phone ?? req.body.mobile ?? req.body.Mobile ?? '';` + `knownFields` Set'e `'mobile'`, `'Mobile'` ekle. `routes/visitors.js:208` paralel fix: `phone: custom_fields?.phone || custom_fields?.mobile || custom_fields?.Mobile || '',`. 2 satır additive değişiklik. Identified 2026-05-19, root cause: Zoho `mobile` lowercase gönderiyor, handler sadece `phone` okuyor. Backfill (6,214 rows) applied; new Zoho payloads still drop phone until this fix lands.
 - [ ] **webhook_payload_log table**: observability layer for incoming webhook POSTs (endpoint, params, body_jsonb, received_at). Would have caught Zoho `mobile` vs `phone` mismatch in minutes instead of hours. Migration + handler hook.
+
+---
+
+### Nigeria Mega Project Expo 2026 Pre-Fair Sprint (18 Aug 2026) — expo_id=13, 25-27 Aug
+
+Shipped (3 commits, staged locally, deployed together in one restart):
+- [x] `reactivate.html` — `required` + `*` on Job Title and Phone (commit `8799ccd`)
+- [x] `webhook.js:55` — `|| req.body.title` so Zoho's lowercase `title` reaches `job_title` (commit `32501ed`)
+- [x] `checkinReports.js:47,73` — `direct_job_title` in CTE + COALESCE/NULLIF fallback (commit `52cc27e`)
+
+Manual step for Suer (NOT run by Claude):
+- [ ] **job_title backfill** — 1,776 rows across 4 expos (1,756 on expo 13) from
+      `custom_fields->>'title'`. Three-phase SQL in `EXEC_BRIEF_02_FINDINGS.md` §2.4.
+      **Run ONLY after `32501ed` is deployed and confirmed filling new rows live.**
+      Backup table `job_title_backup_20260818`. Re-runnable (guard: column empty AND cf.title non-empty).
+
+Pre-fair operational blockers (see `DISCOVERY_20260818.md` §6):
+- [ ] **expo 13 has ZERO terminals** — no check-in path exists. Largest gap, blocks the fair.
+- [ ] **Rotate/deactivate May bulk-print terminal keys** (terminals 33, 34 — both still
+      `is_active=true`, full UUIDs in plaintext in CLAUDE.md in the GitHub repo; `dualAuth.js`
+      grants them visitor read + import on expos 7/8)
+- [ ] Deactivate the other 22 terminals belonging to finished fairs
+- [ ] Remove 4 test rows from expo 13 (`test@test.com`, `yaprakguzelcik@gmail.com`,
+      `elan02@elan-expo.com`, + one `name='test'`) — migration 007 two-phase pattern
+- [ ] Drop 5 stale backup tables (`visitors_test_backup_20260514` ~3 months past its documented
+      drop date; `visitors_backup` is undocumented — confirm provenance before dropping)
+- [ ] Badge template `show_job_title` is `false` by default (`badgeTemplates.js:35`) — decide
+      whether job titles should print on badges once terminals exist
+
+Post-fair from this sprint:
+- [ ] Config-driven `reactivate.html`: verify endpoint returns `forms.fields`, page maps
+      `required` onto its 7 inputs (Option B in `EXEC_BRIEF_02_FINDINGS.md` §1.6).
+      Currently the page is a hardcoded snapshot while `form-public.html` is config-driven.
+- [ ] `reactivate.html` `last_name` is `required:true` in config but rendered unmarked
+- [ ] Add `'title'` to `webhook.js` `knownFields` — ONLY after fix + backfill confirmed.
+      Kept duplicating deliberately as the recovery safety net.
+- [ ] `checkins.js:353` plain COALESCE has the same empty-string flaw as the line fixed in
+      `52cc27e` — 346 production rows hold `custom_fields->>'job_title' = ''`
+- [ ] `checkinReports.js:72` country line — same plain-COALESCE flaw
+- [ ] Check whether `visitors.js` POST `/public` enforces `required` server-side or trusts the client
+- [ ] **`Africa/Lagos` hardcoded in 29 sites** — correct for expo 13 (Nigeria), latent defect for
+      Morocco Siema Expo 2026 (expo_id=9, 22-24 Sep). Also `phoneNormalize` `+234`.
+- [ ] **Docs were 3 months stale** — CLAUDE.md described 21 routes, 34 are mounted; the Expo
+      Operations module (migration 010, applied in prod) and the ELL finance module were
+      entirely undocumented. `expo_clusters` exists but is EMPTY; `expo-list/form/clusters/
+      partners.html` are built but linked from nowhere; `dashboard_new.html:667` pencil is dead.
 
 ---
 

@@ -1368,6 +1368,98 @@ fuarlar (Ghana expo 5 vb.) etkilenmez.
 - Suer tested ✅: 1324296 (manual reg toggle), 5a66070 (bulk print, 2 token), d858391 (preemptive warning, mobile)
 - Pending (fuar günü Yaprak/Suer): 9a20641 (Nigeria certificate), 02e0692 (Cool Plus block)
 
+### v4.0.6 — Nigeria Mega Project Expo 2026 Pre-Fair Sprint (18 August 2026)
+
+**Context:** Nigeria Mega Project Expo 2026 (`expo_id=13`, 25-27 Aug, Lagos) opens in 7 days.
+Discovery pass on 18 Aug found the repo was NOT dormant since May — the ELL finance module
+(migrations 012-028) and an undocumented Expo Operations module (migration 010, 18 June) both
+landed in this repo. See `DISCOVERY_20260818.md` and `EXEC_BRIEF_02_FINDINGS.md` (untracked).
+
+**3 code commits.** No migration, no schema change. All additive and backward compatible.
+Deployed together in a single restart to minimise the Zoho webhook exposure window.
+
+#### Reactivate form required fields (commit 8799ccd)
+- `public/reactivate.html:380-381,386-387` — `required` attribute + ` *` label marker added to
+  Job Title and Phone
+- Root cause: the page renders a **hardcoded** 7-field block (`:353-391`); the `*` is a literal
+  character typed into the label string, and `required` was hardcoded on `#name` and `#company`
+  only. There is no required-marker mechanism on this page.
+- The config was already correct: `forms.fields` for form 53 has
+  `{"name":"title","label":"Job Title / Position","required":true}`. The page never reads it —
+  `GET /api/reactivation/verify/:token` (`reactivation.js:471`) returns `f.config` (**style**),
+  not `f.fields`.
+- Client-side only. The submit listener is bound to the **form's submit event**
+  (`reactivate.html:504`), so browser constraint validation runs before the handler — no JS
+  validation logic needed.
+- `POST /api/reactivation/activate` untouched: still validates only `token`
+  (`reactivation.js:533`), and its `job_title || tokenData.job_title` fallback
+  (`reactivation.js:599`) is preserved.
+- `last_name` is `required:true` in config but deliberately left unmarked (out of scope).
+- Context: 9,651 reactivation tokens on expo 13 (9,326 pending), all `form_id=53`.
+
+#### Zoho `title` → `job_title` column (commit 32501ed)
+- `routes/webhook.js:55` — `??` chain replaced with
+  `req.body.jobTitle || req.body.job_title || req.body.title || ''`
+- Root cause: Zoho posts the job title as **`title`** (lowercase — form 53's field is literally
+  named `title`). The handler read only `jobTitle`/`job_title`, so the value landed in
+  `custom_fields` instead of the column.
+- Measured before fix (expo 13): `origin=zohoform` 1,770 rows → **54 (3%)** had `job_title`;
+  `origin=public` 113 rows → **110 (97%)**. Same key, both paths; `visitors.js:207` already
+  read `title`, the webhook did not.
+- Operator `??` → `||` to match `visitors.js:207`. Production data shows `??` would also have
+  worked (the phone fix at `webhook.js:57` uses `??` and fills **99.9%** of 1,910 post-fix
+  rows, proving Zoho **omits** absent keys rather than sending empty strings), but `||` also
+  falls through on `''` and stays correct if Zoho ever starts emitting empty values.
+- **`knownFields` (`webhook.js:63-68`) deliberately NOT changed** — `title` keeps duplicating
+  into `custom_fields`, which is the safety net that keeps 1,776 rows recoverable. Post-fair cleanup.
+- Forward-only. Backfill of 1,776 rows across 4 expos (1,756 on expo 13) is a separate manual
+  Render Shell step, run AFTER this fix is confirmed live.
+
+#### Check-in report job title fallback (commit 52cc27e)
+- `routes/checkinReports.js:47` — `v.job_title as direct_job_title` added to the
+  `ranked_checkins` CTE (mirrors the existing `v.country as direct_country` pattern)
+- `routes/checkinReports.js:73` — `custom_fields->>'job_title' as job_title` →
+  `COALESCE(NULLIF(custom_fields->>'job_title',''), NULLIF(direct_job_title,''), '')`
+- Without this, the "by job title" breakdown stays empty even after the webhook fix and the
+  backfill, because both write the **column** while this report read only the JSONB key.
+- Measured against production (read-only) on `valid_checkins`:
+  expo 7 `1034 → 2142 / 2214`; expo 3 `793 → 2052 / 2166`; expo 5 `408 → 560 / 587`;
+  expo 8 `69 → 88 / 91`.
+- **Uses `NULLIF`, unlike `checkins.js:353` which uses a plain `COALESCE`.** 346 production rows
+  hold `custom_fields->>'job_title' = ''` (empty string, not NULL); a plain COALESCE returns
+  that empty string and never reaches the column. **`checkins.js:353` therefore carries the
+  same latent flaw**, as does the `country` line at `checkinReports.js:72`. Neither touched — post-fair.
+
+#### Known limitation — job titles will NOT appear on badges
+Three independent gates; only the first is addressed by this sprint:
+1. ✅ `visitors.job_title` populated (webhook fix + backfill)
+2. ❌ badge template needs `show_job_title: true` — `badgeTemplates.js:35` defaults it **false**,
+   and `badge.html:368` renders only when true
+3. ❌ **expo 13 has ZERO terminals** — there is no badge-printing path configured at all
+
+Job titles WILL appear in exports (`visitors.js:1047`), reports (`reports.js:255`), and the
+visitor detail panel — all of which read the column directly.
+
+#### Pre-fair risks logged (see DISCOVERY_20260818.md §6)
+- **expo 13 has 0 terminals and 0 check-ins** — largest operational gap
+- **Both May bulk-print terminal keys are still `is_active=true`**, and their full UUIDs are in
+  plaintext in this file (v4.0.5 section) in the GitHub repo. `dualAuth.js` grants those keys
+  visitor-list read + visitor import on expos 7/8. Rotate/deactivate.
+- 5 backup tables still in production, one ~3 months past its documented drop date; one
+  (`visitors_backup`) undocumented
+- 4 test rows in expo 13 (`test@test.com`, `yaprakguzelcik@gmail.com`, `elan02@elan-expo.com`)
+- `Africa/Lagos` hardcoded in 29 query sites — **correct for expo 13**, latent defect for
+  Morocco Siema Expo 2026 (`expo_id=9`, 22-24 Sep)
+- Email worker healthy: 0 pending / 0 failed / 0 stuck at time of audit
+
+#### Post-fair backlog from this sprint
+- Config-driven `reactivate.html` (verify endpoint returns `forms.fields`; page maps
+  `required` onto the 7 inputs) — Option B in `EXEC_BRIEF_02_FINDINGS.md`
+- Add `'title'` to `webhook.js` `knownFields` — only after the fix and backfill are confirmed
+- `checkins.js:353` + `checkinReports.js:72` (country) NULLIF hardening
+- Verify whether `form-public.html`'s server side (`visitors.js` POST `/public`) enforces
+  `required` at all, or trusts the client
+
 ### Shared Frontend Components (public/leena-*.js)
 
 Two shared components reduce duplication across admin pages:
