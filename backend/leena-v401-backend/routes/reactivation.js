@@ -63,6 +63,37 @@ async function processReactivationChunks(jobId, validRows, ctx) {
   const isExpo = !!source_expo_id;
   let created = 0;
 
+  // Token expiry is anchored to the TARGET FAIR, not a fixed duration.
+  // Campaigns can start six months out, so the previous hardcoded
+  // NOW() + 30 days produced tokens that died before the fair opened
+  // (e.g. generated 2026-08-18 for a fair on 2026-09-22 → expired 09-17).
+  //
+  //   end_date + 1 day  → valid through the whole final fair day (end_date is a DATE,
+  //                       so +1 day is 00:00 the morning after).
+  //   COALESCE(…, +90d) → expos.end_date is nullable (1 such row in production).
+  //   GREATEST(…, +30d) → floor. Never shorter than the previous behaviour, and stops
+  //                       a past-dated expo (10 in production) minting a dead token.
+  const FALLBACK_EXPIRY_DAYS = 90;
+  const MIN_EXPIRY_DAYS = 30;
+  let expiresAt;
+  try {
+    const expRes = await pool.query(
+      `SELECT GREATEST(
+                COALESCE(end_date + INTERVAL '1 day', NOW() + INTERVAL '${FALLBACK_EXPIRY_DAYS} days'),
+                NOW() + INTERVAL '${MIN_EXPIRY_DAYS} days'
+              ) AS expires_at
+       FROM expos WHERE id = $1`,
+      [target_expo_id]
+    );
+    expiresAt = expRes.rows[0] && expRes.rows[0].expires_at;
+  } catch (expErr) {
+    console.error(`[reactivation-job-${jobId}] expiry lookup failed, using ${MIN_EXPIRY_DAYS}d fallback:`, expErr.message);
+  }
+  if (!expiresAt) {
+    expiresAt = new Date(Date.now() + MIN_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+  }
+  console.log(`[reactivation-job-${jobId}] token expiry set to ${new Date(expiresAt).toISOString()} (expo ${target_expo_id})`);
+
   const client = await pool.connect();
   try {
     for (let c = 0; c < validRows.length; c += CHUNK_SIZE) {
@@ -72,12 +103,15 @@ async function processReactivationChunks(jobId, validRows, ctx) {
         // Batch INSERT reactivation_tokens
         const tokenClauses = [];
         const tokenParams = [];
+        // One shared placeholder for expires_at, reused by every row tuple.
+        const expiresIdx = chunk.length * (isExpo ? 13 : 11) + 1;
         if (isExpo) {
           chunk.forEach((r, j) => {
             const base = j * 13;
-            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},'pending',NOW(),NOW()+INTERVAL '30 days')`);
+            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},$${base+12},$${base+13},'pending',NOW(),$${expiresIdx})`);
             tokenParams.push(r.token, r.id, source_expo_id, target_expo_id, organizerId, r.email, r.name, r.last_name, r.company, r.country, r.job_title, r.phone, form_id || null);
           });
+          tokenParams.push(expiresAt);
           await client.query(
             `INSERT INTO reactivation_tokens (token, source_visitor_id, source_expo_id, target_expo_id, organizer_id, email, name, last_name, company, country, job_title, phone, form_id, status, created_at, expires_at) VALUES ${tokenClauses.join(',')}`,
             tokenParams
@@ -85,9 +119,10 @@ async function processReactivationChunks(jobId, validRows, ctx) {
         } else {
           chunk.forEach((r, j) => {
             const base = j * 11;
-            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},'pending',NOW(),NOW()+INTERVAL '30 days')`);
+            tokenClauses.push(`($${base+1},$${base+2},$${base+3},$${base+4},$${base+5},$${base+6},$${base+7},$${base+8},$${base+9},$${base+10},$${base+11},'pending',NOW(),$${expiresIdx})`);
             tokenParams.push(r.token, target_expo_id, organizerId, r.email, r.name, r.last_name, r.company, r.country, r.job_title, r.phone, form_id || null);
           });
+          tokenParams.push(expiresAt);
           await client.query(
             `INSERT INTO reactivation_tokens (token, target_expo_id, organizer_id, email, name, last_name, company, country, job_title, phone, form_id, status, created_at, expires_at) VALUES ${tokenClauses.join(',')}`,
             tokenParams
