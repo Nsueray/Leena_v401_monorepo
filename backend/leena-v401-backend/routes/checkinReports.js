@@ -44,6 +44,7 @@ router.get('/', authenticateToken, async (req, res) => {
           v.origin as visitor_origin,
           v.custom_fields,
           v.country as direct_country,
+          v.job_title as direct_job_title,
           LAG(c.checkin_time) OVER (
             PARTITION BY c.visitor_id 
             ORDER BY c.checkin_time
@@ -69,7 +70,7 @@ router.get('/', authenticateToken, async (req, res) => {
         direct_country,
         COALESCE(custom_fields->>'country', direct_country) as country,
         custom_fields->>'sector' as sector,
-        custom_fields->>'job_title' as job_title
+        COALESCE(NULLIF(custom_fields->>'job_title', ''), NULLIF(direct_job_title, ''), '') as job_title
       FROM valid_checkins
     `;
 
