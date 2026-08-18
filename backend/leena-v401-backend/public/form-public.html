@@ -438,7 +438,7 @@
                     </div>
                 </div>
                 <div class="form-footer">
-                    Powered by Leena v401 &copy; ${new Date().getFullYear()}
+                    ${footerLabel()}
                 </div>
             `;
         }
@@ -461,13 +461,24 @@
                     </div>
                 </div>
                 <div class="form-footer">
-                    Powered by Leena v401 &copy; ${new Date().getFullYear()}
+                    ${footerLabel()}
                 </div>
             `;
         }
         // ============================================================
         // DYNAMIC STYLE FROM config.style
         // ============================================================
+        // Resolved style, kept so cards re-rendered after the form is replaced
+        // (success / error) can reuse the form's own branding. Null until
+        // applyFormStyle runs — showError can fire before the config loads.
+        let formStyle = null;
+
+        function footerLabel() {
+            return (formStyle && formStyle.footerText)
+                ? formStyle.footerText
+                : `Powered by Leena v401 © ${new Date().getFullYear()}`;
+        }
+
         function applyFormStyle(config) {
             // Handle string (double-stringified) or null
             if (typeof config === 'string') { try { config = JSON.parse(config); } catch(e) { return; } }
@@ -480,6 +491,7 @@
                 primaryColor: '#667eea', backgroundColor: '#f5f7fa', fontFamily: 'Poppins', buttonText: 'Register', borderRadius: '12'
             };
             const s = { ...DEFAULT_STYLE, ...config.style };
+            formStyle = s;
 
             // Font
             if (s.fontFamily && s.fontFamily !== 'system-ui') {
@@ -536,8 +548,20 @@
             }
 
             // Dynamic CSS overrides
+            // Header/footer live here, not only as inline styles, so they survive
+            // the innerHTML replacement in showSuccess() / showError().
+            // NOTE: mirrors the inline logic above — see todo.md post-fair cleanup.
+            const headerBg = s.headerBannerImage
+                ? `url(${s.headerBannerImage}) center/cover no-repeat`
+                : (s.headerGradientEnd ? `linear-gradient(135deg, ${s.headerBannerColor}, ${s.headerGradientEnd})` : s.headerBannerColor);
+            const footerBg = s.footerBannerImage
+                ? `url(${s.footerBannerImage}) center/cover no-repeat`
+                : (s.footerGradientEnd ? `linear-gradient(135deg, ${s.footerBannerColor}, ${s.footerGradientEnd})` : s.footerBannerColor);
+            const footerFg = s.footerBannerImage ? 'transparent' : (s.footerGradientEnd ? 'white' : '#6c757d');
             const styleTag = document.createElement('style');
             styleTag.textContent = `
+                .form-header { background: ${headerBg}; min-height: ${s.headerHeight}px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+                .form-footer { background: ${footerBg}; color: ${footerFg}; min-height: ${s.footerHeight}px; display: flex; align-items: center; justify-content: center; }
                 .btn-submit { background: ${s.primaryColor} !important; border-radius: ${s.borderRadius}px !important; }
                 .btn-submit:hover { box-shadow: 0 5px 15px ${s.primaryColor}40 !important; }
                 .form-control:focus, .form-select:focus { border-color: ${s.primaryColor} !important; box-shadow: 0 0 0 0.2rem ${s.primaryColor}25 !important; }

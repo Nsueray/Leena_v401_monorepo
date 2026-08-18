@@ -577,6 +577,13 @@ Post-fair from this sprint:
 - [ ] Config-driven `reactivate.html`: verify endpoint returns `forms.fields`, page maps
       `required` onto its 7 inputs (Option B in `EXEC_BRIEF_02_FINDINGS.md` §1.6).
       Currently the page is a hardcoded snapshot while `form-public.html` is config-driven.
+- [ ] **`form-public.html` header/footer style duplication** — `applyFormStyle` now sets the
+      header/footer band both as inline element styles (`:497-536`) and as rules in the
+      injected `<style>` tag (`:551-563`). The inline copy was deliberately left in place so
+      the initial render stayed provably unchanged during the pre-fair window; the stylesheet
+      copy is what survives the `innerHTML` replacement in `showSuccess()`/`showError()`.
+      Collapse to the stylesheet copy alone and delete the inline block. Two sources of truth
+      until then — edit both or neither.
 - [ ] `reactivate.html` `last_name` is `required:true` in config but rendered unmarked
 - [ ] Add `'title'` to `webhook.js` `knownFields` — ONLY after fix + backfill confirmed.
       Kept duplicating deliberately as the recovery safety net.

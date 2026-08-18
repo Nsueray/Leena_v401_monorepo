@@ -1430,6 +1430,32 @@ Deployed together in a single restart to minimise the Zoho webhook exposure wind
   that empty string and never reaches the column. **`checkins.js:353` therefore carries the
   same latent flaw**, as does the `country` line at `checkinReports.js:72`. Neither touched — post-fair.
 
+#### Public form success/error card follows the form's design (18 Aug 2026)
+- `public/form-public.html` — `showSuccess()` (`:413`) and `showError()` (`:447`) replace
+  `#formContent` via `innerHTML`, destroying the **inline** header/footer styles that
+  `applyFormStyle` had applied (`:497-536`). The new elements fell back to the stylesheet
+  default `--primary-gradient` (`:14`) = `#667eea → #764ba2` — the reported "standard purple".
+- Why the button looked right but the header did not: `.btn-submit` was styled through the
+  injected `<style>` tag (persists across re-render), the header/footer only inline (does not).
+- Fix: the header/footer band rules are now also emitted into that same `<style>` tag, so any
+  re-render inherits them. New `formStyle` module variable + `footerLabel()` helper restore the
+  configured `footerText` on the two re-rendered cards (was hardcoded "Powered by Leena v401").
+- **Strictly additive.** The inline block at `:497-536` is untouched; inline styles beat
+  stylesheet rules, so the initial render is byte-identical to before. The new rules only bind
+  to elements with no inline style — exactly the success/error cards.
+- `showError` can fire before any config loads (`:189,:191,:203`); `formStyle` stays null and
+  `footerLabel()` falls back to the old hardcoded string, so that path is unchanged.
+- `renderForm()`'s footer (`:227-228`) deliberately left hardcoded — `applyFormStyle` runs
+  after it and overwrites the text at `:529`.
+- Success checkmark `#28a745` (`:119`) and error icon `#dc3545` (`:109`) deliberately NOT
+  changed — semantic status colours, not branding (Suer's call).
+- `public/reactivate.html` explicitly OUT OF SCOPE: separate implementation, shows/hides a
+  pre-existing `#successState` div rather than replacing innerHTML, and its green
+  `var(--success)` header is deliberate. It does not have this bug.
+- Expo 13 effect: forms 52/53/55 all set `primaryColor #009846` / `headerGradientEnd #29539f`,
+  so the success card becomes green→blue and the footer reads "Powered by Leena EMS · © Elan Expo".
+- Known duplication (inline + stylesheet) logged in todo.md as post-fair cleanup.
+
 #### Known limitation — job titles will NOT appear on badges
 Three independent gates; only the first is addressed by this sprint:
 1. ✅ `visitors.job_title` populated (webhook fix + backfill)
