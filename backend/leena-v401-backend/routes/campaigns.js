@@ -111,10 +111,14 @@ router.get('/', async (req, res) => {
     const organizerId = req.organizer_id;
     const { expo_id, status } = req.query;
 
+    // Same migration-029 fallback as the detail endpoint (see below).
     let query = `
       SELECT c.*,
         (SELECT COUNT(*) FROM campaign_recipients WHERE campaign_id = c.id) AS recipient_count,
         (SELECT COUNT(*) FROM campaign_steps WHERE campaign_id = c.id) AS step_count,
+        COALESCE(c.delivered_count,
+                 (SELECT COUNT(*) FROM email_queue WHERE campaign_id = c.id AND status = 'sent')) AS delivered_count,
+        (c.status = 'completed' AND c.delivered_count IS NULL) AS delivered_unknown,
         e.name AS expo_name
       FROM email_campaigns c
       LEFT JOIN expos e ON c.expo_id = e.id
@@ -133,7 +137,18 @@ router.get('/', async (req, res) => {
     }
 
     query += ' ORDER BY c.created_at DESC';
-    const result = await pool.query(query, values);
+    let result;
+    try {
+      result = await pool.query(query, values);
+    } catch (listErr) {
+      if (listErr.code === '42703') {
+        // undefined_column — migration 029 not applied yet; fall back to the live count
+        console.warn('[campaigns] delivered_count missing (migration 029 not applied); using live queue count');
+        result = await pool.query(query.replace(/c\.delivered_count/g, 'NULL::int'), values);
+      } else {
+        throw listErr;
+      }
+    }
 
     res.json({ success: true, campaigns: result.rows });
   } catch (err) {
@@ -198,6 +213,75 @@ router.get('/:id', async (req, res) => {
       [campaign.id]
     );
 
+    // ── Funnel: delivered → opened → clicked → registered → checked-in ──────────
+    // DELIVERED comes from email_queue.status='sent' (the actual SendGrid handoff), NOT
+    // from the 'sent' email_event, which is written at ENQUEUE time
+    // (email_worker.js:537-539) and overstates delivery while a campaign is draining —
+    // campaign 17 showed 26,262 'sent' events against 6,765 delivered.
+    //
+    // Aggregated once per set rather than with a per-recipient EXISTS: measured on
+    // production, the per-row form took 1,219-1,575ms on a 26k-recipient campaign versus
+    // 257-308ms for this, with byte-identical results.
+    // Deploy-order safety: this query references email_campaigns.delivered_count
+    // (migration 029). If the code ships before the migration runs, fall back to the
+    // live queue count so the detail endpoint degrades instead of 500-ing. Same
+    // legacy-fallback pattern used for migration 006 in routes/reactivation.js.
+    const FUNNEL_SQL = `
+      WITH ev AS (
+        SELECT COUNT(DISTINCT recipient_id) FILTER (WHERE event_type = 'opened')::int     AS opened,
+               COUNT(DISTINCT recipient_id) FILTER (WHERE event_type = 'clicked')::int    AS clicked,
+               COUNT(DISTINCT recipient_id) FILTER (WHERE event_type = 'registered')::int AS registered
+        FROM email_events WHERE campaign_id = $1
+      ),
+      q AS (
+        -- Live queue counts. 'sent' rows are purged when the campaign completes
+        -- (email_worker.js checkCampaignCompletion), so delivered falls back to the
+        -- snapshot in email_campaigns.delivered_count taken just before that purge.
+        SELECT COUNT(*) FILTER (WHERE status = 'sent')::int    AS live_delivered,
+               COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+               COUNT(*) FILTER (WHERE status = 'failed')::int  AS failed
+        FROM email_queue WHERE campaign_id = $1
+      ),
+      ci AS (
+        -- Joined on EMAIL, not visitor_id: campaign_recipients.visitor_id is NULL on every
+        -- Excel-uploaded recipient (the INSERT above omits the column), so a visitor_id
+        -- join would silently return zero. Postgres resolves this to a Hash Semi Join —
+        -- measured 11.5ms, scaling with check-in count rather than recipient count.
+        SELECT COUNT(DISTINCT cr.id)::int AS checked_in
+        FROM campaign_recipients cr
+        WHERE cr.campaign_id = $1 AND $2::int IS NOT NULL AND EXISTS (
+          SELECT 1 FROM visitors v JOIN checkins ck ON ck.visitor_id = v.id
+          WHERE lower(trim(v.email)) = lower(trim(cr.email))
+            AND v.expo_id = $2 AND ck.expo_id = $2)
+      )
+      SELECT COALESCE(c.delivered_count, q.live_delivered)::int AS delivered,
+             -- Completed before migration 029: the snapshot was never taken AND the
+             -- queue rows are already gone. Neither number is true — the client must
+             -- render this as unknown rather than as a figure.
+             (c.status = 'completed' AND c.delivered_count IS NULL) AS delivered_unknown,
+             q.pending, q.failed,
+             ev.opened, ev.clicked, ev.registered, ci.checked_in,
+             (SELECT start_date FROM expos WHERE id = $2) AS expo_start_date
+      FROM q, ev, ci, email_campaigns c
+      WHERE c.id = $1
+    `;
+
+    let funnelRes;
+    try {
+      funnelRes = await pool.query(FUNNEL_SQL, [campaign.id, campaign.expo_id]);
+    } catch (funnelErr) {
+      if (funnelErr.code === '42703') {
+        // undefined_column — migration 029 not applied yet
+        console.warn('[campaigns] delivered_count missing (migration 029 not applied); using live queue count');
+        funnelRes = await pool.query(
+          FUNNEL_SQL.replace(/c\.delivered_count/g, 'NULL::int'),
+          [campaign.id, campaign.expo_id]
+        );
+      } else {
+        throw funnelErr;
+      }
+    }
+
     const steps = stepsRes.rows.map(step => ({
       ...step,
       stats: stepStatsMap[step.id] || { sent: 0, opened: 0, clicked: 0, sent_events: 0, opened_events: 0, clicked_events: 0 }
@@ -207,7 +291,8 @@ router.get('/:id', async (req, res) => {
       success: true,
       campaign: { ...campaign, registered_count: parseInt(regCountRes.rows[0].registered_count) || 0 },
       steps,
-      stats: statsRes.rows[0]
+      stats: statsRes.rows[0],
+      funnel: funnelRes.rows[0] || null
     });
   } catch (err) {
     console.error('[campaigns] Detail error:', err);

@@ -630,17 +630,47 @@ async function checkCampaignCompletion(campaignId) {
   if (result.rows.length > 0) {
     console.log(`[CAMPAIGN SCHEDULER] Campaign ${campaignId} completed (all recipients done)`);
 
-    // Clean up sent queue rows to prevent email_queue bloat (55K+ rows per step)
+    // Snapshot delivered_count, THEN clean up sent queue rows to prevent email_queue
+    // bloat (55K+ rows per step). Both in ONE transaction: the purge destroys the only
+    // source of the delivered figure, so if the snapshot does not persist neither must
+    // the delete. Without this, a completed campaign's funnel silently collapses toward
+    // zero — measured on campaign 15, which reported 4 delivered against 5 opens.
+    // Requires migration 029 (email_campaigns.delivered_count).
+    const cleanupClient = await pool.connect();
     try {
-      const delRes = await pool.query(
+      await cleanupClient.query('BEGIN');
+
+      const snapRes = await cleanupClient.query(
+        `UPDATE email_campaigns
+            SET delivered_count = (
+                  SELECT COUNT(*) FROM email_queue
+                   WHERE campaign_id = $1 AND status = 'sent'
+                )
+          WHERE id = $1
+          RETURNING delivered_count`,
+        [campaignId]
+      );
+
+      const delRes = await cleanupClient.query(
         `DELETE FROM email_queue WHERE campaign_id = $1 AND status = 'sent' AND sent_at < NOW() - INTERVAL '1 hour'`,
         [campaignId]
       );
+
+      await cleanupClient.query('COMMIT');
+
+      const snapshot = snapRes.rows[0] ? snapRes.rows[0].delivered_count : null;
+      console.log(`[CAMPAIGN SCHEDULER] Campaign ${campaignId} delivered_count snapshot: ${snapshot}`);
       if (delRes.rowCount > 0) {
         console.log(`[CAMPAIGN SCHEDULER] Cleaned up ${delRes.rowCount} sent queue rows for campaign ${campaignId}`);
       }
     } catch (err) {
-      console.warn(`[CAMPAIGN SCHEDULER] Queue cleanup error (non-fatal): ${err.message}`);
+      await cleanupClient.query('ROLLBACK').catch(() => {});
+      // Non-fatal, as before: the campaign is already marked completed by the UPDATE
+      // above. Rolling back leaves the queue rows in place, so delivered stays readable
+      // from the live count and the next completion pass can retry.
+      console.warn(`[CAMPAIGN SCHEDULER] Snapshot/cleanup error (non-fatal): ${err.message}`);
+    } finally {
+      cleanupClient.release();
     }
   }
 }

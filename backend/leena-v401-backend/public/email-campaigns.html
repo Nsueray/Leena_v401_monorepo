@@ -330,14 +330,14 @@
                 return;
             }
 
-            let html = '<table><thead><tr><th>Name</th><th>Status</th><th>Recipients</th><th>Steps</th><th>Sent</th><th>Created</th><th></th></tr></thead><tbody>';
+            let html = '<table><thead><tr><th>Name</th><th>Status</th><th>Recipients</th><th>Steps</th><th>Delivered</th><th>Created</th><th></th></tr></thead><tbody>';
             for (const c of campaigns) {
                 html += `<tr style="cursor:pointer;" onclick="openDetail(${c.id})">
                     <td><strong>${esc(c.name)}</strong>${c.expo_name ? `<br><small style="color:var(--text-muted);">${esc(c.expo_name)}</small>` : ''}</td>
                     <td>${statusBadge(c.status)}</td>
                     <td>${c.recipient_count || 0}</td>
                     <td>${c.step_count || 0}</td>
-                    <td>${c.total_sent || 0}</td>
+                    <td>${c.delivered_unknown ? '<span style="color:var(--text-muted);" title="Campaign completed before delivery tracking">n/a</span>' : (c.delivered_count || 0)}${!c.delivered_unknown && (parseInt(c.total_sent) || 0) > (parseInt(c.delivered_count) || 0) ? `<br><small style="color:var(--text-muted);">${c.total_sent} queued</small>` : ''}</td>
                     <td><small>${new Date(c.created_at).toLocaleDateString()}</small></td>
                     <td onclick="event.stopPropagation()">${c.status !== 'active' ? `<button class="btn btn-danger btn-sm" onclick="quickDelete(${c.id})"><i class="bi bi-trash"></i></button>` : ''}</td>
                 </tr>`;
@@ -533,7 +533,7 @@
                     <div class="step-num">${s.step_number}</div>
                     <div class="step-info">
                         <h5>${esc(s.template_name || 'No template')} ${!s.template_id ? '<span style="color:var(--danger);">(missing)</span>' : ''}</h5>
-                        <p>${delayText} &middot; ${condText}${st.sent > 0 ? ` &middot; ${st.sent} sent, ${st.opened} opened, ${st.clicked} clicked` : ''}</p>
+                        <p>${delayText} &middot; ${condText}${st.sent > 0 ? ` &middot; ${st.sent} queued, ${st.opened} opened, ${st.clicked} clicked` : ''}</p>
                     </div>
                     ${isDraft ? `<div class="step-actions">
                         <button class="btn btn-sm btn-secondary" onclick="editStep(${s.id}, ${s.step_number})"><i class="bi bi-pencil"></i></button>
@@ -762,6 +762,96 @@
     // STATS TAB
     // ============================================================
 
+    // Funnel: Delivered -> Opened -> Clicked -> Registered -> Checked-in.
+    //
+    // DELIVERED is email_queue.status='sent' (actual SendGrid handoff), supplied by the
+    // backend as funnel.delivered. It is deliberately NOT the per-step "sent" number shown
+    // on the Steps tab: that one counts email_events rows written at ENQUEUE time and
+    // overstates delivery while a campaign is still draining. All percentages below are
+    // against delivered, so they stay honest mid-drain.
+    function renderFunnel() {
+        const f = (currentCampaign && currentCampaign.funnel) || null;
+        if (!f) return '';
+
+        const delivered  = parseInt(f.delivered)  || 0;
+        const pending    = parseInt(f.pending)    || 0;
+        const failed     = parseInt(f.failed)     || 0;
+        const opened     = parseInt(f.opened)     || 0;
+        const clicked    = parseInt(f.clicked)    || 0;
+        const registered = parseInt(f.registered) || 0;
+        const checkedIn  = parseInt(f.checked_in) || 0;
+
+        // Campaigns that completed before migration 029 have no snapshot AND no queue
+        // rows left. Any percentage would be fiction, so suppress the maths entirely.
+        const unknown  = !!f.delivered_unknown;
+        const haveBase = !unknown && delivered > 0;
+
+        // Cap at 100%: opened can legitimately exceed a stale delivered figure, and an
+        // uncapped bar overflows its track. Show an em dash rather than 0.0% with no base.
+        const pct = n => haveBase ? Math.min((n / delivered) * 100, 100).toFixed(1) + '%' : '\u2014';
+        const bar = n => haveBase ? Math.min((n / delivered) * 100, 100) : 0;
+
+        // Has the target expo opened? Until it does, 0 check-ins is expected, not a failure.
+        // Default to NOT open when the date is unknown, so we never imply a real zero.
+        let expoOpen = false;
+        if (f.expo_start_date) {
+            const d = new Date(f.expo_start_date); d.setHours(0, 0, 0, 0);
+            expoOpen = d <= new Date();
+        }
+
+        const stages = [
+            { label: 'Delivered',   n: delivered,  color: 'var(--primary)',
+              note: unknown ? 'n/a \u2014 campaign completed before delivery tracking' : 'handed to SendGrid' },
+            { label: 'Opened',      n: opened,     color: '#0ea5e9',        note: '' },
+            { label: 'Clicked',     n: clicked,    color: '#8b5cf6',        note: '' },
+            { label: 'Registered',  n: registered, color: '#7c3aed',        note: '' },
+            { label: 'Checked in',  n: checkedIn,  color: 'var(--success)',
+              note: expoOpen ? 'campaign recipients who checked in' : 'target expo not yet open' }
+        ];
+
+        let h = '<div style="margin-bottom:20px;">';
+        h += '<h4 style="font-size:14px;font-weight:600;margin-bottom:4px;">Funnel</h4>';
+        h += '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">'
+           + 'Percentages are of <strong>delivered</strong>, not of recipients.</p>';
+
+        if (pending > 0) {
+            h += `<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#92400e;">`
+               + `<i class="bi bi-hourglass-split"></i> <strong>${pending.toLocaleString()}</strong> still queued &mdash; `
+               + `rates below are against the <strong>${delivered.toLocaleString()}</strong> delivered so far and will move.`
+               + `</div>`;
+        }
+        if (failed > 0) {
+            h += `<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#991b1b;">`
+               + `<i class="bi bi-exclamation-triangle"></i> <strong>${failed.toLocaleString()}</strong> failed to send.</div>`;
+        }
+
+        for (const st of stages) {
+            const showPct = haveBase && (st.label !== 'Checked in' || expoOpen);
+            const unknownDelivered = unknown && st.label === 'Delivered';
+            h += `<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px;">
+                    <div style="width:96px;font-size:12px;color:var(--text-muted);text-align:right;">${st.label}</div>
+                    <div style="flex:1;background:#e5e7eb;border-radius:6px;height:22px;overflow:hidden;">
+                      <div style="width:${bar(st.n)}%;background:${st.color};height:100%;border-radius:6px;transition:width .4s ease;"></div>
+                    </div>
+                    <div style="width:150px;font-size:12px;">
+                      <strong>${unknownDelivered ? 'n/a' : st.n.toLocaleString()}</strong>
+                      ${showPct ? `<span style="color:var(--text-muted);"> &middot; ${pct(st.n)}</span>` : ''}
+                    </div>
+                  </div>`;
+            if (st.note) {
+                h += `<div style="margin-left:108px;font-size:11px;color:var(--text-muted);margin-top:-4px;margin-bottom:8px;">${st.note}</div>`;
+            }
+        }
+
+        h += '<p style="font-size:11px;color:var(--text-muted);margin-top:10px;line-height:1.5;">'
+           + '<strong>Checked in</strong> counts campaign recipients who have a check-in for this expo, '
+           + 'matched by email address. It does not establish that the campaign caused the visit &mdash; '
+           + 'someone who would have attended anyway still appears here. Treat it as an upper bound on '
+           + 'attribution, not as a measure of campaign ROI.</p>';
+        h += '</div>';
+        return h;
+    }
+
     function renderStats() {
         const steps = currentCampaign.steps || [];
         const stats = currentCampaign.stats || {};
@@ -780,9 +870,15 @@
             <div class="stat-card"><div class="stat-value" style="color:var(--text-muted);">${unsub}</div><div class="stat-label">Unsubscribed</div></div>
         </div>`;
 
+        html += renderFunnel();
+
         if (steps.length === 0) {
             html += '<div class="empty-state"><p>No steps to show stats for.</p></div>';
         } else {
+            html += '<h4 style="font-size:14px;font-weight:600;margin-bottom:4px;">Per step</h4>'
+                  + '<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">'
+                  + '<strong>Queued</strong> is the count enqueued for this step, not delivered &mdash; '
+                  + 'per-step delivery is not tracked separately. Use the funnel above for delivery.</p>';
             for (const s of steps) {
                 const st = s.stats || { sent: 0, opened: 0, clicked: 0, sent_events: 0, opened_events: 0, clicked_events: 0 };
                 const openRate = st.sent > 0 ? Math.round((st.opened / st.sent) * 100) : 0;
@@ -791,7 +887,7 @@
                     <div class="step-num">${s.step_number}</div>
                     <div class="step-info">
                         <h5>${esc(s.template_name || 'Step ' + s.step_number)}</h5>
-                        <p>Sent: <strong>${st.sent}</strong> &middot;
+                        <p>Queued: <strong>${st.sent}</strong> &middot;
                            Opened: <strong>${st.opened}/${st.sent}</strong> (${openRate}%)
                            <small style="color:var(--text-muted);">(${st.opened_events} events)</small> &middot;
                            Clicked: <strong>${st.clicked}/${st.sent}</strong> (${clickRate}%)
