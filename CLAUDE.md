@@ -996,6 +996,7 @@ the email, reactivation or deploy paths.
 | G13 | **`email_queue` sent rows are PURGED on campaign completion** | `checkCampaignCompletion` (`email_worker.js:632-645`) deletes a campaign's `status='sent'` rows older than 1 h once it completes, to stop bloat (each row carries a full rendered `html_content`). **Never build a durable metric on `email_queue` for a completed campaign.** Campaign 15 retained 4 rows against 5 unique opens — a 125% open rate. Use `email_campaigns.delivered_count` (migration 029), snapshotted in the same transaction as the purge. |
 | G14 | **Campaign `sent` event and `total_sent` are ENQUEUE-time counters** | Both are written in `enqueueStepEmail` (`email_worker.js:537-539`) when the row enters `email_queue`, not when SendGrid accepts it. Campaign 17 showed **26,262 sent against 6,765 delivered** — a 4× overstatement mid-drain. Delivery truth = `email_queue.status='sent'` while **active**, `delivered_count` once **completed**. Never compute open/click rates against the event count. |
 | G15 | **`POST /api/terminals/clone/:id` drops `kind` AND `allow_manual_registration`** | The clone INSERT (`routes/terminals.js:70-80`) omits both columns, so each falls to its DB default (`'scanner'`, `true`). **Cloning a `bulk_print` terminal yields a `scanner`**, which `middleware/dualAuth.js` then rejects with `403 WRONG_TERMINAL_KIND`. Clone also forces `is_active=false` and copies `hall`/`terminal_no` verbatim — that verbatim copy is how you tell a clone from a fresh create. |
+| G16 | **`trim()` in an email predicate silently drops the index** | `idx_reactivation_tokens_email_target (email, target_expo_id)` and `idx_visitors_unique_email_per_expo (organizer_id, expo_id, lower(email))` are only usable when the predicate matches their expression. Wrapping the column in `trim()` forces a scan: measured **0.09 ms → 21 ms** on `reactivation_tokens`, a 230× regression, for an identical result set. Production holds **0 untrimmed emails** in `visitors`/`reactivation_tokens` and `campaign_recipients.email` is normalised on upload, so `lower(col) = lower($1)` is both correct and fast. Related: G11. |
 
 ---
 
@@ -1809,6 +1810,44 @@ recipient+step rows** — the `FOR UPDATE SKIP LOCKED` transaction held across t
 
 Impact: a full 41,203-email step drains in **~2.5 h instead of ~24 h**. Before the change,
 step 3 (fires Mon 24 Aug) would have been delivering into **Tue 25 Aug — fair opening day**.
+
+#### `not_registered` now means registered by ANY route (19 Aug, same day)
+
+**The defect.** `evaluateCondition`'s `not_registered` only consulted the campaign
+`registered` event, which fires exclusively when a visitor arrives carrying an `_lc` token.
+Anyone who registered through **organic Zoho traffic** never carries one, so the campaign
+could not see them.
+
+**Measured before the fix**, campaigns 16/17: **66 active recipients** were already visitors
+on expo 13 yet still evaluated as `not_registered` — **all origin `zohoform`** (Pixad,
+landing page, email marketing), growing **~50/day** (16 on 18 Aug → 50 on 19 Aug). They would
+have received Monday's *"last chance to register"* email days after registering; unfixed, step 3
+would have hit an estimated 300-400.
+
+**The fix.** `not_registered` now treats a recipient as registered if **any** of:
+1. the campaign `registered` event exists (as before), **or**
+2. a `visitors` row exists for that email on the campaign's expo, **or**
+3. their `reactivation_tokens` row for that expo is `activated`
+
+Email-matched, read-only, evaluated at send time. `evaluateCondition` gained a `campaign`
+parameter — already in scope at the only call site (`processRecipient`) — and degrades to
+campaign-event-only if it is absent.
+
+⚠️ **This changes the semantics, not just the coverage.** `not_registered` previously meant
+"has not registered *through this campaign*"; it now means "is not registered *at all*". Right
+for a last-chance email; wrong if a campaign ever deliberately re-targets people who registered
+elsewhere. No such campaign exists today.
+
+**One-way by construction:** the extra checks can only ever *suppress* a send, never cause an
+extra or duplicate one.
+
+**Index alignment is load-bearing** — see G16. Combined cost **2.99 ms/recipient** measured
+server-side, ≈6 s per 2,000-recipient batch inside a 10 s scheduler cycle.
+
+⚠️ Check (3) was **redundant on measurement** — 0 activated tokens lacked a campaign event, so
+the bridge is at 100%. Kept deliberately as insurance: `recordCampaignRegistration` is non-fatal
+by design, so a swallowed tracking error would otherwise leave that recipient permanently
+`not_registered`. At 0.09 ms it is free.
 
 #### Campaign results, EOD 19 Aug
 

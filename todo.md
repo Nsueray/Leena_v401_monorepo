@@ -585,6 +585,7 @@ Fair opens **Tue 25 Aug**. Ordered by deadline.
 - [x] `42703` fallback on both read paths so deploy-before-migration degrades instead of 500-ing
 - [x] **Migration 029 applied to production** — `email_campaigns.delivered_count`, snapshotted atomically with the purge in `checkCampaignCompletion`
 - [x] `EMAIL_WORKER_BATCH_SIZE` 1→10 — measured **28.5 → 274.4/min**, restart mid-drain safe (0 retries, 0 duplicates)
+- [x] **`not_registered` now checks visitor row + activated token, not just the campaign event** — 66 recipients across C16/C17 (all organic `zohoform`) would have received Monday's last-chance email after already registering; growing ~50/day
 
 ### MP26 Reactivation Campaign Launch (18-19 Aug 2026) — expo 13
 

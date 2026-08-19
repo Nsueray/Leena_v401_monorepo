@@ -416,7 +416,7 @@ async function processRecipient(campaign, recipient, stepsMap, organizerName) {
   }
 
   // Evaluate condition
-  const conditionPassed = await evaluateCondition(step.condition, recipient, stepsMap);
+  const conditionPassed = await evaluateCondition(step.condition, recipient, stepsMap, campaign);
 
   if (!conditionPassed) {
     // Condition failed → skip this step, advance, compute next due
@@ -435,7 +435,7 @@ async function processRecipient(campaign, recipient, stepsMap, organizerName) {
   return 'enqueued';
 }
 
-async function evaluateCondition(condition, recipient, stepsMap) {
+async function evaluateCondition(condition, recipient, stepsMap, campaign) {
   if (condition === 'all') return true;
 
   // Find the previous step's ID to check events
@@ -467,12 +467,60 @@ async function evaluateCondition(condition, recipient, stepsMap) {
 
   // Check registration events (any registration AFTER previous step was sent)
   if (condition === 'not_registered' || condition === 'registered') {
+    // "Registered" means registered BY ANY ROUTE, not merely via a campaign click.
+    //
+    // The campaign 'registered' event only fires when the visitor arrives carrying an
+    // _lc token (routes/visitors.js:452-468 for the public form, and
+    // recordCampaignRegistration in routes/reactivation.js for token activation).
+    // Someone who registers through organic Zoho traffic never carries one and is
+    // therefore invisible to it. Measured on 19 Aug across campaigns 16/17: 66 active
+    // recipients were already visitors on the target expo yet still evaluated as
+    // not_registered, every one of them origin='zohoform', and the set was growing
+    // ~50/day. Without check (a) they would receive a "last chance to register" email
+    // days after they had registered.
+    //
+    // (b) is currently redundant — measured 0 activated tokens lacking a campaign
+    // event, i.e. the bridge is at 100%. It is kept as insurance because
+    // recordCampaignRegistration is deliberately non-fatal: a swallowed tracking error
+    // would leave that recipient permanently not_registered. At 0.09ms it is free.
+    //
+    // Predicates are index-aligned on purpose:
+    //   - rt.email = $3 uses idx_reactivation_tokens_email_target; wrapping it in
+    //     trim() drops the plan to a parallel Gather (0.09ms -> 21ms).
+    //   - campaign_recipients.email is normalised on upload (normalizeEmail), and
+    //     production holds 0 untrimmed emails in visitors/reactivation_tokens, so
+    //     comparing without trim() is safe here. See gotcha G11.
+    // Measured combined cost: 2.99ms per recipient (server-side EXPLAIN ANALYZE).
+    //
+    // This is one-way: it can only ever SUPPRESS a send, never cause an extra one.
     const regRes = await pool.query(
-      `SELECT id FROM email_events WHERE recipient_id = $1 AND event_type = 'registered'
-       AND created_at >= $2 LIMIT 1`,
-      [recipient.id, recipient.last_step_sent_at || new Date(0)]
+      `SELECT
+         EXISTS (SELECT 1 FROM email_events
+                  WHERE recipient_id = $1 AND event_type = 'registered'
+                    AND created_at >= $2)                       AS via_campaign,
+         EXISTS (SELECT 1 FROM visitors v
+                  WHERE v.organizer_id = $5 AND v.expo_id = $4
+                    AND lower(v.email) = lower($3))             AS via_visitor_row,
+         EXISTS (SELECT 1 FROM reactivation_tokens rt
+                  WHERE rt.email = $3 AND rt.target_expo_id = $4
+                    AND rt.status = 'activated')                AS via_token`,
+      [
+        recipient.id,
+        recipient.last_step_sent_at || new Date(0),
+        recipient.email,
+        campaign ? campaign.expo_id : null,
+        campaign ? campaign.organizer_id : null
+      ]
     );
-    const wasRegistered = regRes.rows.length > 0;
+
+    const r = regRes.rows[0] || {};
+    const wasRegistered = !!(r.via_campaign || r.via_visitor_row || r.via_token);
+
+    if (wasRegistered && !r.via_campaign) {
+      console.log(`[CAMPAIGN SCHEDULER] ${recipient.email} registered outside the campaign `
+        + `(visitor_row=${!!r.via_visitor_row} token=${!!r.via_token}) — treating as registered`);
+    }
+
     if (condition === 'not_registered') return !wasRegistered;
     if (condition === 'registered') return wasRegistered;
   }
