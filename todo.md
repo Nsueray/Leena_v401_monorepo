@@ -555,10 +555,34 @@ Shipped (3 commits, staged locally, deployed together in one restart):
 - [x] `checkinReports.js:47,73` — `direct_job_title` in CTE + COALESCE/NULLIF fallback (commit `52cc27e`)
 
 Manual step for Suer (NOT run by Claude):
-- [ ] **job_title backfill** — 1,776 rows across 4 expos (1,756 on expo 13) from
+- [x] **job_title backfill** ✅ DONE 18 Aug — **1,785 rows** across 4 expos from
       `custom_fields->>'title'`. Three-phase SQL in `EXEC_BRIEF_02_FINDINGS.md` §2.4.
       **Run ONLY after `32501ed` is deployed and confirmed filling new rows live.**
       Backup table `job_title_backup_20260818`. Re-runnable (guard: column empty AND cf.title non-empty).
+
+### MP26 Reactivation Campaign Launch (18-19 Aug 2026) — expo 13
+
+Shipped (2 further commits + data ops; see CLAUDE.md v4.0.7):
+- [x] `fd0c503` — the bridge: `trackingPixel.js:154` matcher + `reactivate.html` `_lc` capture + `recordCampaignRegistration()` in `/activate`
+- [x] `5866a0a` — fair-anchored token expiry (GREATEST/COALESCE, 30-day floor, 90-day NULL fallback)
+- [x] job_title backfill: **1,785 rows**, backup `job_title_backup_20260818`, Render Shell
+- [x] Templates #58/#59 CTA → form 53 (2 occurrences each); `{{unsubscribe_url}}` anchor unwrapped in #54-59; subject comma. **Via API — DB only, not in git.**
+- [x] Campaigns 16 (14,941 G2) + 17 (26,262 G3), steps `0h all / 37h not_registered / 96h not_registered`, 30-min staggered launch
+- [x] `EMAIL_WORKER_BATCH_SIZE` 1→10 on Render worker — measured **28.5 → 274.4/min**
+- [x] Bridge verified end-to-end on throwaway expo 17 (step 2 skipped the activated recipient) **and** in production (100% attribution, 0 gaps)
+
+Post-fair from THIS sprint:
+- [ ] **`knownFields` cleanup** — add `'title'` to `webhook.js:63-68`. Deliberately left so `custom_fields.title` stays a recovery net. Only after the fix + backfill are settled.
+- [ ] **`checkins.js:353` has the same NULLIF flaw** fixed in `52cc27e` — plain `COALESCE` returns `''` for the 346 production rows where `custom_fields->>'job_title'` is an empty string. Same for the `country` line at `checkinReports.js:72`.
+- [ ] **Config-driven required fields on `reactivate.html`** — the page renders a hardcoded 7-field block and only consumes `forms.config` (style), never `forms.fields`. `GET /verify/:token` would need to return `f.fields` too (Option B in `docs/sessions/SIEMA_OPTION_A_GAPS_20260818.md`). Also: `last_name` is `required:true` in config but rendered unmarked.
+- [ ] **Token expiry floor for past-dated expos** — `GREATEST(..., NOW()+30d)` still mints a live token for an expo that already ended. Should refuse, or clamp to the fair.
+- [ ] **`{{unsubscribe_url}}` placeholder support in campaign mode** (Gotcha G7) — currently unfillable; needs the unsub token generated *before* the render at `email_worker.js:531-532`, which is an ordering change.
+- [ ] **Campaign-UI merge flow** — a "Reactivate via Campaign" button so the token-generation → export → recipient-upload round trip isn't manual. Today it is: `create-from-excel` (no `template_id`) → SQL export → build sheet with `activation_url` → campaign upload.
+- [ ] **Duplicate IP allowlist entries cleanup** — Render PostgreSQL Inbound IP Rules has accumulated stale/duplicate entries from repeated re-adds (Gotcha G4).
+- [ ] **SendGrid bounce/complaint webhook integration** — LEENA records no bounce data at all (Gotcha G9). Highest-value observability gap; blocks any data-driven list hygiene.
+- [ ] `prefetchEmails` `LOWER` without `TRIM` (Gotcha G11) — latent dedup hole.
+- [ ] `#54` secondary form link bypasses the token (~1% of C16 conversions create a fresh record and leave the token `pending`) — decide keep or remove.
+- [ ] Duplicate public-form submission created two visitor rows (`chavadagroup@yahoo.com`, 1 min apart) — `/public` upsert should have caught it.
 
 Pre-fair operational blockers (see `DISCOVERY_20260818.md` §6):
 - [ ] **expo 13 has ZERO terminals** — no check-in path exists. Largest gap, blocks the fair.

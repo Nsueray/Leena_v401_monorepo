@@ -975,6 +975,27 @@ Leena uses 3 custom Claude Skills in `.claude/skills/`:
 
 ---
 
+## ⚠️ GOTCHAS & OPERATIONAL LEARNINGS
+
+Traps hit in production. Each cost real time or nearly cost real damage — read before touching
+the email, reactivation or deploy paths.
+
+| # | Trap | Why it bites |
+|---|---|---|
+| G1 | **`??` vs `\|\|` on empty strings** | `??` falls through only on `null`/`undefined`, **not `''`**. A `?? req.body.title` appended to a chain that already yielded `''` fixes nothing. Use `\|\|` unless you specifically need `0`/`false` preserved. Verified: Zoho *omits* absent keys, so `??` did work for `phone` — but `\|\|` is correct under both hypotheses. |
+| G2 | **psql heredoc without `COMMIT` silently rolls back** | A `BEGIN`-wrapped script that ends without `COMMIT` discards everything and exits 0. Always end with an explicit `COMMIT;` and re-verify with a SELECT **after** it. |
+| G3 | **Render restarts are NOT zero-downtime** | Measured **10-50 s of HTTP 502** on web-service deploys (10 s, 20 s, and 50 s on three separate deploys the same day). Any inbound webhook landing in that window fails. Deploy at low traffic. *(The email worker is a separate service — web deploys don't touch it.)* |
+| G4 | **WARP / VPN changes egress IP and breaks the DB allowlist** | The read-only Postgres connection dies with `Connection terminated unexpectedly` or `timeout expired` — looks like a DB outage, is actually the Render inbound-IP rule. Fix: Render → leena_v401_db → PostgreSQL Inbound IP Rules. Happened 3× in one day. |
+| G5 | **VARCHAR overflow rolls back the WHOLE chunk** | `processReactivationChunks` inserts 1,000 rows per statement. **One** 303-char `company` against `VARCHAR(255)` killed all 1,000 — `failed_count=1000`, `error_message=null` (per-chunk errors are console-only). Truncate to column limits before bulk insert. |
+| G6 | **Campaign `sent` event = ENQUEUE, not delivery** | `email_events` `sent` is written in `enqueueStepEmail` (`email_worker.js:537-539`) at enqueue time. A campaign can show 26,262 `sent` events while only 6,765 have reached SendGrid. **Always compute open/click rates against `email_queue.status='sent'`**, never against the event count. |
+| G7 | **`{{unsubscribe_url}}` is unfillable in campaign mode** | The campaign data build (`email_worker.js:520-528`) has no such key, and `injectUnsubscribeLink` (`trackingPixel.js:41-51`) **appends its own footer** rather than replacing the placeholder. It renders `href=""`. A working footer + RFC 8058 headers still ship, so compliance holds — but the visible dead link invites spam complaints. **Platform gap → future work.** |
+| G8 | **Scheduler enqueue rate ≠ worker delivery rate** | Two independent limits. `CAMPAIGN_SCHEDULER_BATCH_LIMIT` controls how fast rows enter `email_queue`; `EMAIL_WORKER_BATCH_SIZE` × `PROCESS_INTERVAL` controls how fast they leave. C16 enqueued 14,941 in **4 m 37 s** but took **9 h** to deliver. Step delays are measured from **enqueue**, so a slow worker can make step 2 fire before step 1 is delivered. |
+| G9 | **LEENA has ZERO bounce visibility** | No `failed` status ever appears in `email_queue` or `email_logs`; `email_events` has no bounce/dropped/spamreport type. There is no SendGrid bounce webhook. **The SendGrid dashboard is the only source of bounce/complaint data.** "sent" means SendGrid *accepted* the API call — nothing more. |
+| G10 | **Step delays run from the previous step's enqueue, not from activation** | Activating an hour earlier than planned shifts every downstream step by that hour. Compute offsets from the *actual* activation time, or accept the drift. Observed: 53-60 min early activation → step 2 landing ~1 h before target. |
+| G11 | **`prefetchEmails` uses `LOWER()` without `TRIM()`** | `routes/reactivation.js` builds its dedup Sets with `LOWER(email)` while the filter loop compares `.toLowerCase().trim()`. A stored address with surrounding whitespace evades the "already exists" check. Currently harmless — **0 untrimmed emails in production** — but any import that introduces padding breaks dedup. |
+
+---
+
 ## Versiyon Geçmişi
 
 ### v4.0.2+ (Şubat 2026 — Mega Horeca Nigeria fuarı)
@@ -1485,6 +1506,225 @@ visitor detail panel — all of which read the column directly.
 - `checkins.js:353` + `checkinReports.js:72` (country) NULLIF hardening
 - Verify whether `form-public.html`'s server side (`visitors.js` POST `/public`) enforces
   `required` at all, or trusts the client
+
+### v4.0.7 — MP26 Reactivation Campaign Launch (18-19 August 2026)
+
+**Context:** first production run of **reactivation links delivered through the campaign
+(multi-step) module** — the two modules were previously unable to talk to each other. Target
+`expo_id=13` Nigeria Mega Project Expo 2026 (25-27 Aug). Source list: 42,212 verified emails
+(MillionVerifier OK-only), segmented into 3 groups. Analysis chain: `DISCOVERY_20260818.md`,
+`EXEC_BRIEF_02_FINDINGS.md`, `SIEMA_MERGE_OPTIONS_20260818.md`,
+`SIEMA_OPTION_A_GAPS_20260818.md`, `REACTIVATION_SEGMENTATION_SQL_20260818.md` — all now
+committed under `docs/sessions/`.
+
+#### The 5 production fixes of this sprint
+
+| # | commit | change | documented |
+|---|---|---|---|
+| 1 | `8799ccd` | reactivate.html required Job Title + Phone | v4.0.6 above |
+| 2 | `32501ed` | webhook `??`→`\|\|` + `req.body.title` | v4.0.6 above |
+| 3 | `52cc27e` | checkinReports COALESCE/NULLIF job_title | v4.0.6 above |
+| 4 | `6279a36` | form-public success/error card follows design | v4.0.6 above |
+| 5 | `fd0c503` + `5866a0a` | **the bridge** + fair-anchored token expiry | below |
+
+#### THE BRIDGE — campaign attribution reaches token activation (commit `fd0c503`)
+
+**The problem.** `evaluateCondition` (`email_worker.js:469-477`) resolves `not_registered` by
+reading `email_events` for `event_type='registered'`. The only writer was
+`routes/visitors.js:452-468`, gated on a `_lc` token that `appendCampaignTokenToFormLinks`
+attached to **Leena form links only**. `reactivate.html` was never matched, and
+`POST /api/reactivation/activate` emitted **no events at all**. Reactivation activations were
+therefore invisible to the campaign scheduler — steps 2/3 would have fired at everyone,
+including people who had already activated.
+
+Three changes close the loop:
+
+1. `utils/trackingPixel.js:154` — matcher now also matches `reactivate.html`. The existing
+   separator logic on the next line handles the page's own `?token=X`, producing
+   `?token=X&_lc=Y`. `wrapClickLinks` runs after (`email_worker.js:551,554`) and base64-encodes
+   the whole URL; `routes/emailTracking.js:104-114` decodes and 302s to it, so **both params
+   survive the click redirect**.
+2. `public/reactivate.html` — reads `_lc` from the URL alongside `token`, forwards it in the
+   `/activate` body. Mirrors `form-public.html:375-377`. Sends `undefined` when absent.
+3. `routes/reactivation.js` — new `recordCampaignRegistration()` helper, called from **both**
+   activate success branches (already-registered and new-visitor). HMAC verification via
+   `verifyUnsubscribeToken`; the event keys on `recipient_id`, matching what `evaluateCondition`
+   reads. Non-fatal by design (mirrors `visitors.js:467-468`).
+
+⚠️ **`_lc` cannot be pre-computed into an Excel column.** `generateUnsubscribeToken` needs
+`recipient_id`, which is assigned by the `campaign_recipients` INSERT. The matcher extension is
+the only viable route, not one option among several.
+
+**Verified end-to-end before the real run** (throwaway expo 17, campaign 15, 5 recipients):
+step 1 queued 5, one recipient activated, **step 2 queued 4** — the activated one correctly
+skipped. Then verified again in production: see results below.
+
+#### Fair-anchored token expiry (commit `5866a0a`)
+
+`expires_at` was hardcoded `NOW() + INTERVAL '30 days'` at both batch INSERT sites. Since
+campaigns can start months before a fair, tokens could expire **before** the event. Measured:
+tokens generated 2026-08-18 for SIEMA (22-24 Sep) expired **2026-09-17**, five days early and
+dead for the whole fair. `/verify:485` and `/activate:548` both return 410.
+
+New expression, computed once per job (`routes/reactivation.js`, `processReactivationChunks`)
+and shared by every row tuple via one placeholder:
+
+```sql
+GREATEST(
+  COALESCE(end_date + INTERVAL '1 day', NOW() + INTERVAL '90 days'),
+  NOW() + INTERVAL '30 days'
+)
+```
+- `end_date + 1 day` — `end_date` is a DATE, so +1 day is 00:00 the following morning: valid
+  through all of the final fair day.
+- `COALESCE(…, +90d)` — `expos.end_date` is nullable (1 such row in production).
+- `GREATEST(…, +30d)` — floor. Never SHORTER than the old behaviour; stops a **past-dated** expo
+  (10 in production) minting an already-dead token.
+
+Verified read-only against all 16 expos: `new_expiry >= old_expiry` for every one.
+Param-index change verified by simulation at chunk sizes 1/3/1000 for both the from-expo
+(13 params/row) and from-excel (11 params/row) branches.
+
+**Backward compatible — existing tokens keep their stored `expires_at`.** Insert-time only.
+
+⚠️ **Known gap:** for a fair nearer than 30 days the floor wins, which is correct; but for a
+**past-dated** expo the floor still mints a live token. See post-fair backlog.
+
+---
+
+### DATA OPERATIONS — production changes NOT in git
+
+> These live only in the database. Nothing below is reproducible from the repo.
+
+#### job_title backfill (Render Shell, 18 Aug)
+
+Recovered Zoho job titles stranded in `custom_fields->>'title'` by the pre-`32501ed` handler.
+
+| | |
+|---|---|
+| Rows updated | **1,785** |
+| Backup table | **`job_title_backup_20260818`** (1,785 rows — `id, expo_id, old_job_title, cf_title, backed_up_at`) |
+| Guard | `WHERE COALESCE(job_title,'')='' AND COALESCE(custom_fields->>'title','')<>''` |
+| Re-runnable | Yes — guard means a second run matches 0 rows; never overwrites an existing value |
+| Method | Three-phase: backup → dry-run counts → `BEGIN` + UPDATE + in-transaction verification + `COMMIT` |
+| Sequencing | Handler fix `32501ed` deployed and confirmed on live traffic **first**, backfill second |
+
+Rollback recipe retained:
+`UPDATE visitors v SET job_title=b.old_job_title FROM job_title_backup_20260818 b WHERE b.id=v.id;`
+
+#### Email templates #54-#59 (via API `PUT /api/email-templates/:id`, 19 Aug)
+
+**Templates are DATA, not code — they are not in git and not reproducible from this repo.**
+Yaprak authored them; two systemic defects were found by audit and fixed in the DB.
+
+| id | name | expo |
+|---|---|---|
+| 54/55/56 | MP26 Reactivate Step1/2/3 | 13 |
+| 57/58/59 | MP26 Register Step1/2/3 | 13 |
+
+1. **#58/#59 CTA pointed at `{{activation_url}}`** — but Group 3 recipients hold no token, so it
+   rendered `href=""`. **Two occurrences each**: the CTA href *and* a plain-text "if the button
+   doesn't work, copy and paste this link" `<span>`. Both replaced with
+   `https://leena.app/form-public.html?id=53` (form 53 = Visitor Registration Form, expo 13;
+   `form-public.html:173` reads `urlParams.get('id')`).
+2. **`{{unsubscribe_url}}` unwrapped in all six** — the placeholder is **unfillable in campaign
+   mode** (see Gotchas). The anchor was removed, sentence text kept; `injectUnsubscribeLink`
+   (`trackingPixel.js:41-51`) appends its own working footer.
+3. Cosmetic: comma added after the `{{first_name|last_name|company|"Dear Visitor"}}` fallback in
+   all six subjects.
+
+Post-fix audit: **all 6 PASS** — correct CTA, no dead unsubscribe, no `{{activation_url}}` in the
+Register set, no Zoho/zfrmz links, no `[##...##]` placeholders.
+
+⚠️ #54 retains a **secondary** `form-public.html?id=53` link alongside its activation CTA
+(deliberate, Suer's call). It bypasses the token: the visitor creates a fresh record and their
+reactivation token stays `pending`. Observed in production at ~1% of C16 conversions.
+
+#### Campaign objects (expo 13)
+
+| | **16 — MP26 Activate Wave** | **17 — MP26 Register Wave** |
+|---|---|---|
+| Group | G2 — prior LEENA visitor on another expo | G3 — no LEENA record |
+| Recipients | **14,941** | **26,262** |
+| Templates | 54 / 55 / 56 | 57 / 58 / 59 |
+| Steps | `0h all` · `37h not_registered` · `96h not_registered` | identical |
+| `activation_url` in `extra_fields` | 14,941 (100%) | 0 (correct — no tokens) |
+| Activated (IST) | 18 Aug **20:52** | 18 Aug **21:15** |
+
+**Segmentation of the 42,212-row verified list** (all distinct emails, 0 parse errors):
+
+| group | definition | count |
+|---|---|---:|
+| G1 | already a visitor on expo 13 → **excluded** | 887 |
+| G2 | visitor on another expo → activate | 14,967 → **14,941** mailable |
+| G3 | no LEENA record → register | 26,358 → **26,262** mailable |
+
+G2 tokens: 14,077 newly minted (`expires 2026-09-17`) + 864 reused from the 9-17 Aug wave
+(`expires 2026-09-09`). 26 excluded: 25 unsubscribed + 1 who registered mid-run (promoted to G1).
+
+**The 30-minute stagger was deliberate** — a sender-reputation ramp. Launching 41k at once from a
+domain whose recent volume was ~19 emails/hour is a spike; splitting into 14.9k then 26.3k half an
+hour later lets the first wave's engagement register before the second lands. Because the exact
+offsets (37.25 h and 36.75 h) both round to **37**, the stagger cost nothing in scheduling
+accuracy — both waves still land Thursday morning.
+
+⚠️ **Step delays are measured from each recipient's own step-1 enqueue, not from activation.**
+Activation ran 53-60 min earlier than the times the offsets were computed against, so step 2
+lands **Thu 07:52 Lagos (C16) / 08:15 (C17)** — about an hour earlier than the 09:00 intent.
+Recorded, not corrected.
+
+#### Worker environment (Render — `leena-email-worker`)
+
+**Canonical values as of 19 Aug 2026.** These are env vars on the Render worker service; they
+are NOT in the repo and NOT reproducible from it.
+
+| var | value | effect |
+|---|---|---|
+| **`EMAIL_WORKER_BATCH_SIZE`** | **10** (was unset ⇒ default 1) | campaign emails per cycle |
+| `CAMPAIGN_SCHEDULER_BATCH_LIMIT` | **2000** (code default 500) | recipients enqueued per campaign per scheduler run |
+| `CAMPAIGN_SCHEDULER_INTERVAL_SECONDS` | **10** (code default 60) | scheduler cadence |
+| `PROCESS_INTERVAL` | **2000 ms — HARDCODED**, `email_worker.js:21`, no env override | worker poll interval |
+
+**The batch-size change, measured.** With `EMAIL_WORKER_BATCH_SIZE` unset the worker sent
+**1 email per 2-second cycle ≈ 30/min ceiling**; measured **28.4/min**, flat to ±0.3% across 13
+consecutive hours. Raised to 10 and restarted at 09:56 on 19 Aug:
+
+```
+09:54→28  09:55→28  09:56→30   ← BATCH_SIZE=1
+09:57→108                       ← restart (partial minute, NO downtime)
+09:58→289 09:59→271 10:00→270   ← BATCH_SIZE=10
+```
+
+**28.5 → 274.4/min (9.6×).** Ceiling is 300 (10 ÷ 2 s); the ~9% shortfall is per-cycle send
+latency. Post-restart integrity: **0 failed, 0 stuck, 0 retries (`try_count>1`), 0 duplicate
+recipient+step rows** — the `FOR UPDATE SKIP LOCKED` transaction held across the restart.
+
+Impact: a full 41,203-email step drains in **~2.5 h instead of ~24 h**. Before the change,
+step 3 (fires Mon 24 Aug) would have been delivering into **Tue 25 Aug — fair opening day**.
+
+⚠️ `TRANSACTIONAL_BATCH_SIZE = 10` is hardcoded (`email_worker.js:24`), so badge/confirmation
+emails were always 10× faster than campaign mail. Campaign email is **priority 2** (`:30`).
+
+#### Results — first 13 hours (19 Aug 09:48 IST)
+
+| | C16 Activate | C17 Register |
+|---|---:|---:|
+| Delivered | 14,941 (100%) | 6,738 (25.7%) |
+| Opened (unique / % of delivered) | 1,217 / **8.15%** | 321 / **4.75%** |
+| Clicked | 161 | 129 |
+| **Registered** | **98** | **7** |
+| Unsubscribed | 4 | 1 |
+
+C16 attribution: 95 `reactivation_activate_new` · 2 `reactivation_activate_existing` ·
+1 `public_form_submission` (via #54's secondary link).
+C17: all 7 via `public_form_submission` — **confirming the Group 3 chain** (campaign email →
+`form-public.html?id=53` with `_lc` → `visitors.js:452-468` writes the event).
+
+**Bridge integrity: 100%.** Zero activated tokens without an attributed event. Counts reconcile:
+105 activations = 97 belonging to C16 recipients + 8 from the earlier 9-17 Aug wave;
+C16's 98 events = those 97 + 1 public-form. Every activator will be correctly skipped at step 2.
+
+Unsubscribe rate **0.05% of delivered** — well within tolerance.
 
 ### Shared Frontend Components (public/leena-*.js)
 
