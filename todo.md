@@ -560,6 +560,32 @@ Manual step for Suer (NOT run by Claude):
       **Run ONLY after `32501ed` is deployed and confirmed filling new rows live.**
       Backup table `job_title_backup_20260818`. Re-runnable (guard: column empty AND cf.title non-empty).
 
+## 🎯 ACTIVE — owners & deadlines (as of 19 Aug 2026 EOD)
+
+Fair opens **Tue 25 Aug**. Ordered by deadline.
+
+| # | Item | Owner | Deadline | Notes |
+|---|---|---|---|---|
+| 1 | **T1 Visitor badge template swap** off `test visitor 80x40` (id 17) | **OPS** | **before Mon 24 Aug** | Serves 3,678 registrants. Confirm physical badge stock size first; template 12 `Standard Badge Template` is the default. |
+| 2 | **Turn on `show_job_title`** for the visitor badge | **OPS** | **before Mon 24 Aug** | 97.7% of expo-13 visitors now have a job title (1,785 recovered by the backfill) and none of it prints. Template 17 has it OFF. |
+| 3 | **Create the conference terminal** + complete conference form topics | **OPS** | **before Mon 24 Aug** | 66 conference registrants, 81 with a topic, form 55 exposes only **1** option. No terminal ⇒ no conference check-in and no certificates. |
+| 4 | **SendGrid bounce webhook → LEENA** | **DEV** | **before SIEMA** | LEENA records zero bounce data (G9). 41k delivered to a partly-aged list with no feedback loop. Highest-value observability gap. |
+| 5 | **Phase 2 campaign wizard** | **DEV** | this week, **awaiting GO** | Design complete: `docs/sessions/CAMPAIGN_UI_DESIGN_20260819.md`. ~1,020 lines / 4 files, no migration. Phase 1 (funnel) shipped. |
+| 6 | Gate-scanner fork of `conference-scanner.html` | **DEV** | backlog — **suspended by decision**, revisit for SIEMA | `qrscanner.html` has no camera (keyboard-wedge only). ~40-60 lines to fork. See `docs/sessions/SCANNER_INSPECTION_20260819.md`. |
+| 7 | Per-step delivered tracking | **DEV** | backlog | Needs an `email_queue.campaign_step_id` join; per-step numbers currently show enqueued and are labelled "Queued". |
+
+---
+
+### Campaign Results Funnel (19 Aug 2026) — SHIPPED
+
+- [x] `6d798ab` — Delivered/Opened/Clicked/Registered/Checked-in funnel on the campaign Stats tab
+- [x] Delivered reads `email_queue.status='sent'`, not the enqueue-time `sent` event (was a 4× overstatement mid-drain)
+- [x] Checked-in joins on **email**, not `visitor_id` — the Excel path never populates it (0 of 41,203 rows)
+- [x] Attribution-honest labelling: "campaign recipients who checked in", upper bound not ROI; "target expo not yet open" before the fair
+- [x] `42703` fallback on both read paths so deploy-before-migration degrades instead of 500-ing
+- [x] **Migration 029 applied to production** — `email_campaigns.delivered_count`, snapshotted atomically with the purge in `checkCampaignCompletion`
+- [x] `EMAIL_WORKER_BATCH_SIZE` 1→10 — measured **28.5 → 274.4/min**, restart mid-drain safe (0 retries, 0 duplicates)
+
 ### MP26 Reactivation Campaign Launch (18-19 Aug 2026) — expo 13
 
 Shipped (2 further commits + data ops; see CLAUDE.md v4.0.7):

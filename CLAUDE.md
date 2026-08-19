@@ -993,6 +993,9 @@ the email, reactivation or deploy paths.
 | G9 | **LEENA has ZERO bounce visibility** | No `failed` status ever appears in `email_queue` or `email_logs`; `email_events` has no bounce/dropped/spamreport type. There is no SendGrid bounce webhook. **The SendGrid dashboard is the only source of bounce/complaint data.** "sent" means SendGrid *accepted* the API call — nothing more. |
 | G10 | **Step delays run from the previous step's enqueue, not from activation** | Activating an hour earlier than planned shifts every downstream step by that hour. Compute offsets from the *actual* activation time, or accept the drift. Observed: 53-60 min early activation → step 2 landing ~1 h before target. |
 | G11 | **`prefetchEmails` uses `LOWER()` without `TRIM()`** | `routes/reactivation.js` builds its dedup Sets with `LOWER(email)` while the filter loop compares `.toLowerCase().trim()`. A stored address with surrounding whitespace evades the "already exists" check. Currently harmless — **0 untrimmed emails in production** — but any import that introduces padding breaks dedup. |
+| G13 | **`email_queue` sent rows are PURGED on campaign completion** | `checkCampaignCompletion` (`email_worker.js:632-645`) deletes a campaign's `status='sent'` rows older than 1 h once it completes, to stop bloat (each row carries a full rendered `html_content`). **Never build a durable metric on `email_queue` for a completed campaign.** Campaign 15 retained 4 rows against 5 unique opens — a 125% open rate. Use `email_campaigns.delivered_count` (migration 029), snapshotted in the same transaction as the purge. |
+| G14 | **Campaign `sent` event and `total_sent` are ENQUEUE-time counters** | Both are written in `enqueueStepEmail` (`email_worker.js:537-539`) when the row enters `email_queue`, not when SendGrid accepts it. Campaign 17 showed **26,262 sent against 6,765 delivered** — a 4× overstatement mid-drain. Delivery truth = `email_queue.status='sent'` while **active**, `delivered_count` once **completed**. Never compute open/click rates against the event count. |
+| G15 | **`POST /api/terminals/clone/:id` drops `kind` AND `allow_manual_registration`** | The clone INSERT (`routes/terminals.js:70-80`) omits both columns, so each falls to its DB default (`'scanner'`, `true`). **Cloning a `bulk_print` terminal yields a `scanner`**, which `middleware/dualAuth.js` then rejects with `403 WRONG_TERMINAL_KIND`. Clone also forces `is_active=false` and copies `hall`/`terminal_no` verbatim — that verbatim copy is how you tell a clone from a fresh create. |
 
 ---
 
@@ -1725,6 +1728,104 @@ C17: all 7 via `public_form_submission` — **confirming the Group 3 chain** (ca
 C16's 98 events = those 97 + 1 public-form. Every activator will be correctly skipped at step 2.
 
 Unsubscribe rate **0.05% of delivered** — well within tolerance.
+
+### v4.0.8 — Campaign Results Funnel + Delivery Truth (19 August 2026)
+
+**Context:** the day after the MP26 launch. Every campaign figure labelled "Sent" was counting
+**enqueues**, not deliveries — a 4× overstatement while a campaign drains. Fixing it exposed a
+second, worse defect: the only live source of delivery truth is destroyed when a campaign
+completes. Both are closed here. Analysis: `docs/sessions/CAMPAIGN_UI_DESIGN_20260819.md`;
+EOD numbers: `docs/sessions/CAMPAIGN_STATUS_20260819_EOD.md`.
+
+#### Campaign results funnel (commit `6d798ab`)
+
+`routes/campaigns.js` · `public/email-campaigns.html` · `email_worker.js` · migration 029.
+
+**The metric bug.** `email_events` `'sent'` rows are written in `enqueueStepEmail`
+(`email_worker.js:537-539`) at **enqueue** time, and `email_campaigns.total_sent` is
+incremented in the same place. Mid-drain, campaign 17 reported **26,262 sent against 6,765
+actually handed to SendGrid**. Delivered now reads `email_queue.status='sent'`; the list column
+is relabelled **Delivered**; per-step numbers stay enqueue-based and are relabelled **Queued**
+with a note saying so (per-step delivery would need a `campaign_step_id` join — deferred).
+
+**The funnel:** Delivered → Opened → Clicked → Registered → Checked-in, on the campaign detail
+Stats tab. Percentages are always **of delivered, never of recipients**, and capped at 100%.
+
+**⭐ CANONICAL JOIN RULE — campaign ↔ visitor is by EMAIL, never `visitor_id`.**
+`campaign_recipients.visitor_id` is written **only** by the from-expo path
+(`campaigns.js` recipients/from-expo INSERT). The **Excel upload path never sets it**, so on
+real campaigns it is **100% NULL** — measured 0 populated across 14,941 (C16) and 26,262 (C17)
+rows. **Any join on `campaign_recipients.visitor_id` silently returns zero.** Join on
+`lower(trim(email))`. Postgres resolves the check-in join to a Hash Semi Join — measured
+**11.5 ms**, scaling with check-in count rather than recipient count.
+
+**Query shape.** Aggregate each source once; do **not** use a per-recipient `EXISTS`. Measured
+on production: per-row form **1,219-1,575 ms** on the 26k campaign vs **248-275 ms** for the
+aggregate form, identical results, and flat with recipient count.
+
+**Attribution honesty — deliberate, do not "simplify" away:**
+- the checked-in row reads *"campaign recipients who checked in"*, never ROI framing, and the
+  tab states it is an **upper bound on attribution** — someone who would have attended anyway
+  still appears
+- until the target expo opens it reads *"target expo not yet open"*; `expoOpen` defaults to
+  **false** when the date is unknown, so a pre-fair 0 is never rendered as a measured zero
+- an amber banner names the base while rows are still pending
+
+**`42703` fallback — deploy-before-migration ordering.** Both read paths catch PostgreSQL
+`42703` (`undefined_column`) and re-run with `delivered_count` as `NULL::int`, so shipping the
+code before the migration degrades to the live count instead of 500-ing. Verified on production
+against the un-migrated schema. Same legacy-fallback pattern as migration 006 in
+`routes/reactivation.js`. **Use this pattern for any read that references a fresh column.**
+
+#### Migration 029 — `email_campaigns.delivered_count` (applied to production 19 Aug)
+
+Additive, nullable, **no backfill**. Written because `email_queue` is **not durable**: see G13.
+
+`checkCampaignCompletion` (`email_worker.js`) now snapshots the live queue count and purges
+**in one transaction** — the purge destroys the only source, so if the snapshot does not persist
+neither may the delete. Rollback leaves the queue rows intact, so delivery stays readable and
+the next completion pass retries.
+
+Readers use `COALESCE(delivered_count, live_count)`. Campaigns completed **before** 029 have
+neither a snapshot nor queue rows; they return `delivered_unknown` and the UI renders
+**"n/a — campaign completed before delivery tracking"** with percentages suppressed, rather than
+printing a false number. Campaign 15 was the proof case: 4 surviving queue rows against 5 unique
+opens produced a **125%** open rate before this fix.
+
+#### `EMAIL_WORKER_BATCH_SIZE` 1 → 10 — measured effect
+
+Raised on the Render worker and restarted 09:56. **28.5 → 274.4 emails/min (9.6×).** Ceiling is
+300 (10 per 2 s cycle, `PROCESS_INTERVAL` hardcoded at `email_worker.js:21`); the ~9% shortfall
+is per-cycle send latency. Minute-by-minute, with **no downtime**:
+
+```
+09:54→28  09:55→28  09:56→30   ← BATCH_SIZE=1
+09:57→108                       ← restart, partial minute
+09:58→289 09:59→271 10:00→270   ← BATCH_SIZE=10
+```
+
+**Restart mid-drain proven safe:** 0 failed, 0 stuck, **0 retries (`try_count>1`), 0 duplicate
+recipient+step rows** — the `FOR UPDATE SKIP LOCKED` transaction held across the restart.
+
+Impact: a full 41,203-email step drains in **~2.5 h instead of ~24 h**. Before the change,
+step 3 (fires Mon 24 Aug) would have been delivering into **Tue 25 Aug — fair opening day**.
+
+#### Campaign results, EOD 19 Aug
+
+| | C16 Activate | C17 Register |
+|---|---:|---:|
+| Delivered | 14,941 (100%) | 26,262 (100%) |
+| Opened | 2,031 (13.6%) | 1,340 (5.1%) |
+| Clicked | 271 (1.8%) | 436 (1.7%) |
+| **Registered** | **190** (1.27%) | **23** (0.09%) |
+| Unsubscribed | 6 | 11 |
+
+Expo 13: **4,055 visitors** (546 via `reactivation_campaign`), 556 tokens activated, 13
+check-ins (test), 4 terminals. **Step 2 fires Thu 20 Aug 07:52 Lagos (C16) / 08:15 (C17)** —
+at 274/min the ~41k wave now drains inside ~2.5 h.
+
+⚠️ `delivered_count` is NULL on both campaigns and **that is correct** — the snapshot is taken
+at completion, and both are still `active` with step 3 pending Monday.
 
 ### Shared Frontend Components (public/leena-*.js)
 
