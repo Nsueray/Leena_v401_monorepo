@@ -21,6 +21,7 @@ Chronological. See `CLAUDE.md` → *v4.0.7* for the durable summary.
 | `REACTIVATION_SEGMENTATION_SQL_20260818.md` | Pre-written read-only segmentation SQL (G1/G2/G3) + recipient-sheet column contracts. Parameterised on `:target_expo_id`. |
 | `HEALTH_SNAPSHOT_20260818_NIGHT.md` | Post-launch baseline, 18 Aug 21:17 IST. First identification of the 28.4/min worker cap. |
 | `MORNING_CHECK_20260819.md` | 19 Aug 09:48 IST. C16 fully delivered, bridge integrity 100%, overnight funnel results. |
+| `CHECKIN_FORENSICS_20260819.md` | 19 Aug. How check-ins actually happened at the May fair. Confirms the print-desk model, corrects the source attribution (`terminal` not `badge-print`), shows the 2-per-person ratio belongs to expo 1 and stems from a log-recovery double-insert, and sizes gate-scanning for expo 13 at 0-3 lines. |
 | `TERMINAL_CHECK_20260819.md` | 19 Aug. Expo-13 terminal readiness vs the expo-7 baseline. Found the visitor gate on a test badge template with `show_job_title` off, and no conference or bulk-print terminal. Ops punch list. |
 
 ## Note on reproducibility
