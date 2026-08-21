@@ -560,7 +560,37 @@ Manual step for Suer (NOT run by Claude):
       **Run ONLY after `32501ed` is deployed and confirmed filling new rows live.**
       Backup table `job_title_backup_20260818`. Re-runnable (guard: column empty AND cf.title non-empty).
 
-## 🎯 ACTIVE — owners & deadlines (as of 19 Aug 2026 EOD)
+## 🎯 ACTIVE — owners & deadlines (updated 21 Aug 2026, 23:15 — fair opens Tue 25)
+
+| # | Item | Owner | Deadline | Notes |
+|---|---|---|---|---|
+| 1 | **T1 Visitor badge template swap** off `test visitor 80x40` (17) | **OPS** | **before Tue 25** | Unchanged since 19 Aug. Gate serves ~5,600 registrants. |
+| 2 | **Turn on `show_job_title`** for the visitor badge | **OPS** | **before Tue 25** | 5,097+ visitors (98%+) have a job title; none of it prints. |
+| 3 | **Conference terminal + confirm session topics** | **OPS** | **Sunday 23 Aug** | 85+ conference registrants, no check-in or certificate path. Form 55 has 4 sessions configured (the earlier "1 topic" finding was a measurement error — withdrawn). |
+| 4 | **C19 "Final Register Push" go/no-go** | **SUER** | **Sat 22 Aug, noon** | 25,844 draft, template #62, ready to activate. Held: coldest segment (0.67% vs 3.41%), and Monday step-3 already reaches them. |
+| 5 | **SendGrid bounce webhook → LEENA** | **DEV** | before SIEMA | Zero bounce visibility (G9); ~96k delivered with no feedback loop. |
+| 6 | Phase 2 campaign wizard | **DEV** | awaiting GO | Design: `docs/sessions/CAMPAIGN_UI_DESIGN_20260819.md`. |
+| 7 | Gate-scanner fork of `conference-scanner.html` | **DEV** | backlog, revisit for SIEMA | `qrscanner.html` has no camera. |
+
+---
+
+### Friday 21 Aug — greeting chain + final push (SHIPPED)
+
+- [x] Diagnosed the `"Dear ,"` incident — bare `{{first_name}}` has no per-token default; the chain is the canonical greeting (see CLAUDE.md v4.0.9 RULE)
+- [x] Greeting chain applied to #56 / #58 / #59 (14:12), re-audited and render-proofed
+- [x] Dead `{{unsubscribe_url}}` anchors unwrapped in #61 / #62 (second time this has been needed)
+- [x] Forensic scan: **96,227 sent bodies, 0 fallback, 0 broken, 0 literal tokens** — verified twice by two methods
+- [x] Campaign 18 "MP26 Final Activate Push" — 14,229, template #61, **ACTIVATED 23:07:31**, drained in ~3 min enqueue / ~250/min
+- [x] Campaign 19 "MP26 Final Register Push" — 25,844, template #62, built as **draft, held**
+- [x] Confirmed Monday step-3 will skip C18 converts via the email-based checks in `dedbcd0`
+
+Post-fair adds from tonight:
+- [ ] **Index `email_queue.campaign_recipient_id`** (G18) — bulk recipient DELETE currently times out against a 361k-row scan
+- [ ] **Condition-based single-step campaigns** (G19) — step 1 is forced to `condition='all'`, so one-shot waves cannot filter at send time and go stale
+- [ ] **Template-edit audit hook** (G17) — templates are referenced live, so editing one silently changes what an active campaign sends next; add a warning or a re-audit prompt when editing a template attached to an active campaign
+- [ ] **Fix `Dear {{chain}}` double-greeting** in #61/#62 (G20) before those templates are reused
+
+## 🎯 ACTIVE — owners & deadlines (19 Aug 2026 EOD — superseded above)
 
 Fair opens **Tue 25 Aug**. Ordered by deadline.
 

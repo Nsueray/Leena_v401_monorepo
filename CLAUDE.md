@@ -997,6 +997,10 @@ the email, reactivation or deploy paths.
 | G14 | **Campaign `sent` event and `total_sent` are ENQUEUE-time counters** | Both are written in `enqueueStepEmail` (`email_worker.js:537-539`) when the row enters `email_queue`, not when SendGrid accepts it. Campaign 17 showed **26,262 sent against 6,765 delivered** — a 4× overstatement mid-drain. Delivery truth = `email_queue.status='sent'` while **active**, `delivered_count` once **completed**. Never compute open/click rates against the event count. |
 | G15 | **`POST /api/terminals/clone/:id` drops `kind` AND `allow_manual_registration`** | The clone INSERT (`routes/terminals.js:70-80`) omits both columns, so each falls to its DB default (`'scanner'`, `true`). **Cloning a `bulk_print` terminal yields a `scanner`**, which `middleware/dualAuth.js` then rejects with `403 WRONG_TERMINAL_KIND`. Clone also forces `is_active=false` and copies `hall`/`terminal_no` verbatim — that verbatim copy is how you tell a clone from a fresh create. |
 | G16 | **`trim()` in an email predicate silently drops the index** | `idx_reactivation_tokens_email_target (email, target_expo_id)` and `idx_visitors_unique_email_per_expo (organizer_id, expo_id, lower(email))` are only usable when the predicate matches their expression. Wrapping the column in `trim()` forces a scan: measured **0.09 ms → 21 ms** on `reactivation_tokens`, a 230× regression, for an identical result set. Production holds **0 untrimmed emails** in `visitors`/`reactivation_tokens` and `campaign_recipients.email` is normalised on upload, so `lower(col) = lower($1)` is both correct and fast. Related: G11. |
+| G17 | **Campaign templates are referenced LIVE, never copied** | `enqueueStepEmail` fetches `email_templates` by `step.template_id` at send time (`email_worker.js:503-508`). Editing a template changes what an **already-active** campaign will send on its next step. Powerful — the 14:12 greeting fix reached campaigns 16/17 without touching them — and dangerous: any template edit while a campaign is active **requires a re-audit and a re-render check** before the next step fires. |
+| G18 | **No index on `email_queue.campaign_recipient_id`** | The FK `email_queue_campaign_recipient_id_fkey` has no supporting index, so deleting one `campaign_recipients` row forces a scan of the **361,000-row** `email_queue`. `DELETE /api/campaigns/:id/recipients` **500s** on any real list (14,308 rows timed out); deleting 79 rows individually took 30 s. Delete in small batches until an index exists. Post-fair fix. |
+| G19 | **Single-step campaigns are forced to `condition='all'`** | `POST /:id/steps` hard-codes step 1 to `delay=0, condition='all'`, and `POST /:id/activate` re-validates it. A one-step campaign therefore **cannot filter at send time** — its recipient list is frozen at build. On a pool moving at ~740 registrations/day, expect tens of stale recipients per day of delay. Rebuild the list immediately before activating. |
+| G20 | **`Dear {{chain}}` produces a double greeting** | The chain's own literal is `"Dear Visitor"`, so `Dear {{first_name\|last_name\|company\|"Dear Visitor"}},` renders **`Dear Dear Visitor,`** when every name field is empty. Templates #61/#62 carry this pattern; it cannot trigger on the current pools (100% have `first_name`) but must be fixed before those templates are reused on a list with incomplete names. Write the chain bare — it supplies its own salutation. |
 
 ---
 
@@ -1865,6 +1869,110 @@ at 274/min the ~41k wave now drains inside ~2.5 h.
 
 ⚠️ `delivered_count` is NULL on both campaigns and **that is correct** — the snapshot is taken
 at completion, and both are still `active` with step 3 pending Monday.
+
+### v4.0.9 — Greeting Chain Rule + Final Push Waves (21 August 2026)
+
+**Context:** Friday, 4 days before Mega Project Nigeria opens. Ops replaced three step-3
+templates with new short designs; a test send rendered `"Dear ,"`. Diagnosis, fix, forensic
+verification, and two final-push waves. Full state:
+`docs/sessions/FRIDAY_NIGHT_20260821.md`.
+
+#### ⭐ RULE — templates MUST use the greeting fallback chain, never bare `{{first_name}}`
+
+```
+✅  {{first_name|last_name|company|"Dear Visitor"}},
+❌  Dear {{first_name}},
+```
+
+**Why.** `processEmailTemplate` (`utils/email.js:12-23`) is the resolver for **both** the
+campaign path (`email_worker.js:531-532`) and the visitor+template path. Its lookup is
+`if (data[part]) return data[part]` — a **truthy** test. A bare `{{first_name}}` against an
+empty value renders **empty string**, producing `"Dear ,"`. There is no per-token default.
+
+The chain rescues it: `expr.split('|')` walks the alternatives in order and
+`/^".*"$/` returns the quoted literal, so an empty `first_name` falls through to `last_name`,
+then `company`, then the literal `Dear Visitor`.
+
+**This is exactly what the reported incident was.** The test-send supplied a recipient whose
+`first_name` was empty. The *subject* already used the chain and slid down to the next non-empty
+field (rendering a surname, "Ay"); the *body* used bare `{{first_name}}` and had nothing to fall
+back to. **Same data, two token forms, two outcomes** — which is why a template-page test can
+look broken while the live campaign path is fine.
+
+⚠️ **Corollary — do not write `Dear {{chain}}`.** The chain's own literal is already
+`"Dear Visitor"`, so `Dear {{first_name|last_name|company|"Dear Visitor"}}` renders
+**`Dear Dear Visitor,`** when every name field is empty. Templates #61/#62 carry this today;
+it cannot trigger on the current pools (100% have `first_name`) but must be fixed before reuse.
+
+#### Forensic verification of every live send
+
+**MEASURED 21 Aug 23:11 — 96,227 sent bodies still resident in `email_queue` (unpurged):**
+
+| campaign | step | template | sent | body fallback | body broken | body literal `{{}}` | subject defects |
+|---|---|---|---:|---:|---:|---:|---:|
+| 16 | 1 | 54 | 14,941 | 0 | 0 | 0 | 0 |
+| 16 | 2 | 55 | 14,649 | 0 | 0 | 0 | 0 |
+| 17 | 1 | 57 | 26,262 | 0 | 0 | 0 | 0 |
+| 17 | 2 | 58 | 26,148 | 0 | 0 | 0 | 0 |
+| 18 | 1 | 61 | 14,227 | 0 | 0 | 0 | 0 |
+| **total** | | | **96,227** | **0** | **0** | **0** | **0** |
+
+**100% rendered a real name. Nothing broken has ever gone out.** Verified twice by two
+independent methods (regex capture, then literal substring match on `Dear ,` / `Dear  ,` /
+`{{` / `}}` / subjects starting with `,`), on two separate days.
+
+⚠️ **A figure of "77% real name / 23% Dear Visitor fallback" was reported during this sprint.
+It is NOT supported by the data — the fallback path has never fired in a live send.** Both
+scans return zero. Likely origin: a UI statistic with a different definition, or the
+template-page test send (which is not stored in `email_queue`). **Do not propagate 77/23.**
+
+#### Template timeline, 21 Aug
+
+| time (IST) | event |
+|---|---|
+| 13:34 | Ops saves #60 "Test 1" / #61 "Test 2" — short designs, bare `{{first_name}}` |
+| **14:12:50** | **Greeting chain applied to #56, #58, #59** via `PUT /api/email-templates/:id` |
+| 17:54 | Ops replaces #61 → "Activate Badge Last Call", #62 → "Register Now Last Call" — chain greeting ✅ but **dead `{{unsubscribe_url}}` anchors reintroduced** |
+| ~22:50 | **Unsubscribe anchors unwrapped again** in #61/#62 (`href=""` → gone, sentence kept) |
+
+**The unsubscribe anchor has now been removed twice** — once from #54-#59 on 18 Aug, again from
+#61/#62 tonight. It returns whenever a template is authored fresh in the UI, because
+`{{unsubscribe_url}}` looks like a valid placeholder but **cannot be filled in campaign mode**
+(G7). Treat its reappearance as expected, not exceptional.
+
+⚠️ Note the greeting fix **removed the word "Dear"** from #56/#58/#59 — they now open
+`Ololade,` rather than `Dear Ololade,`. Intended, but a copy change.
+
+#### Final push waves
+
+| | **18 — MP26 Final Activate Push** | **19 — MP26 Final Register Push** |
+|---|---|---|
+| Pool | C16 not activated/registered | C17 not registered |
+| Recipients | **14,229** | **25,844** |
+| Template | **#61** `{{activation_url}}` | **#62** form-53 |
+| Step | 1 only, `0h`, `all` | 1 only, `0h`, `all` |
+| Status | **ACTIVATED Fri 23:07:31** → `completed` | **DRAFT — HELD** |
+
+**C18 delivery:** 14,227 enqueued in 3 m 17 s (23:07:33 → 23:10:50), drained at ~252/min.
+All 14,229 `activation_url`s resolved to live `pending` tokens; 79 recipients that had converted
+since the afternoon build were removed before activation.
+
+**C19 held deliberately.** It is the coldest segment — 26k people who have ignored two emails
+and convert at **0.67%** against C16's **3.41%**. Sending it Friday night would add ~26k sends
+at the moment sender reputation matters most, for the weakest return, to people **Monday's
+step 3 already reaches**. Decision point: Saturday noon.
+
+#### Monday state
+
+Step 3 fires **Mon 24 Aug 07:52 Lagos (C16) / 08:15 (C17)** with templates #56/#59, both
+chain-greeted and verified.
+
+**The `not_registered` fix (`dedbcd0`) is what prevents a double-mail from C18 conversions.**
+A C18 activation writes its `registered` event against **campaign 18's** `recipient_id`, so
+check (a) — the campaign event — would not see it from campaign 16. It is caught instead by
+check (b) `lower(v.email)` on the visitor row and check (c) `rt.email` on the activated token,
+both email-matched and campaign-agnostic. Without that fix every C18 convert would receive
+Monday's "last chance" email anyway.
 
 ### Shared Frontend Components (public/leena-*.js)
 
