@@ -661,7 +661,9 @@
         // ==================== MANUAL REGISTRATION ====================
         async function handleManualRegistration() {
             const { expoId, organizerId, token } = getStorageData();
-            if (!expoId || !token) { showAlert('Missing required data. Please login again.', 'danger'); return; }
+            // Terminal mode needs NO login: the key authenticates and the backend takes
+            // expo/organizer from the terminal row. Only the JWT path needs localStorage.
+            if (!terminalKey && (!expoId || !token)) { showAlert('Missing required data. Please login again.', 'danger'); return; }
             
             // #5 — manual reason is required (audit trail)
             const reasonSel = document.getElementById('manualReason').value;
@@ -697,17 +699,21 @@
                     source: 'manual',
                     visitor_type: document.getElementById('visitorType').value,
                     manual_reason: manualReason,
-                    expo_id: expoId,
-                    organizer_id: organizerId || '1',
                     hall: hall,
                     terminal: terminal
                 };
+                // Terminal mode: expo_id / organizer_id are forced server-side from the
+                // terminal row, so they are deliberately NOT sent from the client.
+                if (!terminalKey) {
+                    formData.expo_id = expoId;
+                    formData.organizer_id = organizerId || '1';
+                }
                 
                 console.log('Submitting manual registration:', formData);
                 
                 const response = await fetch(`${API_BASE_URL}/visitors/manual`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    headers: buildHeaders(true),
                     body: JSON.stringify(formData)
                 });
                 
@@ -737,7 +743,11 @@
                 
             } catch (error) {
                 console.error('Registration error:', error);
-                showAlert(error.message || 'Registration failed. Please try again.', 'danger');
+                // Fail closed, same as a check-in failure: blocking panel, no badge, Retry.
+                // Retry re-submits the form, which is upsert-by-email server-side, so a
+                // partially-succeeded attempt cannot produce a duplicate visitor.
+                showCheckinError(error.message || 'Registration failed.',
+                    { retry: () => handleManualRegistration() });
                 isProcessing = false;
                 showLoading(false);
             }
@@ -824,16 +834,24 @@
             si.value = ''; si.focus();
         }
         function finishManual(qrCode) {
-            setTimeout(() => {
-                openBadgeAndReset(qrCode);
-                document.getElementById('manualToggle').checked = false;
-                document.getElementById('manualForm').classList.remove('active');
-                document.getElementById('registrationForm').reset();
-            }, 500);
+            // Opened directly, not behind a setTimeout: a deferred window.open breaks the
+            // user-gesture chain and is what popup blockers catch. Same call shape as the
+            // scan path, which is proven in production.
+            openBadgeAndReset(qrCode);
+            document.getElementById('manualToggle').checked = false;
+            document.getElementById('manualForm').classList.remove('active');
+            document.getElementById('registrationForm').reset();
         }
         async function retryCheckin() {
             if (!pendingCheckin) return;
             const ctx = pendingCheckin;
+            // Registration failures carry their own retry (re-submit the form); check-in
+            // failures retry the check-in call for an already-created visitor.
+            if (typeof ctx.retry === 'function') {
+                hideCheckinError();
+                await ctx.retry();
+                return;
+            }
             showLoading(true);
             const ci = await performCheckin(ctx.visitorId);
             showLoading(false);

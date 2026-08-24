@@ -9,6 +9,13 @@ const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceT
 const { normalizePhone } = require('../utils/phoneNormalize');
 const authMiddleware = require('../middleware/authMiddleware');
 const dualAuth = require('../middleware/dualAuth');
+// Manual registration is a scanner-desk operation, so it accepts a scanner terminal
+// key as well as a JWT. Bulk-print keys are deliberately NOT accepted here.
+const scannerDualAuth = dualAuth.forKinds(['scanner'], 'Terminal not authorized for manual registration');
+// visitor_type values the manual-registration form actually offers. In terminal mode
+// anything outside this list falls back to 'visitor' — a desk key must not be able to
+// mint arbitrary types.
+const MANUAL_VISITOR_TYPES = ['visitor', 'exhibitor', 'conference', 'vip', 'press', 'staff', 'speaker'];
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const upload = multer({ storage: multer.memoryStorage() });
@@ -486,14 +493,37 @@ router.post('/public', async (req, res) => {
   }
 });
 
-// ✅ MANUAL REGISTRATION (authMiddleware added — Sprint 1 security fix)
-router.post('/manual', authMiddleware, async (req, res) => {
+// ✅ MANUAL REGISTRATION
+// Auth: JWT (admin, unchanged) OR a scanner terminal key. The terminal path exists
+// because manual registration is a desk operation on the same page as scanning —
+// binding it to admin auth meant a hostess tablet opened with only ?terminal_key=
+// scanned fine and then failed on the first walk-in.
+//
+// In terminal mode expo_id and organizer_id come from the TERMINAL ROW, never from
+// the body: a key must not be able to write outside its own expo.
+router.post('/manual', scannerDualAuth, async (req, res) => {
   try {
-    const { name, last_name, email, company, job_title, country, expo_id, organizer_id, visitor_type, origin, source, manual_reason } = req.body;
+    const { name, last_name, email, company, job_title, country, visitor_type, origin, source, manual_reason } = req.body;
 
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required' });
     }
+
+    const isTerminal = req.authMode === 'terminal';
+
+    // Terminal mode: scope is forced from the terminal row and the body is ignored.
+    // JWT mode: body values, exactly as before (backward compatible).
+    const expo_id      = isTerminal ? req.terminal.expoId      : req.body.expo_id;
+    const organizer_id = isTerminal ? req.terminal.organizerId : req.body.organizer_id;
+
+    if (isTerminal && !expo_id) {
+      return res.status(400).json({ success: false, message: 'Terminal has no expo assigned' });
+    }
+
+    // Terminal mode: only the types the form offers; anything else becomes 'visitor'.
+    const safeVisitorType = isTerminal
+      ? (MANUAL_VISITOR_TYPES.includes(visitor_type) ? visitor_type : 'visitor')
+      : visitor_type;
 
     // #5 — audit trail: store why this was a manual registration.
     // Backward compatible: callers that omit manual_reason → cfJson stays
@@ -526,7 +556,7 @@ router.post('/manual', authMiddleware, async (req, res) => {
           END,
           updated_at = NOW()
         WHERE id = $6`,
-        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id, visitor_type || '', cfJson]
+        [name || '', last_name || '', company || '', job_title || '', country || '', ex.id, safeVisitorType || '', cfJson]
       );
       console.log('🔄 [MANUAL] Updated existing visitor:', email, 'ID:', ex.id);
       return res.json({
@@ -551,7 +581,7 @@ router.post('/manual', authMiddleware, async (req, res) => {
       [name || '', last_name || '', email, company || '',
        job_title || '', country || '',
        expo_id || null, organizer_id || null,
-       visitor_type || 'visitor', origin || 'onsite', source || 'manual',
+       safeVisitorType || 'visitor', origin || 'onsite', source || 'manual',
        qrCode, badgeId, badgeUrl, cfJson]
     );
 
