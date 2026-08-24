@@ -139,6 +139,64 @@ const CERT_EMAIL_TEMPLATE_NG = `
 </html>
 `;
 
+// --- Certificate email template — Nigeria Mega Project Expo 2026 (expo_id=13) ---
+// Same STRUCTURE as CERT_EMAIL_TEMPLATE_NG (a tested email-client layout) — only
+// branding swapped: MP26 logo, #009846 accent, dates/venue line. Ghana (default)
+// and expo-7 NG are untouched.
+const CERT_EMAIL_TEMPLATE_MP26 = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <!-- Header: MP26 green banner with logo -->
+    <div style="background:#009846;padding:28px 30px;text-align:center;">
+      <img src="https://nigeriamegaproject.com/newsletter/nigeria-mega-project-logo.png" alt="Nigeria Mega Project Expo 2026" style="max-height:48px;margin-bottom:14px;display:inline-block;" />
+      <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Certificate of Participation</h1>
+      <p style="margin:6px 0 0;font-size:13px;color:#ffffff;opacity:0.9;">25&ndash;27 August 2026 &bull; Landmark Centre, VI Lagos</p>
+    </div>
+
+    <!-- Content -->
+    <div style="padding:36px 30px;text-align:center;">
+      <p style="font-size:16px;color:#1a1a1a;margin:0 0 6px;">Dear</p>
+      <p style="font-size:22px;color:#1a1a1a;margin:0 0 20px;font-weight:700;">{{name}} {{last_name}}</p>
+
+      <p style="font-size:15px;color:#444;line-height:1.6;margin:0 0 24px;">
+        Thank you for attending the <strong>{{expo_name}}</strong>.
+        Your certificate of participation is ready.
+      </p>
+
+      <div style="background:#e8f5ee;border-left:4px solid #009846;border-radius:6px;padding:16px 20px;margin:0 0 8px;text-align:left;">
+        <p style="margin:0 0 4px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">Session attended</p>
+        <p style="margin:0;color:#009846;font-size:17px;font-weight:700;">{{conference_topic}}</p>
+      </div>
+
+      <p style="font-size:14px;color:#888;margin:0 0 28px;text-align:left;">Click the button below to view and download your certificate as PDF.</p>
+
+      <a href="{{certificate_url}}" style="display:inline-block;padding:14px 36px;background:#009846;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:600;">View Certificate</a>
+
+      <p style="margin:20px 0 0;color:#aaa;font-size:12px;">Use &ldquo;Save as PDF&rdquo; in the print dialog to download.</p>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:20px 30px;text-align:center;border-top:1px solid #eee;background:#fafafa;">
+      <table style="margin:0 auto 10px;border:0;border-spacing:16px 0;" cellpadding="0" cellspacing="16">
+        <tr>
+          <td style="text-align:center;vertical-align:middle;">
+            <img src="https://nigeriamegaproject.com/newsletter/elan-logo.png" alt="Organized by Elan Expo" style="height:28px;display:inline-block;" />
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0 0 4px;color:#999;font-size:12px;">www.nigeriamegaproject.com</p>
+      <p style="margin:0;color:#ccc;font-size:11px;">Powered by Leena EMS</p>
+    </div>
+
+  </div>
+</body>
+</html>
+`;
+
 /**
  * Helper: Split conference_topic string into individual topics.
  * ONLY splits by " || " (double pipe with spaces).
@@ -326,7 +384,9 @@ async function issueCertificate(client, visitor, expoId, organizerId, hall, term
   };
 
   const emailSubject = `Your Conference Certificate — ${conference_topic}`;
-  const emailTemplate = (Number(expoId) === 7) ? CERT_EMAIL_TEMPLATE_NG : CERT_EMAIL_TEMPLATE;
+  const emailTemplate = (Number(expoId) === 13) ? CERT_EMAIL_TEMPLATE_MP26
+                      : (Number(expoId) === 7)  ? CERT_EMAIL_TEMPLATE_NG
+                      : CERT_EMAIL_TEMPLATE;
   const emailHtml = processEmailTemplate(emailTemplate, emailData);
 
   // Queue email (Mode 1: pre-processed HTML)
@@ -613,7 +673,9 @@ router.post('/resend', terminalAuth, async (req, res) => {
     };
 
     const emailSubject = `Your Conference Certificate — ${cert.conference_topic} (Resent)`;
-    const emailTemplate = (Number(cert.expo_id) === 7) ? CERT_EMAIL_TEMPLATE_NG : CERT_EMAIL_TEMPLATE;
+    const emailTemplate = (Number(cert.expo_id) === 13) ? CERT_EMAIL_TEMPLATE_MP26
+                        : (Number(cert.expo_id) === 7)  ? CERT_EMAIL_TEMPLATE_NG
+                        : CERT_EMAIL_TEMPLATE;
     const emailHtml = processEmailTemplate(emailTemplate, emailData);
 
     // Queue email (Mode 1)
