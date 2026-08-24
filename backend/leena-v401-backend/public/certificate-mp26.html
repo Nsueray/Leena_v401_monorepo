@@ -629,7 +629,16 @@
         certificate_id:   'MPN-2026-' + token.slice(0, 10).toUpperCase()
       };
 
-      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+      /* Skip SCRIPT/STYLE: their text nodes are walkable and this file's own source
+         contains a literal "{{" in a comment. Nothing matches a values key today, so
+         this is defensive, not a live bug — but it keeps the walker to rendered text. */
+      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+        acceptNode: function (n) {
+          var tag = n.parentNode && n.parentNode.nodeName;
+          return (tag === 'SCRIPT' || tag === 'STYLE')
+            ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+        }
+      }, false);
       var node, pending = [];
       while ((node = walker.nextNode())) {
         if (node.nodeValue && node.nodeValue.indexOf('{{') !== -1) pending.push(node);
