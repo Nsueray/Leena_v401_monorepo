@@ -698,3 +698,137 @@ re-render or migrate — this is forward-only, exactly as the May install was.
    *"25–27 August 2026 • Landmark Centre, Lagos, Nigeria"*.
 3. **Approval to deploy B + C together**, and the window. Tablets need a manual refresh after
    deploy for Part B to take effect (§B3).
+
+---
+
+# PART D — deploy record + verification results (24 Aug, night)
+
+**Shipped and live.** Four commits, one Render deploy cycle each for the last two.
+
+| commit | scope |
+|---|---|
+| `e900b70` | scanner: fail-closed check-in, switch removed, duplicate note |
+| `3e14bf8` | `certificate-mp26.html` + expo-13 redirect branch |
+| `d06069e` | MP26 email template + selectors at issue **and** resend |
+| `668fd5c` | walker guard (found during verification, see D3) |
+
+Deploy windows measured: **~60 s** and **~50 s**, each with ~30 s of 502 — consistent with G3.
+
+## D1. Certificate smoke test — PASS
+
+Issued against **visitor 59725** (`elan02@elan-expo.com`, Elan's own address), deliberately
+chosen because it holds a ` || ` multi-topic value *and* topics whose names contain single pipes —
+the exact trap.
+
+| check | result |
+|---|---|
+| Issue via terminal 42 | ✅ `success:true`, certificate **id 612** |
+| Cert number | ✅ **`MPN-2026-107466E308`** — matches token `107466e308…` |
+| Topic rendered | ✅ *"1. Panel Session **\|** Building the Future of Nigeria: State Infrastructure Priorities, Investment Opportunities & Innovative Financing"* — **single pipe intact, not shredded** |
+| Name rendered | ✅ "Elahe Dorreh" |
+| Unfilled `{{ }}` | ✅ none |
+| Email branding | ✅ MP26 logo · `#009846` · "25–27 August 2026 • Landmark Centre, VI Lagos" |
+| **Ghana leak** | ✅ **none** — no "Ghana", "Accra", "Mega Clima" or `westafricahvacexpo` anywhere |
+| Duplicate re-scan | ✅ `duplicate:true`, same token, no second certificate |
+| **Resend** | ✅ **also MP26-branded** — this is what proves the `:676` selector took |
+| Check-in row | ✅ id 20312, `terminal='Conference'`, `source='conference-cert'` |
+| Expo-5 Ghana regression | ✅ unchanged |
+| Page mechanics | ✅ A4 landscape, manual print button, no `window.print()` on load |
+
+**Test artefacts left in production** — remove before opening if the counts matter:
+
+```sql
+DELETE FROM conference_certificates WHERE id = 612;
+DELETE FROM checkins WHERE id = 20312;
+```
+
+## D2. Scanner — live, verification is Suer's laptop test
+
+Confirmed served from production: `id="autoCheckin"` **0 occurrences**, `autoCheckinEnabled`
+**0**, `id="checkinError"` present, `id="dupNote"` present, `retryCheckin` present.
+
+**⚠️ Every laptop must be refreshed.** A deploy does not reload an open tab — a browser opened
+before tonight keeps running the old switch-and-silent-failure code.
+
+### Test plan — 4 minutes per laptop, T1 key `b3b32aae-d70a-4370-a9f0-d35129929ff4`
+
+| # | do | expect |
+|---|---|---|
+| 1 | Open scanner, **hard refresh** (Ctrl/Cmd+Shift+R) | Settings shows **no Auto Check-in switch** |
+| 2 | Scan a test badge | badge popup opens, no yellow note, check-in count **+1** |
+| 3 | Scan the **same** badge again within 2 min | badge opens, **yellow "Already checked in — reprinting badge"**, count **unchanged** |
+| 4 | **Turn wifi off**, scan | **red CHECK-IN FAILED**, low beep, **no badge**, Retry + Cancel |
+| 5 | Wifi on, press **Retry** | panel clears, badge opens, count **+1** |
+| 6 | Cancel instead of Retry | panel clears, no badge, cursor back in the box, next scan works |
+| 7 | Manual registration with wifi off | red panel: *"Visitor registered, but check-in failed … do NOT re-register, press Retry"* |
+
+```sql
+SELECT id, visitor_id, terminal, source, checkin_time
+FROM checkins WHERE expo_id = 13 ORDER BY id DESC LIMIT 5;
+```
+
+## D3. Two things found during verification
+
+**(a) Walker guard — fixed in `668fd5c`.** `NodeFilter.SHOW_TEXT` walks text inside `<script>`,
+and the renderer's own source contains a literal `{{` in a comment, so it was visiting itself. No
+live bug — nothing matched a values key, and rewriting a script's text after execution changes
+nothing — but fixed because a future `{{name}}` inside a `<style>` would start mutating source.
+
+**(b) 🟠 10 C17 emails stuck in `processing` — NOT caused by this deploy.**
+
+Rows `410455-410464`, campaign 17 step 3, enqueued **08:23:03**, `try_count=0`, `sent_at` null.
+Rows with higher ids have sent (max sent id 416649), and the queue is flowing at **369.8/min**, so
+these are orphaned, not queued behind anything. Same ten ids after 12 seconds — no turnover.
+
+The email worker is a **separate Render service** and web deploys do not restart it, so tonight's
+two deploys are not the cause. `try_count=0` says the worker claimed the batch and died or threw
+before incrementing. This is known risk **R5 (stale `processing` recovery)**, logged in May:
+`fetchNextTask` claims with `FOR UPDATE SKIP LOCKED` and sets `status='processing'`, and **nothing
+ever re-claims a row that is left there**.
+
+**Impact: 10 people out of 25,735 never got Monday's step-3 email, and never will.** These are the
+only such rows in the entire table's history — zero stuck rows before id 410455.
+
+Recovery, if Suer wants them sent (safe: `sent_at` is null, so no double-send):
+
+```sql
+UPDATE email_queue SET status = 'pending'
+ WHERE status = 'processing' AND sent_at IS NULL AND id BETWEEN 410455 AND 410464;
+```
+
+Post-fair: a sweep that returns `processing` rows older than N minutes to `pending`.
+
+## D4. Reminder list — tonight's laptop setup
+
+**On every hostess laptop, in this order:**
+
+1. **Log in** at `leena.app/login.html`, then **select Nigeria Mega Project Expo 2026** on the expo
+   screen. Both steps are required — walk-in registration posts with the JWT, not the terminal
+   key, and dies with *"Missing required data. Please login again."* without them.
+2. **Open the terminal URL and hard-refresh** (Ctrl/Cmd+Shift+R) so the new scanner code loads.
+3. **Run the D2 test plan**, including the wifi-off step. Do it now, not in the queue.
+4. **Allow pop-ups for leena.app** — the badge opens in one.
+5. **Bookmark the lane URL**, so nobody retypes a key at 10:00:
+   - T1 Visitor `qrscanner.html?terminal_key=b3b32aae-d70a-4370-a9f0-d35129929ff4`
+   - T2 Exhibitor `…29279c38-4e72-4bf4-81bd-1eb997d2e957`
+   - T3 Speaker `…4399d46d-f16c-493e-b979-f589d7e9e5f2`
+   - T4 VIP `…492e20c3-4eea-47b0-87e0-87843f9dde32`
+   - Conference `conference-scanner.html?terminal_key=80b25686-a65e-4811-839a-35ea72024fc5`
+   - Bulk print `bulk-badge-print.html?key=15b1182e-632d-493d-9201-7d01e0d63d59` *(`key=`, not
+     `terminal_key=` — different spelling on this page)*
+6. **Test the scanner gun** into the box before closing the lid — one real scan end to end.
+
+**Tell the hostesses three things:**
+- **Red panel = stop.** The badge did not print and the person is not checked in. Press **Retry**.
+  Never wave someone through on a red panel.
+- **Yellow note is fine** — it means they were already checked in and the badge is a reprint.
+- **Close the badge popup after each print.** It never closes itself, and while it is on top the
+  scanner gun may be typing into it instead of the scan box.
+
+**Still open going into tomorrow:**
+- 🟠 **T3 Speaker / T4 VIP mis-badge.** Expo 13 has **0 speakers and 0 VIPs**; the layout comes
+  from the terminal's template, so an ordinary visitor scanned at T4 gets a VIP badge **with no
+  job title**. Close those lanes or repoint them at template 12.
+- 🟡 Three junk rows in the conference topic dropdown (topics 6, 7, `Choice One`) — they work, they
+  are just untidy.
+- 🟡 The 10 stuck emails above — Suer's call.
