@@ -525,6 +525,12 @@
           return;
         }
 
+        // Nigeria Mega Project (expo_id=13) → separate certificate page
+        if (Number(cert.expo_id) === 13) {
+          location.replace('certificate-mp26.html' + location.search);
+          return;
+        }
+
         // Populate certificate fields
         const fullName = [cert.name, cert.last_name].filter(Boolean).join(' ') || 'Guest';
         document.getElementById('certName').textContent = fullName;
