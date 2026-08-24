@@ -469,3 +469,232 @@ normally.
 2. 🟠 **Part B** — awaiting Suer's decision; requires a tablet refresh after deploy.
 3. 🟠 T3/T4 mis-badging (0 speakers, 0 VIPs on expo 13).
 4. 🟡 Tablet login for the walk-in path; hostesses told to keep the badge popup closed.
+
+---
+
+# PART C — MP26 certificate install (PROPOSAL, ships with Part B)
+
+Added after ops confirmed the expo-13 certificate as a standalone A4-landscape HTML using
+`{{name}} {{last_name}} {{conference_topic}}` and external assets from `nigeriamegaproject.com`.
+**Suer supplies the file; nothing below is implemented.** Method: Option 1 / the proven May
+`expoId`-switch (commit `9a20641`), Ghana default and expo-7 NG both left byte-identical.
+
+## C1. Fix 1 — the certificate number
+
+Ops' file carries `MPN-2026-{{name}}`, which prints the attendee's first name as the certificate
+number. **Replace it with the certificate token prefix**, not `badge_id`. Three reasons, in order
+of weight:
+
+1. **Uniqueness.** `conference_certificates` is UNIQUE on `(visitor_id, expo_id, conference_topic)`
+   — one person attending two sessions holds **two** certificates. `badge_id` is per *visitor*, so
+   both would print the same number. `certificate_token` is per *certificate*.
+2. **Verifiability.** The token **is** the lookup key: the printed number is a visible prefix of
+   the `/verify/:token` URL the certificate was opened from, so a number can be checked against
+   the live record. `badge_id` maps to nothing an auditor can query here.
+3. **It is already available.** `GET /verify/:token` returns `name, last_name, company, job_title,
+   country, conference_topic, expo_name, expo_id, created_at` (`conferenceCertificates.js:519-524`)
+   — **`badge_id` and `qr_code` are not in that payload.** Using `badge_id` would mean widening a
+   public unauthenticated endpoint; the token needs no change at all, it is in `location.search`.
+
+**Format:** `MPN-2026-` + first 10 hex chars of the 64-char token, uppercased — mirroring May's
+`MCN-2026-<token[0:10]>`. Collision space 16¹⁰ ≈ 1.1 × 10¹² against ~100 certificates.
+
+**Install edit to ops' file — one substitution:**
+
+```diff
+-              <div class="cert-id">CERTIFICATE No: MPN-2026-{{name}}</div>
++              <div class="cert-id">CERTIFICATE No: {{certificate_id}}</div>
+```
+
+## C2. Fix 2 — `{{conference_topic}}` and the pipe trap
+
+**Measured across all 482 certificate rows in production:**
+
+| | |
+|---|---:|
+| Rows whose topic contains a **single** `\|` (part of the name) | **482 / 482 — 100%** |
+| Rows containing the ` \|\| ` multi-topic separator | **0** |
+
+Every certificate topic in the system contains a single pipe — *"Technical Talk | ASHRAE and its
+Role in Code Development"*, *"1. Panel Session | Building the Future of Nigeria…"*. On expo 13, 6
+of the 7 distinct topics do.
+
+**So the correct handling is to not split at all.** `conference_certificates.conference_topic`
+holds exactly **one** topic — the one selected at scan time — never the visitor's merged string.
+`issueCertificate` inserts the single selected topic; the ` || ` merge lives only in
+`visitors.custom_fields`.
+
+**Any renderer that splits on `|` would shred 100% of certificate topics.** The proposal renders
+the stored value **verbatim**, with one defensive branch that has never fired in 482 rows:
+
+```js
+// conference_certificates holds ONE topic. Verbatim is correct.
+// Split ONLY on the exact " || " separator — never on a bare "|", which is
+// part of every topic NAME we have ever issued (482/482). See G-series.
+var topic = c.conference_topic || '';
+if (topic.indexOf(' || ') !== -1) topic = topic.split(' || ').map(t => t.trim()).join('  •  ');
+```
+
+## C3. New file — `public/certificate-mp26.html`
+
+Ops' markup verbatim, plus this script before `</body>`. It replaces placeholders **in text nodes
+only**, via `nodeValue` assignment, which never parses HTML — so a visitor named `<script>` is
+inert by construction. No `innerHTML`, no escaping helper needed.
+
+```diff
++<script>
++(function () {
++  var params = new URLSearchParams(location.search);
++  var token  = params.get('token') || '';
++  var root   = document.body;
++  root.style.visibility = 'hidden';          // never show raw {{placeholders}}
++
++  function fail(msg) {
++    root.style.visibility = 'visible';
++    root.innerHTML = '<div style="font-family:Arial,sans-serif;text-align:center;padding:60px;">'
++      + '<h2 style="color:#c0392b;">Certificate not available</h2><p>' + msg + '</p></div>';
++  }
++  if (!token) { fail('No certificate token in the link.'); return; }
++
++  fetch('/api/conference-certificates/verify/' + encodeURIComponent(token))
++    .then(function (r) { return r.json(); })
++    .then(function (d) {
++      if (!d || !d.success || !d.certificate) { fail('This certificate link is invalid or expired.'); return; }
++      var c = d.certificate;
++
++      // See C2 — split ONLY on " || ", never on a bare "|".
++      var topic = c.conference_topic || '';
++      if (topic.indexOf(' || ') !== -1) {
++        topic = topic.split(' || ').map(function (t) { return t.trim(); }).filter(Boolean).join('  •  ');
++      }
++
++      var values = {
++        name:             c.name || '',
++        last_name:        c.last_name || '',
++        conference_topic: topic,
++        company:          c.company || '',
++        job_title:        c.job_title || '',
++        country:          c.country || '',
++        expo_name:        c.expo_name || '',
++        // See C1 — token prefix, not badge_id: unique per certificate and verifiable.
++        certificate_id:   'MPN-2026-' + token.slice(0, 10).toUpperCase()
++      };
++
++      // Text nodes ONLY. Assigning nodeValue never parses HTML → XSS-safe by construction.
++      // NOTE: placeholders inside ATTRIBUTES are deliberately not substituted.
++      var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
++      var node, pending = [];
++      while ((node = walker.nextNode())) { if (node.nodeValue.indexOf('{{') !== -1) pending.push(node); }
++      pending.forEach(function (n) {
++        n.nodeValue = n.nodeValue.replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, function (m, key) {
++          return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : m;
++        });
++      });
++
++      root.style.visibility = 'visible';
++    })
++    .catch(function () { fail('Could not load this certificate. Please try again.'); });
++})();
++</script>
+```
+
+**Contract for ops' file** — three things must hold, checkable in one grep at install:
+- placeholders appear in **text content**, not inside attributes (`alt="{{name}}"` will not fill);
+- asset URLs are absolute `https://` (the page is public and unauthenticated);
+- keep a manual **Print / Save PDF** button as `certificate-ng.html:443` does — do **not** add
+  `window.print()` on load, or it fires before the `nigeriamegaproject.com` images arrive.
+
+## C4. `public/certificate.html` — add the expo-13 branch
+
+```diff
+@@ -521,6 +521,10 @@
+         if (Number(cert.expo_id) === 7) {
+           location.replace('certificate-ng.html' + location.search);
++          return;
++        }
++        if (Number(cert.expo_id) === 13) {
++          location.replace('certificate-mp26.html' + location.search);
+           return;
+         }
+```
+
+Ghana rendering below this point is untouched.
+
+## C5. `routes/conferenceCertificates.js` — email template + selector
+
+```diff
+@@ -84,6 +84,17 @@
+ const CERT_EMAIL_TEMPLATE_NG = `
+ ...unchanged...
+ `;
++
++// --- Certificate email — Nigeria Mega Project Expo 2026 (expo_id=13) ---
++// Same STRUCTURE as CERT_EMAIL_TEMPLATE_NG (a tested email-client layout);
++// branding values below are lifted from ops' delivered certificate file.
++const CERT_EMAIL_TEMPLATE_MP26 = `
++  ...NG structure, with:
++     header background  → ‹MP26 accent colour from ops file›
++     logo               → https://nigeriamegaproject.com/‹logo asset›
++     header sub-line    → 25–27 August 2026 &bull; Landmark Centre, Lagos, Nigeria
++     CTA href           → {{certificate_url}}   (unchanged mechanism)
++`;
+```
+
+```diff
+@@ -329 +340 @@ issueCertificate
+-  const emailTemplate = (Number(expoId) === 7) ? CERT_EMAIL_TEMPLATE_NG : CERT_EMAIL_TEMPLATE;
++  const emailTemplate = (Number(expoId) === 13) ? CERT_EMAIL_TEMPLATE_MP26
++                      : (Number(expoId) === 7)  ? CERT_EMAIL_TEMPLATE_NG
++                      : CERT_EMAIL_TEMPLATE;
+@@ -616 +628 @@ /resend
+-    const emailTemplate = (Number(cert.expo_id) === 7) ? CERT_EMAIL_TEMPLATE_NG : CERT_EMAIL_TEMPLATE;
++    const emailTemplate = (Number(cert.expo_id) === 13) ? CERT_EMAIL_TEMPLATE_MP26
++                        : (Number(cert.expo_id) === 7)  ? CERT_EMAIL_TEMPLATE_NG
++                        : CERT_EMAIL_TEMPLATE;
+```
+
+**Both selectors must change.** Missing `/resend` is how a resent certificate silently reverts to
+Ghana branding — the exact class of bug the May notes warn about.
+
+## C6. Combined deploy — Part B + Part C
+
+| file | change | risk |
+|---|---|---|
+| `public/qrscanner.html` | Part B: no switch, fail-closed, visible duplicate | behaviour inversion — see B1 |
+| `public/certificate-mp26.html` | **new** | none — nothing links to it until C4 lands |
+| `public/certificate.html` | +5 lines, expo-13 branch | none for expo 5/7 |
+| `routes/conferenceCertificates.js` | +1 constant, 2 selectors | **backend** — see below |
+
+⚠️ **This is no longer a frontend-only deploy.** Part B alone touched one static file; adding
+`conferenceCertificates.js` means the Node process restarts — still the same single Render web
+service and the same 10–50 s 502 window (G3), but now the conference/certificate API is in scope.
+The email worker is a separate service and is untouched.
+
+**Ordering:** ship C **before** anyone uses terminal 42. It is live right now and would issue
+Ghana certificates today (§A3). If ops' file does not arrive tonight, deactivate terminal 42
+rather than deploying B alone and leaving the certificate path armed.
+
+**Zero existing rows are affected.** Expo 13 has **0** certificates, so there is nothing to
+re-render or migrate — this is forward-only, exactly as the May install was.
+
+## C7. Smoke test — certificate (run after B4)
+
+1. On `conference-scanner.html?terminal_key=80b25686-…`, pick a topic and scan a **test** visitor.
+2. Expect success, and an email whose header reads **25–27 August 2026 • Landmark Centre, Lagos** —
+   **not** Accra. Any mention of Ghana means the selector at `:340` did not take.
+3. Open the emailed link → must land on `certificate-mp26.html`, not `certificate.html`.
+4. Verify on the page: full name, the **exact** session title *including its single pipe*, and a
+   cert number of the form `MPN-2026-XXXXXXXXXX`. **No `{{ }}` anywhere.**
+5. Confirm that cert number's 10 chars are the opening characters of `?token=` in the URL bar.
+6. Press **Print / Save PDF** → A4 landscape, images present.
+7. Re-scan the same visitor + topic → duplicate overlay → **Resend Certificate** → the resent
+   email must be MP26-branded too (this is what proves `:628` was changed).
+8. Regression: open any **expo 5** certificate link → still the Ghana page, unchanged.
+
+## C8. What is still needed from Suer
+
+1. **The HTML file** — then C1's one-line cert-id substitution and the C3 script append.
+2. **Email branding values**: logo URL, accent colour, and confirmation of the header line
+   *"25–27 August 2026 • Landmark Centre, Lagos, Nigeria"*.
+3. **Approval to deploy B + C together**, and the window. Tablets need a manual refresh after
+   deploy for Part B to take effect (§B3).
