@@ -132,6 +132,16 @@
         
         <div class="scanner-body">
             <div id="alertMessage" class="alert" style="display: none;"></div>
+            <!-- Fail-closed check-in failure. Blocking: no badge is printed until Retry succeeds. -->
+            <div id="checkinError" style="display:none;background:#c0392b;color:#fff;padding:18px 20px;border-radius:8px;margin-bottom:14px;text-align:center;">
+                <div style="font-size:20px;font-weight:700;margin-bottom:6px;">&#9888; CHECK-IN FAILED</div>
+                <div id="checkinErrorMsg" style="font-size:14px;opacity:.95;margin-bottom:12px;"></div>
+                <div style="font-size:13px;opacity:.9;margin-bottom:12px;">Badge NOT printed. Do not let the visitor through.</div>
+                <button type="button" id="checkinRetryBtn" class="btn btn-light" style="font-weight:600;">Retry</button>
+                <button type="button" id="checkinCancelBtn" class="btn btn-outline-light" style="margin-left:8px;">Cancel</button>
+            </div>
+            <!-- Duplicate scan: informational only, the badge still prints. -->
+            <div id="dupNote" style="display:none;background:#f9e79f;color:#7d6608;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-weight:600;text-align:center;"></div>
             
             <div class="scan-section">
                 <div class="scan-input-wrapper">
@@ -393,15 +403,6 @@
             </div>
             
             <div class="settings-section">
-                <div class="setting-item">
-                    <div>
-                        <div class="setting-label">Auto Check-in</div>
-                        <div class="setting-description">Automatically check-in visitor after badge print</div>
-                    </div>
-                    <div class="form-check form-switch">
-                        <input class="form-check-input" type="checkbox" id="autoCheckin" checked>
-                    </div>
-                </div>
             </div>
         </div>
     </div>
@@ -412,7 +413,10 @@
         let hall = null;
         let terminal = null;
         let terminalKey = null;
-        let autoCheckinEnabled = true;
+        // Check-in is ALWAYS on. The former UI switch silently turned the desk into a
+        // badge printer that recorded nothing, and terminals.auto_checkin is dead config
+        // (stored and editable, read by no route). Server-side authority remains
+        // expos.settings.auto_checkin_on_badge_print.
         let isProcessing = false;
         
         document.addEventListener('DOMContentLoaded', () => {
@@ -548,7 +552,12 @@
             });
             
             document.getElementById('registrationForm').addEventListener('submit', async (e) => { e.preventDefault(); if (!isProcessing) await handleManualRegistration(); });
-            document.getElementById('autoCheckin').addEventListener('change', (e) => { autoCheckinEnabled = e.target.checked; });
+            document.getElementById('checkinRetryBtn').addEventListener('click', async () => { await retryCheckin(); });
+            document.getElementById('checkinCancelBtn').addEventListener('click', () => {
+                hideCheckinError();
+                const si = document.getElementById('scanInput');
+                si.value = ''; si.focus();
+            });
 
             // #5 — show the "Specify..." text input only when reason is "Other"
             document.getElementById('manualReason').addEventListener('change', (e) => {
@@ -575,6 +584,8 @@
             isProcessing = true;
             showLoading(true);
             hideAlert();
+            hideCheckinError();
+            showDupNote(false);
             
             try {
                 // If input looks like email, search by email first
@@ -609,9 +620,12 @@
                     const visitor = result.visitor;
                     console.log('Visitor found (terminal mode):', visitor);
                     
-                    if (autoCheckinEnabled && visitor.id) {
-                        await performCheckin(visitor.id);
+                    const ci = await performCheckin(visitor.id);
+                    if (!ci.ok) {
+                        showCheckinError(ci.error, { visitorId: visitor.id, qrCode, afterSuccess: () => openBadgeAndReset(qrCode) });
+                        return;   // fail closed: NO badge without a recorded check-in
                     }
+                    showDupNote(ci.duplicate);
                 } else {
                     // Normal mode
                     const response = await fetch(`${API_BASE_URL}/visitors/badge/${qrCode}`, { headers: buildHeaders() });
@@ -621,13 +635,17 @@
                     const visitorData = result.visitor || result;
                     console.log('Visitor found:', visitorData);
                     
-                    if (autoCheckinEnabled) {
-                        await performCheckin(visitorData.id || result.id);
+                    const vId = visitorData.id || result.id;
+                    const ci = await performCheckin(vId);
+                    if (!ci.ok) {
+                        showCheckinError(ci.error, { visitorId: vId, qrCode, afterSuccess: () => openBadgeAndReset(qrCode) });
+                        return;   // fail closed: NO badge without a recorded check-in
                     }
+                    showDupNote(ci.duplicate);
                 }
                 
-                // Badge print for ALL visitor types
-                window.open(buildBadgeUrl(qrCode), '_blank', 'width=600,height=400'); document.getElementById('scanInput').value = ''; document.getElementById('scanInput').focus();
+                // Badge prints ONLY after a confirmed check-in (see performCheckin).
+                openBadgeAndReset(qrCode);
                 
             } catch (error) {
                 console.error('Scan error:', error);
@@ -664,6 +682,8 @@
             isProcessing = true;
             showLoading(true);
             hideAlert();
+            hideCheckinError();
+            showDupNote(false);
 
             try {
                 const formData = {
@@ -699,14 +719,21 @@
                 const qrCode = result.qr_code || result.qrCode || result.badge_id;
                 if (!qrCode) throw new Error('Registration successful but no QR code received');
                 
-                if (autoCheckinEnabled && result.visitor_id) {
-                    await performCheckin(result.visitor_id);
+                const ci = await performCheckin(result.visitor_id);
+                if (!ci.ok) {
+                    // The visitor row ALREADY EXISTS. Say so, or the hostess re-registers them.
+                    showCheckinError('Visitor registered, but check-in failed: ' + ci.error + ' \u2014 do NOT re-register, press Retry.',
+                        { visitorId: result.visitor_id, qrCode, afterSuccess: () => finishManual(qrCode) });
+                    isProcessing = false;
+                    showLoading(false);
+                    return;   // fail closed: NO badge without a recorded check-in
                 }
+                showDupNote(ci.duplicate);
                 
                 showAlert('Registration successful!', 'success');
                 isProcessing = false;
                 showLoading(false);
-                setTimeout(() => { window.open(buildBadgeUrl(qrCode), '_blank', 'width=600,height=400'); document.getElementById('scanInput').value = ''; document.getElementById('scanInput').focus(); document.getElementById('manualToggle').checked = false; document.getElementById('manualForm').classList.remove('active'); document.getElementById('registrationForm').reset(); }, 500);
+                finishManual(qrCode);
                 
             } catch (error) {
                 console.error('Registration error:', error);
@@ -717,11 +744,14 @@
         }
         
         // ==================== CHECK-IN ====================
+        // Returns { ok, duplicate, error }. NEVER throws \u2014 callers branch on .ok.
+        // This previously swallowed every failure while the badge printed anyway, so a
+        // dropped request meant the visitor walked in unrecorded and nobody noticed.
         async function performCheckin(visitorId) {
             const { expoId } = getStorageData();
             
             if (terminalKey) {
-                if (!visitorId) return;
+                if (!visitorId) return { ok: false, duplicate: false, error: 'No visitor id returned' };
                 try {
                     const response = await fetch(`${API_BASE_URL}/terminal/checkin`, {
                         method: 'POST',
@@ -729,13 +759,16 @@
                         body: JSON.stringify({ visitor_id: visitorId, notes: `Scanned at ${hall || 'main'} - Terminal ${terminal || '1'}` })
                     });
                     const result = await response.json();
-                    if (response.ok) console.log('Terminal check-in successful');
-                    else console.warn('Terminal check-in failed:', result);
-                } catch (error) { console.error('Terminal check-in error:', error); }
-                return;
+                    if (!response.ok || result.success === false) {
+                        return { ok: false, duplicate: false, error: (result && (result.message || result.error)) || `HTTP ${response.status}` };
+                    }
+                    return { ok: true, duplicate: result.duplicate === true, error: null };
+                } catch (error) {
+                    return { ok: false, duplicate: false, error: 'Network error \u2014 ' + (error.message || 'request failed') };
+                }
             }
             
-            if (!expoId || !visitorId) return;
+            if (!expoId || !visitorId) return { ok: false, duplicate: false, error: 'Missing expo or visitor id' };
             try {
                 const response = await fetch(`${API_BASE_URL}/checkins`, {
                     method: 'POST',
@@ -747,11 +780,69 @@
                     })
                 });
                 const result = await response.json();
-                if (response.ok) console.log('Check-in successful');
-                else console.warn('Check-in failed:', result);
-            } catch (error) { console.error('Check-in error:', error); }
+                if (!response.ok || result.success === false) {
+                    return { ok: false, duplicate: false, error: (result && (result.message || result.error)) || `HTTP ${response.status}` };
+                }
+                return { ok: true, duplicate: result.duplicate === true, error: null };
+            } catch (error) {
+                return { ok: false, duplicate: false, error: 'Network error \u2014 ' + (error.message || 'request failed') };
+            }
         }
         
+        // ==================== CHECK-IN UI STATE ====================
+        let pendingCheckin = null;   // { visitorId, qrCode, afterSuccess }
+
+        function beep(ok) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const o = ctx.createOscillator(), g = ctx.createGain();
+                o.connect(g); g.connect(ctx.destination);
+                o.frequency.value = ok ? 880 : 220;
+                g.gain.value = 0.15;
+                o.start();
+                setTimeout(() => { o.stop(); ctx.close(); }, ok ? 120 : 500);
+            } catch (e) { /* audio unavailable \u2014 the red panel is the primary signal */ }
+        }
+        function showCheckinError(msg, ctx) {
+            pendingCheckin = ctx || null;
+            document.getElementById('checkinErrorMsg').textContent = msg || 'Unknown error';
+            document.getElementById('checkinError').style.display = 'block';
+            beep(false);
+        }
+        function hideCheckinError() {
+            document.getElementById('checkinError').style.display = 'none';
+            pendingCheckin = null;
+        }
+        function showDupNote(show) {
+            const el = document.getElementById('dupNote');
+            el.textContent = 'Already checked in \u2014 reprinting badge';
+            el.style.display = show ? 'block' : 'none';
+        }
+        function openBadgeAndReset(qrCode) {
+            window.open(buildBadgeUrl(qrCode), '_blank', 'width=600,height=400');
+            const si = document.getElementById('scanInput');
+            si.value = ''; si.focus();
+        }
+        function finishManual(qrCode) {
+            setTimeout(() => {
+                openBadgeAndReset(qrCode);
+                document.getElementById('manualToggle').checked = false;
+                document.getElementById('manualForm').classList.remove('active');
+                document.getElementById('registrationForm').reset();
+            }, 500);
+        }
+        async function retryCheckin() {
+            if (!pendingCheckin) return;
+            const ctx = pendingCheckin;
+            showLoading(true);
+            const ci = await performCheckin(ctx.visitorId);
+            showLoading(false);
+            if (!ci.ok) { showCheckinError(ci.error, ctx); return; }
+            hideCheckinError();
+            showDupNote(ci.duplicate);
+            ctx.afterSuccess(ci);
+        }
+
         // ==================== UI HELPERS ====================
         function showAlert(message, type) {
             const alertDiv = document.getElementById('alertMessage');
