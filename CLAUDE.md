@@ -1001,6 +1001,9 @@ the email, reactivation or deploy paths.
 | G18 | **No index on `email_queue.campaign_recipient_id`** | The FK `email_queue_campaign_recipient_id_fkey` has no supporting index, so deleting one `campaign_recipients` row forces a scan of the **361,000-row** `email_queue`. `DELETE /api/campaigns/:id/recipients` **500s** on any real list (14,308 rows timed out); deleting 79 rows individually took 30 s. Delete in small batches until an index exists. Post-fair fix. |
 | G19 | **Single-step campaigns are forced to `condition='all'`** | `POST /:id/steps` hard-codes step 1 to `delay=0, condition='all'`, and `POST /:id/activate` re-validates it. A one-step campaign therefore **cannot filter at send time** — its recipient list is frozen at build. On a pool moving at ~740 registrations/day, expect tens of stale recipients per day of delay. Rebuild the list immediately before activating. |
 | G20 | **`Dear {{chain}}` produces a double greeting** | The chain's own literal is `"Dear Visitor"`, so `Dear {{first_name\|last_name\|company\|"Dear Visitor"}},` renders **`Dear Dear Visitor,`** when every name field is empty. Templates #61/#62 carry this pattern; it cannot trigger on the current pools (100% have `first_name`) but must be fixed before those templates are reused on a list with incomplete names. Write the chain bare — it supplies its own salutation. |
+| G21 | **Excel agency exports store phones as NUMBERS, and the import hard-fails on them** | A phone cell typed as a number arrives as a JS number, so `phone.trim()` throws and the row dies. **It is visually indistinguishable in Excel** — the cell displays identically to a text phone, and changing the *display format* does not change the stored type. The fix is cell-type coercion (`String(v).trim()`), not formatting. Hit **twice in two days on two different agency files**; manual surgery applied both times. Ask for a CSV, or coerce before trimming. |
+| G22 | **Terminals-page "Copy URL" always emits the scanner page** | The button builds `qrscanner.html?terminalKey=…` for **every** terminal regardless of purpose. A conference lane needs **`conference-scanner.html?terminal_key=…`** — different page *and* different param spelling (`terminal_key`, not `terminalKey`; bulk print uses `key`). Copying the URL for a conference terminal therefore yields a working *check-in* desk that can never issue a certificate. This is exactly what happened on day 1: the conference lane ran ordinary check-ins for hours with **0 certificates**. Hand out purpose-specific URLs, never the Copy button, until the page is fixed. |
+| G23 | **Campaign completion fires mid-drain, freezing `delivered_count` early** | `checkCampaignCompletion` fires when the last recipient's last step is **enqueued**, not when the queue drains — so the snapshot is always taken with the final step still in flight, and the same transaction purges the older sent rows so the live count can no longer recover the truth. **Not single-step-only**, as first assumed: C18 froze at **950 against a real 14,227**, and the multi-step C16/C17 froze at **~70%** (30,990 / 43,466 and 52,410 / 78,145). Readers prefer the non-null snapshot permanently, so completed campaigns under-report delivery by roughly a third and over-state every per-delivered rate. **Display-only** — sending is unaffected. |
 
 ---
 
@@ -1869,6 +1872,88 @@ at 274/min the ~41k wave now drains inside ~2.5 h.
 
 ⚠️ `delivered_count` is NULL on both campaigns and **that is correct** — the snapshot is taken
 at completion, and both are still `active` with step 3 pending Monday.
+
+### v4.0.10 — Final Pre-Fair Deploys + Fair Day 1 (24-25 August 2026)
+
+**Context:** the last night before Nigeria Mega Project Expo 2026 (`expo_id=13`, 25-27 Aug,
+Landmark Centre Lagos) and the fair's opening day. Four code commits, all deployed and verified
+live before doors.
+
+#### Fail-closed scanner (commit `e900b70`)
+`public/qrscanner.html` only. Backend untouched — `/terminal/checkin` and its duplicate
+semantics are unchanged; the page simply stopped discarding the response.
+- **The check-in write now gates the badge popup.** `performCheckin` returns
+  `{ok, duplicate, error}` and never throws, where it previously caught every failure and wrote
+  only to `console`. All three call sites (both scan modes + manual registration) branch on `.ok`
+  and open the badge **only after a confirmed check-in**.
+- **Failure = blocking red panel + low beep + Retry/Cancel.** Text tells the hostess not to let the
+  visitor through. The manual path's message says explicitly that the visitor row already exists
+  and not to re-register — otherwise a hostess reading "CHECK-IN FAILED" re-types the person.
+- **This inverts the failure mode on purpose.** Before, a dropped request meant silent
+  under-counting while the queue kept moving; now a broken API stops the queue. Correct trade for a
+  system whose whole purpose is the attendance record.
+- **Duplicates became visible** — the backend already returned `duplicate:true` and the UI
+  discarded it, so a re-scan and a first scan looked identical. Now a yellow non-blocking
+  *"Already checked in — reprinting badge"* note, and the badge still prints.
+- **The Auto Check-in switch was removed.** It was a live client-side toggle that silently turned
+  the desk into a badge printer recording nothing. `terminals.auto_checkin` is dead config —
+  stored, editable, selected by `terminalAuth.js:33`, **read by no route**. Server authority stays
+  `expos.settings.auto_checkin_on_badge_print`.
+
+#### Terminal-key manual registration — the philosophy fix (commit `580dff1`)
+Scanning needed only `?terminal_key=`; manual registration posted with `Authorization: Bearer` and
+gated on `localStorage.token` + `selectedExpoId`. A tablet opened with just the terminal URL
+scanned perfectly and then **died on the first walk-in**. A design violation, not a missing feature.
+- `middleware/dualAuth.js` became a **kind-parameterised factory**. Default export unchanged
+  (`kind='bulk_print'`); `dualAuth.forKinds(['scanner'])` builds the variant `/manual` needs.
+- **In terminal mode `expo_id` and `organizer_id` come from the TERMINAL ROW and the body is
+  ignored** — including the existing-visitor lookup, so the upsert can only touch a row on the
+  terminal's own expo. `visitor_type` is clamped to the seven values the form offers.
+- Verified with a hostile body (`expo_id:5, organizer_id:999, visitor_type:"admin"`) → landed on
+  expo 13, organizer 1, type `visitor`, **0 rows outside expo 13**. Bulk-print keys rejected here;
+  scanner keys still rejected on bulk-print endpoints. JWT path byte-identical.
+- Also removed the 500 ms `setTimeout` around the badge popup — a deferred `window.open` breaks the
+  user-gesture chain and is what popup blockers catch.
+
+#### MP26 certificate — installed the May way (commits `3e14bf8`, `d06069e`, `668fd5c`)
+Expo 13 fell through to the **Ghana** default and would have issued certificates naming
+*Mega Clima Ghana 2026, 3-5 March, The Palms Convention Centre Accra*, signed by the Ashrae Ghana
+Chapter. Terminal 42 was live at the time, so this was an armed path, not a hypothetical.
+- Method A2 / `expoId`-switch exactly as `9a20641` did for expo 7. Ghana and NG both byte-identical.
+- **`certificate_id = MPN-2026-<token[0:10]>` uppercased**, not `badge_id`: certificates are UNIQUE
+  per `(visitor, expo, topic)` so a two-session attendee holds two and `badge_id` would print the
+  same number on both; the token is the lookup key so the printed number is a verifiable prefix of
+  the `?token=` in the URL; and `badge_id` is not in the `/verify` payload at all.
+- **No pipe splitting.** Measured across all 482 certificate rows in production: **482 contain a
+  single `|` as part of the topic NAME, 0 contain the ` || ` separator** — the cert row holds one
+  topic, the merge lives only in `visitors.custom_fields`. Splitting on a bare `|` would shred
+  every topic ever issued. The renderer splits only on the exact ` || `.
+- Placeholders substituted in **text nodes only** via `nodeValue`, which never parses HTML — a
+  visitor named `<script>` is inert by construction. Walker skips `SCRIPT`/`STYLE`.
+- **Both selectors changed, at issue (`:387`) and resend (`:676`)** — changing only the first is
+  how a resent certificate silently reverts to Ghana branding.
+
+#### Fair day 1 — opening state (25 Aug)
+- **Gates opened 08:26:39**, 1h33m before the advertised 10:00 — exhibitor move-in, by design.
+- **Fail-closed ran in production with zero incident.** Across the day: **0 failed emails, 0 orphan
+  check-ins, 0 unknown/revoked terminal labels, 0 cross-expo leakage, 0 duplicate-guard
+  violations**, and a phantom rate of **1 in 981 (0.10%)** against May's 0.15%.
+- The terminal manual path, which had **never carried a production registration**, began carrying
+  real walk-ins from 10:00.
+- Both new terminals (41 bulk print, 42 conference) authenticated correctly on first live use.
+
+#### DAY 1 — session record
+The day is documented in `docs/sessions/`, in order:
+`FAIR_EVE_MECHANICS_20260824.md` (print→check-in chain traced against May's 2,223 check-ins) →
+`FAIR_EVE_FINAL_20260824.md` (conference/certificate audit + the deploy record) →
+`DEPLOY_MANUAL_REG_20260824.md` (the philosophy fix, 14-point smoke test) →
+`FAIR_DAY_TOOLS_20260824.md` (missed-day-1 mailing, dashboards, field parity, phantom check-ins) →
+`SUNDAY_SOURCES_20260824.md` (the pre-fair source breakdown) →
+**`FAIR_DAY1_OPENING_20260825.md`** (09:51 baseline) →
+**`DAY1_VS_MEGACLIMA_20260825.md`** (like-for-like vs May — both Tuesday openings, same venue) →
+**`DAY1_MIDDAY_20260825.md`** (12:16 pulse).
+
+⚠️ Session docs are **point-in-time records**, true as of their timestamp and never updated.
 
 ### v4.0.9 — Greeting Chain Rule + Final Push Waves (21 August 2026)
 

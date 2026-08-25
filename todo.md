@@ -1,8 +1,51 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: 18 Mayıs 2026
+> Son güncelleme: **25 Ağustos 2026, fuar günü 1** (önceki: 21 Ağustos)
 > Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
+
+---
+
+## 🔴 TONIGHT — 25 Aug
+
+| owner | item |
+|---|---|
+| **OPS + SUER** | **Conference lane catch-up.** The lane ran `qrscanner.html` instead of `conference-scanner.html` all day (G22), so people were checked in but **no certificates were issued**. Measured at 15:21: **51 distinct visitors**, first 10:52, last 15:19 — *not* the 9 seen at midday, the number grew all afternoon. ⚠️ **Only 5 of the 51 hold a `conference_topic`**, so the other 46 cannot be certified without the **force** path (which *adds* a topic they never registered for). Decide per person, or certify only the 5. **Switch the lane to the correct URL first**, or tomorrow repeats it: `https://leena.app/conference-scanner.html?terminal_key=80b25686-a65e-4811-839a-35ea72024fc5` |
+| SUER | Test-row cleanup still pending — visitors 67234/67237, checkins 20312/20313, certificate 612 (+614 = ops' own test). SQL in `docs/sessions/FAIR_DAY1_OPENING_20260825.md` §7. Does **not** pollute day-1 counters (all dated 24 Aug) but does inflate cumulative and makes conference stats read 2 certificates before a real one exists. |
+
+## 📋 POST-FAIR — priorities refreshed 25 Aug
+
+| # | item | note |
+|---|---|---|
+| 1 | **Campaign wizard (Phase 2)** | **SIEMA deadline ~8 Sep** — the binding date on this list |
+| 2 | **Import phone coercion** | `String(v).trim()` + restore the `+` for 234-typed ints. **Promoted — a third agency file failed.** See G21: Excel stores phones as numbers and it is invisible in the UI |
+| 3 | **"Copy URL" per terminal purpose + param unification** | Button always emits `qrscanner.html?terminalKey=`. Make it purpose-aware **and** unify on `terminal_key` everywhere (`conference-scanner` uses `terminal_key`, `bulk-badge-print` uses `key`). See G22 — this cost day 1's conference certificates |
+| 4 | **`delivered_count` snapshot timing** | All campaign types, not just single-step. See G23 — snapshot must wait for drain, not recipient completion |
+| 5 | **Certificate Templates admin page** | May's Option 3. Ends the hardcoded `expoId`-switch; every new expo currently needs a code change (v4.0.10) |
+| 6 | **Manual-reg form parity with form config** | Read required fields from `forms.fields` instead of hardcoding, and **kill the silent `N/A` / `Nigeria` defaults** — `'N/A'` is not empty so it passes every missing-value check and prints on the badge |
+| 7 | **Phone cleanup: 840 malformed `+2340…` rows** expo-wide | Trunk zero not stripped before the `+234` prefix; not dialable as written |
+| 8 | **Conference stats: exclude or flag test certificates** | Page reads 2 issued when both are smoke tests |
+
+### Carried, unchanged
+- SendGrid bounce webhook → automated `email_unsubscribes` (G9: we have **zero** bounce visibility)
+- Index `email_queue.campaign_recipient_id` (G18) · condition-based single-step campaigns (G19)
+- Per-check-in print signal + a check-in undo path (no `DELETE /api/checkins/:id` exists at all)
+- `expos.js:628` country stat reads the JSONB key, not the column (437 vs 7,249)
+- `reports.js` bare `CURRENT_DATE` on a UTC session → "today" rolls at 01:00 Lagos
+- Fix `Dear {{chain}}` double greeting in templates #61/#62 (G20)
+
+---
+
+## ✅ CLOSED — shipped Sunday night 24 Aug
+
+- [x] **Fail-closed check-in** — badge popup gated on a confirmed check-in, red panel + Retry (`e900b70`)
+- [x] **Auto Check-in switch removed** — was a silent kill switch; `terminals.auto_checkin` confirmed dead config
+- [x] **Duplicate scans made visible** — yellow "Already checked in — reprinting badge"
+- [x] **Terminal-key manual registration** — `dualAuth` factory, expo/organizer clamped from the terminal row, `visitor_type` allowlisted (`580dff1`)
+- [x] **Popup `setTimeout` removed** — closed the popup-blocker hypothesis
+- [x] **MP26 certificate installed** — `expoId`-switch, `MPN-2026-<token[0:10]>`, no pipe splitting, issue **and** resend switched (`3e14bf8`, `d06069e`, `668fd5c`)
+- [x] **Bulk-print terminal 41** created and verified live (148-exhibitor pool)
+- [x] **10 stuck `processing` emails** recovered — all sent 24 Aug 12:10
 
 ---
 
