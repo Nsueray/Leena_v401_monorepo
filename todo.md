@@ -25,6 +25,8 @@
 | 6 | **Manual-reg form parity with form config** | Read required fields from `forms.fields` instead of hardcoding, and **kill the silent `N/A` / `Nigeria` defaults** — `'N/A'` is not empty so it passes every missing-value check and prints on the badge |
 | 7 | **Phone cleanup: 840 malformed `+2340…` rows** expo-wide | Trunk zero not stripped before the `+234` prefix; not dialable as written |
 | 8 | **Conference stats: exclude or flag test certificates** | Page reads 2 issued when both are smoke tests |
+| 9 | **Unsubscribe UI — toggle button in visitor detail panel** | Add/remove with reason field (default `manual_ops_added`, free-text for `reply_request` etc.). Reuses existing detail-panel drawer next to Send Email button. Per `UNSUBSCRIBE_ANALYSIS_20260826.md` §6.3 — today ops must psql for every single opt-out. Bulk action on segments page as secondary. |
+| 10 | **Reply-to-unsubscribe handling** | Visitors reply UNSUBSCRIBE to `noreply@` and it's only caught by a human reading the inbox (today's `abimbolaakinkugbe@gmail.com` was manual). Options to evaluate post-fair: (a) SendGrid Inbound Parse webhook → auto-insert into `email_unsubscribes` with reason `reply_request`, (b) at minimum a documented ops procedure in `docs/sessions/`. Related: G9 SendGrid bounce webhook already in Carried block — bundle both. |
 
 ### Carried, unchanged
 - SendGrid bounce webhook → automated `email_unsubscribes` (G9: we have **zero** bounce visibility)
