@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { processEmailTemplate, sendEmail, sendEmailWithReplyTo } = require('../utils/email');
+const { isUnsubscribed, loadUnsubscribeSet } = require('../utils/unsubscribe');
 const { generateQRCode } = require('../utils/qrcode');
 const { v4: uuidv4 } = require('uuid');
 
@@ -14,6 +15,16 @@ router.post('/single', authMiddleware, async (req, res) => {
 
         if (!template_id || !expo_id || !recipient || !recipient.email) {
             return res.status(400).json({ success: false, message: 'Template, expo and recipient email required' });
+        }
+
+        // Unsubscribe check (compliance: Gmail/Yahoo bulk rules).
+        // Silent skip is not appropriate for a single explicit send — return
+        // 200 with clear body so the caller knows nothing shipped and why.
+        if (await isUnsubscribed(recipient.email, organizerId)) {
+            return res.json({
+                success: true, sent_count: 0, skipped: 1, skippedUnsubscribed: 1,
+                message: `${recipient.email} is on the unsubscribe list — skipped`
+            });
         }
 
         const templateRes = await pool.query(`SELECT * FROM email_templates WHERE id = $1 AND organizer_id = $2`, [template_id, organizerId]);
@@ -141,12 +152,21 @@ router.post('/bulk', authMiddleware, async (req, res) => {
         let sent = 0, saved = 0, errors = [];
         const visitorType = record_type || 'visitor';
 
+        // Preload unsubscribe set once (compliance) — O(1) lookups per recipient.
+        const unsubSet = await loadUnsubscribeSet(organizerId);
+        let skippedUnsubscribed = 0;
+
         for (const recipient of recipients) {
             try {
                 let qrCode = null, badgeUrl = null, visitorId = null, visitorCustomFields = {};
 
                 if (!recipient.email) {
                     errors.push({ recipient: recipient.name || 'Unknown', error: 'Missing email' });
+                    continue;
+                }
+
+                if (unsubSet.has(recipient.email.toLowerCase().trim())) {
+                    skippedUnsubscribed++;
                     continue;
                 }
 
@@ -249,6 +269,7 @@ router.post('/bulk', authMiddleware, async (req, res) => {
             success: true,
             sent_count: sent,
             saved_count: saved,
+            skippedUnsubscribed: skippedUnsubscribed,
             errors: errors.length > 0 ? errors : undefined
         });
 

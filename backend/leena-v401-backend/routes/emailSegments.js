@@ -13,6 +13,7 @@ const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { processEmailTemplate, sendEmailWithReplyTo } = require('../utils/email');
+const { loadUnsubscribeSet } = require('../utils/unsubscribe');
 
 // Apply JWT authentication to all routes
 router.use(authMiddleware);
@@ -129,12 +130,21 @@ router.post('/send', async (req, res) => {
         }
 
         const visitors = visitorsRes.rows;
-        const totalTargeted = visitors.length;
+        const totalPreFilter = visitors.length;
+
+        // Filter unsubscribed recipients (compliance: Gmail/Yahoo bulk rules).
+        // Preload once → O(1) Set lookup per visitor. Fails loud if DB errors.
+        const unsubSet = await loadUnsubscribeSet(organizerId);
+        const filteredVisitors = visitors.filter(v => !unsubSet.has((v.email || '').toLowerCase().trim()));
+        const skippedUnsubscribed = totalPreFilter - filteredVisitors.length;
+        console.log(`[emailSegments] Unsub filter: ${skippedUnsubscribed} skipped from ${totalPreFilter} → ${filteredVisitors.length} to send`);
+
+        const totalTargeted = filteredVisitors.length;
         let totalSent = 0;
         let totalFailed = 0;
 
         // Send emails to each visitor
-        for (const visitor of visitors) {
+        for (const visitor of filteredVisitors) {
             try {
                 // Prepare email data for template processing
                 const emailData = {
@@ -216,6 +226,8 @@ router.post('/send', async (req, res) => {
         res.json({
             success: true,
             segment: segment,
+            total_pre_filter: totalPreFilter,
+            skippedUnsubscribed: skippedUnsubscribed,
             total_targeted: totalTargeted,
             total_sent: totalSent,
             total_failed: totalFailed
