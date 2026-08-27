@@ -62,6 +62,18 @@
         .result-stat .label { font-size: 11px; color: inherit; opacity: 0.8; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .card { margin: 0 16px; } }
         .page-info-box{margin:0 0 20px;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:8px;background:#f0f7ff;padding:16px 20px;position:relative;font-size:14px;line-height:1.6}.info-box-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:12px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:12px;border-top:1px solid #dbeafe;padding-top:10px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:13px;padding:4px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:6px 0;padding-left:20px}.page-info-box li{margin-bottom:4px}
+        .preview-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .preview-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.5); }
+        .preview-modal-body { position: relative; background: white; border-radius: var(--radius-lg); padding: 28px; max-width: 520px; width: calc(100% - 32px); box-shadow: 0 20px 40px rgba(0,0,0,0.2); }
+        .preview-summary { background: var(--primary-light); border-radius: var(--radius-md); padding: 14px 16px; margin-bottom: 18px; font-size: 13px; }
+        .preview-summary > div { margin-bottom: 6px; }
+        .preview-summary > div:last-child { margin-bottom: 0; }
+        .preview-sample { margin-bottom: 20px; }
+        .preview-label { font-size: 11px; font-weight: 600; color: var(--text-secondary); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+        .preview-sample ul { margin: 0; padding-left: 20px; font-size: 13px; }
+        .preview-sample li { margin-bottom: 4px; word-break: break-all; }
+        .preview-actions { display: flex; gap: 12px; }
+        .preview-actions .btn { flex: 1; }
     </style>
 </head>
 <body>
@@ -118,8 +130,8 @@
                   <button class="info-box-close" onclick="closeInfoBox()" title="Close">&#10005;</button>
                   <div class="info-box-toggle" id="infoBoxToggle" onclick="toggleInfoBox()">&#8505;&#65039; Help</div>
                   <div class="info-box-content" id="infoBoxContent">
-                    <div class="info-en"><strong>Email Segments</strong> — Send targeted emails to specific groups of registered visitors.<ul><li><strong>All registered</strong> — every visitor</li><li><strong>Checked in</strong> — only attendees</li><li><strong>No-show</strong> — registered but didn't attend</li><li>Different from Send Emails: segments only target THIS expo's visitors</li></ul></div>
-                    <div class="info-tr"><strong>Email Segmentleri</strong> — Bu fuara kayıtlı belirli visitor gruplarına hedefli email gönderin.<ul><li><strong>Tüm kayıtlılar</strong> — fuardaki her visitor</li><li><strong>Check-in yapanlar</strong> — sadece katılan visitor'lar</li><li><strong>No-show</strong> — kayıt olup katılmayanlar</li><li>Email Gönder'den farkı: segmentler sadece BU fuarın kayıtlı visitor'larını hedefler</li></ul></div>
+                    <div class="info-en"><strong>Email Segments</strong> — Send targeted emails to visitor groups. Preview count before queueing; sends go through the email worker.<ul><li><strong>Attended (any day)</strong> — anyone who checked in</li><li><strong>Never attended</strong> — registered but no check-in</li><li><strong>Attended on [date]</strong> — checked in on a specific fair day (Lagos time)</li><li><strong>No-show as of [date]</strong> — registered by that date, no check-in on or before</li><li>Unsubscribed and invalid emails are auto-skipped</li></ul></div>
+                    <div class="info-tr"><strong>Email Segmentleri</strong> — Ziyaretçi gruplarına hedefli email gönderin. Sıraya almadan önce sayı önizlemesi yapılır; gönderim email worker üzerinden yürür.<ul><li><strong>Attended (any day)</strong> — check-in yapan herkes</li><li><strong>Never attended</strong> — kayıtlı ama check-in yok</li><li><strong>Attended on [tarih]</strong> — belirli bir fuar günü check-in yapanlar (Lagos saati)</li><li><strong>No-show as of [tarih]</strong> — o tarihe kadar kayıtlı, o tarihe kadar check-in yok</li><li>Unsubscribe ve geçersiz emailler otomatik atlanır</li></ul></div>
                   </div>
                 </div>
                 <div class="card">
@@ -139,12 +151,19 @@
                     
                     <div class="form-group">
                         <label class="form-label">Target Segment</label>
-                        <select id="segmentSelect" class="form-select">
-                            <option value="checked_in">✅ Checked-in visitors</option>
-                            <option value="not_checked_in">⏳ Not checked-in visitors</option>
+                        <select id="segmentSelect" class="form-select" onchange="onSegmentChange()">
+                            <option value="attended_any">✅ Attended (any day)</option>
+                            <option value="noshow_any">⏳ Never attended</option>
+                            <option value="attended_on">📅 Attended on specific day…</option>
+                            <option value="noshow_asof">🕰 No-show as of specific day…</option>
                         </select>
                     </div>
-                    
+
+                    <div class="form-group" id="dateGroup" style="display:none;">
+                        <label class="form-label">Date (fair day, Lagos time)</label>
+                        <input type="date" id="segmentDate" class="form-select">
+                    </div>
+
                     <button class="btn btn-primary" id="sendBtn" onclick="sendEmails()">
                         <i class="bi bi-send"></i> Send Emails
                     </button>
@@ -152,6 +171,31 @@
                     <div class="result-box" id="resultBox"></div>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- Preview confirmation modal -->
+    <div id="previewModal" class="preview-modal" style="display:none;">
+        <div class="preview-modal-backdrop" onclick="closePreview()"></div>
+        <div class="preview-modal-body">
+            <h3 style="margin:0 0 6px;font-size:16px;">Confirm Send</h3>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">
+                Review the recipient count before queueing. Click Confirm to write to the email queue.
+            </div>
+            <div class="preview-summary">
+                <div><strong>Targeted:</strong> <span id="pvTargeted">-</span></div>
+                <div><strong>Skipped:</strong> <span id="pvSkipped">-</span>
+                    (<span id="pvSkipUnsub">-</span> unsubscribed + <span id="pvSkipInvalid">-</span> invalid emails)</div>
+                <div><strong>Template:</strong> <span id="pvTemplate">-</span></div>
+            </div>
+            <div class="preview-sample">
+                <div class="preview-label">Sample (first 5 recipients)</div>
+                <ul id="pvSample"></ul>
+            </div>
+            <div class="preview-actions">
+                <button class="btn btn-secondary" onclick="closePreview()">Cancel</button>
+                <button class="btn btn-primary" id="pvConfirmBtn" onclick="confirmSend()">Confirm &amp; Queue</button>
+            </div>
         </div>
     </div>
 
@@ -185,42 +229,106 @@
             }
         }
 
-        async function sendEmails() {
+        let currentPayload = null;
+
+        function onSegmentChange() {
+            const seg = document.getElementById('segmentSelect').value;
+            document.getElementById('dateGroup').style.display =
+                (seg === 'attended_on' || seg === 'noshow_asof') ? '' : 'none';
+        }
+
+        function buildPayload() {
             const templateId = document.getElementById('templateSelect').value;
-            const segment = document.getElementById('segmentSelect').value;
-            
-            if (!templateId) { showToast('Please select an email template', 'warning'); return; }
-            
+            let segment = document.getElementById('segmentSelect').value;
+            const date = document.getElementById('segmentDate').value;
+            if (!templateId) { showToast('Please select an email template', 'warning'); return null; }
+            if (segment === 'attended_on' || segment === 'noshow_asof') {
+                if (!date) { showToast('Please pick a date for this segment', 'warning'); return null; }
+                segment = `${segment}:${date}`;
+            }
+            return { expo_id: expoId, segment, template_id: templateId };
+        }
+
+        // sendEmails now fetches /preview and opens the confirmation modal.
+        async function sendEmails() {
+            const payload = buildPayload();
+            if (!payload) return;
+            currentPayload = payload;
+
+            const btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Loading preview…';
+            try {
+                const res = await fetch(`${API}/email-segments/preview`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) { showToast(data.message || 'Preview failed', 'error'); return; }
+
+                document.getElementById('pvTargeted').textContent = data.targeted;
+                document.getElementById('pvSkipped').textContent = data.skipped_total;
+                document.getElementById('pvSkipUnsub').textContent = data.skipped_unsubscribed;
+                document.getElementById('pvSkipInvalid').textContent = data.skipped_invalid;
+                document.getElementById('pvTemplate').textContent = data.template_name;
+
+                const sampleList = document.getElementById('pvSample');
+                sampleList.innerHTML = '';
+                if (!data.sample || data.sample.length === 0) {
+                    sampleList.innerHTML = '<li><em>No recipients matched — nothing will be queued.</em></li>';
+                } else {
+                    data.sample.forEach(s => {
+                        const li = document.createElement('li');
+                        li.textContent = `${s.email} — ${s.name}${s.company ? ' (' + s.company + ')' : ''}`;
+                        sampleList.appendChild(li);
+                    });
+                }
+                document.getElementById('pvConfirmBtn').disabled = (data.targeted === 0);
+                document.getElementById('previewModal').style.display = 'flex';
+            } catch (e) {
+                showToast('Network error while loading preview', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-send"></i> Send Emails';
+            }
+        }
+
+        async function confirmSend() {
+            closePreview();
+            if (!currentPayload) return;
             const btn = document.getElementById('sendBtn');
             const resultBox = document.getElementById('resultBox');
-            
             btn.disabled = true;
-            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Sending...';
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Queueing…';
             resultBox.className = 'result-box sending';
-            resultBox.innerHTML = '<i class="bi bi-envelope"></i> Sending emails, please wait...';
+            resultBox.innerHTML = '<i class="bi bi-envelope"></i> Writing to email queue…';
 
             try {
                 const res = await fetch(`${API}/email-segments/send`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                    body: JSON.stringify({ expo_id: expoId, segment, template_id: templateId })
+                    body: JSON.stringify(currentPayload)
                 });
                 const data = await res.json();
-                
                 if (res.ok) {
                     resultBox.className = 'result-box success';
                     resultBox.innerHTML = `
                         <i class="bi bi-check-circle" style="font-size:24px;"></i>
-                        <div style="margin-top:8px;font-weight:600;">Emails sent successfully!</div>
+                        <div style="margin-top:8px;font-weight:600;">${data.queued} emails queued</div>
                         <div class="result-stats">
-                            <div class="result-stat"><div class="value">${data.total_targeted || 0}</div><div class="label">Targeted</div></div>
-                            <div class="result-stat"><div class="value">${data.total_sent || 0}</div><div class="label">Sent</div></div>
-                            <div class="result-stat"><div class="value">${data.total_failed || 0}</div><div class="label">Failed</div></div>
+                            <div class="result-stat"><div class="value">${data.targeted}</div><div class="label">Targeted</div></div>
+                            <div class="result-stat"><div class="value">${data.skipped_total}</div><div class="label">Skipped</div></div>
+                            <div class="result-stat"><div class="value">${data.queued}</div><div class="label">Queued</div></div>
+                        </div>
+                        <div style="margin-top:12px;font-size:12px;">
+                            Worker is draining now.
+                            <a href="email-history.html" style="color:inherit;text-decoration:underline;">View Email History →</a>
                         </div>
                     `;
                 } else {
                     resultBox.className = 'result-box error';
-                    resultBox.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${data.error || 'Failed to send emails'}`;
+                    resultBox.innerHTML = `<i class="bi bi-exclamation-circle"></i> ${data.message || 'Queue insert failed'}`;
                 }
             } catch (e) {
                 resultBox.className = 'result-box error';
@@ -228,7 +336,12 @@
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-send"></i> Send Emails';
+                currentPayload = null;
             }
+        }
+
+        function closePreview() {
+            document.getElementById('previewModal').style.display = 'none';
         }
     function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
     </script>
