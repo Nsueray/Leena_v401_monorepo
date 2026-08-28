@@ -13,7 +13,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
-const { processEmailTemplate } = require('../utils/email');
 const { loadUnsubscribeSet } = require('../utils/unsubscribe');
 
 router.use(authMiddleware);
@@ -176,8 +175,13 @@ router.post('/preview', async (req, res) => {
 
 /**
  * POST /api/email-segments/send
- * Batch INSERT into email_queue (Mode 1). Response returns queued count in ~1s.
- * Worker drains at its own cadence.
+ * Batch INSERT into email_queue (Mode 2: visitor_id + template_id, worker renders).
+ * Response returns queued count in <2s regardless of recipient count. Worker
+ * drains at its own cadence and does per-row template rendering + unsub recheck.
+ *
+ * Prior Mode 1 implementation pre-rendered all HTML in Node memory and pushed
+ * ~10 KB × N as the INSERT payload — that OOM'd / HTTP-timed-out at N=~8k on
+ * 28 Aug 2026. See docs/sessions/SEGMENT_FORENSICS_20260828.md.
  */
 router.post('/send', async (req, res) => {
     try {
@@ -198,46 +202,19 @@ router.post('/send', async (req, res) => {
             });
         }
 
-        // Pre-process templates per visitor (Mode 1 stores final HTML in the queue row)
-        const now = new Date();
-        const baseBadgeUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
-        const rows = targeted.map(v => {
-            const emailData = {
-                name: v.name || 'Guest',
-                last_name: v.last_name || '',
-                full_name: `${v.name || ''} ${v.last_name || ''}`.trim() || 'Guest',
-                email: v.email,
-                company: v.company || '',
-                country: v.country || '',
-                job_title: v.job_title || '',
-                expo_name: expo.name,
-                qr_code: v.qr_code
-                    ? `<img src="${baseBadgeUrl}/api/qr-image/${v.qr_code}" alt="QR Code" style="max-width:200px;">`
-                    : '',
-                badge_url: v.badge_url || '',
-                date: now.toLocaleDateString()
-            };
-            return {
-                visitor_id: v.id,
-                recipient_email: v.email,
-                subject: processEmailTemplate(template.subject, emailData),
-                html_content: processEmailTemplate(template.html_content, emailData)
-            };
-        });
-
-        // Batch INSERT in CHUNK_SIZE-row chunks
-        const cols = ['visitor_id', 'expo_id', 'organizer_id', 'template_id',
-                      'recipient_email', 'subject', 'html_content', 'status'];
+        // Mode 2 enqueue: worker (email_worker.js:162) fetches visitor + template
+        // and renders per-message at drain time. Payload per row: 5 params, ~40
+        // bytes vs Mode 1's ~10 KB. INSERT is constant-time in payload size.
+        const cols = ['visitor_id', 'expo_id', 'organizer_id', 'template_id', 'status'];
         let queued = 0;
-        for (let i = 0; i < rows.length; i += CHUNK_SIZE) {
-            const chunk = rows.slice(i, i + CHUNK_SIZE);
+        for (let i = 0; i < targeted.length; i += CHUNK_SIZE) {
+            const chunk = targeted.slice(i, i + CHUNK_SIZE);
             const valueClauses = [];
             const values = [];
-            chunk.forEach((row, idx) => {
-                const b = idx * 8;
-                valueClauses.push(`($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7},$${b+8})`);
-                values.push(row.visitor_id, expo.id, organizerId, template.id,
-                            row.recipient_email, row.subject, row.html_content, 'pending');
+            chunk.forEach((v, idx) => {
+                const b = idx * 5;
+                valueClauses.push(`($${b+1},$${b+2},$${b+3},$${b+4},$${b+5})`);
+                values.push(v.id, expo.id, organizerId, template.id, 'pending');
             });
             await pool.query(
                 `INSERT INTO email_queue (${cols.join(',')}) VALUES ${valueClauses.join(',')}`,
