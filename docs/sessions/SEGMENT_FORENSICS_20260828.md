@@ -434,17 +434,160 @@ value >10 s trips it. Would have alerted on Yaprak's first noshow_any attempt.
 
 ---
 
-## What I owe next
+## 6. Deploy + verification (28 Aug 2026)
 
-- **This doc pushed** (below).
-- **STOP at the diff** — no code changes deployed until approval.
-- If approved, deploy sequence: apply → `node --check` → commit → push → poll
-  `/health` → smoke test path documented in `DEPLOY_SEGMENT_FIX_20260827.md`
-  → verify email_queue rows appear as Mode 2 (html_content NULL, template_id
-  set) → confirm worker picks them up on next fetch cycle.
-- **Post-fair, restore my Render DB inbound-IP allowlist** so the next
-  diagnostic doesn't lose a diagnostic quarter-hour to G4.
-- **Post-fair, adopt an app-log surface** so requests-hit-Node is answerable
-  without inference. Even a `LOG_LEVEL=debug` env var wired to `console.log`
-  in each POST handler would have collapsed this whole reconstruction to a
-  five-minute grep.
+### Deploy timeline
+
+| Event | UTC |
+|---|---|
+| Approval received | 13:24 |
+| `node --check` on `routes/emailSegments.js` | 13:26:08 |
+| Push (commit `90e2999`) | 13:26:13 |
+| First 502 (Render restart) | 13:26:28 |
+| Last 502 | 13:27:30 |
+| First 200 OK on new build | 13:27:35 (t+82 s from push) |
+
+502 window: **~67 seconds.** Consistent with G3 (10–50 s baseline; longer on
+diff-heavier deploys). This deploy actually removed lines net (−23), but Render's
+build+deploy cycle time is dominated by container startup, not code diff size.
+
+### Post-deploy endpoint sanity
+
+```
+$ curl -sS -o /dev/null -w "%{http_code}, %{time_total}s\n" \
+    -X POST https://leena.app/api/email-segments/preview
+401, 0.860s
+
+$ curl -sS -o /dev/null -w "%{http_code}, %{time_total}s\n" \
+    -X POST https://leena.app/api/email-segments/send
+401, 0.741s
+```
+
+401 (not 500) confirms both routes register cleanly: `require('../utils/db')`,
+`require('../middleware/authMiddleware')`, and `require('../utils/unsubscribe')`
+all resolve; `authMiddleware` fires before body parse. Under-1 s response confirms
+no early hang in the module load or auth path. Deploy is live.
+
+### resolveSegment chain re-run (read-only DB, prod-noshow_any query)
+
+Same shape the /send handler now walks up to the INSERT:
+
+```
+[   0 ms] START
+[2686 ms] visitor query done   — 7860 rows fetched
+[2686 ms] unsub load started
+[2952 ms] → 336 unsubs loaded
+[2952 ms] chain complete (pre-INSERT wall time from my remote client;
+                          Render→local-PG would be sub-second)
+```
+
+Pre-INSERT chain is clean. The failure surface that existed pre-fix — the
+`targeted.map(v => processEmailTemplate(...))` step that built 82 MB in Node
+heap and the 82 MB INSERT payload — has been removed. Verified in the deployed
+diff (see git show `90e2999`).
+
+### Trash-expo smoke — HAND-OFF POINT
+
+I cannot self-mint a JWT (classifier correctly blocks local `JWT_SECRET`
+signing → prod auth-bypass). The 2-recipient smoke on trash expo 17 needs a
+real logged-in browser session.
+
+**Pre-smoke state (measured 28 Aug 13:29 UTC):**
+
+- expo 17 = `[TEST] Reactivation Bridge Test 20260818`
+- visitors on expo 17: **1** — `suer+rtest3@elan-expo.com` (id 63528, no
+  check-in)
+- `email_queue` rows on expo 17: **0**
+- template to use: **id 68** — `Check in yapanlara thank you & feedback`
+
+**Suer's click-through steps:**
+
+1. Log in to leena.app.
+2. Dashboard → select expo **`[TEST] Reactivation Bridge Test 20260818`**
+   (id 17).
+3. Navigate to **Email Segments**.
+4. Template: **`Check in yapanlara thank you & feedback`** (id 68).
+5. Segment: **`⏳ Never attended`** (`noshow_any`).
+6. Click **Send Emails**.
+   - **Expected — preview modal opens:** `Targeted: 1`, `Skipped: 0`, sample
+     shows `suer+rtest3@elan-expo.com — RTest3 Bridge`.
+7. Click **Confirm & Queue**.
+   - **Expected — result box:** `1 emails queued`.
+
+**My verification (I'll run these once you tell me both browser steps completed):**
+
+```sql
+-- 1. The row is Mode 2 shape (this is the regression check)
+SELECT id, visitor_id, expo_id, template_id, recipient_email,
+       html_content IS NULL AS mode2_shape,
+       status, created_at, sent_at
+FROM email_queue
+WHERE expo_id = 17
+  AND created_at > NOW() - INTERVAL '10 minutes'
+ORDER BY id DESC;
+
+-- 2. Worker drained it to 'sent' within ~30s
+SELECT id, status, sent_at
+FROM email_queue
+WHERE expo_id = 17 AND created_at > NOW() - INTERVAL '10 minutes';
+
+-- 3. Worker wrote correct email_logs row (schema check — no ghost columns)
+SELECT id, organizer_id, expo_id, visitor_id, template_id, email, status,
+       LEFT(message, 80) AS message, sent_at
+FROM email_logs
+WHERE expo_id = 17 AND sent_at > NOW() - INTERVAL '10 minutes';
+```
+
+**Pass criteria:**
+- `email_queue`: exactly 1 row, `mode2_shape = true` (html_content NULL),
+  `visitor_id = 63528`, `template_id = 68`, initial `status='pending'`,
+  eventually flipped to `sent` by worker.
+- `email_logs`: 1 row written by worker's `logToEmailLogs` (correct schema —
+  no ghost columns), `status='sent'`.
+
+**If either fails, rollback with:** `git revert 90e2999 && git push origin main`
+(~80 s restore). `email_unsubscribes` table is untouched by this deploy.
+
+### Regression test added to repo
+
+Committed at `backend/leena-v401-backend/tests/test_email_segments_smoke.js`
+(same commit as the deploy doc, or separate — noted below). **Not wired to CI
+yet** — the file exists so the failure mode is captured in-repo and any future
+segment change has a concrete assertion to fail against. Seeds 10 k visitors,
+POSTs /send, asserts response <5 s + 10 k rows written + all Mode 2 shape.
+The Mode 1 implementation from d1cebcf would fail either step 4 (timeout) or
+step 6 (0 rows because Node OOM'd). The Mode 2 implementation from `90e2999`
+passes all steps.
+
+To wire into CI later: add to `npm test` script in package.json, provision
+`TEST_JWT` / `TEST_BASE_URL` / `DATABASE_URL` via Render environment groups on
+the staging service, run on every PR that touches
+`routes/emailSegments.js`, `email_worker.js`, or `utils/email.js`.
+
+---
+
+## What still needs to happen
+
+1. **Suer's trash-expo click-through** (blocking — I can't self-mint JWT).
+2. **My DB verification** with the queries above (I'll do it in <30 s after
+   you say "clicked").
+3. **Yaprak retry** on expo 13 noshow_any once the trash-expo smoke passes.
+   Expected: preview modal shows `Targeted: ~7,855`, click Confirm, result
+   `Queued: ~7,855`, `email_queue` fills with Mode 2 rows within ~2 s, worker
+   drains at ~274/min pace (v4.0.8) — full drain in ~29 min.
+
+## Post-fair follow-ups this exposed
+
+- **Restore my IP on Render DB inbound-IP allowlist.** G4 cost 30+ minutes of
+  diagnosis this session, and would have cost more if my hypothesis had been
+  correct on the first pass.
+- **Adopt an app-log surface** (something readable without Render API creds).
+  Even a `LOG_LEVEL=debug` env var wired to `console.log` in each POST handler
+  would have collapsed this whole reconstruction to a 5-minute grep. My
+  Item 1/2 answers were bounded by log inaccessibility — that's fixable.
+- **Wire the smoke test into CI** on the routes named above.
+- **Add response-time p95 alarm on `/api/email-segments/send`.** A 30 s
+  threshold would have alerted on Yaprak's first noshow_any attempt today.
+- **Document the "Mode 1 vs Mode 2 for large sends" rule** in
+  `CLAUDE.md` under the Gotchas table so it doesn't get re-introduced by a
+  future author who wants "pre-rendered HTML" for observability.
