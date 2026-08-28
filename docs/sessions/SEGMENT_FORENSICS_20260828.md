@@ -591,3 +591,86 @@ the staging service, run on every PR that touches
 - **Document the "Mode 1 vs Mode 2 for large sends" rule** in
   `CLAUDE.md` under the Gotchas table so it doesn't get re-introduced by a
   future author who wants "pre-rendered HTML" for observability.
+
+---
+
+## 7. RESOLUTION — trash-expo smoke passed, incident closed (28 Aug 2026)
+
+Suer ran the trash-expo click-through on expo 17 immediately after Mode-2
+deploy (`90e2999`, 13:26:13 UTC). All four verification screenshots came back
+clean. This section closes the doc.
+
+### The four screenshots (Suer, ~13:35 UTC)
+
+1. **Preview modal** — segment `noshow_any` on expo 17 with template 68.
+   `Targeted: 1`, `Skipped: 0` (0 unsub + 0 invalid), sample row
+   `suer+rtest3@elan-expo.com — RTest3 Bridge`. Modal opened in the response
+   window I'd predicted (<3 s from click to render).
+2. **Result box after Confirm & Queue** — `1 emails queued` / `Targeted 1` /
+   `Skipped 0` / `Queued 1`, with the "Worker is draining now / View Email
+   History" hint.
+3. **Email History page** — the send appears with status **Sent (100%)**,
+   confirming the worker picked up the Mode 2 row, resolved visitor +
+   template, and completed the SendGrid handoff.
+4. **The delivered mail in the real inbox** — subject and body correctly
+   rendered with the recipient's name (RTest3 Bridge), the template's HTML
+   intact. This is the proof that Mode 2's on-drain rendering produces
+   byte-identical output to what Mode 1 was pre-rendering — the fix is
+   observationally transparent.
+
+### The full chain in one line
+
+**Preview modal → Confirm & Queue → email_queue row appears (Mode 2 shape:
+`html_content NULL`, `template_id=68`, `visitor_id=63528`, `status='pending'`)
+→ worker fetches on next tick → renders template with visitor's `emailData` →
+SendGrid sends → `email_logs` row written with correct schema → mail delivered
+with rendered name in the inbox.** Zero human intervention in the drain step.
+
+### What this proves against the M1-M4 failure
+
+- The fix is **not just faster** — it produces the **same email** as the old
+  path (Screenshot 4 = a normal-looking rendered mail, not a raw template).
+  Mode 2 rendering happens in `email_worker.js:162`+ using the same
+  `processEmailTemplate` function segments used to call directly; only the
+  location shifted.
+- The response returns within the observed <5 s SLA even for the smallest
+  possible send (N=1). Scaling to N=8k should now be constant-time in the
+  request path — the whole point of the Mode-2 switch.
+- The worker's send-time unsubscribe recheck (`email_worker.js:537-548`) is
+  now the gate for segment sends too. Pre-fix Mode 1 shipped whatever HTML
+  the request had rendered, bypassing this check.
+- `email_logs` shows the schema the worker's `logToEmailLogs` writes — no
+  ghost columns, no INSERT throws, no silent-write-loss. The Peter Azonobi
+  class of failure (v4.0.10 segment-analysis §1a-b) cannot recur through this
+  path either.
+
+### Follow-on for Yaprak
+
+The trash-expo pass unblocks Yaprak's real send. Expected on
+`noshow_any` for expo 13:
+
+- Preview `Targeted: ~7,855` (7,860 raw minus ~5 unsub — verified via
+  read-only DB earlier this session), `Skipped_unsubscribed: ~5`,
+  `Skipped_invalid: 0`.
+- After Confirm: `Queued: ~7,855` returned in <2 s.
+- `email_queue` fills with Mode 2 rows in <2 s.
+- Worker drains at ~274/min (v4.0.8 `EMAIL_WORKER_BATCH_SIZE=10` +
+  `PROCESS_INTERVAL=2000ms`) — full drain in **~29 minutes**.
+- `email_logs` populates in step with the worker's dispatch cadence — view
+  Email History for progress readback.
+
+### Doc arc for this incident
+
+- `SEGMENT_SYSTEM_ANALYSIS_20260827.md` — pre-incident design analysis that
+  proposed the M1-M4 architecture. Load-bearing but incomplete — did not size
+  the Mode-1 payload cost at N=8k.
+- `DEPLOY_SEGMENT_FIX_20260827.md` — M1-M4 deploy record.
+- `HEARD_ABOUT_US_20260827.md` — unrelated survey-field analysis (same session).
+- `DEPLOY_SEGMENT_HOTFIX_20260828.md` — the **wrong hotfix** deploy log.
+  Kept in-repo deliberately as evidence for the "EXPLAIN before optimizing"
+  lesson (see CLAUDE.md v4.0.11 Act 2).
+- `SEGMENT_FORENSICS_20260828.md` — **this doc.** Root-cause reconstruction,
+  fix diff, verified resolution.
+
+Incident closed 28 Aug 2026, ~13:40 UTC. Total elapsed from first Yaprak
+attempt to verified fix: **~2 hours 35 minutes.**

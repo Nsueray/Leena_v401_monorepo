@@ -1,40 +1,54 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: **25 Ağustos 2026, fuar günü 1** (önceki: 21 Ağustos)
-> Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management
+> Son güncelleme: **28 Ağustos 2026, fuar-sonrası gün 1** (önceki: 25 Ağustos)
+> Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management + Segments
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
 ---
 
-## 🔴 TONIGHT — 25 Aug
+## 🔴 TODAY — 28 Aug (post-fair, top of stack)
 
 | owner | item |
 |---|---|
-| **OPS + SUER** | **Conference lane catch-up.** The lane ran `qrscanner.html` instead of `conference-scanner.html` all day (G22), so people were checked in but **no certificates were issued**. Measured at 15:21: **51 distinct visitors**, first 10:52, last 15:19 — *not* the 9 seen at midday, the number grew all afternoon. ⚠️ **Only 5 of the 51 hold a `conference_topic`**, so the other 46 cannot be certified without the **force** path (which *adds* a topic they never registered for). Decide per person, or certify only the 5. **Switch the lane to the correct URL first**, or tomorrow repeats it: `https://leena.app/conference-scanner.html?terminal_key=80b25686-a65e-4811-839a-35ea72024fc5` |
-| SUER | Test-row cleanup still pending — visitors 67234/67237, checkins 20312/20313, certificate 612 (+614 = ops' own test). SQL in `docs/sessions/FAIR_DAY1_OPENING_20260825.md` §7. Does **not** pollute day-1 counters (all dated 24 Aug) but does inflate cumulative and makes conference stats read 2 certificates before a real one exists. |
+| **OPS** | **Conference cert catch-up — ~340 attended conference-topic-holders on expo 13 still uncertified.** Mailmerge query in `docs/sessions/FAIR_FINAL_20260827.md` §5. Bulk-issue via `POST /api/conference-certificates/…` per row or via `email_queue` Mode 1 with pre-generated cert URLs. |
+| **SUER** | **PIXAD brief update** — Friday's budget-math call. Feeds off `FAIR_FINAL_20260827.md` §3 SIEMA table (Pixad = 4,857 registered / 570 attended / **11.74%** show rate; contrast public_form 78%, Email Marketing 29%). |
 
-## 📋 POST-FAIR — priorities refreshed 25 Aug
+## 📋 POST-FAIR — priorities refreshed 28 Aug
 
-| # | item | note |
-|---|---|---|
-| 1 | **Campaign wizard (Phase 2)** | **SIEMA deadline ~8 Sep** — the binding date on this list |
-| 2 | **Import phone coercion** | `String(v).trim()` + restore the `+` for 234-typed ints. **Promoted — a third agency file failed.** See G21: Excel stores phones as numbers and it is invisible in the UI |
-| 3 | **"Copy URL" per terminal purpose + param unification** | Button always emits `qrscanner.html?terminalKey=`. Make it purpose-aware **and** unify on `terminal_key` everywhere (`conference-scanner` uses `terminal_key`, `bulk-badge-print` uses `key`). See G22 — this cost day 1's conference certificates |
-| 4 | **`delivered_count` snapshot timing** | All campaign types, not just single-step. See G23 — snapshot must wait for drain, not recipient completion |
-| 5 | **Certificate Templates admin page** | May's Option 3. Ends the hardcoded `expoId`-switch; every new expo currently needs a code change (v4.0.10) |
-| 6 | **Manual-reg form parity with form config** | Read required fields from `forms.fields` instead of hardcoding, and **kill the silent `N/A` / `Nigeria` defaults** — `'N/A'` is not empty so it passes every missing-value check and prints on the badge |
-| 7 | **Phone cleanup: 840 malformed `+2340…` rows** expo-wide | Trunk zero not stripped before the `+234` prefix; not dialable as written |
-| 8 | **Conference stats: exclude or flag test certificates** | Page reads 2 issued when both are smoke tests |
-| 9 | **Unsubscribe UI — toggle button in visitor detail panel** | Add/remove with reason field (default `manual_ops_added`, free-text for `reply_request` etc.). Reuses existing detail-panel drawer next to Send Email button. Per `UNSUBSCRIBE_ANALYSIS_20260826.md` §6.3 — today ops must psql for every single opt-out. Bulk action on segments page as secondary. |
-| 10 | **Reply-to-unsubscribe handling** | Visitors reply UNSUBSCRIBE to `noreply@` and it's only caught by a human reading the inbox (today's `abimbolaakinkugbe@gmail.com` was manual). Options to evaluate post-fair: (a) SendGrid Inbound Parse webhook → auto-insert into `email_unsubscribes` with reason `reply_request`, (b) at minimum a documented ops procedure in `docs/sessions/`. Related: G9 SendGrid bounce webhook already in Carried block — bundle both. |
+| # | item | pri | note |
+|---|---|---|---|
+| 1 | **Campaign wizard (Phase 2)** | P1 | **SIEMA deadline ~8 Sep** — the binding date on this list |
+| 2 | **App-log surface for Claude Code diagnostics** | **P1** | **New — surfaced by v4.0.11 segment-forensics.** Either ship Render logs to a Claude-readable sink, wire `LOG_LEVEL=debug` to `console.log` at each POST handler entry/exit, or add a lightweight `logs/access.log` on the Render disk. G26. **Diagnosis without app logs costs ~2 h that a 5-minute grep would replace** — the M1-M4 failure reconstruction is the reference case. |
+| 3 | **Wire segment smoke test into CI** | **P1** | **New — file exists at `backend/leena-v401-backend/tests/test_email_segments_smoke.js`.** Runs 10 k-recipient `/send`, asserts response <5 s + Mode 2 shape. Add to `npm test`; run on every PR touching `routes/emailSegments.js`, `email_worker.js`, or `utils/email.js`. Needs `TEST_JWT`/`TEST_BASE_URL`/`DATABASE_URL` on staging service. Would have caught the Mode-1 regression on its own PR. |
+| 4 | **Import phone coercion** | P1 | `String(v).trim()` + restore the `+` for 234-typed ints. **Third agency file failed.** See G21: Excel stores phones as numbers and it is invisible in the UI |
+| 5 | **"Copy URL" per terminal purpose + param unification** | P1 | Button always emits `qrscanner.html?terminalKey=`. Make it purpose-aware **and** unify on `terminal_key` everywhere (`conference-scanner` uses `terminal_key`, `bulk-badge-print` uses `key`). See G22 |
+| 6 | **`delivered_count` snapshot timing** | P1 | All campaign types, not just single-step. See G23 |
+| 7 | **Certificate Templates admin page** | P1 | May's Option 3. Ends the hardcoded `expoId`-switch (v4.0.10) |
+| 8 | **Unsubscribe UI in visitor detail panel** | P1 | Add/remove with reason field. Reuses existing drawer. Ops still psqls for every opt-out. `UNSUBSCRIBE_ANALYSIS_20260826.md` §6.3 |
+| 9 | **Reply-to-unsubscribe automation** | P1 | (a) SendGrid Inbound Parse webhook → auto-insert `email_unsubscribes` with reason `reply_request`, OR (b) documented ops procedure. Bundle with G9 SendGrid bounce webhook |
+| 10 | **p95 response-time alarm on `/api/email-segments/send`** | **P2** | **New — surfaced by v4.0.11.** 30 s threshold would have alerted on Yaprak's first noshow_any attempt today. Extends naturally to `/api/email-send/bulk` and `/api/reactivation/create-from-excel`. |
+| 11 | **Restore Claude Code's DB inbound-IP as standing item** | **P2** | **New — recurring G4.** WARP/VPN egress-IP drift blocked read-only DB access mid-segment-diagnosis; had to work analytically for 20 min. Standing checklist item at start of any prod-diagnosis session: `psql $RENDER_DATABASE_READONLY_URL -c 'SELECT 1'` — if it fails, refresh whitelist BEFORE touching anything else. |
+| 12 | **Manual-reg form parity with form config** | P2 | Read required fields from `forms.fields`, kill silent `N/A`/`Nigeria` defaults |
+| 13 | **Phone cleanup: 840 malformed `+2340…` rows** | P2 | Trunk zero not stripped before `+234` prefix; not dialable |
+| 14 | **Conference stats: exclude/flag test certificates** | P3 | Page reads 2 issued when both are smoke tests |
 
 ### Carried, unchanged
-- SendGrid bounce webhook → automated `email_unsubscribes` (G9: we have **zero** bounce visibility)
+- SendGrid bounce webhook → automated `email_unsubscribes` (G9: **zero** bounce visibility)
 - Index `email_queue.campaign_recipient_id` (G18) · condition-based single-step campaigns (G19)
 - Per-check-in print signal + a check-in undo path (no `DELETE /api/checkins/:id` exists at all)
 - `expos.js:628` country stat reads the JSONB key, not the column (437 vs 7,249)
 - `reports.js` bare `CURRENT_DATE` on a UTC session → "today" rolls at 01:00 Lagos
 - Fix `Dear {{chain}}` double greeting in templates #61/#62 (G20)
+
+## ✅ CLOSED — 28 Aug (segment incident, one arc)
+
+- [x] **M1-M4 segment rewrite** shipped 27 Aug 22:16 UTC (`d1cebcf`) — `email_queue`-routed, preview modal, day-scoped targeting, ghost-columns fix. Bug: enqueued Mode 1 (pre-rendered HTML in queue row) which OOM'd `/send` at N=~8k
+- [x] **First hotfix** (`5794e2a`, 28 Aug 12:24 UTC) — `NOT EXISTS`→`NOT IN`. Diagnosis was **wrong** (both forms measured ~9 ms via `EXPLAIN ANALYZE`). Falsified by post-hotfix retry at 12:45 UTC failing identically. Rewrite is functionally correct but not the actual fix
+- [x] **Real fix** (`90e2999`, 28 Aug 13:26 UTC) — switched `/send` to Mode 2 enqueue. Payload per row 10 KB → 40 bytes, **165× reduction**. Request path now constant-size in recipient count. Beneficial side effect: worker's send-time unsubscribe recheck now applies to segment sends (Mode 1 bypassed it)
+- [x] **End-to-end verification** via trash-expo click-through — preview modal → queue Mode 2 row → worker drain → correctly-rendered mail delivered → clean `email_logs`
+- [x] **Regression test** committed at `backend/leena-v401-backend/tests/test_email_segments_smoke.js` (10 k recipients, response <5 s, Mode 2 shape assertions). **Not CI-wired yet** — item #3 above
+- [x] **New Gotchas added:** G24 (never pre-render bulk email in request path), G25 (Network-error toast = fetch/parse throw, not HTTP status), G26 (diagnosis without app logs)
+- [x] Full arc: `SEGMENT_FORENSICS_20260828.md` (reconstruction) + `DEPLOY_SEGMENT_HOTFIX_20260828.md` (the wrong-fix log, kept as evidence for the "EXPLAIN before optimizing" lesson)
 
 ---
 

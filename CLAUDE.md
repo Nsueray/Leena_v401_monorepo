@@ -1004,6 +1004,9 @@ the email, reactivation or deploy paths.
 | G21 | **Excel agency exports store phones as NUMBERS, and the import hard-fails on them** | A phone cell typed as a number arrives as a JS number, so `phone.trim()` throws and the row dies. **It is visually indistinguishable in Excel** — the cell displays identically to a text phone, and changing the *display format* does not change the stored type. The fix is cell-type coercion (`String(v).trim()`), not formatting. Hit **twice in two days on two different agency files**; manual surgery applied both times. Ask for a CSV, or coerce before trimming. |
 | G22 | **Terminals-page "Copy URL" always emits the scanner page** | The button builds `qrscanner.html?terminalKey=…` for **every** terminal regardless of purpose. A conference lane needs **`conference-scanner.html?terminal_key=…`** — different page *and* different param spelling (`terminal_key`, not `terminalKey`; bulk print uses `key`). Copying the URL for a conference terminal therefore yields a working *check-in* desk that can never issue a certificate. This is exactly what happened on day 1: the conference lane ran ordinary check-ins for hours with **0 certificates**. Hand out purpose-specific URLs, never the Copy button, until the page is fixed. |
 | G23 | **Campaign completion fires mid-drain, freezing `delivered_count` early** | `checkCampaignCompletion` fires when the last recipient's last step is **enqueued**, not when the queue drains — so the snapshot is always taken with the final step still in flight, and the same transaction purges the older sent rows so the live count can no longer recover the truth. **Not single-step-only**, as first assumed: C18 froze at **950 against a real 14,227**, and the multi-step C16/C17 froze at **~70%** (30,990 / 43,466 and 52,410 / 78,145). Readers prefer the non-null snapshot permanently, so completed campaigns under-report delivery by roughly a third and over-state every per-delivered rate. **Display-only** — sending is unaffected. |
+| G24 | **NEVER pre-render bulk email HTML in a request path** | `email_queue` supports two modes: **Mode 1** stores the fully rendered `html_content` in the queue row; **Mode 2** stores just `visitor_id + template_id` and the worker renders per-message at drain time (`email_worker.js:162`). Mode 1 is fine for single/small sends (reactivation confirmation, badge email, single-recipient `/email-send/single`). **Anything targeting >1k recipients MUST use Mode 2** — otherwise the request path holds `N × template_bytes` in Node heap and pushes that same payload across the INSERT wire, which OOMs the Node process OR blows the Render HTTP window at ~N=8k with a ~10 KB template. Measured 28 Aug 2026: segments `/send` on 3,065 recipients (33 MB) survived; on 7,860 (82 MB) died with zero rows written and a browser "Network error." **Rule for any future bulk-send endpoint: the request path must be constant-size in recipient count.** See v4.0.11 for the incident, `SEGMENT_FORENSICS_20260828.md` for the reconstruction. |
+| G25 | **"Network error" toast in our frontends ≠ HTTP failure — it means the response never completed** | The catch clause that renders `"Network error"` (e.g. `email-segments.html:290`, `email-segments.html:335`) fires **only** when `fetch()` itself throws (connection reset, DNS, browser network layer) OR `res.json()` throws (non-JSON body — typically a Render 502 HTML page). A backend 500 with a JSON body goes through `if (!res.ok)` and renders `data.message` — a **different** toast string. **Diagnostic shortcut:** if the user reports "Network error" specifically, the response never made it back with a valid HTTP body — suspect OOM/proxy kill/Render restart/upstream cut, NOT an application-level 4xx/5xx. This distinction was the load-bearing piece of evidence in the segment-failure reconstruction. |
+| G26 | **Diagnosis without app logs costs hours** | The M1-M4 segment failure took ~2 h to reconstruct because I could not read the Render web-service application logs from my access surface — every hypothesis had to be tested through DB-side evidence and code inspection. A 5-minute `grep` on the `[emailSegments/send] Error:` line would have collapsed the whole exercise. **P1 infra follow-up:** either wire Render log-shipping to somewhere Claude Code can read, OR add a `LOG_LEVEL=debug` env var that surfaces `console.log('POST /api/…', body)` at each POST handler entry + `console.log('resp', status)` at each exit, OR add a lightweight `logs/access.log` file on the Render disk that DB-side queries can join against. Any of the three closes the gap. |
 
 ---
 
@@ -1954,6 +1957,93 @@ The day is documented in `docs/sessions/`, in order:
 **`DAY1_MIDDAY_20260825.md`** (12:16 pulse).
 
 ⚠️ Session docs are **point-in-time records**, true as of their timestamp and never updated.
+
+### v4.0.11 — Segment `/send` Incident: Failure → Forensics → Mode-2 Fix (28 August 2026)
+
+**Context:** first fair-close-day of use for the M1-M4 segment rewrite shipped 27 Aug
+22:16 UTC (v4.0.10 last night). Yaprak sent the closing "thank you" via
+`attended_any` at 12:09 UTC — 3,065 recipients, 33 MB payload, worked end-to-end.
+She then tried the same page with segment `noshow_any` (7,860 recipients) five
+times across two windows (12:05-12:10 and 12:45-12:47). Every attempt returned
+the browser's "Network error" toast; zero rows written to `email_queue`.
+Full arc across three acts. Reference doc: `SEGMENT_FORENSICS_20260828.md`.
+
+#### Act 1 — the latent Mode-1 design flaw (M1-M4, commit `d1cebcf`)
+
+The 27 Aug rewrite moved segments off direct `sgMail` and onto `email_queue`,
+which was the right architectural move. But it enqueued **Mode 1** rows — every
+row containing the fully rendered `html_content` for that visitor. The `/send`
+handler therefore did all its work **synchronously in the request path**:
+
+1. Fetched all visitor rows (~7,860 for noshow_any on expo 13).
+2. `targeted.map(v => processEmailTemplate(...))` — rendered per-visitor HTML
+   into a `rows` array held in Node heap. **Measured: 82 MB of `html_content`
+   held simultaneously across 7,855 objects, Node heap 178 MB used / 299 MB
+   allocated, RSS 364 MB.**
+3. Batch-INSERTed in 500-row chunks — each chunk pushing ~8.8 MB across the
+   PG wire. **Total INSERT payload: 82 MB across 16 chunks in one request.**
+
+3,065-recipient send at 33 MB survived. 7,860-recipient at 82 MB died with
+zero rows written and browser "Network error" (either Node OOM or Render HTTP
+window kill — both produce the same symptom; see G25).
+
+#### Act 2 — the wrong hotfix (commit `5794e2a`, ~4 h later)
+
+My first diagnosis: the `noshow_any` `NOT EXISTS` was correlated on both
+`c.visitor_id = v.id` AND `c.expo_id = v.expo_id`, which I assumed forced a
+nested-loop anti-join. I rewrote it as uncorrelated `NOT IN` and deployed.
+
+**The diagnosis was wrong.** `EXPLAIN ANALYZE` on production showed both forms
+execute in **~9 ms** — the PG planner is smart enough to turn the correlated
+`NOT EXISTS` into a `Hash Anti Join` too. Yaprak's post-hotfix retry at
+12:45-12:47 failed the same way. **That failure was the direct falsification of
+the hotfix.** The rewrite is functionally correct but addressed a bottleneck
+that did not exist.
+
+**Lesson worth recording: `EXPLAIN` before optimizing.** I had the read-only DB
+access to check this in 30 seconds and skipped it because the correlation
+"looked slow." Two hours of debug + a wasted deploy is what that habit costs.
+
+#### Act 3 — the real fix (commit `90e2999`)
+
+`/send` now enqueues **Mode 2**: `visitor_id + template_id + expo_id +
+organizer_id + status='pending'`, no `html_content`. Worker
+(`email_worker.js:162`) fetches template + visitor and renders per-message at
+drain time. **Payload per row drops from ~10 KB to ~40 bytes — 165× smaller.**
+The `/send` request path is now **constant-size in recipient count.**
+
+**Verified end-to-end via trash-expo smoke on expo 17** (Suer's click-through,
+28 Aug ~13:35 UTC):
+
+1. Preview modal → `Targeted: 1`, sample `suer+rtest3@elan-expo.com`.
+2. Confirm & Queue → result box `1 emails queued`.
+3. `email_queue` row: **Mode 2 shape** (`html_content NULL`, `template_id=68`,
+   `visitor_id=63528`, `status='pending'`).
+4. Worker drained within ~30 s, `status='sent'`, `sent_at` set.
+5. `email_logs` row written by worker's `logToEmailLogs` — correct schema, no
+   ghost columns.
+6. Mail delivered to the real inbox with the visitor's rendered name.
+
+**Beneficial side effect:** the worker's send-time unsubscribe recheck
+(`email_worker.js:537-548`) now applies to segment sends. Mode 1 bypassed it —
+if a visitor unsubscribed between `/send` and worker dispatch, the pre-rendered
+HTML shipped anyway. Post-fix behaviour is stricter and matches how campaigns
+already work.
+
+#### Deliverables in-repo
+
+- Fix: commit `90e2999` (17 lines added, 40 removed in `routes/emailSegments.js`).
+- Forensics reconstruction: `docs/sessions/SEGMENT_FORENSICS_20260828.md`
+  (evidence-first, access-boundaries stated upfront, hypotheses labelled).
+- Regression test: `backend/leena-v401-backend/tests/test_email_segments_smoke.js`
+  (10 k recipients, asserts response <5 s + all rows Mode 2 shape). **Not
+  CI-wired yet — captured so the failure mode has a concrete assertion.**
+
+#### New Gotchas produced
+
+- **G24** — don't pre-render bulk email HTML in a request path (rule + rationale).
+- **G25** — "Network error" toast ≠ HTTP failure (diagnostic shortcut).
+- **G26** — diagnosis without app logs costs hours (P1 infra follow-up).
 
 ### v4.0.9 — Greeting Chain Rule + Final Push Waves (21 August 2026)
 
