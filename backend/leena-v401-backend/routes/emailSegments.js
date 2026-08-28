@@ -41,8 +41,14 @@ function buildSegmentFilter(segment, nextParamIdx) {
         };
     }
     if (kind === 'noshow_any') {
+        // Anti-join form: uncorrelated subquery lets PG evaluate the inner set ONCE
+        // (~few thousand visitor_ids per expo), build a hash, then anti-join against
+        // visitors. The prior NOT EXISTS with c.expo_id = v.expo_id was correlated and
+        // forced a nested loop that hit statement_timeout on large expos.
+        // $1 is the outer expo_id (reusable — PG allows the same param position
+        // to appear multiple times).
         return {
-            clause: `NOT EXISTS (SELECT 1 FROM checkins c WHERE c.visitor_id = v.id AND c.expo_id = v.expo_id)`,
+            clause: `v.id NOT IN (SELECT visitor_id FROM checkins WHERE expo_id = $1 AND visitor_id IS NOT NULL)`,
             params: []
         };
     }
@@ -63,12 +69,15 @@ function buildSegmentFilter(segment, nextParamIdx) {
         if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr || '')) {
             throw new Error(`noshow_asof requires YYYY-MM-DD suffix, got: ${segment}`);
         }
+        // Anti-join form — same reasoning as noshow_any. Inner subquery filtered
+        // by expo_id ($1) and date ($nextParamIdx), evaluated once.
         return {
             clause: `v.created_at::date <= $${nextParamIdx}::date
-                     AND NOT EXISTS (
-                         SELECT 1 FROM checkins c
-                         WHERE c.visitor_id = v.id AND c.expo_id = v.expo_id
-                           AND DATE(c.checkin_time AT TIME ZONE '${LAGOS_TZ}') <= $${nextParamIdx}::date
+                     AND v.id NOT IN (
+                         SELECT visitor_id FROM checkins
+                         WHERE expo_id = $1
+                           AND visitor_id IS NOT NULL
+                           AND DATE(checkin_time AT TIME ZONE '${LAGOS_TZ}') <= $${nextParamIdx}::date
                      )`,
             params: [dateStr]
         };
