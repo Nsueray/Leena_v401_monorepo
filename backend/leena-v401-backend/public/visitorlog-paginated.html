@@ -339,6 +339,29 @@
         </div>
     </div>
 
+    <!-- Unsubscribe / Re-subscribe modal -->
+    <div class="modal-overlay" id="unsubModal">
+        <div class="modal-box" style="max-width:460px;text-align:left;">
+            <h3 style="margin-bottom:12px;"><i class="bi bi-slash-circle"></i> <span id="unsubModalTitle">Unsubscribe</span></h3>
+            <div id="unsubModalBody" style="font-size:13px;color:#374151;margin-bottom:16px;"></div>
+
+            <div id="unsubReasonWrap" style="margin-bottom:12px;">
+                <label style="font-size:12px;font-weight:600;color:#6b7280;">Reason</label>
+                <select id="unsubReasonSelect" onchange="onUnsubReasonChange()" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;">
+                    <option value="manual_ops_added">Manual ops action</option>
+                    <option value="reply_request">Reply request (visitor emailed asking to unsubscribe)</option>
+                    <option value="other">Other (specify below)</option>
+                </select>
+                <input id="unsubReasonOther" type="text" placeholder="Free text reason…" maxlength="200" style="display:none;width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:6px;">
+            </div>
+
+            <div class="modal-actions" style="justify-content:flex-end;">
+                <button onclick="closeUnsubModal()" style="background:#e5e7eb;color:#374151;border:none;padding:8px 16px;border-radius:4px;font-size:13px;cursor:pointer;">Cancel</button>
+                <button id="unsubConfirmBtn" onclick="confirmUnsubAction()" style="background:#dc2626;color:white;border:none;padding:8px 16px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/leena-toast.js"></script>
     <script src="/leena-fetch.js"></script>
     <script>
@@ -644,6 +667,7 @@
         let _currentVisitor = null;
         let _currentVisitorIdx = -1;
         let _isEditing = false;
+        let _currentUnsubStatus = null;   // {unsubscribed, since, reason} for _currentVisitor; loaded on panel open
 
         function openVisitorPanel(idx) {
             const v = window._visitorCache[idx];
@@ -657,6 +681,7 @@
             updateNavButtons();
             renderPanelReadOnly(v);
             loadVisitorEmails(v.id);
+            loadUnsubStatus(v.email);
             document.getElementById('visitorPanelOverlay').style.display = '';
             document.getElementById('visitorDetailPanel').style.right = '0';
         }
@@ -697,10 +722,12 @@
                     <div><strong>Registered:</strong><br>${v.created_at ? new Date(v.created_at).toLocaleDateString() : '-'}</div>
                     ${topicRow}
                 </div>
-                <div style="margin-top:12px;display:flex;gap:12px;align-items:center;">
+                <div style="margin-top:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
                     ${v.qr_code ? `<a href="badge.html?qr=${encodeURIComponent(v.qr_code)}" target="_blank" style="color:#4a6fa5;font-size:13px;"><i class="bi bi-qr-code"></i> View Badge</a>` : ''}
                     <button onclick="toggleSendEmailForm()" style="background:#4a6fa5;color:white;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;"><i class="bi bi-envelope"></i> Send Email</button>
+                    <button id="panelUnsubBtn" onclick="openUnsubModal()" style="background:#e5e7eb;color:#374151;border:none;padding:5px 12px;border-radius:4px;font-size:12px;cursor:pointer;" title="Loading…" disabled><i class="bi bi-slash-circle"></i> …</button>
                 </div>
+                <div id="panelUnsubStatusLine" style="margin-top:6px;font-size:11px;color:#6b7280;"></div>
                 <div id="sendEmailForm" style="display:none;margin-top:12px;padding:12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;">
                     <label style="font-size:12px;font-weight:600;color:#6b7280;">Select Template</label>
                     <select id="emailTemplateSelect" style="width:100%;padding:6px 8px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin:6px 0 10px;"></select>
@@ -887,6 +914,137 @@
         }
 
         function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+
+        // ============================================================
+        // Unsubscribe UI (todo P1 #9) — button in visitor detail panel
+        // ============================================================
+        async function loadUnsubStatus(email) {
+            _currentUnsubStatus = null;
+            const btn = document.getElementById('panelUnsubBtn');
+            const line = document.getElementById('panelUnsubStatusLine');
+            if (!btn || !line) return;
+            if (!email) {
+                btn.disabled = true;
+                btn.title = 'No email on file';
+                btn.innerHTML = '<i class="bi bi-slash-circle"></i> Unsubscribe';
+                btn.style.background = '#e5e7eb';
+                btn.style.color = '#9ca3af';
+                line.textContent = '';
+                return;
+            }
+            btn.disabled = true;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> …';
+            line.textContent = '';
+            try {
+                const res = await leenaFetch(`/api/unsubscribes/status?email=${encodeURIComponent(email)}`);
+                if (!res.ok) throw new Error('status lookup failed');
+                const data = await res.json();
+                _currentUnsubStatus = data;
+                btn.disabled = false;
+                if (data.unsubscribed) {
+                    btn.innerHTML = '<i class="bi bi-arrow-counterclockwise"></i> Re-subscribe';
+                    btn.style.background = '#10b981';
+                    btn.style.color = 'white';
+                    btn.title = 'Remove from unsubscribe list';
+                    const sinceStr = data.since ? new Date(data.since).toLocaleDateString() : '?';
+                    line.textContent = `Unsubscribed since ${sinceStr}${data.reason ? ` — ${data.reason}` : ''}`;
+                } else {
+                    btn.innerHTML = '<i class="bi bi-slash-circle"></i> Unsubscribe';
+                    btn.style.background = '#e5e7eb';
+                    btn.style.color = '#374151';
+                    btn.title = 'Add to unsubscribe list';
+                    line.textContent = 'Subscribed';
+                }
+            } catch (e) {
+                if (e.status === 401 || e.status === 403) return;
+                btn.disabled = true;
+                btn.title = 'Status unavailable';
+                line.textContent = 'Status unavailable';
+            }
+        }
+
+        function openUnsubModal() {
+            if (!_currentVisitor || !_currentVisitor.email || !_currentUnsubStatus) return;
+            const modal = document.getElementById('unsubModal');
+            const title = document.getElementById('unsubModalTitle');
+            const body = document.getElementById('unsubModalBody');
+            const reasonWrap = document.getElementById('unsubReasonWrap');
+            const confirmBtn = document.getElementById('unsubConfirmBtn');
+            const email = _currentVisitor.email;
+
+            if (_currentUnsubStatus.unsubscribed) {
+                title.textContent = 'Re-subscribe';
+                body.innerHTML = `Remove <strong>${escapeHtml(email)}</strong> from the unsubscribe list?<br><br><span style="font-size:12px;color:#6b7280;">This does not re-add them to any campaign. If they should receive future campaign emails, add them to a campaign manually.</span>`;
+                reasonWrap.style.display = 'none';
+                confirmBtn.textContent = 'Confirm re-subscribe';
+                confirmBtn.style.background = '#10b981';
+            } else {
+                title.textContent = 'Unsubscribe';
+                body.innerHTML = `Add <strong>${escapeHtml(email)}</strong> to the unsubscribe list?<br><br><span style="font-size:12px;color:#6b7280;">Any active campaign recipient rows for this address will be deactivated. Transactional emails (badge, cert, registration confirmation) will still send — this only blocks marketing.</span>`;
+                reasonWrap.style.display = '';
+                document.getElementById('unsubReasonSelect').value = 'manual_ops_added';
+                document.getElementById('unsubReasonOther').style.display = 'none';
+                document.getElementById('unsubReasonOther').value = '';
+                confirmBtn.textContent = 'Confirm unsubscribe';
+                confirmBtn.style.background = '#dc2626';
+            }
+            modal.classList.add('show');
+        }
+
+        function closeUnsubModal() {
+            document.getElementById('unsubModal').classList.remove('show');
+        }
+
+        function onUnsubReasonChange() {
+            const sel = document.getElementById('unsubReasonSelect').value;
+            const other = document.getElementById('unsubReasonOther');
+            other.style.display = (sel === 'other') ? '' : 'none';
+            if (sel === 'other') other.focus();
+        }
+
+        async function confirmUnsubAction() {
+            if (!_currentVisitor || !_currentVisitor.email || !_currentUnsubStatus) return;
+            const btn = document.getElementById('unsubConfirmBtn');
+            const email = _currentVisitor.email;
+            btn.disabled = true;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Working…';
+            try {
+                if (_currentUnsubStatus.unsubscribed) {
+                    const res = await leenaFetch('/api/unsubscribes', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email })
+                    });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Re-subscribe failed'); }
+                    const data = await res.json();
+                    showToast(data.message || 'Re-subscribed');
+                } else {
+                    const reasonKey = document.getElementById('unsubReasonSelect').value;
+                    let reason = reasonKey;
+                    if (reasonKey === 'other') {
+                        const free = document.getElementById('unsubReasonOther').value.trim();
+                        if (!free) { showToast('Please enter a reason', 'error'); btn.disabled = false; btn.innerHTML = origHtml; return; }
+                        reason = free;
+                    }
+                    const res = await leenaFetch('/api/unsubscribes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email, reason, expo_id: currentExpoId ? parseInt(currentExpoId, 10) : undefined })
+                    });
+                    if (!res.ok) { const d = await res.json().catch(() => ({})); throw new Error(d.message || 'Unsubscribe failed'); }
+                    const data = await res.json();
+                    showToast(data.message || 'Unsubscribed');
+                }
+                closeUnsubModal();
+                await loadUnsubStatus(email);
+            } catch (err) {
+                if (err.status !== 401 && err.status !== 403) showToast(err.message || 'Action failed', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        }
     </script>
 
     <!-- Visitor Detail Slide Panel -->
