@@ -1,6 +1,6 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: **28 Ağustos 2026, fuar-sonrası gün 1** (önceki: 25 Ağustos)
+> Son güncelleme: **31 Ağustos 2026, fuar-sonrası gün 4** (önceki: 28 Ağustos)
 > Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management + Segments
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
 
@@ -24,8 +24,8 @@
 | 5 | **"Copy URL" per terminal purpose + param unification** | P1 | Button always emits `qrscanner.html?terminalKey=`. Make it purpose-aware **and** unify on `terminal_key` everywhere (`conference-scanner` uses `terminal_key`, `bulk-badge-print` uses `key`). See G22 |
 | 6 | **`delivered_count` snapshot timing** | P1 | All campaign types, not just single-step. See G23 |
 | 7 | **Certificate Templates admin page** | P1 | May's Option 3. Ends the hardcoded `expoId`-switch (v4.0.10) |
-| 8 | **Unsubscribe UI in visitor detail panel** | P1 | Add/remove with reason field. Reuses existing drawer. Ops still psqls for every opt-out. `UNSUBSCRIBE_ANALYSIS_20260826.md` §6.3 |
-| 9 | **Reply-to-unsubscribe automation** | P1 | (a) SendGrid Inbound Parse webhook → auto-insert `email_unsubscribes` with reason `reply_request`, OR (b) documented ops procedure. Bundle with G9 SendGrid bounce webhook |
+| ~~8~~ | ~~**Unsubscribe UI in visitor detail panel**~~ | ~~P1~~ | **DONE 31 Aug** — see CLOSED block below and `docs/sessions/DEPLOY_UNSUB_UI_20260831.md` |
+| 9 | **Reply-to-unsubscribe automation** | P1 | (a) SendGrid Inbound Parse webhook → auto-insert `email_unsubscribes` with reason `reply_request`, OR (b) documented ops procedure. Bundle with G9 SendGrid bounce webhook. **NOTE:** the UI now covers the ops-procedure half — Yaprak can insert with `reply_request` reason via the visitor detail panel — but auto-insert on inbound reply is still open |
 | 10 | **p95 response-time alarm on `/api/email-segments/send`** | **P2** | **New — surfaced by v4.0.11.** 30 s threshold would have alerted on Yaprak's first noshow_any attempt today. Extends naturally to `/api/email-send/bulk` and `/api/reactivation/create-from-excel`. |
 | 11 | **Restore Claude Code's DB inbound-IP as standing item** | **P2** | **New — recurring G4.** WARP/VPN egress-IP drift blocked read-only DB access mid-segment-diagnosis; had to work analytically for 20 min. Standing checklist item at start of any prod-diagnosis session: `psql $RENDER_DATABASE_READONLY_URL -c 'SELECT 1'` — if it fails, refresh whitelist BEFORE touching anything else. |
 | 12 | **Manual-reg form parity with form config** | P2 | Read required fields from `forms.fields`, kill silent `N/A`/`Nigeria` defaults |
@@ -39,6 +39,11 @@
 - `expos.js:628` country stat reads the JSONB key, not the column (437 vs 7,249)
 - `reports.js` bare `CURRENT_DATE` on a UTC session → "today" rolls at 01:00 Lagos
 - Fix `Dear {{chain}}` double greeting in templates #61/#62 (G20)
+
+## ✅ CLOSED — 31 Aug
+
+- [x] **Unsubscribe UI in visitor detail panel** (was P1 #9) — `feat(unsub)` commit `34061f8`. New route file `routes/unsubscribes.js` (GET status / POST idempotent add + campaign_recipients deactivate / DELETE idempotent remove), all JWT-auth + organizer-scoped. Frontend button in visitorlog panel next to Send Email, toggles Unsubscribe (grey) ↔ Re-subscribe (green) with status line. Confirmation modal with reason dropdown (`manual_ops_added` / `reply_request` / other+free text). Ops no longer needs psql for individual opt-outs. Verified end-to-end via trash-expo click-through — see `docs/sessions/DEPLOY_UNSUB_UI_20260831.md`. First real use: Yaprak on `ggem603@gmail.com`.
+- [x] **G4 recurrence noted** — second time in three days, DB access lost mid-verification. P2 #11 (standing DB IP allowlist check at session start) remains the fix.
 
 ## ✅ CLOSED — 28 Aug (segment incident, one arc)
 
