@@ -146,6 +146,18 @@
         .wizard-preview-grid .label { color:var(--text-secondary); font-size:13px; }
         .wizard-preview-grid .value { font-weight:600; font-family:'SF Mono',Monaco,Consolas,monospace; text-align:right; }
         .wizard-preview-grid .label.excl, .wizard-preview-grid .value.excl { color:#94a3b8; text-decoration:line-through; }
+        /* Preview panel readability (Suer 2 Sep — misread struck G1 as "0 registered") */
+        .wizard-preview-headline { padding:14px 16px; background:#f0f9ff; border:1px solid #93c5fd; border-radius:var(--radius-md); margin-bottom:12px; }
+        .wizard-preview-headline .wph-primary { font-size:18px; font-weight:600; color:var(--text-primary); margin-bottom:6px; }
+        .wizard-preview-headline .wph-primary strong { color:var(--primary); font-size:22px; }
+        .wizard-preview-headline .wph-secondary { font-size:13px; color:var(--text-secondary); margin-top:4px; }
+        .wizard-preview-headline .wph-breakdown { color:var(--text-muted); font-size:12px; margin-left:4px; }
+        .wizard-preview-g1-note { padding:10px 14px; background:#fef3c7; border:1px solid #fde68a; border-radius:var(--radius-md); font-size:13px; color:#92400e; margin-bottom:10px; }
+        .wizard-preview-note { padding:8px 14px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md); font-size:12px; color:var(--text-muted); margin-bottom:10px; }
+        .wizard-preview-details { margin-top:12px; }
+        .wizard-preview-details summary { cursor:pointer; font-size:12px; color:var(--text-secondary); font-weight:500; padding:6px 0; user-select:none; list-style-position:outside; }
+        .wizard-preview-details summary:hover { color:var(--primary); }
+        .wizard-preview-details[open] summary { color:var(--primary); }
         .wizard-wave-block { border:1px solid var(--border-color); border-radius:var(--radius-md); padding:14px; margin-bottom:14px; background:#f8fafc; }
         .wizard-wave-block.disabled { opacity:0.45; pointer-events:none; }
         .wizard-wave-block h4 { margin:0 0 10px; font-size:13px; color:var(--text-primary); }
@@ -474,19 +486,41 @@
                         <div id="wPreviewLoading" style="display:none;" class="loading-spinner"><div class="spinner"></div></div>
                         <div id="wPreviewBody" style="display:none;">
                             <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Target: <strong id="wPreviewTargetName"></strong> · Source: <span id="wPreviewSourceKind"></span> (<span id="wPreviewSourceSize"></span> rows)</div>
-                            <div class="wizard-preview-grid">
-                                <div class="label">Total verified emails</div><div class="value" id="wPvTotal">-</div>
-                                <div class="label">Invalid email address</div><div class="value" id="wPvInvalid">-</div>
-                                <div class="label">Duplicates within source</div><div class="value" id="wPvDup">-</div>
-                                <div class="label excl">G1 — already registered on target (excluded)</div><div class="value excl" id="wPvG1">-</div>
-                                <div class="label"><strong>G2 — activate wave, mailable</strong></div><div class="value" id="wPvG2">-</div>
-                                <div class="label" style="padding-left:24px; font-size:12px;">... raw</div><div class="value" style="font-size:12px;" id="wPvG2Raw">-</div>
-                                <div class="label" style="padding-left:24px; font-size:12px;">... existing pending tokens (reused, not minted)</div><div class="value" style="font-size:12px;" id="wPvG2Tok">-</div>
-                                <div class="label" style="padding-left:24px; font-size:12px;">... tokens to mint (new)</div><div class="value" style="font-size:12px;" id="wPvG2Mint">-</div>
-                                <div class="label"><strong>G3 — register wave, mailable</strong></div><div class="value" id="wPvG3">-</div>
-                                <div class="label" style="padding-left:24px; font-size:12px;">... raw</div><div class="value" style="font-size:12px;" id="wPvG3Raw">-</div>
-                                <div class="label" style="padding-left:24px; font-size:12px;">Unsubscribed hits (G2+G3)</div><div class="value" style="font-size:12px;" id="wPvUnsub">-</div>
+
+                            <!-- Headline block: 3 lines, plain English (Suer 2 Sep) -->
+                            <div class="wizard-preview-headline">
+                                <div class="wph-primary">Will receive emails: <strong id="wPvHeadlineReceive">-</strong></div>
+                                <div class="wph-secondary">Excluded: <strong id="wPvHeadlineExcluded">-</strong> <span class="wph-breakdown" id="wPvHeadlineExcludedBreakdown"></span></div>
+                                <div class="wph-secondary">New tokens to be minted: <strong id="wPvHeadlineToMint">-</strong></div>
                             </div>
+
+                            <!-- G1 info row: amber, not struck-through. Only shown when g1 > 0. -->
+                            <div class="wizard-preview-g1-note" id="wPvG1Note" style="display:none;">
+                                <i class="bi bi-info-circle"></i>
+                                <strong><span id="wPvG1">-</span></strong> people are ALREADY registered on <strong><span id="wPvG1TargetName">-</span></strong> — they are excluded and will receive nothing.
+                            </div>
+
+                            <!-- Register wave empty: only shown when g3_mailable = 0. -->
+                            <div class="wizard-preview-note" id="wPvG3NoneNote" style="display:none;">
+                                Register wave: none in this source (everyone is already in our database).
+                            </div>
+
+                            <!-- Collapsible full ledger: retains every existing wPv* ID for backward-compat. -->
+                            <details class="wizard-preview-details">
+                                <summary>Details</summary>
+                                <div class="wizard-preview-grid" style="margin-top:8px;">
+                                    <div class="label">Total verified emails</div><div class="value" id="wPvTotal">-</div>
+                                    <div class="label">Invalid email address</div><div class="value" id="wPvInvalid">-</div>
+                                    <div class="label">Duplicates within source</div><div class="value" id="wPvDup">-</div>
+                                    <div class="label"><strong>G2 — activate wave, mailable</strong></div><div class="value" id="wPvG2">-</div>
+                                    <div class="label" style="padding-left:24px; font-size:12px;">... raw</div><div class="value" style="font-size:12px;" id="wPvG2Raw">-</div>
+                                    <div class="label" style="padding-left:24px; font-size:12px;">... existing pending tokens (reused, not minted)</div><div class="value" style="font-size:12px;" id="wPvG2Tok">-</div>
+                                    <div class="label" style="padding-left:24px; font-size:12px;">... tokens to mint (new)</div><div class="value" style="font-size:12px;" id="wPvG2Mint">-</div>
+                                    <div class="label wPvG3Row"><strong>G3 — register wave, mailable</strong></div><div class="value wPvG3Row" id="wPvG3">-</div>
+                                    <div class="label wPvG3Row" style="padding-left:24px; font-size:12px;">... raw</div><div class="value wPvG3Row" style="font-size:12px;" id="wPvG3Raw">-</div>
+                                    <div class="label" style="padding-left:24px; font-size:12px;">Unsubscribed hits (G2+G3)</div><div class="value" style="font-size:12px;" id="wPvUnsub">-</div>
+                                </div>
+                            </details>
                             <div style="font-size:11px; color:var(--text-muted); margin-top:12px;">Preview cached server-side for 30 minutes. Still zero writes.</div>
                         </div>
                         <div class="wizard-nav">
@@ -1620,6 +1654,48 @@ function wRenderPreview(data) {
     document.getElementById('wPvG3').textContent       = Number(c.g3_register_mailable).toLocaleString();
     document.getElementById('wPvG3Raw').textContent    = Number(c.g3_register_raw).toLocaleString();
     document.getElementById('wPvUnsub').textContent    = Number(c.unsubscribed_hits).toLocaleString();
+
+    // ---- Headline block (Suer 2 Sep — misread struck G1 as "0 registered") ----
+    const willReceive = Number(c.g2_activate_mailable) + Number(c.g3_register_mailable);
+    const g1Count = Number(c.g1_already_registered_target);
+    const excludedTotal = g1Count + Number(c.invalid_email) + Number(c.duplicates_in_list) + Number(c.unsubscribed_hits);
+    document.getElementById('wPvHeadlineReceive').textContent  = willReceive.toLocaleString();
+    document.getElementById('wPvHeadlineExcluded').textContent = excludedTotal.toLocaleString();
+    // Breakdown text — most common causes named, per Suer's spec. Extras shown in Details.
+    const breakdownParts = [
+        g1Count.toLocaleString() + ' already registered',
+        Number(c.invalid_email).toLocaleString() + ' invalid emails'
+    ];
+    if (Number(c.duplicates_in_list) > 0) breakdownParts.push(Number(c.duplicates_in_list).toLocaleString() + ' duplicates');
+    if (Number(c.unsubscribed_hits) > 0) breakdownParts.push(Number(c.unsubscribed_hits).toLocaleString() + ' unsubscribed');
+    document.getElementById('wPvHeadlineExcludedBreakdown').textContent = '(' + breakdownParts.join(' · ') + ')';
+    // tokens_to_mint uses the same fallback as wPvG2Mint above.
+    const toMint = c.tokens_to_mint != null
+        ? Number(c.tokens_to_mint)
+        : Math.max(0, Number(c.g2_activate_mailable) - Number(c.existing_pending_tokens_hit));
+    document.getElementById('wPvHeadlineToMint').textContent = toMint.toLocaleString();
+
+    // ---- G1 amber info row (only when g1 > 0) ----
+    const g1Note = document.getElementById('wPvG1Note');
+    if (g1Count > 0) {
+        document.getElementById('wPvG1TargetName').textContent = data.target_expo_name;
+        g1Note.style.display = 'block';
+    } else {
+        g1Note.style.display = 'none';
+    }
+
+    // ---- Register-wave empty state (only when g3_mailable = 0) ----
+    // Hides the G3 rows in the ledger and surfaces one muted line instead.
+    const g3Mailable = Number(c.g3_register_mailable);
+    const g3NoneNote = document.getElementById('wPvG3NoneNote');
+    const g3Rows = document.getElementsByClassName('wPvG3Row');
+    if (g3Mailable === 0) {
+        g3NoneNote.style.display = 'block';
+        for (const el of g3Rows) el.style.display = 'none';
+    } else {
+        g3NoneNote.style.display = 'none';
+        for (const el of g3Rows) el.style.display = '';
+    }
 }
 
 function wGoToTemplates() {

@@ -42,7 +42,26 @@ function injectUnsubscribeLink(html, token, organizerName) {
   if (!html || !token) return html || '';
 
   const unsubUrl = `${BASE_URL}/api/email-track/unsubscribe/${token}`;
-  const footer = `<div style="text-align:center;margin-top:20px;padding:16px;font-size:11px;color:#888;border-top:1px solid #eee;">If you no longer wish to receive these emails from ${organizerName || 'this organizer'}, <a href="${unsubUrl}" style="color:#888;text-decoration:underline;">unsubscribe here</a>.</div>`;
+  // Physical address on its own lines satisfies US CAN-SPAM §316.5(a)(5)
+  // — required for commercial email. Built into the footer template
+  // directly (not appended via .replace on the sentence) so that any
+  // future change to the wording cannot silently drop the address line.
+  // Campaign-only injection point (email_worker.js:596 inside
+  // enqueueStepEmail; badge/certificate/single sends bypass this helper).
+  //
+  // Morocco entity (Suer 2 Sep) — the fair on this domain's next launch is
+  // SIEMA (Casablanca), and the operating entity for SIEMA is Elan Expo
+  // Maroc SARL. UTF-8 preserved: "2ème" (U+00E8) and "N°" (U+00B0).
+  // ⚠️ HARDCODED — see P2 todo "Footer postal address should come from the
+  // expo's organiser entity, not a constant". Fine for SIEMA (Morocco);
+  // wrong for a subsequent Nigeria/Ghana/Kenya campaign on the same code.
+  const footer = `<div style="text-align:center;margin-top:20px;padding:16px;font-size:11px;color:#888;border-top:1px solid #eee;">`
+    + `If you no longer wish to receive these emails from ${organizerName || 'this organizer'}, `
+    + `<a href="${unsubUrl}" style="color:#888;text-decoration:underline;">unsubscribe here</a>.`
+    + `<br>ELAN EXPO MAROC SARL`
+    + `<br>30, Bd Rahal El Meskini, 2ème Etage, Appart N° 5, Casablanca, Morocco`
+    + `<br>+212 650 219 756`
+    + `</div>`;
 
   if (html.includes('</body>')) {
     return html.replace('</body>', footer + '</body>');
