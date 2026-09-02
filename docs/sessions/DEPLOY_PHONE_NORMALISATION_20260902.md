@@ -461,8 +461,16 @@ end-to-end production execution yet:**
   `tests/test_activate_phone_smoke.js` (new this commit) — creates
   5 tokens, activates row 4 (Turkey local → happy path) + row 3
   (`12ab` → fail-open + trace), asserts stored phone + `custom_fields`
-  on both. **Suer runs TODAY**, before the SIEMA campaign mints real
-  tokens — see todo #0.
+  on both.
+
+  **VERIFIED LIVE 2 Sep — job 36:** row 4 stored `+905321234567` with
+  `custom_fields=NULL`; row 3 stored `''` with
+  `custom_fields={phone_raw:"12ab", phone_reject_reason:"invalid phone
+  number for country NG: \"12ab\"", phone_rejected_at:"2026-09-02T11:
+  04:20.088Z"}`. Cleanup ran (email_queue + tokens + visitors, `0|0|0`).
+  A-1 fail-open + JSONB trace round-trip proven end-to-end before the
+  wizard mints real tokens. Todo #0 CLOSED. This unblocks G1 of the
+  wizard (feat: wizard segment preview + orchestrator skeleton).
 - **Legacy 1-arg `normalizePhone` for `visitors.js:1076` export** —
   unit-tested (Group 5 in `test_phone_normalize.js`, 6/6 pass) but
   never exercised on real prod data since deploy. Live-test deferred

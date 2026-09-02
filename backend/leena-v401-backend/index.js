@@ -113,6 +113,8 @@ let conferenceCleanupRoutes;
 try { conferenceCleanupRoutes = require('./routes/conferenceCleanup'); console.log('✓ Conference Cleanup routes loaded'); } catch (err) { console.error('✗ Failed to load conference cleanup routes:', err.message); }
 let unsubscribeRoutes;
 try { unsubscribeRoutes = require('./routes/unsubscribes'); console.log('✓ Unsubscribe admin routes loaded'); } catch (err) { console.error('✗ Failed to load unsubscribe routes:', err.message); }
+let campaignBuilderRoutes;
+try { campaignBuilderRoutes = require('./routes/campaignBuilder'); console.log('✓ Campaign Wizard (builder) routes loaded'); } catch (err) { console.error('✗ Failed to load campaignBuilder routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -141,6 +143,7 @@ if (conferenceCertRoutes) app.use('/api/conference-certificates', conferenceCert
 if (floorplanRoutes) app.use('/api/floorplan', floorplanRoutes); // ✅ Floor Plan Builder
 if (exhibitorRoutes) app.use('/api/exhibitors', exhibitorRoutes); // ✅ Exhibitor Management
 if (campaignRoutes) app.use('/api/campaigns', campaignRoutes); // ✅ v403 Email Campaigns
+if (campaignBuilderRoutes) app.use('/api/campaigns', campaignBuilderRoutes); // ✅ Campaign Wizard — /reactivation/segment, /reactivation/build, /reactivation/job/:id (mounted on same prefix; Express handles multi-router)
 if (emailTrackingRoutes) app.use('/api/email-track', emailTrackingRoutes); // ✅ v403 Email Tracking (public)
 if (unsubscribeRoutes) app.use('/api/unsubscribes', unsubscribeRoutes); // ✅ Unsubscribe admin UI (todo P1 #9)
 if (conferenceCleanupRoutes) app.use('/api/conference-cleanup', conferenceCleanupRoutes); // ✅ Conference Topic Cleanup

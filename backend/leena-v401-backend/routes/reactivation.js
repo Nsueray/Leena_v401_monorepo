@@ -64,6 +64,12 @@ async function processReactivationChunks(jobId, validRows, ctx) {
   const CHUNK_SIZE = 1000;
   const isExpo = !!source_expo_id;
   let created = 0;
+  // Piece 4 (wizard G1): persist the FIRST per-chunk error into
+  // import_jobs.error_message so post-run diagnostics don't require log
+  // grep. Design §2.4(1). Once set, subsequent chunks' errors go to
+  // console only (first error is usually the interesting one; if others
+  // differ, they surface in the log).
+  let firstChunkErrorPersisted = false;
 
   // Token expiry is anchored to the TARGET FAIR, not a fixed duration.
   // Campaigns can start six months out, so the previous hardcoded
@@ -160,7 +166,19 @@ async function processReactivationChunks(jobId, validRows, ctx) {
         );
       } catch (chunkErr) {
         await client.query('ROLLBACK').catch(() => {});
-        console.error(`[reactivation-job-${jobId}] chunk ${Math.floor(c/CHUNK_SIZE)+1} error:`, chunkErr.message);
+        const chunkNum = Math.floor(c/CHUNK_SIZE)+1;
+        console.error(`[reactivation-job-${jobId}] chunk ${chunkNum} error:`, chunkErr.message);
+        // Piece 4: persist the first chunk error (only) into import_jobs
+        // so it's queryable without log access. IF NULL guard prevents
+        // stomping on a job that already had a hard error set upstream.
+        if (!firstChunkErrorPersisted) {
+          firstChunkErrorPersisted = true;
+          await pool.query(
+            `UPDATE import_jobs SET error_message = $1, updated_at = NOW()
+             WHERE id = $2 AND error_message IS NULL`,
+            [`Chunk ${chunkNum}: ${String(chunkErr.message).slice(0, 500)}`, jobId]
+          ).catch(() => {});
+        }
         await pool.query(
           'UPDATE import_jobs SET failed_count = failed_count + $1, updated_at = NOW() WHERE id = $2',
           [chunk.length, jobId]
