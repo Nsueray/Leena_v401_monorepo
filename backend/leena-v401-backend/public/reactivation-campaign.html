@@ -133,6 +133,31 @@
         .campaign-compact .campaign-status-badge { margin-left:auto; }
         @media (max-width: 768px) { .sidebar { display: none; } .main-wrapper { margin-left: 0; } .stats-grid { grid-template-columns: repeat(2, 1fr); } .form-row { grid-template-columns: 1fr; } }
         .page-info-box{margin:0 0 20px;border:1px solid #d1d5db;border-left:4px solid #3b82f6;border-radius:8px;background:#f0f7ff;padding:16px 20px;position:relative;font-size:14px;line-height:1.6}.info-box-close{position:absolute;top:8px;right:12px;background:none;border:none;font-size:16px;color:#9ca3af;cursor:pointer;padding:4px}.info-box-close:hover{color:#374151}.info-en{color:#1e3a5f;margin-bottom:12px}.info-en strong{color:#1e40af}.info-tr{color:#6b7280;font-size:12px;border-top:1px solid #dbeafe;padding-top:10px;font-style:italic}.info-box-toggle{cursor:pointer;color:#3b82f6;font-size:13px;padding:4px 0;display:none}.info-box-toggle:hover{text-decoration:underline}.page-info-box ul{margin:6px 0;padding-left:20px}.page-info-box li{margin-bottom:4px}
+        /* Wizard (G3) */
+        .wizard-steps { display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; align-items:center; }
+        .wizard-step-badge { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:20px; background:#f1f5f9; color:#64748b; font-size:12px; font-weight:500; }
+        .wizard-step-badge.active { background:var(--primary); color:#fff; }
+        .wizard-step-badge.done { background:var(--success-bg); color:#065f46; }
+        .wizard-step-arrow { color:#cbd5e1; font-size:12px; }
+        .wizard-panel { background:var(--bg-card); border:1px solid var(--border-color); border-radius:var(--radius-md); padding:20px; }
+        .wizard-panel h3 { margin:0 0 12px; font-size:15px; color:var(--text-primary); }
+        .wizard-nav { display:flex; justify-content:space-between; align-items:center; margin-top:20px; padding-top:16px; border-top:1px solid var(--border-color); gap:12px; }
+        .wizard-preview-grid { display:grid; grid-template-columns:1fr auto; gap:6px 24px; margin:8px 0; }
+        .wizard-preview-grid .label { color:var(--text-secondary); font-size:13px; }
+        .wizard-preview-grid .value { font-weight:600; font-family:'SF Mono',Monaco,Consolas,monospace; text-align:right; }
+        .wizard-preview-grid .label.excl, .wizard-preview-grid .value.excl { color:#94a3b8; text-decoration:line-through; }
+        .wizard-wave-block { border:1px solid var(--border-color); border-radius:var(--radius-md); padding:14px; margin-bottom:14px; background:#f8fafc; }
+        .wizard-wave-block.disabled { opacity:0.45; pointer-events:none; }
+        .wizard-wave-block h4 { margin:0 0 10px; font-size:13px; color:var(--text-primary); }
+        .wizard-step-row { display:grid; grid-template-columns:minmax(180px,2fr) 100px 130px auto auto; gap:8px; align-items:center; margin-bottom:6px; }
+        .wizard-step-row select, .wizard-step-row input[type="number"] { padding:6px 10px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:#fff; }
+        .wizard-step-row button { white-space:nowrap; }
+        .wizard-validation { grid-column:1 / -1; padding:6px 10px; border-radius:4px; font-size:12px; margin-top:2px; margin-bottom:6px; }
+        .wizard-validation.ok { background:#d1fae5; color:#065f46; }
+        .wizard-validation.warn { background:#fef3c7; color:#92400e; }
+        .wizard-validation.err { background:#fee2e2; color:#991b1b; }
+        .wizard-validation ul { margin:4px 0 0 18px; padding:0; }
+        .wizard-validation li { font-size:11px; margin-bottom:2px; line-height:1.4; }
     </style>
 </head>
 <body>
@@ -199,6 +224,7 @@
                 <div class="tabs">
                     <div class="tab active" data-tab="create">Create Campaign</div>
                     <div class="tab" data-tab="campaigns">View Campaigns</div>
+                    <div class="tab" data-tab="wizard"><i class="bi bi-magic"></i> Wizard (BETA)</div>
                 </div>
                 
                 <!-- Create Campaign Tab -->
@@ -356,6 +382,142 @@
                     </div>
 
                     <div id="campaignsList"></div>
+                </div>
+
+                <!-- ============================================================ -->
+                <!-- WIZARD Tab (G3) — 5-step flow                                  -->
+                <!-- ============================================================ -->
+                <div id="wizardTab" class="tab-content">
+                    <div class="wizard-steps" id="wizardStepBadges">
+                        <div class="wizard-step-badge active" data-step="1">1. Source</div>
+                        <div class="wizard-step-arrow">→</div>
+                        <div class="wizard-step-badge" data-step="2">2. Preview</div>
+                        <div class="wizard-step-arrow">→</div>
+                        <div class="wizard-step-badge" data-step="3">3. Templates</div>
+                        <div class="wizard-step-arrow">→</div>
+                        <div class="wizard-step-badge" data-step="4">4. Confirm</div>
+                        <div class="wizard-step-arrow">→</div>
+                        <div class="wizard-step-badge" data-step="5">5. Build</div>
+                    </div>
+
+                    <!-- Panel 1: Source + target -->
+                    <div id="wizardPanel1" class="wizard-panel">
+                        <h3>Choose data source and target expo</h3>
+                        <div class="form-group">
+                            <label class="form-label">Data source</label>
+                            <div class="radio-group">
+                                <label class="radio-item"><input type="radio" name="wSourceType" value="excel" checked onchange="wUpdateSourceType()"> <span>Import from Excel</span></label>
+                                <label class="radio-item"><input type="radio" name="wSourceType" value="expo" onchange="wUpdateSourceType()"> <span>Select from existing expo(s)</span></label>
+                            </div>
+                        </div>
+                        <div id="wExcelSection" class="form-group">
+                            <label class="form-label">Upload Excel file (up to 50 MB)</label>
+                            <input type="file" id="wFileInput" accept=".xlsx,.xls,.csv" onchange="wHandleFile(event)">
+                            <div class="form-hint">Required: email. Optional: name, last_name, company, country, job_title, phone.</div>
+                            <div id="wFileInfo" style="display:none; font-size:13px; color:var(--text-secondary); margin-top:6px;"></div>
+                        </div>
+                        <div id="wExpoSection" class="form-group" style="display:none;">
+                            <label class="form-label">Source expo(s)</label>
+                            <select id="wSourceExpos" multiple size="6" class="form-select"></select>
+                            <div class="form-hint">Ctrl / ⌘-click for multiple. Freshest visitor row per email is used across selected expos.</div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Target expo <span style="color:var(--danger)">*</span></label>
+                            <select id="wTargetExpo" class="form-select"><option value="">Select target expo...</option></select>
+                        </div>
+                        <div class="wizard-nav">
+                            <div style="font-size:12px; color:var(--text-muted);">Zero writes until step 5.</div>
+                            <button class="btn btn-primary" onclick="wGoToPreview()">Preview segmentation →</button>
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: Preview -->
+                    <div id="wizardPanel2" class="wizard-panel" style="display:none;">
+                        <h3>Segmentation preview</h3>
+                        <div id="wPreviewLoading" style="display:none;" class="loading-spinner"><div class="spinner"></div></div>
+                        <div id="wPreviewBody" style="display:none;">
+                            <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px;">Target: <strong id="wPreviewTargetName"></strong> · Source: <span id="wPreviewSourceKind"></span> (<span id="wPreviewSourceSize"></span> rows)</div>
+                            <div class="wizard-preview-grid">
+                                <div class="label">Total verified emails</div><div class="value" id="wPvTotal">-</div>
+                                <div class="label">Invalid email address</div><div class="value" id="wPvInvalid">-</div>
+                                <div class="label">Duplicates within source</div><div class="value" id="wPvDup">-</div>
+                                <div class="label excl">G1 — already registered on target (excluded)</div><div class="value excl" id="wPvG1">-</div>
+                                <div class="label"><strong>G2 — activate wave, mailable</strong></div><div class="value" id="wPvG2">-</div>
+                                <div class="label" style="padding-left:24px; font-size:12px;">... raw</div><div class="value" style="font-size:12px;" id="wPvG2Raw">-</div>
+                                <div class="label" style="padding-left:24px; font-size:12px;">... existing pending tokens (reused, not minted)</div><div class="value" style="font-size:12px;" id="wPvG2Tok">-</div>
+                                <div class="label"><strong>G3 — register wave, mailable</strong></div><div class="value" id="wPvG3">-</div>
+                                <div class="label" style="padding-left:24px; font-size:12px;">... raw</div><div class="value" style="font-size:12px;" id="wPvG3Raw">-</div>
+                                <div class="label" style="padding-left:24px; font-size:12px;">Unsubscribed hits (G2+G3)</div><div class="value" style="font-size:12px;" id="wPvUnsub">-</div>
+                            </div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:12px;">Preview cached server-side for 30 minutes. Still zero writes.</div>
+                        </div>
+                        <div class="wizard-nav">
+                            <button class="btn btn-secondary" onclick="wBackTo(1)">← Back to source</button>
+                            <button class="btn btn-primary" id="wPreviewNextBtn" onclick="wGoToTemplates()" disabled>Configure templates →</button>
+                        </div>
+                    </div>
+
+                    <!-- Panel 3: Templates -->
+                    <div id="wizardPanel3" class="wizard-panel" style="display:none;">
+                        <h3>Configure email steps per wave</h3>
+                        <p style="font-size:12px; color:var(--text-muted); margin:0 0 12px;">Each step is validated against its wave. Errors block. Warnings pass. Wave rules: activate-wave templates must wire <code>{{activation_url}}</code> into an <code>&lt;a href&gt;</code>; bare <code>{{first_name}}</code> / <code>{{last_name}}</code> that would render empty are errors; bare <code>{{name}}</code> is a warning (worker falls back to <em>Guest</em>).</p>
+                        <div class="wizard-wave-block" id="wWaveActivate">
+                            <h4><i class="bi bi-envelope-check"></i> ACTIVATE wave <span id="wActivateCount" style="color:var(--text-muted); font-weight:normal;"></span></h4>
+                            <div class="form-group"><label class="form-label" style="font-size:12px;">Campaign name (optional)</label><input type="text" id="wActivateName" class="form-select" placeholder="Auto: {expo} Activate Wave"></div>
+                            <label class="form-label" style="font-size:12px;">Steps</label>
+                            <div id="wActivateSteps"></div>
+                            <button class="btn btn-sm btn-secondary" onclick="wAddStep('activate')" style="margin-top:4px;"><i class="bi bi-plus"></i> Add step</button>
+                        </div>
+                        <div class="wizard-wave-block" id="wWaveRegister">
+                            <h4><i class="bi bi-envelope-plus"></i> REGISTER wave <span id="wRegisterCount" style="color:var(--text-muted); font-weight:normal;"></span></h4>
+                            <div class="form-group"><label class="form-label" style="font-size:12px;">Campaign name (optional)</label><input type="text" id="wRegisterName" class="form-select" placeholder="Auto: {expo} Register Wave"></div>
+                            <label class="form-label" style="font-size:12px;">Steps</label>
+                            <div id="wRegisterSteps"></div>
+                            <button class="btn btn-sm btn-secondary" onclick="wAddStep('register')" style="margin-top:4px;"><i class="bi bi-plus"></i> Add step</button>
+                        </div>
+                        <div class="wizard-nav">
+                            <button class="btn btn-secondary" onclick="wBackTo(2)">← Back to preview</button>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <span id="wStep3Blocker" style="color:var(--danger); font-size:12px; display:none;"></span>
+                                <button class="btn btn-primary" id="wStep3NextBtn" onclick="wGoToConfirm()" disabled>Review & confirm →</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel 4: Confirm -->
+                    <div id="wizardPanel4" class="wizard-panel" style="display:none;">
+                        <h3>Ready to build</h3>
+                        <div id="wConfirmSummary"></div>
+                        <div style="font-size:12px; color:var(--text-muted); margin-top:16px; padding:10px 12px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md);">All campaigns land in <strong>draft</strong>. Nothing sends until you activate them from the <a href="email-campaigns.html">Email Campaigns</a> page.</div>
+                        <div class="wizard-nav">
+                            <button class="btn btn-secondary" onclick="wBackTo(3)">← Back to templates</button>
+                            <button class="btn btn-primary" id="wBuildBtn" onclick="wBuild()"><i class="bi bi-hammer"></i> Build campaigns</button>
+                        </div>
+                    </div>
+
+                    <!-- Panel 5: Build (progress) -->
+                    <div id="wizardPanel5" class="wizard-panel" style="display:none;">
+                        <h3>Building campaigns...</h3>
+                        <div id="wJobStatus" style="font-size:14px; color:var(--text-secondary); margin-bottom:12px;">Starting job...</div>
+                        <div class="campaign-progress-bar"><div class="campaign-progress-fill" id="wJobFill" style="width:0%;"></div></div>
+                        <div class="campaign-progress-caption" style="margin-top:6px;">
+                            <span id="wJobText">0 / 0</span>
+                            <span id="wJobId" style="color:var(--text-muted); font-size:11px;"></span>
+                        </div>
+                        <div id="wJobDone" style="display:none; margin-top:20px; padding:14px; background:var(--success-bg); border-radius:var(--radius-md); color:#065f46;">
+                            <strong>✅ Campaigns built.</strong>
+                            <div id="wJobDoneSummary" style="margin-top:8px; font-size:13px;"></div>
+                            <div style="margin-top:12px;">
+                                <a class="btn btn-primary" href="email-campaigns.html"><i class="bi bi-envelope-paper"></i> Open Email Campaigns page →</a>
+                                <button class="btn btn-secondary" onclick="wReset()" style="margin-left:8px;">Start another</button>
+                            </div>
+                        </div>
+                        <div id="wJobFailed" style="display:none; margin-top:20px; padding:14px; background:#fee2e2; border-radius:var(--radius-md); color:#991b1b;">
+                            <strong>❌ Job failed</strong>
+                            <div id="wJobFailedMsg" style="margin-top:8px; font-size:13px; font-family:'SF Mono',Monaco,Consolas,monospace;"></div>
+                            <div style="margin-top:12px;"><button class="btn btn-secondary" onclick="wReset()">Start over</button></div>
+                        </div>
+                    </div>
                 </div>
             </main>
         </div>
@@ -667,6 +829,10 @@
                         loadCampaigns();
                         const sel = document.getElementById('autoRefreshSelect');
                         if (sel) applyAutoRefresh(parseInt(sel.value, 10));
+                    } else if (tabId === 'wizard') {
+                        // Pause monitor auto-refresh; init wizard dropdowns.
+                        if (autoRefreshIntervalId) { clearInterval(autoRefreshIntervalId); autoRefreshIntervalId = null; }
+                        wInitTab();
                     } else {
                         // Pause auto-refresh when leaving the tab
                         if (autoRefreshIntervalId) {
@@ -719,6 +885,11 @@
                 if (selectedExpoId) {
                     targetSelect.value = selectedExpoId;
                 }
+
+                // Fix (b) — populate wizard dropdowns now that `expos` is loaded.
+                // wInitTab is idempotent (guard: target.options.length <= 1),
+                // so this is safe if the user later clicks the wizard tab.
+                if (typeof wInitTab === 'function') wInitTab();
             } catch (err) {
                 console.error('Error loading expos:', err);
             }
@@ -1220,6 +1391,408 @@
             } catch(e) { showToast('Resend failed: ' + e.message, 'error'); }
         }
     function closeInfoBox(){var b=document.getElementById('pageInfoBox'),t=document.getElementById('infoBoxToggle');b.querySelector('.info-box-content').style.display='none';b.querySelector('.info-box-close').style.display='none';t.style.display='block';b.style.padding='8px 20px';localStorage.setItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''),'closed')}function toggleInfoBox(){var b=document.getElementById('pageInfoBox');b.querySelector('.info-box-content').style.display='';b.querySelector('.info-box-close').style.display='';document.getElementById('infoBoxToggle').style.display='none';b.style.padding='16px 20px';localStorage.removeItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))}function initInfoBox(){var b=document.getElementById('pageInfoBox');if(!b)return;b.style.display='';if(localStorage.getItem('infoBox_'+location.pathname.replace(/[^a-zA-Z]/g,''))==='closed')closeInfoBox()}document.addEventListener('DOMContentLoaded',initInfoBox);
+
+// ============================================================
+// CAMPAIGN WIZARD (G3) — 5-step flow, vanilla JS, no Bootstrap
+// Talks to /api/campaigns/reactivation/segment, /validate-template,
+// /reactivation/build, /reactivation/job/:id (all G1+G2 endpoints).
+// ============================================================
+const wizard = {
+    step: 1, sourceType: 'excel',
+    file: null, sourceExpoIds: [], targetExpoId: null, targetExpoName: null,
+    previewToken: null, previewCounts: null,
+    // Each step: {template_id, delay_hours, condition, validation}
+    activateSteps: [], registerSteps: [],
+    jobId: null, pollTimer: null
+};
+
+function wEscapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+}
+
+function wSetStep(n) {
+    wizard.step = n;
+    document.querySelectorAll('#wizardStepBadges .wizard-step-badge').forEach(b => {
+        const s = parseInt(b.dataset.step, 10);
+        b.classList.remove('active', 'done');
+        if (s === n) b.classList.add('active');
+        else if (s < n) b.classList.add('done');
+    });
+    for (let i = 1; i <= 5; i++) {
+        const p = document.getElementById('wizardPanel' + i);
+        if (p) p.style.display = (i === n ? 'block' : 'none');
+    }
+}
+
+function wBackTo(n) {
+    if (wizard.pollTimer) { clearInterval(wizard.pollTimer); wizard.pollTimer = null; }
+    wSetStep(n);
+}
+
+function wUpdateSourceType() {
+    const t = document.querySelector('input[name="wSourceType"]:checked').value;
+    wizard.sourceType = t;
+    document.getElementById('wExcelSection').style.display = t === 'excel' ? 'block' : 'none';
+    document.getElementById('wExpoSection').style.display = t === 'expo' ? 'block' : 'none';
+}
+
+function wHandleFile(ev) {
+    const f = ev.target.files[0];
+    if (!f) { wizard.file = null; document.getElementById('wFileInfo').style.display = 'none'; return; }
+    if (f.size > 50 * 1024 * 1024) { showAlert('File too large (max 50MB)', 'danger'); ev.target.value = ''; return; }
+    wizard.file = f;
+    const info = document.getElementById('wFileInfo');
+    info.textContent = f.name + '  —  ' + (f.size / 1024 / 1024).toFixed(2) + ' MB';
+    info.style.display = 'block';
+}
+
+function wInitTab() {
+    // Populate target expo + source expo dropdowns from already-loaded `expos`.
+    const target = document.getElementById('wTargetExpo');
+    const src = document.getElementById('wSourceExpos');
+    if (!target || !src) return;
+    if (target.options.length <= 1 && Array.isArray(expos) && expos.length) {
+        for (const e of expos) {
+            const opt = '<option value="' + e.id + '">' + wEscapeHtml(e.name) + '</option>';
+            target.insertAdjacentHTML('beforeend', opt);
+            src.insertAdjacentHTML('beforeend', opt);
+        }
+        const sel = localStorage.getItem('selectedExpoId');
+        if (sel) target.value = sel;
+    }
+}
+
+async function wGoToPreview() {
+    const target = document.getElementById('wTargetExpo').value;
+    if (!target) { showAlert('Pick a target expo', 'danger'); return; }
+    if (wizard.sourceType === 'excel' && !wizard.file) { showAlert('Upload an Excel file', 'danger'); return; }
+    if (wizard.sourceType === 'expo') {
+        const sel = Array.from(document.getElementById('wSourceExpos').selectedOptions).map(o => parseInt(o.value, 10));
+        if (sel.length === 0) { showAlert('Select at least one source expo', 'danger'); return; }
+        wizard.sourceExpoIds = sel;
+    }
+    wizard.targetExpoId = parseInt(target, 10);
+    const t = document.getElementById('wTargetExpo');
+    wizard.targetExpoName = t.options[t.selectedIndex].textContent;
+    wSetStep(2);
+    document.getElementById('wPreviewLoading').style.display = 'flex';
+    document.getElementById('wPreviewBody').style.display = 'none';
+    document.getElementById('wPreviewNextBtn').disabled = true;
+    try {
+        const token = localStorage.getItem('token');
+        let response;
+        if (wizard.sourceType === 'excel') {
+            const fd = new FormData();
+            fd.append('file', wizard.file);
+            fd.append('target_expo_id', wizard.targetExpoId);
+            response = await fetch(API_URL + '/campaigns/reactivation/segment', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token },
+                body: fd
+            });
+        } else {
+            response = await fetch(API_URL + '/campaigns/reactivation/segment', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target_expo_id: wizard.targetExpoId, source_expo_ids: wizard.sourceExpoIds })
+            });
+        }
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Preview failed');
+        wizard.previewToken = data.preview_token;
+        wizard.previewCounts = data.counts;
+        wRenderPreview(data);
+        document.getElementById('wPreviewLoading').style.display = 'none';
+        document.getElementById('wPreviewBody').style.display = 'block';
+        const canProceed = (data.counts.g2_activate_mailable + data.counts.g3_register_mailable) > 0;
+        document.getElementById('wPreviewNextBtn').disabled = !canProceed;
+        if (!canProceed) showAlert('No mailable recipients after segmentation (0 G2 + 0 G3).', 'warning');
+    } catch (err) {
+        document.getElementById('wPreviewLoading').style.display = 'none';
+        showAlert('Preview failed: ' + err.message, 'danger');
+        wSetStep(1);
+    }
+}
+
+function wRenderPreview(data) {
+    document.getElementById('wPreviewTargetName').textContent = data.target_expo_name;
+    document.getElementById('wPreviewSourceKind').textContent = data.source_kind;
+    document.getElementById('wPreviewSourceSize').textContent = Number(data.source_size).toLocaleString();
+    const c = data.counts;
+    document.getElementById('wPvTotal').textContent    = Number(c.total_verified).toLocaleString();
+    document.getElementById('wPvInvalid').textContent  = Number(c.invalid_email).toLocaleString();
+    document.getElementById('wPvDup').textContent      = Number(c.duplicates_in_list).toLocaleString();
+    document.getElementById('wPvG1').textContent       = Number(c.g1_already_registered_target).toLocaleString();
+    document.getElementById('wPvG2').textContent       = Number(c.g2_activate_mailable).toLocaleString();
+    document.getElementById('wPvG2Raw').textContent    = Number(c.g2_activate_raw).toLocaleString();
+    document.getElementById('wPvG2Tok').textContent    = Number(c.existing_pending_tokens_hit).toLocaleString();
+    document.getElementById('wPvG3').textContent       = Number(c.g3_register_mailable).toLocaleString();
+    document.getElementById('wPvG3Raw').textContent    = Number(c.g3_register_raw).toLocaleString();
+    document.getElementById('wPvUnsub').textContent    = Number(c.unsubscribed_hits).toLocaleString();
+}
+
+function wGoToTemplates() {
+    const c = wizard.previewCounts;
+    const actWave = document.getElementById('wWaveActivate');
+    const regWave = document.getElementById('wWaveRegister');
+    if (c.g2_activate_mailable > 0) {
+        actWave.classList.remove('disabled');
+        document.getElementById('wActivateCount').textContent = '(' + Number(c.g2_activate_mailable).toLocaleString() + ' mailable)';
+        if (wizard.activateSteps.length === 0) wAddStep('activate');
+    } else {
+        actWave.classList.add('disabled');
+        wizard.activateSteps = [];
+        document.getElementById('wActivateCount').textContent = '(0 mailable — skip this wave)';
+    }
+    if (c.g3_register_mailable > 0) {
+        regWave.classList.remove('disabled');
+        document.getElementById('wRegisterCount').textContent = '(' + Number(c.g3_register_mailable).toLocaleString() + ' mailable)';
+        if (wizard.registerSteps.length === 0) wAddStep('register');
+    } else {
+        regWave.classList.add('disabled');
+        wizard.registerSteps = [];
+        document.getElementById('wRegisterCount').textContent = '(0 mailable — skip this wave)';
+    }
+    document.getElementById('wActivateName').placeholder = 'Auto: ' + wizard.targetExpoName + ' Activate Wave';
+    document.getElementById('wRegisterName').placeholder = 'Auto: ' + wizard.targetExpoName + ' Register Wave';
+    wSetStep(3);
+    wRecomputeStep3BlockState();
+}
+
+function wAddStep(wave) {
+    const arr = wave === 'activate' ? wizard.activateSteps : wizard.registerSteps;
+    arr.push({ template_id: null, delay_hours: arr.length === 0 ? 0 : 24, condition: 'all', validation: null });
+    wRenderSteps(wave);
+    wRecomputeStep3BlockState();
+}
+
+function wRemoveStep(wave, idx) {
+    const arr = wave === 'activate' ? wizard.activateSteps : wizard.registerSteps;
+    arr.splice(idx, 1);
+    wRenderSteps(wave);
+    wRecomputeStep3BlockState();
+}
+
+function wUpdateStep(wave, idx, field, val) {
+    const arr = wave === 'activate' ? wizard.activateSteps : wizard.registerSteps;
+    arr[idx][field] = val;
+    if (field === 'template_id') arr[idx].validation = null;
+    wRenderSteps(wave);
+    wRecomputeStep3BlockState();
+}
+
+function wRenderSteps(wave) {
+    const arr = wave === 'activate' ? wizard.activateSteps : wizard.registerSteps;
+    const container = document.getElementById(wave === 'activate' ? 'wActivateSteps' : 'wRegisterSteps');
+    if (!container) return;
+    if (arr.length === 0) { container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; margin-bottom:8px;">No steps yet.</div>'; return; }
+    const activeTemplates = (Array.isArray(templates) ? templates : []).filter(t => t.is_active);
+    const conds = ['all','not_opened','opened','not_clicked','clicked','not_registered','registered'];
+    let html = '';
+    for (let i = 0; i < arr.length; i++) {
+        const s = arr[i];
+        const tplOpts = activeTemplates.map(t => '<option value="' + t.id + '"' + (s.template_id === t.id ? ' selected' : '') + '>' + wEscapeHtml(t.name) + '</option>').join('');
+        const condOpts = conds.map(c => '<option value="' + c + '"' + (s.condition === c ? ' selected' : '') + '>' + c + '</option>').join('');
+        html +=
+            '<div class="wizard-step-row">' +
+                '<select onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'template_id\', parseInt(this.value, 10) || null)">' +
+                    '<option value="">Template...</option>' + tplOpts +
+                '</select>' +
+                '<input type="number" min="0" step="1" value="' + s.delay_hours + '" title="Delay hours from previous step" ' +
+                    'onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'delay_hours\', parseInt(this.value, 10) || 0)">' +
+                '<select onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'condition\', this.value)">' + condOpts + '</select>' +
+                '<button class="btn btn-sm btn-secondary" ' + (s.template_id ? '' : 'disabled') + ' onclick="wValidate(\'' + wave + '\', ' + i + ')">Validate</button>' +
+                '<button class="btn btn-sm" style="color:var(--danger);" onclick="wRemoveStep(\'' + wave + '\', ' + i + ')" title="Remove">&times;</button>' +
+                (s.validation ? wRenderValidation(s.validation) : '') +
+            '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function wRenderValidation(v) {
+    if (!v) return '';
+    const cls = !v.ok ? 'err' : (v.warning_count > 0 ? 'warn' : 'ok');
+    const badge = !v.ok
+        ? ('<strong>' + v.error_count + ' error' + (v.error_count===1?'':'s') + '</strong>' + (v.warning_count > 0 ? (', ' + v.warning_count + ' warning' + (v.warning_count===1?'':'s')) : ''))
+        : (v.warning_count > 0 ? (v.warning_count + ' warning' + (v.warning_count===1?'':'s') + ' (does not block)') : '✓ OK');
+    let items = '';
+    if (v.issues && v.issues.length) {
+        items = '<ul>' + v.issues.map(i => '<li><strong>' + wEscapeHtml(i.severity) + '</strong> [' + wEscapeHtml(i.code) + ']: ' + wEscapeHtml(i.message) + '</li>').join('') + '</ul>';
+    }
+    return '<div class="wizard-validation ' + cls + '">' + badge + items + '</div>';
+}
+
+async function wValidate(wave, idx) {
+    const arr = wave === 'activate' ? wizard.activateSteps : wizard.registerSteps;
+    const s = arr[idx];
+    if (!s.template_id) return;
+    try {
+        const res = await fetch(API_URL + '/campaigns/validate-template', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token'), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ template_id: s.template_id, wave: wave })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'validation failed');
+        s.validation = data;
+        wRenderSteps(wave);
+        wRecomputeStep3BlockState();
+    } catch (err) {
+        showAlert('Template validation failed: ' + err.message, 'danger');
+    }
+}
+
+function wRecomputeStep3BlockState() {
+    let blocking = false, unchecked = false, total = 0;
+    for (const arr of [wizard.activateSteps, wizard.registerSteps]) {
+        for (const s of arr) {
+            total++;
+            if (!s.template_id) { unchecked = true; continue; }
+            if (!s.validation) { unchecked = true; continue; }
+            if (!s.validation.ok) blocking = true;
+        }
+    }
+    if (total === 0) unchecked = true;
+    const btn = document.getElementById('wStep3NextBtn');
+    const msg = document.getElementById('wStep3Blocker');
+    btn.disabled = blocking || unchecked;
+    if (blocking) { msg.textContent = '⛔ Fix validation errors above ↑'; msg.style.display = 'inline'; }
+    else if (unchecked) { msg.textContent = 'Validate all steps to continue →'; msg.style.display = 'inline'; }
+    else { msg.style.display = 'none'; }
+}
+
+function wGoToConfirm() {
+    const c = wizard.previewCounts;
+    const templatesArr = Array.isArray(templates) ? templates : [];
+    const namesOf = list => list.filter(s => s.template_id).map((s, i) => {
+        const t = templatesArr.find(x => x.id === s.template_id);
+        return '<li>Step ' + (i+1) + ': <strong>' + wEscapeHtml(t ? t.name : ('template ' + s.template_id)) + '</strong> · +' + s.delay_hours + 'h · condition=' + wEscapeHtml(s.condition) + '</li>';
+    }).join('');
+    let html = '<div style="font-size:13px;">';
+    html += '<p><strong>Target:</strong> ' + wEscapeHtml(wizard.targetExpoName) + '</p>';
+    const actSteps = wizard.activateSteps.filter(s => s.template_id);
+    const regSteps = wizard.registerSteps.filter(s => s.template_id);
+    if (actSteps.length > 0) {
+        html += '<p><strong>ACTIVATE wave</strong> — ' + Number(c.g2_activate_mailable).toLocaleString() + ' recipients, ' + actSteps.length + ' step(s)</p>';
+        html += '<ul>' + namesOf(wizard.activateSteps) + '</ul>';
+    }
+    if (regSteps.length > 0) {
+        html += '<p><strong>REGISTER wave</strong> — ' + Number(c.g3_register_mailable).toLocaleString() + ' recipients, ' + regSteps.length + ' step(s)</p>';
+        html += '<ul>' + namesOf(wizard.registerSteps) + '</ul>';
+    }
+    const totalTok = c.g2_activate_mailable - c.existing_pending_tokens_hit;
+    if (totalTok > 0) html += '<p>Tokens to mint: <strong>' + Number(totalTok).toLocaleString() + '</strong> (existing pending tokens reused: ' + Number(c.existing_pending_tokens_hit).toLocaleString() + ')</p>';
+    html += '</div>';
+    document.getElementById('wConfirmSummary').innerHTML = html;
+    wSetStep(4);
+}
+
+async function wBuild() {
+    const btn = document.getElementById('wBuildBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Building...';
+    try {
+        const packSteps = arr => arr.filter(s => s.template_id).map(s => ({ template_id: s.template_id, delay_hours: s.delay_hours, condition: s.condition }));
+        const body = {
+            preview_token: wizard.previewToken,
+            activate_steps: packSteps(wizard.activateSteps),
+            register_steps: packSteps(wizard.registerSteps)
+        };
+        const actName = document.getElementById('wActivateName').value.trim();
+        const regName = document.getElementById('wRegisterName').value.trim();
+        if (actName) body.activate_name = actName;
+        if (regName) body.register_name = regName;
+        const res = await fetch(API_URL + '/campaigns/reactivation/build', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token'), 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            btn.disabled = false; btn.innerHTML = '<i class="bi bi-hammer"></i> Build campaigns';
+            if (data.blocking_templates) {
+                let msg = 'Template validation blocked the build:\n';
+                data.blocking_templates.forEach(bt => {
+                    msg += '\n' + bt.template_name + ' (' + bt.wave + ' wave):\n' + bt.errors.map(e => '  - ' + e.code + ': ' + e.message).join('\n');
+                });
+                showAlert(msg, 'danger');
+                // Fix (a) — send user back to step 3 so they can see the templates
+                // panel and fix the offending row. Also re-run wRecomputeStep3BlockState
+                // so the disabled/enabled state reflects the current /validate-template cache.
+                wSetStep(3);
+                wRecomputeStep3BlockState();
+            } else {
+                showAlert(data.error || 'Build failed', 'danger');
+            }
+            return;
+        }
+        wizard.jobId = data.job_id;
+        wSetStep(5);
+        document.getElementById('wJobId').textContent = 'job #' + data.job_id;
+        wPollJob(data.g2_activate_planned + data.g3_register_planned);
+    } catch (err) {
+        btn.disabled = false; btn.innerHTML = '<i class="bi bi-hammer"></i> Build campaigns';
+        showAlert('Build request failed: ' + err.message, 'danger');
+    }
+}
+
+function wPollJob(totalPlanned) {
+    const total = Math.max(1, totalPlanned || 1);
+    document.getElementById('wJobText').textContent = '0 / ' + Number(total).toLocaleString();
+    document.getElementById('wJobFill').style.width = '0%';
+    document.getElementById('wJobDone').style.display = 'none';
+    document.getElementById('wJobFailed').style.display = 'none';
+    if (wizard.pollTimer) clearInterval(wizard.pollTimer);
+    wizard.pollTimer = setInterval(async () => {
+        try {
+            const res = await fetch(API_URL + '/campaigns/reactivation/job/' + wizard.jobId, {
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+            });
+            const j = await res.json();
+            const proc = j.processed_count || 0;
+            const tot = j.total_count || total;
+            const pct = Math.min(100, Math.round(proc / tot * 100));
+            document.getElementById('wJobFill').style.width = pct + '%';
+            document.getElementById('wJobText').textContent = Number(proc).toLocaleString() + ' / ' + Number(tot).toLocaleString() + ' (' + pct + '%)';
+            document.getElementById('wJobStatus').textContent = j.status === 'processing' ? 'Building...' : ('Status: ' + j.status);
+            if (j.status === 'completed') {
+                clearInterval(wizard.pollTimer); wizard.pollTimer = null;
+                document.getElementById('wJobFill').classList.add('completed');
+                document.getElementById('wJobFill').style.width = '100%';
+                document.getElementById('wJobDone').style.display = 'block';
+                const activeSteps = wizard.activateSteps.filter(s => s.template_id).length > 0 ? 1 : 0;
+                const regSteps = wizard.registerSteps.filter(s => s.template_id).length > 0 ? 1 : 0;
+                const note = j.error_message ? ('\nNote: ' + j.error_message) : '';
+                document.getElementById('wJobDoneSummary').textContent = 'Processed ' + Number(proc).toLocaleString() + ' recipient row(s) across ' + (activeSteps + regSteps) + ' draft campaign(s).' + note;
+            } else if (j.status === 'failed') {
+                clearInterval(wizard.pollTimer); wizard.pollTimer = null;
+                document.getElementById('wJobFailed').style.display = 'block';
+                document.getElementById('wJobFailedMsg').textContent = j.error_message || 'Unknown failure';
+            }
+        } catch (err) {
+            console.error('[wizard] job poll error:', err);
+        }
+    }, 2000);
+}
+
+function wReset() {
+    if (wizard.pollTimer) { clearInterval(wizard.pollTimer); wizard.pollTimer = null; }
+    wizard.step = 1; wizard.file = null;
+    wizard.previewToken = null; wizard.previewCounts = null;
+    wizard.activateSteps = []; wizard.registerSteps = [];
+    wizard.jobId = null;
+    const f = document.getElementById('wFileInput'); if (f) f.value = '';
+    document.getElementById('wFileInfo').style.display = 'none';
+    document.getElementById('wActivateName').value = '';
+    document.getElementById('wRegisterName').value = '';
+    document.getElementById('wActivateSteps').innerHTML = '';
+    document.getElementById('wRegisterSteps').innerHTML = '';
+    document.getElementById('wJobDone').style.display = 'none';
+    document.getElementById('wJobFailed').style.display = 'none';
+    document.getElementById('wJobFill').classList.remove('completed');
+    document.getElementById('wJobFill').style.width = '0%';
+    wSetStep(1);
+}
     </script>
 </body>
 </html>
