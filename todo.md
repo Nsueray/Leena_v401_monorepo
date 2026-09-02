@@ -44,6 +44,8 @@
 - `expos.js:628` country stat reads the JSONB key, not the column (437 vs 7,249)
 - `reports.js` bare `CURRENT_DATE` on a UTC session → "today" rolls at 01:00 Lagos
 - Fix `Dear {{chain}}` double greeting in templates #61/#62 (G20)
+- **P3 — `DELETE /api/email-templates/:id` returns 500 when the template is referenced by `campaign_steps`** (observed 2 Sep, probe template 70 during wizard smoke). Should be a 409 with a clear message naming the blocking campaigns, not a 500. Fix in `routes/emailTemplates.js` — catch pg `23503` (foreign_key_violation), SELECT campaign IDs + names via `campaign_steps` → `email_campaigns`, return `{success:false, error:'Template in use', blocking_campaigns:[{id,name,status}]}`.
+- **P3 — remove the wizard's `c.tokens_to_mint` fallback in `reactivation-campaign.html`** (2 places: `wRenderPreview` around :1535, `wGoToConfirm` around :1693). The backend and HTML always ship together, so `c.tokens_to_mint` is guaranteed present — the `!= null` guards are dead code. Simplify on the next touch of that file.
 
 ## ✅ CLOSED — 2 Sep
 

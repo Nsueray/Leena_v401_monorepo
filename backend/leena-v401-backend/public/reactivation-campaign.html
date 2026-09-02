@@ -445,6 +445,7 @@
                                 <div class="label"><strong>G2 — activate wave, mailable</strong></div><div class="value" id="wPvG2">-</div>
                                 <div class="label" style="padding-left:24px; font-size:12px;">... raw</div><div class="value" style="font-size:12px;" id="wPvG2Raw">-</div>
                                 <div class="label" style="padding-left:24px; font-size:12px;">... existing pending tokens (reused, not minted)</div><div class="value" style="font-size:12px;" id="wPvG2Tok">-</div>
+                                <div class="label" style="padding-left:24px; font-size:12px;">... tokens to mint (new)</div><div class="value" style="font-size:12px;" id="wPvG2Mint">-</div>
                                 <div class="label"><strong>G3 — register wave, mailable</strong></div><div class="value" id="wPvG3">-</div>
                                 <div class="label" style="padding-left:24px; font-size:12px;">... raw</div><div class="value" style="font-size:12px;" id="wPvG3Raw">-</div>
                                 <div class="label" style="padding-left:24px; font-size:12px;">Unsubscribed hits (G2+G3)</div><div class="value" style="font-size:12px;" id="wPvUnsub">-</div>
@@ -1526,6 +1527,15 @@ function wRenderPreview(data) {
     document.getElementById('wPvG2').textContent       = Number(c.g2_activate_mailable).toLocaleString();
     document.getElementById('wPvG2Raw').textContent    = Number(c.g2_activate_raw).toLocaleString();
     document.getElementById('wPvG2Tok').textContent    = Number(c.existing_pending_tokens_hit).toLocaleString();
+    // tokens_to_mint may be undefined if talking to a pre-fix backend —
+    // fall back to (raw − unsub − reused) client-side. G3 counts unsub_hits
+    // together with G2, so this is an estimate only when tokens_to_mint is
+    // absent; the fixed server always returns the number.
+    document.getElementById('wPvG2Mint').textContent   =
+        Number(c.tokens_to_mint != null
+            ? c.tokens_to_mint
+            : Math.max(0, c.g2_activate_mailable - c.existing_pending_tokens_hit)
+        ).toLocaleString();
     document.getElementById('wPvG3').textContent       = Number(c.g3_register_mailable).toLocaleString();
     document.getElementById('wPvG3Raw').textContent    = Number(c.g3_register_raw).toLocaleString();
     document.getElementById('wPvUnsub').textContent    = Number(c.unsubscribed_hits).toLocaleString();
@@ -1680,8 +1690,18 @@ function wGoToConfirm() {
         html += '<p><strong>REGISTER wave</strong> — ' + Number(c.g3_register_mailable).toLocaleString() + ' recipients, ' + regSteps.length + ' step(s)</p>';
         html += '<ul>' + namesOf(wizard.registerSteps) + '</ul>';
     }
-    const totalTok = c.g2_activate_mailable - c.existing_pending_tokens_hit;
-    if (totalTok > 0) html += '<p>Tokens to mint: <strong>' + Number(totalTok).toLocaleString() + '</strong> (existing pending tokens reused: ' + Number(c.existing_pending_tokens_hit).toLocaleString() + ')</p>';
+    // Prefer server-supplied tokens_to_mint (post-fix backend). Fall back
+    // to (mailable − reused) if the backend hasn't been redeployed yet —
+    // note the fallback slightly over-subtracts when an unsub row also
+    // holds a token (existing_pending_tokens_hit counts hasToken
+    // unconditionally), so it's a lower-bound approximation only.
+    const totalTok = c.tokens_to_mint != null
+        ? c.tokens_to_mint
+        : Math.max(0, c.g2_activate_mailable - c.existing_pending_tokens_hit);
+    if (totalTok > 0 || c.existing_pending_tokens_hit > 0) {
+        html += '<p>Tokens to mint: <strong>' + Number(totalTok).toLocaleString() + '</strong>'
+              + ' (existing pending tokens reused: ' + Number(c.existing_pending_tokens_hit).toLocaleString() + ')</p>';
+    }
     html += '</div>';
     document.getElementById('wConfirmSummary').innerHTML = html;
     wSetStep(4);

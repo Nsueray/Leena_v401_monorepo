@@ -557,6 +557,140 @@ async function main() {
                 assert(row.template_id === probeTemplateId,
                     `campaign_steps row for campaign ${row.campaign_id} points at probe template ${probeTemplateId} (got ${row.template_id})`);
             }
+
+            // ============================================================
+            // STEP 6 — SECOND-RUN mailable + reuse invariant (Suer 2 Sep)
+            // ============================================================
+            // The first build minted 3 tokens on target expo. A second
+            // segment against the same fixture MUST report:
+            //   g2_activate_mailable        = 3   (mailable = raw − unsub;
+            //                                      pending-token rows are STILL mailable)
+            //   existing_pending_tokens_hit = 3   (all 3 hit the token cache)
+            //   tokens_to_mint              = 0   (nothing new to mint)
+            // A second build then MUST:
+            //   g2_activate_planned         = 3   (all 3 reused, none dropped)
+            //   reactivation_tokens for those emails on target = STILL 3
+            //   (no new rows minted; the 3 existing tokens are reused)
+            //
+            // Regression guard: locks in the fix at campaignBuilder.js:472
+            // where the old formula subtracted _hasToken. The old bug
+            // silently disabled the activate wave on any second run —
+            // exactly the state Yaprak will hit if she previews twice
+            // before building.
+            console.log(`\n---- STEP 6: SECOND-RUN mailable + reuse invariant ----`);
+            console.log(`  Recording pre-second-run reactivation_tokens count for target expo ${TEST_EXPO_ID}:`);
+            const preRun2 = await pool.query(
+                `SELECT COUNT(*)::int AS n FROM reactivation_tokens
+                 WHERE target_expo_id = $1 AND email = ANY($2)`,
+                [TEST_EXPO_ID, G2_SEED_EMAILS]
+            );
+            console.log(`    ${preRun2.rows[0].n} tokens exist for G2 seed emails on target`);
+            assert(preRun2.rows[0].n === 3,
+                `pre-second-run baseline: 3 tokens exist for G2 seed emails (got ${preRun2.rows[0].n})`);
+
+            // Second segment run — same fixture, same target.
+            console.log(`\n  Second /segment call (same fixture, same target):`);
+            const seg2Form = new FormData();
+            seg2Form.append('file', new Blob([fullBuffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }), 'wizard_smoke.xlsx');
+            seg2Form.append('target_expo_id', String(TEST_EXPO_ID));
+            const seg2Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/segment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` },
+                body: seg2Form
+            });
+            if (!seg2Res.ok) {
+                const t = await seg2Res.text().catch(() => '');
+                throw new Error(`second /segment HTTP ${seg2Res.status}: ${t.slice(0, 200)}`);
+            }
+            const seg2Body = await seg2Res.json();
+            console.log(`    counts:  ${JSON.stringify(seg2Body.counts)}`);
+            const c2 = seg2Body.counts;
+            assert(c2.g2_activate_mailable === 3,
+                `second-run g2_activate_mailable === 3 — pending-token rows STAY mailable (got ${c2.g2_activate_mailable}) — this is the regression the fix guards against`);
+            assert(c2.existing_pending_tokens_hit === 3,
+                `second-run existing_pending_tokens_hit === 3 (got ${c2.existing_pending_tokens_hit})`);
+            assert(c2.tokens_to_mint === 0,
+                `second-run tokens_to_mint === 0 — no new tokens needed (got ${c2.tokens_to_mint})`);
+
+            // Second build run.
+            const preview2Token = seg2Body.preview_token;
+            const runTag2 = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '-run2';
+            const jobStartTime2 = new Date();
+            const build2Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/build`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    preview_token: preview2Token,
+                    activate_steps: [{ template_id: probeTemplateId, delay_hours: 0, condition: 'all' }],
+                    register_steps: [{ template_id: probeTemplateId, delay_hours: 0, condition: 'all' }],
+                    activate_name: `${CAMPAIGN_TAG} Activate ${runTag2}`,
+                    register_name: `${CAMPAIGN_TAG} Register ${runTag2}`,
+                    skip_template_validation: true
+                })
+            });
+            if (build2Res.status !== 202) {
+                const t = await build2Res.text().catch(() => '');
+                throw new Error(`second /build HTTP ${build2Res.status}: ${t.slice(0, 300)}`);
+            }
+            const built2 = await build2Res.json();
+            console.log(`\n  Second /build 202 body:`);
+            console.log(JSON.stringify(built2, null, 2).split('\n').map(l => '    ' + l).join('\n'));
+
+            console.log(`\n  Second-run build assertions:`);
+            assert(built2.g2_activate_planned === 3,
+                `second-run g2_activate_planned === 3 (got ${built2.g2_activate_planned})`);
+            assert(built2.tokens_to_mint === 0,
+                `second-run tokens_to_mint === 0 (got ${built2.tokens_to_mint})`);
+
+            // Poll second job to completion.
+            const pollDeadline2 = Date.now() + 60000;
+            let job2 = null;
+            while (Date.now() < pollDeadline2) {
+                const jr2 = await fetch(`${BASE_URL}/api/campaigns/reactivation/job/${built2.job_id}`, {
+                    headers: { 'Authorization': `Bearer ${TEST_JWT}` }
+                });
+                job2 = await jr2.json();
+                if (job2.status === 'completed' || job2.status === 'failed') break;
+                await new Promise(r => setTimeout(r, 1500));
+            }
+            console.log(`\n  Second job final: status=${job2 && job2.status}`);
+            assert(job2 && job2.status === 'completed',
+                `second job completed (final=${job2 && job2.status})`);
+
+            // DB — no new tokens were minted (still 3 total for those emails).
+            const postRun2 = await pool.query(
+                `SELECT COUNT(*)::int AS n FROM reactivation_tokens
+                 WHERE target_expo_id = $1 AND email = ANY($2)`,
+                [TEST_EXPO_ID, G2_SEED_EMAILS]
+            );
+            console.log(`    Post-second-run tokens on target for G2 seed emails: ${postRun2.rows[0].n}`);
+            assert(postRun2.rows[0].n === 3,
+                `no new tokens minted by second run — total still 3 (got ${postRun2.rows[0].n}) — token reuse invariant holds`);
+
+            // Second-run campaign recipients count == g2_planned + g3_planned.
+            const camp2Res = await pool.query(
+                `SELECT id, name, status FROM email_campaigns
+                 WHERE expo_id = $1 AND created_at >= $2 AND name LIKE $3
+                 ORDER BY id ASC`,
+                [TEST_EXPO_ID, jobStartTime2.toISOString(), CAMPAIGN_TAG + '%']
+            );
+            console.log(`    Second-run campaigns created: ${camp2Res.rows.length}`);
+            for (const row of camp2Res.rows) {
+                console.log(`      #${row.id}  status='${row.status}'  name='${row.name}'`);
+            }
+            assert(camp2Res.rows.length === 2,
+                `second-run created exactly 2 draft campaigns (got ${camp2Res.rows.length})`);
+            const camp2Ids = camp2Res.rows.map(r => r.id);
+            const rec2Res = await pool.query(
+                `SELECT COUNT(*)::int AS n FROM campaign_recipients
+                 WHERE campaign_id = ANY($1)`,
+                [camp2Ids]
+            );
+            console.log(`    Second-run campaign_recipients total: ${rec2Res.rows[0].n}`);
+            assert(rec2Res.rows[0].n === 5,
+                `second-run campaign_recipients sum === 5 (3 activate + 2 register) (got ${rec2Res.rows[0].n})`);
         } finally {
             await pool.end();
         }

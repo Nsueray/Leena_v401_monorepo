@@ -469,8 +469,20 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
                 if (isUnsub) unsub_hits++;
             }
         }
-        const g2_activate_mailable = g2_list.filter(r => !r._unsub && !r._hasToken).length;
+        // Mailable = raw − unsubscribed. A recipient with a pre-existing
+        // pending token IS mailable — they get the activate email with the
+        // SAME reused token (Phase 3 SELECT reuses existing tokens, see
+        // :742-748 for the "email = ANY(FULL g2 mailable list)" reuse
+        // pattern). Subtracting _hasToken here was a bug caught by Suer's
+        // live click-through on 2 Sep: with 3 pre-existing tokens, /segment
+        // returned g2_activate_mailable=0 while /build's g2_activate_planned
+        // returned 3, silently disabling the activate wave in the UI.
+        // Reserve _hasToken for the mint counter (below + Phase 2 filter :712).
+        const g2_activate_mailable = g2_list.filter(r => !r._unsub).length;
         const g3_register_mailable = g3_list.filter(r => !r._unsub).length;
+        // Tokens the build phase will actually mint. Same formula and same
+        // name as build's :921 response — the two are meant to match.
+        const g2_tokens_to_mint = g2_list.filter(r => !r._unsub && !r._hasToken).length;
 
         // ---- Cache the segmented sets for the orchestrator ------------
         // Payload is small (5 short strings per row) and lives 30 min. For
@@ -507,6 +519,9 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
                 g3_register_mailable,
                 unsubscribed_hits: unsub_hits,
                 existing_pending_tokens_hit: g2_already_has_token,
+                // Same formula and same key name as /build's :921
+                // response — the two are contracted to match.
+                tokens_to_mint: g2_tokens_to_mint,
             },
             preview_expires_at: new Date(Date.now() + PREVIEW_TTL_MS).toISOString(),
             note: 'Zero writes. Preview is cached server-side for 30 minutes. Pass preview_token to POST /reactivation/build to commit.'
