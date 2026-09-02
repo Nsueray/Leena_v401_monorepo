@@ -190,12 +190,38 @@ Send is unaffected. Display only. Flag for Yaprak: "the completed-campaign deliv
 
 ### C.1 DNS (measured from terminal, 2 Sep 16:xx UTC)
 
+> ### ⚠️ CORRECTION — 2 Sep 2026 21:23, superseded by measurement
+>
+> **The SPF finding in this section is wrong. Do not act on it.** See
+> `DEPLOY_FOOTER_AND_WIZARD_POLISH_20260902.md` §3.5 + §5 for the raw
+> `Authentication-Results` header from a real Gmail delivery.
+>
+> **What is actually true:** SPF is evaluated on the **Return-Path**
+> (`smtp.mailfrom`) domain, not the `From:` domain. SendGrid sends bounces
+> from `bounces+…@em5759.leena.app` — a subdomain provisioned for this
+> account, with its own SPF record served by SendGrid's DNS. Live Gmail
+> delivery shows `spf=pass smtp.mailfrom="bounces+…@em5759.leena.app"
+> (50.31.42.23 permitted)`. All three of DKIM, SPF, and DMARC pass on
+> real mail today.
+>
+> **What the audit measured:** `dig +short txt leena.app` — only the apex.
+> An apex SPF record would not have appeared in the SPF check at all (the
+> check follows the Return-Path, not the From). Adding `-all` at the apex
+> before a 21k send would have been risk without benefit.
+>
+> The recommendation *"Adding an SPF `v=spf1 include:sendgrid.net -all`
+> record is a 60-second fix"* below is **withdrawn**. No todo carries it
+> forward.
+
 **SPF (`dig +short txt leena.app`):**
 ```
 (empty — no TXT records at all on leena.app)
 ```
 
 **⚠️ NO SPF RECORD.** DMARC alignment therefore relies **entirely on DKIM alignment**. Any Gmail path that strips DKIM (forwarders, mailing lists) will fail authentication and be dropped by `p=reject`.
+
+> *(Superseded — see correction block above. SPF passes via the
+> Return-Path subdomain `em5759.leena.app`, not the apex.)*
 
 **DMARC (`dig +short txt _dmarc.leena.app`):**
 ```
@@ -392,8 +418,8 @@ From MP26 outcomes recorded in v4.0.7-v4.0.9:
 
 ### Conditional items (do these before send, not blockers)
 
-1. **[Code, 60 sec]** Add `v=spf1 include:sendgrid.net -all` TXT record on `leena.app` — closes DKIM-only auth gap.
-2. **[Code, ~5 min]** Add physical postal address ("Elan Expo, Istanbul, Turkey") to the auto-appended unsub footer at `utils/trackingPixel.js:45`. CAN-SPAM compliance.
+1. ~~**[Code, 60 sec]** Add `v=spf1 include:sendgrid.net -all` TXT record on `leena.app`~~ — **WITHDRAWN.** Superseded by measurement 2 Sep 21:23: SPF passes via the Return-Path subdomain `em5759.leena.app`. Adding an apex record is risk without benefit. See §C.1 correction block and `DEPLOY_FOOTER_AND_WIZARD_POLISH_20260902.md` §5.
+2. ~~**[Code, ~5 min]** Add physical postal address to the auto-appended unsub footer~~ — **DONE.** Deployed 2 Sep as commit `3f4da63`. Address is `ELAN EXPO MAROC SARL / 30, Bd Rahal El Meskini, 2ème Etage, Appart N° 5, Casablanca, Morocco / +212 650 219 756` (Morocco entity, correct for SIEMA). Verified end-to-end via Gmail delivery — see `DEPLOY_FOOTER_AND_WIZARD_POLISH_20260902.md` §3.4. **New P2 todo: address is hardcoded; must move to per-organiser-office lookup before the next non-Morocco campaign.**
 3. **[Ops discipline]** Do NOT reuse templates 47/69/28 for SIEMA campaign steps — create new SIEMA-branded drip templates in `email-templates.html` and run each through the wizard's Validate button before build.
 4. **[Ops discipline]** Watch the SendGrid dashboard alongside our UI on Day 1 of send — until the Event Webhook is wired (post-SIEMA backlog), SendGrid is the only bounce/complaint source of truth.
 5. **[Ops decision]** French form 59: either add `hear_about_event` field, or accept lost attribution for the French sub-segment.
@@ -412,8 +438,8 @@ From MP26 outcomes recorded in v4.0.7-v4.0.9:
 ## F. Click-through script for Suer + Yaprak (once conditional items clear)
 
 **Pre-flight, Suer:**
-1. Add SPF TXT record on `leena.app` via Render DNS or wherever `leena.app` is registered. Verify with `dig +short txt leena.app`.
-2. Edit `utils/trackingPixel.js:45` to include "Elan Expo, Istanbul, Turkey." in the footer. Commit + push.
+1. ~~Add SPF TXT record on `leena.app`~~ — **WITHDRAWN.** SPF passes via `em5759.leena.app` (measured 2 Sep 21:23 from a live Gmail delivery). Do nothing.
+2. ~~Edit `utils/trackingPixel.js:45` to add postal address~~ — **DONE** in commit `3f4da63` (2 Sep). Morocco entity address deployed; verified in Gmail with intact UTF-8. See `DEPLOY_FOOTER_AND_WIZARD_POLISH_20260902.md`.
 
 **Template prep, Yaprak (in `email-templates.html`):**
 1. Create 3 new templates for SIEMA activate wave: `SIEMA26 Activate Step 1`, `Step 2`, `Step 3`. Body must include `<a href="{{activation_url}}">` and use the greeting chain `{{first_name|last_name|company|"Dear Visitor"}}` (not bare `{{first_name}}`). Include "Elan Expo, Istanbul, Turkey" address near the footer.
