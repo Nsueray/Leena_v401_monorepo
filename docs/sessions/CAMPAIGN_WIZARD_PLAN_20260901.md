@@ -40,7 +40,7 @@ Data from live prod (`SELECT … FROM email_campaigns WHERE expo_id=13`):
 | Setup step | Manual on 18 Aug? | UI capability today | path:line |
 |---|---|---|---|
 | Segment 42k emails into G1/G2/G3 | **YES — local Node script** | **NONE** | — |
-| Pre-flight token minting (silent, no email) | YES — `curl POST /api/reactivation/create-from-excel` without `template_id` | **NONE** — reactivation-campaign.html always requires a template | `routes/reactivation.js:26-35` (backend), `public/reactivation-campaign.html` (no silent-mode toggle) |
+| Pre-flight token minting (silent, no email) | YES — `curl POST /api/reactivation/create-from-excel` without `template_id` | **NONE** — reactivation-campaign.html always requires a template | `routes/reactivation.js:133` (`if (emailTemplate)` guards the queue INSERT inside `processReactivationChunks`), `:346` (from-excel template fetch gated on `if (template_id)`), `:380` (from-excel `import_jobs` INSERT with `template_id \|\| null`), `:440` (same gate in the from-expo path). `public/reactivation-campaign.html` has no silent-mode toggle. |
 | Build recipient sheet with `activation_url` | YES — local SQL + xlsx | **NONE** | — |
 | Create the empty campaign object | curl `POST /api/campaigns` | ✅ exists — `openCreateModal()` at `public/email-campaigns.html:379` → `createCampaign()` at `:382` | `routes/campaigns.js:86` |
 | Add step (delay, condition, template) | curl `POST /api/campaigns/:id/steps` | ✅ exists — `addStep()` at `public/email-campaigns.html:553`, modal at `:208` | `routes/campaigns.js:364` |
@@ -397,8 +397,10 @@ choose to override warnings.
    - `email_events` — zero rows for these campaigns.
 5. Cleanup.
 
-**Why it matters:** the silent-mode path (`reactivation.js:26-35`
-`template_id` optional, `processReactivationChunks:68-69` email gating) is
+**Why it matters:** the silent-mode path (`reactivation.js:346` +
+`:440` template fetches gated on `if (template_id)`, `:380` `import_jobs`
+INSERT with `template_id || null`, and `:133` `if (emailTemplate)` guarding
+the per-row email queue INSERT inside `processReactivationChunks`) is
 the load-bearing property of the token-minting flow. A future change that
 "helpfully" required `template_id` or that logged an email in the queue
 "for reference" would silently start emailing 40k people during token

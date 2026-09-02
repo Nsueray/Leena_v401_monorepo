@@ -108,7 +108,7 @@ uploaded, **nothing activated.** Ops presses Activate on each, as tonight.
 
 | capability | endpoint | note |
 |---|---|---|
-| Silent token generation | `POST /api/reactivation/create-from-excel` | `template_id` **optional** (`reactivation.js:26-35`); email queueing gated on it (`processReactivationChunks:68-69`). **Verified silent on expo 17 and used for all 14,077 MP26 tokens.** |
+| Silent token generation | `POST /api/reactivation/create-from-excel` | `template_id` **optional** — guard chain: `reactivation.js:346` (from-excel `if (template_id)` template fetch), `:440` (from-expo equivalent), `:380` (`import_jobs` INSERT with `template_id \|\| null`), and `:133` `if (emailTemplate) {` guarding the per-row email queue INSERT inside `processReactivationChunks`. **Verified silent on expo 17 and used for all 14,077 MP26 tokens.** (Correction 2 Sep 2026 — original doc had `reactivation.js:26-35` + `processReactivationChunks:68-69`, both wrong.) |
 | Token generation from an expo | `POST /api/reactivation/create-from-expo` | same silent property |
 | Async job + polling | `import_jobs` table + `GET /api/reactivation/job/:id` | schema has `job_type, target_expo_id, source_expo_id, template_id, form_id, total_count, processed_count, skipped_count, failed_count, status, error_message, completed_at` |
 | Chunked background processing | `processReactivationChunks` (`reactivation.js:31`) | `CHUNK_SIZE=1000`, per-chunk transaction, `setImmediate` (`:322`, `:432`) |
