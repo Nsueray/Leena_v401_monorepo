@@ -220,7 +220,15 @@ function validateTemplateBody(html, subject, wave) {
                 });
                 continue;
             }
-            if (key === 'first_name' || key === 'name' || key === 'last_name') {
+            // Severity split — measured against email_worker.js:570-572
+            // (Suer, 2 Sep):
+            //   {{first_name}} / {{last_name}} → `|| ''` at :571-572 → render
+            //     EMPTY on miss. This is what breaks at send time. ERROR.
+            //   {{name}} → `recipient.first_name || 'Guest'` at :570 → NEVER
+            //     empty; falls back to the fixed English word "Guest".
+            //     Correct but not localisable and not controllable. WARNING.
+            //   Same distinction applies in the subject line.
+            if (key === 'first_name' || key === 'last_name') {
                 if (where === 'body') {
                     issues.push({
                         code: 'NO_GREETING_CHAIN',
@@ -234,6 +242,12 @@ function validateTemplateBody(html, subject, wave) {
                         message: `${where}: bare {{${key}}} without a |-chain — will render empty in the subject line if the field is missing`
                     });
                 }
+            } else if (key === 'name') {
+                issues.push({
+                    code: 'BARE_NAME_FALLBACK',
+                    severity: 'warning',
+                    message: `${where}: {{name}} renders the fixed English word "Guest" when the first name is empty. Recommended chain: {{first_name|last_name|company|"Dear Visitor"}} — this lets you control the greeting.`
+                });
             }
         }
     };
