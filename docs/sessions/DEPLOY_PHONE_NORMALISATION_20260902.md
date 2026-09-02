@@ -1,0 +1,339 @@
+# Deploy — Phone import normalisation (todo #4)
+
+**Date:** 2 Sep 2026
+**Commits:** `2664ead` (main deploy) · `14d7ff8` (import smoke response-shape fix) · `2a1e48f` (reactivation smoke)
+**Scope:** import path only — `routes/visitors.js:712/788/884` and `routes/reactivation.js:197/669`. Public form + Zoho webhook are Phase 2 (todo item #14).
+
+Closes G21 (Excel numeric-cell phones crashing `.trim()` and killing the whole
+import batch — three agency files lost) with one consistent storage format
+(E.164, `+CCXXXXXXXXX`) at every import write site. Design decisions locked
+in `docs/sessions/IMPORT_PHONE_NORMALISATION_20260901.md`; deploy record follows.
+
+---
+
+## 1. What shipped (in order)
+
+| commit | UTC | files | net |
+|---|---|---|---|
+| `fbd18c8` | 1 Sep 20:36 | `CAMPAIGN_WIZARD_PLAN` + `CAMPAIGN_UI_DESIGN` | +6 / −4 (doc citation fix, Suer catch — `reactivation.js:133/346/380/440`, not the stale `:26-35`) |
+| `50660e6` | 2 Sep 06:19 | `CLAUDE.md` | +4 (DB access quick-reference — two-command block to end G4 rediscovery) |
+| **`2664ead`** | **2 Sep 09:00** | **9 files** | **+666 / −65** |
+| `14d7ff8` | 2 Sep 09:15 | `tests/test_import_phone_smoke.js` | +104 / −68 (response-shape fix — my assertion read `body.results.*`, actual shape is top-level per `routes/visitors.js:1018-1022`) |
+| `2a1e48f` | 2 Sep 09:41 | `tests/test_reactivation_phone_smoke.js` (new) | +248 (silent-mode verification since `reactivation-campaign.html:278` marks template `required`) |
+
+Deploy of `2664ead`: pushed `09:00:06 UTC`, service healthy at `09:03:46 UTC`,
+no visible 502 window in my poll (Render likely did a zero-downtime rollover
+or the window fell between 4-second polls). Endpoint sanity confirmed: `POST
+/api/visitors/import` unauth → 401 in 274 ms; `POST /api/reactivation/activate`
+empty → 400 "Token is required" (new fail-open code path reachable).
+
+## 2. `2664ead` — the main change
+
+### 2.1 `utils/phoneNormalize.js` (154 → 194 lines)
+
+Ambidextrous export:
+- `normalizePhone(raw)` — legacy string return, hardcoded `+234` — **preserved
+  verbatim** for `routes/visitors.js:1076` export CSV column.
+- `normalizePhone(raw, defaultCountry)` — new strict mode returning
+  `{ ok, e164, reason }`.
+
+Wrapper rules (both measured against `libphonenumber-js@1.13.12`, MIT, zero deps):
+
+- **(a) Empty/null → `{ ok:true, e164:'' }` BEFORE calling the library.**
+  `parsePhoneNumberFromString('')` returns undefined; catching it here keeps
+  the current empty-preservation contract at every write site (see report §1b).
+- **(b) Trunk-zero retry.** If the first parse is invalid AND the cleaned
+  input matches `/^\+\d{1,3}0\d{6,}$/`, strip that single 0 and parse once
+  more; accept ONLY if the retry is valid. Never blind. Measured:
+  `+2340801234567 NG` → invalid → retry `+234801234567` valid; `+2120633787189 MA` →
+  library already fixes it, retry never runs; `+2340611234567 NG` (bogus
+  6-prefix) → both first parse AND retry invalid → correctly stays rejected.
+
+Additional preprocessing:
+- `00XXXXXXX…` folded to `+XXXXXXX…` (E.123 international prefix — library
+  doesn't do this on its own).
+- Junk placeholder `/^x+$/i` → `{ ok:true, e164:'' }` (agency Excel column
+  placeholder — 12 rows in prod).
+- Cleaning strips whitespace, dashes, parens, dots, plus observed Unicode
+  direction marks (`U+202A-E`) and non-standard hyphens (`U+2010`, `U+2011`).
+- No default country AND no leading `+` → `{ ok:false, reason:'no country context …' }`.
+
+### 2.2 Wiring — the five sites
+
+| # | site | change |
+|---|---|---|
+| 1 | `routes/visitors.js:641-656` | fetch `expo.country_code` once alongside expo name |
+| 2 | `routes/visitors.js:712-732` (import row loop) | replace unguarded `phone.trim()` with `normalizePhone(rawPhone, expoCountryCode)`; on `!ok` push `{ row, raw_value, message: "Phone rejected: …" }` into `results.errors`, increment `failed_count`, `continue`. G21 crash class closed. |
+| 3 | `routes/visitors.js:788` (existing-visitor UPDATE) | `phone.trim()` → `phone` (already E.164) |
+| 4 | `routes/visitors.js:884` (new-visitor INSERT) | same |
+| 5 | `routes/reactivation.js:181-217` (`prepareExcelRows`) | new `defaultCountry` parameter; new `skipped_invalid_phone` counter; `invalid_phone_samples` capped at 3 with Excel row number. Row REJECTED on `!ok` — matches primary-import policy. |
+| 6 | `routes/reactivation.js:673-708` (`/activate`) | fetch target expo's `country_code`; **FAIL-OPEN** on `!ok` (store `''` phone, log `console.warn`, still create visitor); INSERT widened to 16 columns with `$16::jsonb custom_fields` — NULL on success, `{ phone_raw:'<≤80 chars>', phone_reject_reason, phone_rejected_at }` on failure, atomic with the INSERT (A-1). |
+
+### 2.3 Response shape + UI
+
+- `POST /api/visitors/import` — spreads counters at top level:
+  `{ success, message, success_count, new_count, updated_count, failed_count,
+    skipped_count, email_sent_count, qr_regenerated_count,
+    custom_fields_updated_count, imported, errors }` at
+  `routes/visitors.js:1018-1022`. Consumed by `public/import.html:440-459` unchanged.
+- `POST /api/reactivation/create-from-excel` — 202 response returns
+  `skipped_invalid_phone` + `invalid_phone_samples` at top level; log line at
+  the same handler prints "invalid phone samples (up to 3)".
+- `public/reactivation-campaign.html` — new 4th `results-item` div "Invalid
+  Phone (Skipped) N (rows X, Y, Z)" populated in BOTH the async immediate
+  path (`:865-880`) AND the legacy sync fallback (`:918-928`). **See §5 for
+  the caveat about how this line was verified.**
+
+### 2.4 Tests added — no CI yet, all standalone
+
+| file | what it does |
+|---|---|
+| `tests/test_phone_normalize.js` | 42 unit fixtures across 6 groups (agency shapes / real prod rows from report §3 / empty preservation / rejections / legacy 1-arg / idempotency). `42 passed, 0 failed` locally. |
+| `tests/test_import_phone_smoke.js` | 3-row xlsx-in-memory POST to `/api/visitors/import`. Idempotent (fixed test emails; reruns hit UPDATE path, still count as success). Prints ALL 11 top-level counters BEFORE asserting. Status check BEFORE `.json()` (G25). Cleanup SQL emitted on pass AND fail. Saves `/tmp/phone_smoke.xlsx` for the reactivation test. |
+| `tests/test_reactivation_phone_smoke.js` | POST to `/api/reactivation/create-from-excel` with **no template_id**. 202 assertions + poll `/job/:id` until `completed` + 2 read-only DB checks (2 tokens created; 0 `email_queue` rows since job-start snapshot — silent mode confirmed). |
+
+---
+
+## 3. Verification — 2 Sep, on trash expo 17
+
+Ran three verifications in order. Every assertion measured, not inferred.
+
+### 3.1 Unit — `test_phone_normalize.js`
+
+`42 passed, 0 failed`. Full run:
+```
+=== Agency-file shapes (G21 crash class)         → 5 pass
+=== Real production samples (report §3)          → 17 pass
+=== Empty inputs — preserved as empty            → 6 pass
+=== Rejections — must come back ok:false         → 5 pass
+=== Legacy 1-arg mode                            → 6 pass
+=== Idempotency                                  → 2 pass
+Result: 42 passed, 0 failed
+```
+
+Bonus catch during test-writing: `0654864997` is a valid Moroccan mobile
+prefix but NOT a valid Ghanaian one (Ghana mobiles start with 2/3/5, not 6).
+Library correctly rejects it under GH context — test asserts explicitly so
+future readers see the plan-vs-country distinction is real.
+
+### 3.2 Import smoke — `test_import_phone_smoke.js` (Suer, 09:26 UTC)
+
+```
+Response in 472ms, status=200
+Top-level response counters:
+  success           = true
+  message           = "Import completed: 2 new, 0 updated, 1 failed"
+  success_count     = 2
+  new_count         = 2
+  failed_count      = 1
+  errors            = [ { row: 4, raw_value: "12ab",
+                          message: "Phone rejected: invalid phone number for country NG: \"12ab\"" } ]
+  imported (count)  = 2
+Assertions:
+  ✓ body.success === true
+  ✓ body.success_count === 2 (row1 numeric-cell + row2 xxxxxxxxxx — got 2)
+  ✓ body.failed_count === 1 (row3 "12ab" rejected — got 1)
+  ✓ body.errors[] populated
+  ✓ body.errors[0].message starts with "Phone rejected"
+✅ ALL ASSERTIONS PASSED
+```
+
+**Read-only DB verification of stored values** (Suer requested; assertion
+only checked counts):
+
+| id | email | stored `phone` | `custom_fields` |
+|---|---|---|---|
+| 71312 | `smoke-phone-1@leena-test.local` | **`+2348012345678`** | `{}` |
+| 71313 | `smoke-phone-2@leena-test.local` | **`` (empty)** | `{}` |
+
+Row 1 numeric-cell (`2348012345678`) landed as E.164 `+2348012345678` exactly.
+Row 2 `xxxxxxxxxx` preserved as empty. `custom_fields = {}` on both because
+the import path doesn't hit the A-1 fail-open trace — that fires only on
+`/activate`.
+
+### 3.3 Reactivation silent-mode smoke — `test_reactivation_phone_smoke.js` (Suer, 09:47 UTC)
+
+```
+202 response body:
+  success                = true
+  job_id                 = 33
+  total                  = 3
+  valid                  = 2
+  skipped                = 1
+  skipped_invalid_phone  = 1
+  invalid_phone_samples  = [ { row: 4, email: "smoke-phone-3@leena-test.local",
+                               raw: "12ab",
+                               reason: "invalid phone number for country NG: \"12ab\"" } ]
+Assertions on 202 body:
+  ✓ body.success === true
+  ✓ body.job_id present (33)
+  ✓ body.skipped_invalid_phone === 1
+  ✓ body.invalid_phone_samples[0].row === 4
+  ✓ body.valid === 2
+Polling /api/reactivation/job/33 ...
+  [09:47:27Z] status=completed processed=2/3
+DB assertions (read-only):
+  ✓ exactly 2 reactivation_tokens created for smoke emails
+  ✓ zero email_queue rows on expo 17 since job start — silent mode confirmed
+✅ ALL ASSERTIONS PASSED
+```
+
+Silent-mode guard chain (`reactivation.js:133 if (emailTemplate)` + `:346` +
+`:440` + `:380`) held: no `template_id` in the POST body → zero
+`email_queue` INSERTs — the exact property the wizard needs to rely on.
+
+### 3.4 Real-file verification — `Meta Pixad 3.xlsx` (Suer, `import.html`, 09:32 UTC)
+
+The load-bearing test. This file previously ate a whole import when the same
+agency uploaded it, twice, in Aug. File shape measured by Suer's side: **261
+data rows, phone cell types `int=259 / None=1 / str=1`.**
+
+Same file, same expo pattern, same import handler — before vs after the
+Sep 2026 rewrite:
+
+| Date | Expo | Result | Errors |
+|---|---|---|---|
+| **26 Aug 15:35 UTC** | 13 (Nigeria MP) | **`0 new, 145 errors`** | G21 numeric-cell crashes across the batch — the whole flow choked on `.trim()` |
+| **2 Sep 12:32 IST (09:32 UTC)** | 17 (trash bridge, `country_code='NG'`) | **`259 successful, 2 failed — 259 new · 0 updated`** | `Row 203: Invalid or missing email: "" ` (fully empty row) · `Row 204: Phone rejected: invalid phone number for country NG: "telefon_numarası"` (Turkish header row inside the data — column headers repeated) |
+
+**Whole-batch phone-shape audit on all 259 successful rows** (single query,
+DB-side):
+
+```
+ total | starts_+234 | empty | null_phone | other_non_e164
+-------+-------------+-------+------------+----------------
+   259 |         259 |     0 |          0 |              0
+```
+
+Every phone stored as `+234…` E.164. Zero exceptions. 259 of 259.
+
+**Cost of the file to the batch as a whole:** two rows lost (both genuinely
+unusable — empty email + Turkish header row), zero cost to the other 259.
+Compare 26 Aug where 145 rows were lost to G21 alone.
+
+10-row sample of stored phones:
+
+```
+  id   |       name       |           email            |     phone
+-------+------------------+----------------------------+----------------
+ 71314 | Olusoga          | odebunmiolusoga@gmail.com  | +2349061292408
+ 71315 | Sodiq Olamilekan | omotoshosodiq88@gmail.com  | +2348037643118
+ 71316 | Ibrahim          | ibrahim.gabar@yahoo.com    | +2348155559814
+ 71317 | Otti             | chibuezegodson16@gmail.com | +2347051327737
+ 71318 | Onah             | bishopikenna855@gmail.com  | +2348068544311
+ 71319 | Babatunde        | eddycima@yahoo.com         | +2348060704454
+ 71320 | Huzaifa          | houzeifer@gmail.com        | +2348138948346
+ 71321 | Makinde David    | makjay.mj@gmail.com        | +2347012219945
+ 71322 | Isola            | isolasamsudeen@gmail.com   | +2348132107926
+ 71323 | Mudashiru        | khadijaholujide@gmail.com  | +2348037563375
+```
+
+---
+
+## 4. Batch↔visitors linkage — an audit finding, not a bug
+
+For the 259-row cleanup after verification, we needed to identify which
+visitor rows came from the Pixad batch. Finding: the `visitors` table has
+**NO `import_id` / `batch_id` / `log_id` FK column**. The only link between
+an `import_logs` entry and its resulting rows is a **`created_at` time
+window** correlated to the log's own `created_at`.
+
+For this batch: `import_logs.id=49, created_at=2026-09-02 09:32:13.244914+00`.
+Visitor rows `71314–71572` landed between `09:32:12.685` and `09:32:13.243`
+(a 0.56-second window ending ~1 ms before the log row was written). All
+carry `origin='massimport'` and `source='Nigeria Mega Project Expo 2026
+Visitor Registration - Pixad'` — the belt-and-suspenders predicate combined
+`expo + origin + source + narrow created_at window` for the cleanup.
+
+**Not a blocker; noted as an operational awareness item.** If any future
+work needs to attribute visitors back to their import log, the current
+linkage model requires a time-window join. A proper `import_log_id` column
+on `visitors` would be a schema addition — out of scope here, deferred.
+
+---
+
+## 5. Reactivation UI 4th line — verified by code review only
+
+`reactivation-campaign.html:278` marks the campaign template `<select>` as
+`required`. This makes it structurally impossible to POST
+`/api/reactivation/create-from-excel` without a `template_id` from the UI.
+The wizard closes this gap (todo #1); until then, the silent-mode path is
+backend-only.
+
+The 4th results-line ("Invalid Phone (Skipped) N (rows X, Y, Z)") was added
+in the deploy at both DOM populators:
+
+- Async immediate path — `public/reactivation-campaign.html:875-879`
+  (reads `data.skipped_invalid_phone` + `data.invalid_phone_samples[i].row`)
+- Legacy sync fallback — `:925-929` (reads
+  `data.results.skipped_invalid_phone` + `data.results.invalid_phone_samples[i].row`)
+
+Both were **verified by code review only**. Live UI execution of the line
+requires either a template select (which triggers no-template exercising),
+or a UI change to lift the `required` — neither shipped here. The backend
+smoke `tests/test_reactivation_phone_smoke.js` fully covers the endpoint's
+behaviour that these DOM populators read; the DOM populators themselves are
+one-liner reads from a JSON body whose shape is asserted end-to-end.
+
+---
+
+## 6. Cleanup executed (Suer, Render Shell)
+
+Single BEGIN/COMMIT transaction. Precount `259` → three DELETEs → three
+zero-count verifications → COMMIT. Left in place as advised:
+
+- `import_logs` rows 47 (`smoke_phone.xlsx`), 48 (`phone_smoke.xlsx`),
+  49 (`Meta Pixad 3.xlsx` — log says `259 new`, visitors gone — accurate
+  archaeology, not a bug).
+- `import_jobs` row 33 (silent-mode smoke, `status='completed'`,
+  `processed=2, failed=0` — historical audit).
+
+`import_jobs` has no FK from any other table (`\d import_jobs` "Referenced by"
+is empty) — deleting the tokens does not orphan anything downstream.
+
+---
+
+## 7. Config drift
+
+None. This deploy touched:
+- `package.json` + `package-lock.json` (add `libphonenumber-js@1.13.12`)
+- `utils/phoneNormalize.js` (rewritten)
+- `routes/visitors.js` (import block only)
+- `routes/reactivation.js` (`prepareExcelRows` + `/activate`)
+- `public/reactivation-campaign.html` (4th results-item + populators)
+- `todo.md` (updates only)
+
+Not touched: `index.js`, middleware, DB pool config, other routes,
+`utils/email.js`, `email_worker.js`. No new environment variables, no
+schema change (`custom_fields` was already a nullable JSONB column on
+`visitors`), no migration file. Fully idempotent — rerunning the wire diff
+against the pre-deploy code would produce the same result.
+
+---
+
+## 8. Known follow-ups from this deploy
+
+- **todo #14 (P2)** — extend the normaliser to `routes/visitors.js:215`
+  (public form submit) + `routes/webhook.js:57` (Zoho). Deferred 1 week
+  minimum — see item note.
+- **todo #16 (P3, NEW)** — swap check order in the import loop
+  (`routes/visitors.js:712-732`). Currently phone runs before email; row 204
+  in the Pixad test was reported as `Phone rejected: …` when its email was
+  also blank. Email is the primary key and should be flagged first.
+  Cosmetic — the row still fails either way — but the ops-facing message is
+  misleading.
+- **todo #13 count corrected 840 → 5,148** during Phase 1 measurement
+  (`IMPORT_PHONE_NORMALISATION_20260901.md §2`). Dry-run SQL for that
+  cleanup exists in the same doc §7; **not run** — Suer's call.
+
+---
+
+## 9. Summary
+
+- Design (`IMPORT_PHONE_NORMALISATION_20260901.md`) → Step 2 code
+  (`2664ead`) → smoke fix (`14d7ff8`) → reactivation smoke (`2a1e48f`)
+  → three verifications pass → cleanup runs clean → close.
+- **G21 closed. 259 real agency rows imported vs 145 lost on the same file
+  eight days earlier. Zero exceptions in the E.164 shape audit.**
+- Public form + Zoho webhook explicitly deferred as Phase 2 — one-week
+  soak on the import deploy first.
