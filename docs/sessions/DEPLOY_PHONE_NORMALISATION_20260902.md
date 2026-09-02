@@ -337,3 +337,153 @@ against the pre-deploy code would produce the same result.
   eight days earlier. Zero exceptions in the E.164 shape audit.**
 - Public form + Zoho webhook explicitly deferred as Phase 2 — one-week
   soak on the import deploy first.
+
+---
+
+## Addendum — Decision B, 2 Sep 2026
+
+Landed the same day (commit `9d868e3`) after the first-pass verification
+proved the pipeline works. Two refinements on top of `2664ead`. **Todo #4
+remains CLOSED — this is a scope refinement of the shipped work, not a
+reopen.** For sections 1–9 above, treat any behaviour statement about
+"row rejection on invalid phone" as superseded by §B-1 below.
+
+### B-1. What changed — drop-phone-not-row + warnings + amber UI
+
+The 2 Sep first pass rejected a whole row when its phone was unfixable
+(pushed to `results.errors`, incremented `failed_count`, `continue`). That
+was overzealous — the phone is optional metadata on almost every import
+Leena runs. Decision B: **unfixable phone now drops the phone (stored as
+`''`), row still imports.**
+
+| Path | Before Decision B | After Decision B |
+|---|---|---|
+| `routes/visitors.js` import row loop | Row → `errors[]`, `failed_count++`, `continue` | Row → `warnings[]`, `warning_count++`, `phone=''`, row IMPORTS (`success_count++`) |
+| `routes/reactivation.js` `prepareExcelRows` | Row skipped (`skipped_invalid_phone`) | Token created with `phone=''` (`phone_dropped++`, `phone_dropped_samples[]`) |
+| `routes/reactivation.js` `/activate` | Already fail-open (A-1 trace) | Behaviour unchanged; resolver order added |
+
+**UI:** `import.html` renders warnings in an amber `.result-item` right
+after the errors block, same `Row N: message` pattern (`import.html:452-453`
+style). `reactivation-campaign.html`'s 4th line is renamed
+**"Phone dropped"** and both populators (async immediate + legacy sync
+fallback) read the new field names.
+
+### B-2. Country resolution order for a local number
+
+For a phone that does NOT start with `+` or `00`:
+
+1. **Row's own `country` column** — 2-letter ISO code accepted directly
+   (case-insensitive), otherwise case-insensitive + trimmed match against
+   `core_countries.name` (230 rows verified in prod: Turkey→TR, Nigeria→NG,
+   Morocco→MA, Ghana→GH, Kenya→KE all resolve directly).
+2. **`expos.country_code`** — the fallback used pre-Decision-B for every row.
+3. **Null** → normaliser rejects with `"no country context"`.
+
+A leading `+` or `00` always wins upstream — the library ignores the
+default country when the input carries one. `utils/countryResolve.js`
+(new, +92 lines) loads the country map once per Node process (module-scope
+cache) and returns `{code, matched_by, unmatched_raw?}` per row. Unmatched
+non-blank strings are aggregated across the batch and surfaced as the
+top-5 in `unmatched_countries_top5` on both the import response and the
+reactivation 202 response. This is the ops-alias-learning surface —
+first candidate we already know: `MAROC` appears **22× in prod
+visitors.country** but not in `core_countries.name`.
+
+The same resolution order applies inside `/activate` using
+`tokenData.country` as (1).
+
+### B-3. Verification on production, 2 Sep (Suer, trash expo 17)
+
+Deploy `9d868e3` — zero-downtime rollover, no 502 window across 40 polls,
+both write endpoints returning 401 in <320 ms (module load clean).
+
+**Reactivation smoke, job 35** (rebuilt 5-row xlsx):
+- `total=5, valid=5, skipped=0, phone_dropped=1`
+- `phone_dropped_samples=[{row:4, email:smoke-phone-3, raw:"12ab"}]`
+- `unmatched_countries_top5=[]`
+- Job completed 5/5, **5 reactivation_tokens** created, **0
+  `email_queue` rows** since job start.
+- **ALL ASSERTIONS PASSED.**
+
+**Import smoke** (5 rows):
+- `success_count=5, new_count=5, failed_count=0, warning_count=1`
+- `errors=[]`
+- `warnings=[{row:4, raw_value:"12ab", message:"phone dropped: invalid
+  phone number for country NG: \"12ab\""}]`
+- `unmatched_countries_top5=[]`
+- **ALL ASSERTIONS PASSED.**
+
+**Stored phones verified by Suer directly in psql** (before cleanup):
+
+```
+  smoke-phone-1  +2348012345678   country=(blank)   ← numeric cell, expo NG
+  smoke-phone-2  (empty)                            ← xxxxxxxxxx
+  smoke-phone-3  (empty)                            ← 12ab dropped, row imported
+  smoke-phone-4  +905321234567    country=Turkey    ← row country won over expo
+  smoke-phone-5  +212661234567    country=Turkey    ← '+' won over row country
+```
+
+Cleanup ran: DELETE 5 tokens, DELETE 5 visitors, verification `0 | 0`.
+
+### B-4. Two test bugs surfaced and fixed
+
+1. **Stale `/tmp/phone_smoke.xlsx`.** An earlier reactivation-smoke run
+   (job 34, before job 35) reused the leftover 3-row xlsx from a prior
+   era on disk. `valid=3, phone_dropped=1` — server behaviour was
+   correct, but the assertion `valid === 5` failed. Fix: **both smoke
+   tests now always rebuild the xlsx**, never `fs.existsSync`-gate on
+   a shared temp file. See G28.
+
+2. **`RENDER_DATABASE_READONLY_URL not set` in import smoke.** The
+   import smoke's stored-phone DB verification silently skipped
+   because it did not `require('dotenv').config(...)`. Only the
+   reactivation smoke had it. Suer had to verify the 5 stored phones
+   in psql by hand. Fix: **both smoke tests now load dotenv
+   file-relative** at the top: `require('dotenv').config({ path:
+   path.join(__dirname, '..', '.env') })`. See G29.
+
+### B-5. Run-order rule (see G27)
+
+**Reactivation smoke FIRST, then import smoke.** The import creates
+visitors on expo 17; those visitors then make the reactivation smoke's
+rows skip as `already_registered` and assertion `valid === 5` fails.
+Both smoke files now state this in their header comment.
+
+### B-6. Still un-live-tested — activate smoke runs TODAY
+
+**Two code paths from `9d868e3` have unit-test coverage but no
+end-to-end production execution yet:**
+
+- **`/activate` fail-open + A-1 `custom_fields` trace** — the JSONB
+  blob `{phone_raw, phone_reject_reason, phone_rejected_at}` writing
+  atomically with the widened 16-column INSERT
+  (`routes/reactivation.js:711-731`). Covered by
+  `tests/test_activate_phone_smoke.js` (new this commit) — creates
+  5 tokens, activates row 4 (Turkey local → happy path) + row 3
+  (`12ab` → fail-open + trace), asserts stored phone + `custom_fields`
+  on both. **Suer runs TODAY**, before the SIEMA campaign mints real
+  tokens — see todo #0.
+- **Legacy 1-arg `normalizePhone` for `visitors.js:1076` export** —
+  unit-tested (Group 5 in `test_phone_normalize.js`, 6/6 pass) but
+  never exercised on real prod data since deploy. Live-test deferred
+  to whichever future run exports the CSV.
+
+### B-7. New Gotchas produced
+
+- **G27** — smoke test run order on trash expo 17
+- **G28** — smoke test that reuses a file on disk must verify shape first
+- **G29** — smoke test that reads the DB must load dotenv itself, path-relative
+
+### B-8. Follow-up committed elsewhere
+
+- **`todo #0`** (new, P1 BLOCKER): run `test_activate_phone_smoke.js`
+  today. Before the wizard.
+- **`todo #18`** (new, P3): `results.warnings` is spread into the
+  response body but not written to `import_logs.errors` — History tab
+  won't show phone-drop warnings for past imports. Small change,
+  deferred. (Noted 2 Sep, not urgent.)
+
+Deploy chain for this addendum: `9d868e3` (Decision B main deploy) +
+this doc + the two smoke fixes + `test_activate_phone_smoke.js`. Single
+commit `test(phone): dotenv + no stale xlsx + activate smoke; docs:
+decision B addendum`.

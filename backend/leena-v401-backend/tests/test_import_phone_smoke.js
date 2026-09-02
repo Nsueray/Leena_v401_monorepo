@@ -1,9 +1,19 @@
 /**
  * Regression test — /api/visitors/import phone normalisation
  *
+ * ⚠️ RUN ORDER: reactivation smoke FIRST, then this import smoke. The import
+ * creates visitors on expo 17; those visitors then make the reactivation
+ * smoke's rows skip as `already_registered`. Reversed order breaks the
+ * reactivation assertion `valid === 5`.
+ *
+ * ⚠️ DB verification requires WARP off + your local IP on Render's
+ * PostgreSQL Inbound IP Rules. Test loads `backend/leena-v401-backend/.env`
+ * automatically (path resolved relative to this file, not cwd).
+ *
  * Origin: IMPORT_PHONE_NORMALISATION_20260901.md (Sep 2026 rewrite).
  * Written after commit 2664ead shipped libphonenumber-js-backed normalisation
- * for the primary import path. Ensures three known-failing shapes behave as
+ * for the primary import path, refined by 9d868e3 (Decision B, 2 Sep).
+ * Ensures three known-failing shapes + two country-fallback cases behave as
  * designed:
  *
  *   Row 1: numeric Excel cell (JS number 2348012345678, NG) → +2348012345678
@@ -39,6 +49,10 @@
 const XLSX = require('xlsx');
 const fs = require('fs');
 const path = require('path');
+// Load backend/.env relative to THIS file (not cwd) so
+// RENDER_DATABASE_READONLY_URL is available for the stored-phone DB
+// verification regardless of where `node` is invoked from.
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const BASE_URL = process.env.TEST_BASE_URL || 'https://leena.app';
 const TEST_JWT = process.env.TEST_JWT;
@@ -109,16 +123,16 @@ async function main() {
           email: TEST_EMAILS.row5, company: 'Test Co', country: 'Turkey',
           phone: '+212 661 23 45 67' }                  // '+' wins → +212, Turkey ignored
     ];
+    // ALWAYS rebuild — a stale /tmp/phone_smoke.xlsx from a 3-row era caused
+    // reactivation job 34 to post the old shape on 2 Sep. Cheap to rebuild.
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
-    // Save to /tmp so the reactivation upload step of Step-3 verification can
-    // reuse the exact same bytes without rebuilding.
     const tmpPath = '/tmp/phone_smoke.xlsx';
     fs.writeFileSync(tmpPath, buffer);
-    console.log(`  Built ${buffer.length}-byte xlsx, saved to ${tmpPath}\n`);
+    console.log(`  Rebuilt ${buffer.length}-byte xlsx at ${tmpPath} (always fresh, never reused)\n`);
 
     // POST as multipart/form-data.
     const form = new FormData();

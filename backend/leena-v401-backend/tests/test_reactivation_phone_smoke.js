@@ -2,8 +2,17 @@
  * Regression test — /api/reactivation/create-from-excel phone normalisation
  *                   (SILENT mode, no template_id)
  *
+ * ⚠️ RUN ORDER: this test FIRST, then test_import_phone_smoke.js. The
+ * import creates visitors on expo 17; those visitors then make this
+ * reactivation smoke skip rows as `already_registered`. Reversed order
+ * breaks the assertion `valid === 5`.
+ *
+ * ⚠️ DB verification requires WARP off + your local IP on Render's
+ * PostgreSQL Inbound IP Rules. Test loads `backend/leena-v401-backend/.env`
+ * automatically (path resolved relative to this file, not cwd).
+ *
  * Origin: IMPORT_PHONE_NORMALISATION_20260901.md Sep 2026 rewrite +
- *         2 Sep 2026 verification pass.
+ *         2 Sep 2026 verification pass + 9d868e3 Decision B refinement.
  *
  * Motivation: reactivation-campaign.html:278 marks the template <select>
  * `required`, so the UI cannot exercise no-template silent mode — the
@@ -54,7 +63,9 @@
 const { Pool } = require('pg');
 const XLSX = require('xlsx');
 const fs = require('fs');
-require('dotenv').config();
+const path = require('path');
+// Load backend/.env relative to THIS file (not cwd).
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const BASE_URL = process.env.TEST_BASE_URL || 'https://leena.app';
 const TEST_JWT = process.env.TEST_JWT;
@@ -99,37 +110,33 @@ async function main() {
     console.log(`  Expo:   ${TEST_EXPO_ID} (must be country_code='NG')`);
     console.log(`  Mode:   silent — NO template_id (guard chain: reactivation.js:133/346/380/440)\n`);
 
-    // Reuse /tmp/phone_smoke.xlsx if the import smoke already built it; else rebuild.
+    // ALWAYS rebuild — never reuse a stale /tmp file. Job 34 on 2 Sep read
+    // a leftover 3-row xlsx and posted the wrong shape; server was correct
+    // but the assertion failed. Rebuilding is cheap; disk trust is not.
+    const rows = [
+        { name: 'SmokeRow1', last_name: 'Numeric',
+          email: TEST_EMAILS.row1, company: 'Test Co',
+          phone: 2348012345678 },                    // JS NUMBER (G21 shape)
+        { name: 'SmokeRow2', last_name: 'Placeholder',
+          email: TEST_EMAILS.row2, company: 'Test Co',
+          phone: 'xxxxxxxxxx' },
+        { name: 'SmokeRow3', last_name: 'Invalid',
+          email: TEST_EMAILS.row3, company: 'Test Co',
+          phone: '12ab' },                           // Decision B: dropped, not skipped
+        { name: 'SmokeRow4', last_name: 'Turkish',
+          email: TEST_EMAILS.row4, company: 'Test Co', country: 'Turkey',
+          phone: '0532 123 45 67' },                 // row-country resolver → TR
+        { name: 'SmokeRow5', last_name: 'PlusWins',
+          email: TEST_EMAILS.row5, company: 'Test Co', country: 'Turkey',
+          phone: '+212 661 23 45 67' }               // '+' wins → +212
+    ];
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
     const tmpPath = '/tmp/phone_smoke.xlsx';
-    let buffer;
-    if (fs.existsSync(tmpPath)) {
-        buffer = fs.readFileSync(tmpPath);
-        console.log(`  Using existing ${tmpPath} (${buffer.length} bytes)`);
-    } else {
-        const rows = [
-            { name: 'SmokeRow1', last_name: 'Numeric',
-              email: TEST_EMAILS.row1, company: 'Test Co',
-              phone: 2348012345678 },                    // JS NUMBER (G21 shape)
-            { name: 'SmokeRow2', last_name: 'Placeholder',
-              email: TEST_EMAILS.row2, company: 'Test Co',
-              phone: 'xxxxxxxxxx' },
-            { name: 'SmokeRow3', last_name: 'Invalid',
-              email: TEST_EMAILS.row3, company: 'Test Co',
-              phone: '12ab' },                           // Decision B: dropped, not skipped
-            { name: 'SmokeRow4', last_name: 'Turkish',
-              email: TEST_EMAILS.row4, company: 'Test Co', country: 'Turkey',
-              phone: '0532 123 45 67' },                 // row-country resolver → TR
-            { name: 'SmokeRow5', last_name: 'PlusWins',
-              email: TEST_EMAILS.row5, company: 'Test Co', country: 'Turkey',
-              phone: '+212 661 23 45 67' }               // '+' wins → +212
-        ];
-        const ws = XLSX.utils.json_to_sheet(rows);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-        buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-        fs.writeFileSync(tmpPath, buffer);
-        console.log(`  Rebuilt ${buffer.length}-byte xlsx at ${tmpPath}`);
-    }
+    fs.writeFileSync(tmpPath, buffer);
+    console.log(`  Rebuilt ${buffer.length}-byte xlsx at ${tmpPath} (always fresh, never reused)`);
 
     // Snapshot BEFORE the request — used by the "0 new email_queue rows" DB check.
     const jobStartTime = new Date();
