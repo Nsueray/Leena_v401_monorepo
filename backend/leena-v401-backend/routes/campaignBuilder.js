@@ -26,6 +26,12 @@ const XLSX = require('xlsx');
 const crypto = require('crypto');
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
+// G2: reuse the same token-minting chunk processor as the reactivation route.
+// Called with emailTemplate=null to enforce silent mode (verified live 2 Sep
+// on jobs 35/36: tokens created, 0 email_queue rows).
+const { processReactivationChunks, generateToken } = require('./reactivation');
+// Valid step conditions — mirrors campaigns.js:47 exactly.
+const VALID_CONDITIONS = ['all', 'not_opened', 'opened', 'not_clicked', 'clicked', 'not_registered', 'registered'];
 
 // Match reactivation.js:20 file-size limit (50 MB — 70k-row-agency headroom).
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -74,6 +80,205 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function normEmail(e) {
     return String(e == null ? '' : e).toLowerCase().trim();
+}
+
+// ============================================================
+// TRUNCATION HELPER (Piece 5) — reactivation_tokens columns are
+// VARCHAR(255). One 303-char value can roll back a 1000-row chunk
+// (per CAMPAIGN_UI_DESIGN_20260819.md §2.4). Truncate at 255 with a
+// counter surfaced in the job's console log + result summary.
+// ============================================================
+const VARCHAR_LIMIT = 255;
+function truncate255(s) {
+    const str = s == null ? '' : String(s);
+    return str.length > VARCHAR_LIMIT ? str.slice(0, VARCHAR_LIMIT) : str;
+}
+function truncateRowFields(row) {
+    let truncated = 0;
+    const t = (v) => {
+        const s = v == null ? '' : String(v);
+        if (s.length > VARCHAR_LIMIT) { truncated++; return s.slice(0, VARCHAR_LIMIT); }
+        return s;
+    };
+    const out = {
+        email: t(row.email),
+        name: t(row.name),
+        last_name: t(row.last_name),
+        company: t(row.company),
+        country: t(row.country),
+        job_title: t(row.job_title),
+        phone: t(row.phone || '')
+    };
+    return { row: out, truncated };
+}
+
+// ============================================================
+// TEMPLATE VALIDATION (Piece 6) — 5 checks per plan §3.4.
+//
+//   NO_GREETING_CHAIN         ERROR — bare {{first_name}}/{{name}}/{{last_name}}
+//                                     not wrapped in a `|` chain in the body
+//   BARE_FIRST_NAME_IN_SUBJECT ERROR — same, in the subject
+//   UNRESOLVED_TOKEN          ERROR — {{token}} not in the wizard's known set
+//                                     (see KNOWN_TOKENS below)
+//   NO_CTA                    WARNING — no <a href="..."> with a real target
+//   DEAD_UNSUB_URL            WARNING — literal {{unsubscribe_url}} in body
+//                                       (unfillable in campaign mode — G7)
+//
+// A campaign-recipient row's `extra_fields` JSONB can carry any key; the
+// wizard puts `activation_url` there for G2 tokens. Both `first_name` +
+// `last_name` are proper columns on `campaign_recipients`. `{{name}}` is
+// the frontend alias for `first_name` (documented in
+// REACTIVATION_SEGMENTATION_SQL_20260818.md:213-216).
+// ============================================================
+// KNOWN_TOKENS derived from the actual resolvers, not invented:
+//
+//   Campaign Mode 2 render (email_worker.js:569-577) provides the fixed set:
+//       name, first_name, last_name, email, company, date
+//   Plus `...extraFields` at :576 — anything the wizard puts into
+//   campaign_recipients.extra_fields becomes a valid token at send time.
+//   The wizard populates: activation_url, country, job_title, expo_name
+//   (see Phase 3/4 build).
+//
+// NOT included:
+//   - unsubscribe_url  — unfillable in campaign mode (G7); flagged separately
+//                        as DEAD_UNSUB_URL warning.
+//   - qr_code, badge_url — those live in badge/confirmation Mode 2 (email_worker.js
+//                        :208-223), NOT in campaign mail. Using them in a
+//                        campaign template renders empty.
+const KNOWN_TOKENS = new Set([
+    // Fixed keys from email_worker.js:569-577 (campaign Mode 2 data build):
+    'name', 'first_name', 'last_name', 'email', 'company', 'date',
+    // Keys wizard writes into extra_fields for every recipient (Phase 3/4):
+    'activation_url', 'country', 'job_title', 'expo_name',
+    // Recognised so the validator does NOT fire UNRESOLVED_TOKEN — but the
+    // literal placeholder is unfillable in campaign mode (G7). It gets its
+    // own warning (DEAD_UNSUB_URL) below.
+    'unsubscribe_url'
+]);
+
+const PLACEHOLDER_RE = /\{\{([^}]+)\}\}/g;
+
+// True iff `part` is a quoted literal, matching utils/email.js:18 exactly.
+function isQuotedLiteral(part) {
+    return /^".*"$/.test(part);
+}
+
+// Validate a single {{...}} inside content: for chain form ({{a|b|"lit"}}) every
+// segment must be either a KNOWN_TOKENS key or a quoted literal — mirrors the
+// resolver at utils/email.js:15-22 which walks parts left-to-right and only
+// resolves keys present in `data` OR literal strings. A junk segment would
+// silently render empty at send time.
+function inspectPlaceholder(inside) {
+    const parts = inside.split('|').map(p => p.trim());
+    const hasChain = parts.length > 1;
+    const unknownSegments = parts.filter(p => !isQuotedLiteral(p) && !KNOWN_TOKENS.has(p));
+    return { parts, hasChain, unknownSegments };
+}
+
+/**
+ * Validate a template body/subject pair against the greeting-chain rule and
+ * the token-resolvability rules. Optionally wave-aware (Fix 3):
+ *   wave === 'activate'  → body MUST contain <a href="...{{activation_url}}...">
+ *                          (ERROR MISSING_ACTIVATION_URL); NO_CTA suppressed
+ *                          (the activation URL IS the CTA).
+ *   wave === 'register'  → no activation_url required; NO_CTA warning applies.
+ *   wave === null        → standalone /validate-template preview — activation
+ *                          check skipped, generic CTA check runs as warning.
+ */
+function validateTemplateBody(html, subject, wave) {
+    const issues = [];
+    const bodyStr = String(html || '');
+    const subjStr = String(subject || '');
+
+    const scan = (str, where) => {
+        let m;
+        PLACEHOLDER_RE.lastIndex = 0;
+        while ((m = PLACEHOLDER_RE.exec(str)) !== null) {
+            const inside = m[1].trim();
+            const { parts, hasChain, unknownSegments } = inspectPlaceholder(inside);
+
+            // Chain-syntax check FIRST — a `{{first_name|last_name|company|"Dear Visitor"}}`
+            // parses cleanly; a `{{first_name|junk_key}}` does not.
+            if (hasChain && unknownSegments.length > 0) {
+                issues.push({
+                    code: 'UNRESOLVED_TOKEN',
+                    severity: 'error',
+                    message: `${where}: chain {{${inside}}} contains unknown segment(s): ${unknownSegments.map(s => `"${s}"`).join(', ')} — must be a known key or a quoted literal`
+                });
+                continue;
+            }
+            if (hasChain) continue; // valid chain form
+
+            // Bare token — must be in KNOWN_TOKENS, and (for first_name/name/last_name)
+            // must NOT be bare (must use the chain form).
+            const key = parts[0].split(/\s/)[0]; // guard against inner whitespace
+            if (!KNOWN_TOKENS.has(key)) {
+                issues.push({
+                    code: 'UNRESOLVED_TOKEN',
+                    severity: 'error',
+                    message: `${where}: token {{${inside}}} is not resolvable at send time (not in the wizard's known set)`
+                });
+                continue;
+            }
+            if (key === 'first_name' || key === 'name' || key === 'last_name') {
+                if (where === 'body') {
+                    issues.push({
+                        code: 'NO_GREETING_CHAIN',
+                        severity: 'error',
+                        message: `${where}: bare {{${key}}} without a |-chain — will render empty if the field is missing (CLAUDE.md v4.0.9)`
+                    });
+                } else {
+                    issues.push({
+                        code: 'BARE_FIRST_NAME_IN_SUBJECT',
+                        severity: 'error',
+                        message: `${where}: bare {{${key}}} without a |-chain — will render empty in the subject line if the field is missing`
+                    });
+                }
+            }
+        }
+    };
+    scan(bodyStr, 'body');
+    scan(subjStr, 'subject');
+
+    // ---- Wave-aware CTA check (Fix 3) --------------------------------
+    // ACTIVATE wave: MUST wire {{activation_url}} into an <a href> — this is
+    // exactly the #58/#59 failure from the 18 Aug template audit (CTA
+    // pointed at empty {{activation_url}} for Group 3 recipients who held
+    // no token). For activate-wave recipients ALL have tokens — missing
+    // the placeholder inside the href means the link goes nowhere.
+    if (wave === 'activate') {
+        const hasActivationHref =
+            /\<a[^>]*\shref\s*=\s*["'][^"']*\{\{\s*activation_url\s*\}\}[^"']*["']/i.test(bodyStr);
+        if (!hasActivationHref) {
+            issues.push({
+                code: 'MISSING_ACTIVATION_URL',
+                severity: 'error',
+                message: 'body: activate-wave template has no <a href="...{{activation_url}}..."> — CTA points nowhere for recipients with tokens (#58/#59 pattern from 18 Aug audit)'
+            });
+        }
+    } else {
+        // REGISTER wave (or standalone preview): NO_CTA if there's no
+        // <a href="..."> with a non-empty target at all.
+        const hasAnyExternalHref = /\<a[^>]*\shref\s*=\s*["'][^"'\s][^"']*["']/i.test(bodyStr);
+        if (!hasAnyExternalHref) {
+            issues.push({
+                code: 'NO_CTA',
+                severity: 'warning',
+                message: 'body: no <a href="..."> with a non-empty target — announcement-only template?'
+            });
+        }
+    }
+
+    // ---- DEAD_UNSUB_URL warning (G7) ----
+    if (/\{\{\s*unsubscribe_url\s*\}\}/.test(bodyStr)) {
+        issues.push({
+            code: 'DEAD_UNSUB_URL',
+            severity: 'warning',
+            message: 'body: literal {{unsubscribe_url}} placeholder is unfillable in campaign mode (G7) — worker appends its own footer, this token will render as empty href'
+        });
+    }
+
+    return issues;
 }
 
 // ============================================================
@@ -300,20 +505,84 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
 });
 
 // ============================================================
-// BUILD (SKELETON — G1) — POST /api/campaigns/reactivation/build
+// VALIDATE-TEMPLATE (Piece 6) — POST /api/campaigns/validate-template
 // ============================================================
 //
-// G1 skeleton: creates an import_jobs row with job_type='reactivation_campaign',
-// dispatches setImmediate that immediately marks status='completed'. Full 6
-// phases (re-segment → mint tokens silently → build recipient rows → create
-// draft campaigns + steps → insert campaign_recipients) land in G2.
+// Pure validation. Fetches subject + html_content for template_id, runs the
+// 5 checks, returns { ok, issues:[{code, message, severity}], template_name }.
+// ok === issues.every(i => i.severity !== 'error').
+router.post('/validate-template', async (req, res) => {
+    try {
+        const organizerId = req.organizer_id || 1;
+        const { template_id, wave } = req.body || {};
+        if (!template_id) {
+            return res.status(400).json({ success: false, error: 'template_id is required' });
+        }
+        if (wave != null && wave !== 'activate' && wave !== 'register') {
+            return res.status(400).json({ success: false, error: 'wave, if provided, must be "activate" or "register"' });
+        }
+        const r = await pool.query(
+            `SELECT id, name, subject, html_content FROM email_templates
+             WHERE id = $1 AND organizer_id = $2`,
+            [template_id, organizerId]
+        );
+        if (r.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Template not found' });
+        }
+        const t = r.rows[0];
+        const issues = validateTemplateBody(t.html_content, t.subject, wave || null);
+        const errorCount = issues.filter(i => i.severity === 'error').length;
+        const warningCount = issues.filter(i => i.severity === 'warning').length;
+        res.json({
+            success: true,
+            template_id: t.id,
+            template_name: t.name,
+            wave: wave || null,
+            ok: errorCount === 0,
+            error_count: errorCount,
+            warning_count: warningCount,
+            issues
+        });
+    } catch (err) {
+        console.error('[campaign-wizard/validate-template] error:', err.message);
+        res.status(500).json({ success: false, error: 'Template validation failed' });
+    }
+});
+
+// ============================================================
+// BUILD (G2 — full orchestrator) — POST /api/campaigns/reactivation/build
+// ============================================================
 //
-// Input: { preview_token }
-// Response: 202 { success, job_id, phase, ... }
+// Six phases inside one import_jobs row (job_type='reactivation_campaign'):
+//   1. RESEGMENT     — read from preview cache (already done at segment time)
+//   2. MINT TOKENS   — silent via processReactivationChunks (emailTemplate=null)
+//   3. BUILD G2 RECIPIENTS — with activation_url from just-minted tokens
+//   4. BUILD G3 RECIPIENTS — no tokens needed
+//   5. CREATE 2 DRAFT CAMPAIGNS + STEPS — email_campaigns + campaign_steps
+//   6. INSERT campaign_recipients — batch INSERT with ON CONFLICT DO NOTHING
+//
+// Body:
+//   {
+//     preview_token: string,
+//     activate_steps: [{template_id, delay_hours, condition}, ...],
+//     register_steps: [{template_id, delay_hours, condition}, ...],
+//     activate_name?: string,      // default: "<expo> Activate Wave"
+//     register_name?: string,      // default: "<expo> Register Wave"
+//     skip_template_validation?: true  // API-only per Suer, not in the wizard UI
+//   }
+//
+// Returns 202 { job_id, ...counts }. Poll /reactivation/job/:id for status.
 router.post('/reactivation/build', async (req, res) => {
     try {
         const organizerId = req.organizer_id || 1;
-        const { preview_token } = req.body || {};
+        const {
+            preview_token,
+            activate_steps = [],
+            register_steps = [],
+            activate_name,
+            register_name,
+            skip_template_validation
+        } = req.body || {};
 
         if (!preview_token) {
             return res.status(400).json({ success: false, error: 'preview_token is required' });
@@ -326,7 +595,79 @@ router.post('/reactivation/build', async (req, res) => {
             });
         }
 
-        // Create the job row up front so the caller can poll it immediately.
+        // ---- Validate step configs shape ---------------------------------
+        const stepArrays = [
+            { name: 'activate_steps', arr: activate_steps },
+            { name: 'register_steps', arr: register_steps }
+        ];
+        for (const { name, arr } of stepArrays) {
+            if (!Array.isArray(arr)) {
+                return res.status(400).json({ success: false, error: `${name} must be an array` });
+            }
+            for (let i = 0; i < arr.length; i++) {
+                const s = arr[i];
+                if (!s || typeof s.template_id !== 'number') {
+                    return res.status(400).json({ success: false, error: `${name}[${i}].template_id must be a number` });
+                }
+                if (s.delay_hours != null && (typeof s.delay_hours !== 'number' || s.delay_hours < 0)) {
+                    return res.status(400).json({ success: false, error: `${name}[${i}].delay_hours must be a non-negative number` });
+                }
+                if (s.condition && !VALID_CONDITIONS.includes(s.condition)) {
+                    return res.status(400).json({ success: false, error: `${name}[${i}].condition must be one of: ${VALID_CONDITIONS.join(', ')}` });
+                }
+            }
+        }
+        if (activate_steps.length === 0 && register_steps.length === 0) {
+            return res.status(400).json({ success: false, error: 'At least one of activate_steps or register_steps must be non-empty' });
+        }
+
+        // ---- Template validation (Piece 6, unless skip flag set) ---------
+        // Blocks on error-severity issues; warnings pass through.
+        // WAVE-AWARE (Fix 3): activate-wave templates must wire {{activation_url}}
+        // into an href (or ERROR); register-wave templates get the generic CTA
+        // warning. Templates used in BOTH waves are validated against BOTH — if
+        // a template is legal in only one wave it can still be legally used in
+        // that one, and its report will name the wave that objected.
+        if (!skip_template_validation) {
+            const uniqueTemplateIds = [...new Set([
+                ...activate_steps.map(s => s.template_id),
+                ...register_steps.map(s => s.template_id)
+            ])];
+            if (uniqueTemplateIds.length > 0) {
+                const tr = await pool.query(
+                    `SELECT id, name, subject, html_content FROM email_templates
+                     WHERE id = ANY($1) AND organizer_id = $2`,
+                    [uniqueTemplateIds, organizerId]
+                );
+                if (tr.rows.length !== uniqueTemplateIds.length) {
+                    return res.status(404).json({ success: false, error: 'One or more template_ids not found for your organizer' });
+                }
+                const activateTemplateIds = new Set(activate_steps.map(s => s.template_id));
+                const registerTemplateIds = new Set(register_steps.map(s => s.template_id));
+                const blockingIssues = [];
+                for (const t of tr.rows) {
+                    if (activateTemplateIds.has(t.id)) {
+                        const errs = validateTemplateBody(t.html_content, t.subject, 'activate')
+                            .filter(i => i.severity === 'error');
+                        if (errs.length > 0) blockingIssues.push({ template_id: t.id, template_name: t.name, wave: 'activate', errors: errs });
+                    }
+                    if (registerTemplateIds.has(t.id)) {
+                        const errs = validateTemplateBody(t.html_content, t.subject, 'register')
+                            .filter(i => i.severity === 'error');
+                        if (errs.length > 0) blockingIssues.push({ template_id: t.id, template_name: t.name, wave: 'register', errors: errs });
+                    }
+                }
+                if (blockingIssues.length > 0) {
+                    return res.status(400).json({
+                        success: false,
+                        error: 'One or more templates fail validation. Fix the templates or pass skip_template_validation=true to override.',
+                        blocking_templates: blockingIssues
+                    });
+                }
+            }
+        }
+
+        // ---- Create the job row up front so caller can poll immediately --
         const totalRows = preview.g2_activate.length + preview.g3_register.length;
         const jobRes = await pool.query(
             `INSERT INTO import_jobs (organizer_id, job_type, target_expo_id, total_count, status)
@@ -335,25 +676,225 @@ router.post('/reactivation/build', async (req, res) => {
         );
         const jobId = jobRes.rows[0].id;
 
-        // G1 SKELETON — orchestrator body lands in G2. For now, immediately
-        // mark completed so the polling endpoint returns cleanly and the
-        // wizard flow can be smoke-tested end-to-end without campaigns being
-        // created yet. G2 replaces this setImmediate with the real phases.
+        // ---- Dispatch orchestrator body (setImmediate, phased) -----------
         setImmediate(async () => {
+            let phase = 'phase_1_resegment';
             try {
+                console.log(`[wizard/build ${jobId}] START — target expo ${preview.target_expo_id}, G2=${preview.g2_activate.length}, G3=${preview.g3_register.length}`);
+
+                // Phase 1 — resegment (already done at segment time; nothing to do).
+                // Kept as an explicit named phase for future orchestration.
+
+                // -------------------------------------------------------------
+                // Phase 2 — MINT TOKENS silently.
+                // Filter G2 to !_unsub && !_hasToken. Truncate VARCHAR(255)
+                // fields per Piece 5. Call processReactivationChunks with
+                // emailTemplate=null (silent-mode guard chain enforced at
+                // reactivation.js:133/346/380/440).
+                // -------------------------------------------------------------
+                phase = 'phase_2_mint_tokens';
+                console.log(`[wizard/build ${jobId}] ${phase} START`);
+
+                const tokensNeeded = preview.g2_activate.filter(r => !r._unsub && !r._hasToken);
+                let truncatedCount = 0;
+                const tokenValidRows = tokensNeeded.map(r => {
+                    const { row: t, truncated } = truncateRowFields(r);
+                    truncatedCount += truncated;
+                    // Fix 1: use reactivation.js:25 generateToken() — single
+                    // source of truth. Never a second RNG.
+                    return { ...t, token: generateToken() };
+                });
+                if (truncatedCount > 0) {
+                    console.log(`[wizard/build ${jobId}] Piece 5: truncated ${truncatedCount} field values to 255 chars`);
+                }
+
+                // Fetch target expo full row (processReactivationChunks reads it).
+                const targetExpoRes = await pool.query(
+                    `SELECT id, name, end_date FROM expos WHERE id = $1`,
+                    [preview.target_expo_id]
+                );
+                const targetExpo = targetExpoRes.rows[0];
+
+                if (tokenValidRows.length > 0) {
+                    await processReactivationChunks(jobId, tokenValidRows, {
+                        target_expo_id: preview.target_expo_id,
+                        organizerId,
+                        template_id: null,          // silent
+                        form_id: null,
+                        emailTemplate: null,        // silent (guarded at reactivation.js:133)
+                        targetExpo,
+                        source_expo_id: null        // not the from-expo path
+                    });
+                    console.log(`[wizard/build ${jobId}] ${phase} DONE — minted ${tokenValidRows.length} tokens`);
+                } else {
+                    console.log(`[wizard/build ${jobId}] ${phase} SKIP — 0 new tokens needed (all G2 already have tokens or are unsubbed)`);
+                }
+
+                // -------------------------------------------------------------
+                // Phase 3 — BUILD G2 RECIPIENT ROWS with activation_url.
+                // Includes freshly-minted AND pre-existing tokens (both
+                // preview.g2_activate emails that aren't unsub).
+                // -------------------------------------------------------------
+                phase = 'phase_3_g2_recipients';
+                const g2Mailable = preview.g2_activate.filter(r => !r._unsub);
+                const g2Emails = g2Mailable.map(r => r.email);
+                let g2Recipients = [];
+                if (g2Emails.length > 0) {
+                    const tokenLookup = await pool.query(
+                        `SELECT LOWER(TRIM(email)) AS email, token FROM reactivation_tokens
+                         WHERE target_expo_id = $1 AND email = ANY($2)
+                           AND status = 'pending'`,
+                        [preview.target_expo_id, g2Emails]
+                    );
+                    const tokenByEmail = new Map(tokenLookup.rows.map(r => [r.email, r.token]));
+                    const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+                    for (const r of g2Mailable) {
+                        const tok = tokenByEmail.get(r.email);
+                        if (!tok) continue; // token missing (chunk error) — skip; will surface in job.failed_count
+                        g2Recipients.push({
+                            email: r.email,
+                            first_name: r.name || null,
+                            last_name: r.last_name || null,
+                            company: r.company || null,
+                            extra_fields: {
+                                activation_url: `${baseUrl}/reactivate.html?token=${tok}`,
+                                country: r.country || '',
+                                job_title: r.job_title || '',
+                                expo_name: preview.target_expo_name
+                            }
+                        });
+                    }
+                }
+                console.log(`[wizard/build ${jobId}] ${phase} DONE — ${g2Recipients.length} G2 recipient rows built`);
+
+                // -------------------------------------------------------------
+                // Phase 4 — BUILD G3 RECIPIENT ROWS. No tokens; extra_fields
+                // carries country + job_title so future templates can use them.
+                // -------------------------------------------------------------
+                phase = 'phase_4_g3_recipients';
+                const g3Mailable = preview.g3_register.filter(r => !r._unsub);
+                const g3Recipients = g3Mailable.map(r => ({
+                    email: r.email,
+                    first_name: r.name || null,
+                    last_name: r.last_name || null,
+                    company: r.company || null,
+                    extra_fields: {
+                        country: r.country || '',
+                        job_title: r.job_title || '',
+                        expo_name: preview.target_expo_name
+                    }
+                }));
+                console.log(`[wizard/build ${jobId}] ${phase} DONE — ${g3Recipients.length} G3 recipient rows built`);
+
+                // -------------------------------------------------------------
+                // Phase 5 — CREATE 2 DRAFT CAMPAIGNS + steps.
+                // Skip a campaign if its step array is empty AND its recipient
+                // count is zero — an empty campaign is not useful and would
+                // trip the existing activation guard at campaigns.js:422
+                // (canActivate needs steps.length > 0 && total_count > 0).
+                // -------------------------------------------------------------
+                phase = 'phase_5_create_campaigns';
+                const createdCampaigns = [];
+                async function createCampaignWithSteps(name, steps, recipients, kind) {
+                    if (steps.length === 0 && recipients.length === 0) {
+                        console.log(`[wizard/build ${jobId}] skip ${kind} — 0 steps AND 0 recipients`);
+                        return null;
+                    }
+                    const cr = await pool.query(
+                        `INSERT INTO email_campaigns (organizer_id, expo_id, name, description, created_by)
+                         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                        [organizerId, preview.target_expo_id, name,
+                         `Auto-created by wizard for ${preview.target_expo_name}`, organizerId]
+                    );
+                    const camp = cr.rows[0];
+                    for (let i = 0; i < steps.length; i++) {
+                        const s = steps[i];
+                        await pool.query(
+                            `INSERT INTO campaign_steps (campaign_id, step_number, template_id, delay_hours, condition)
+                             VALUES ($1, $2, $3, $4, $5)`,
+                            [camp.id, i + 1, s.template_id,
+                             s.delay_hours == null ? 0 : s.delay_hours,
+                             s.condition || 'all']
+                        );
+                    }
+                    console.log(`[wizard/build ${jobId}] created ${kind} campaign ${camp.id} with ${steps.length} step(s)`);
+                    return camp;
+                }
+                const activateCamp = await createCampaignWithSteps(
+                    activate_name || `${preview.target_expo_name} Activate Wave`,
+                    activate_steps, g2Recipients, 'activate'
+                );
+                const registerCamp = await createCampaignWithSteps(
+                    register_name || `${preview.target_expo_name} Register Wave`,
+                    register_steps, g3Recipients, 'register'
+                );
+                if (activateCamp) createdCampaigns.push({ id: activateCamp.id, name: activateCamp.name, kind: 'activate', recipient_count: g2Recipients.length });
+                if (registerCamp) createdCampaigns.push({ id: registerCamp.id, name: registerCamp.name, kind: 'register', recipient_count: g3Recipients.length });
+
+                // -------------------------------------------------------------
+                // Phase 6 — INSERT campaign_recipients.
+                // Batch insert with ON CONFLICT DO NOTHING (shape from
+                // campaigns.js:615-619). extra_fields as JSONB.
+                // -------------------------------------------------------------
+                phase = 'phase_6_insert_recipients';
+                const RECIPIENT_CHUNK = 500;
+                async function insertRecipients(campaignId, rows) {
+                    if (!campaignId || rows.length === 0) return 0;
+                    let inserted = 0;
+                    for (let i = 0; i < rows.length; i += RECIPIENT_CHUNK) {
+                        const chunk = rows.slice(i, i + RECIPIENT_CHUNK);
+                        const valueClauses = [];
+                        const params = [];
+                        chunk.forEach((r, idx) => {
+                            const b = idx * 6;
+                            valueClauses.push(`($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6})`);
+                            params.push(campaignId, r.email, r.first_name, r.last_name, r.company, JSON.stringify(r.extra_fields));
+                        });
+                        const insRes = await pool.query(
+                            `INSERT INTO campaign_recipients (campaign_id, email, first_name, last_name, company, extra_fields)
+                             VALUES ${valueClauses.join(',')}
+                             ON CONFLICT (campaign_id, email) DO NOTHING`,
+                            params
+                        );
+                        inserted += insRes.rowCount;
+                    }
+                    // NB: NOT updating email_campaigns.total_recipients.
+                    // Confirmed at campaigns.js:177-185 — stats.total_count
+                    // comes from COUNT(*) over campaign_recipients, not the
+                    // column. canActivate at campaigns.js:422 reads that
+                    // stats.total_count too. The activate handler at
+                    // campaigns.js:911 RE-RESETS total_recipients from a
+                    // COUNT(*) at activation time regardless. Maintaining
+                    // it here is dead weight — dropped.
+                    return inserted;
+                }
+                const activateInserted = activateCamp ? await insertRecipients(activateCamp.id, g2Recipients) : 0;
+                const registerInserted = registerCamp ? await insertRecipients(registerCamp.id, g3Recipients) : 0;
+                console.log(`[wizard/build ${jobId}] ${phase} DONE — inserted activate=${activateInserted}, register=${registerInserted}`);
+
+                // ---- Mark job completed ------------------------------------
+                const summary = {
+                    campaigns: createdCampaigns,
+                    tokens_minted_this_run: tokenValidRows.length,
+                    activate_recipients_inserted: activateInserted,
+                    register_recipients_inserted: registerInserted,
+                    truncated_field_count: truncatedCount
+                };
                 await pool.query(
                     `UPDATE import_jobs
                      SET status='completed', processed_count=$1, completed_at=NOW(), updated_at=NOW(),
-                         error_message='SKELETON: G2 will implement the 6 phases (re-segment → mint tokens → build recipients → create draft campaigns → insert campaign_recipients)'
-                     WHERE id=$2`,
-                    [totalRows, jobId]
+                         error_message=CASE WHEN error_message IS NULL THEN $2 ELSE error_message END
+                     WHERE id=$3`,
+                    [activateInserted + registerInserted,
+                     truncatedCount > 0 ? `Completed with ${truncatedCount} field values truncated to 255 chars (Piece 5)` : null,
+                     jobId]
                 );
-                console.log(`[wizard/build ${jobId}] SKELETON — marked completed, ${totalRows} rows unhandled (G2 pending)`);
+                console.log(`[wizard/build ${jobId}] ✅ COMPLETED — summary: ${JSON.stringify(summary)}`);
             } catch (err) {
-                console.error(`[wizard/build ${jobId}] skeleton commit failed:`, err.message);
+                console.error(`[wizard/build ${jobId}] FAILED at ${phase}:`, err.message, err.stack);
                 await pool.query(
                     `UPDATE import_jobs SET status='failed', error_message=$1, updated_at=NOW() WHERE id=$2`,
-                    [err.message, jobId]
+                    [`${phase}: ${String(err.message).slice(0, 500)}`, jobId]
                 ).catch(() => {});
             }
         });
@@ -361,14 +902,12 @@ router.post('/reactivation/build', async (req, res) => {
         res.status(202).json({
             success: true,
             job_id: jobId,
-            phase: 'accepted',
-            phase_progress: 0,
-            phase_total: totalRows,
-            g2_activate_count: preview.g2_activate.length,
-            g3_register_count: preview.g3_register.length,
+            g2_activate_planned: preview.g2_activate.filter(r => !r._unsub).length,
+            g3_register_planned: preview.g3_register.filter(r => !r._unsub).length,
+            tokens_to_mint: preview.g2_activate.filter(r => !r._unsub && !r._hasToken).length,
             target_expo_id: preview.target_expo_id,
             target_expo_name: preview.target_expo_name,
-            message: 'Wizard job accepted. Poll /api/campaigns/reactivation/job/' + jobId + ' for status. NOTE (G1): orchestrator body is skeleton — no campaigns will be created until G2 lands.'
+            message: `Wizard job accepted. Poll /api/campaigns/reactivation/job/${jobId} for status. All campaigns will land in DRAFT — activate them from the Email Campaigns page when ready.`
         });
     } catch (err) {
         console.error('[campaign-wizard/build] error:', err.message);

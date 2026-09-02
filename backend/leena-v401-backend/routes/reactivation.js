@@ -1242,3 +1242,10 @@ router.post('/campaign/:expoId/reopen', authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
+// Wizard G2 — orchestrator reuses the same token-minting chunk processor
+// (with emailTemplate=null for silent mode) AND the same token generator
+// (single source of truth — never a second RNG). Named exports on the
+// router object so callers can `require('./reactivation').processReactivationChunks`
+// / `.generateToken`.
+module.exports.processReactivationChunks = processReactivationChunks;
+module.exports.generateToken = generateToken;
