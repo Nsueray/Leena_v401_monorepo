@@ -956,3 +956,8 @@ router.get('/reactivation/job/:id', async (req, res) => {
 });
 
 module.exports = router;
+// Named exports for direct unit testing (no HTTP round-trip, no DB).
+// Mirrors reactivation.js's `.processReactivationChunks` / `.generateToken`
+// pattern — Express still sees `router` as the mounted default export.
+module.exports.validateTemplateBody = validateTemplateBody;
+module.exports.KNOWN_TOKENS = KNOWN_TOKENS;
