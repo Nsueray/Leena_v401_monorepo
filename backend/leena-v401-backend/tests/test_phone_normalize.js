@@ -249,6 +249,99 @@ expect('idempotent MA local → E.164 → same E.164',
     secondMA, { ok: true, e164: firstMA.e164, reason: null });
 
 // -----------------------------------------------------------------------------
+// GROUP 7 — Country-fallback resolver (Sep 2026 Decision B)
+// -----------------------------------------------------------------------------
+console.log('\n=== Country-fallback resolver (utils/countryResolve.js) ===');
+
+const { resolveCountry } = require('../utils/countryResolve');
+const fakeMap = new Map([
+    ['nigeria', 'NG'],
+    ['turkey', 'TR'],
+    ['morocco', 'MA'],
+    ['ghana', 'GH'],
+    ['united kingdom', 'GB']
+]);
+
+function expectResolve(label, actual, expected) {
+    const ok = actual.code === expected.code &&
+               actual.matched_by === expected.matched_by &&
+               (expected.unmatched_raw === undefined ||
+                actual.unmatched_raw === expected.unmatched_raw);
+    if (ok) { pass++; console.log(`  ✓ ${label}`); }
+    else {
+        fail++; failures.push({ label, actual, expected });
+        console.log(`  ✗ ${label}`);
+        console.log(`     expected: ${JSON.stringify(expected)}`);
+        console.log(`     actual  : ${JSON.stringify(actual)}`);
+    }
+}
+
+// (1) row wins — direct 2-letter code
+expectResolve('row "TR" direct → TR (row_direct)',
+    resolveCountry('TR', 'NG', fakeMap),
+    { code: 'TR', matched_by: 'row_direct' });
+
+// (1) row wins — lowercase 2-letter still direct
+expectResolve('row "tr" lowercase → TR (row_direct, upper-cased)',
+    resolveCountry('tr', 'NG', fakeMap),
+    { code: 'TR', matched_by: 'row_direct' });
+
+// (1) row wins — name match, case-insensitive + trimmed
+expectResolve('row "Turkey" name → TR (row_name)',
+    resolveCountry('Turkey', 'NG', fakeMap),
+    { code: 'TR', matched_by: 'row_name' });
+
+expectResolve('row "  nigeria  " name+whitespace → NG (row_name)',
+    resolveCountry('  nigeria  ', 'MA', fakeMap),
+    { code: 'NG', matched_by: 'row_name' });
+
+// (2) blank/null row → expo fallback
+expectResolve('blank row → expo NG (expo)',
+    resolveCountry('', 'NG', fakeMap),
+    { code: 'NG', matched_by: 'expo' });
+
+expectResolve('null row → expo MA (expo)',
+    resolveCountry(null, 'MA', fakeMap),
+    { code: 'MA', matched_by: 'expo' });
+
+// (2) row unmatched → expo fallback, unmatched_raw tracked
+expectResolve('row "MAROC" unmatched → expo NG (expo, unmatched_raw)',
+    resolveCountry('MAROC', 'NG', fakeMap),
+    { code: 'NG', matched_by: 'expo', unmatched_raw: 'MAROC' });
+
+// (3) row unmatched + no expo → null, unmatched_raw still tracked
+expectResolve('row "MAROC" + no expo → null (null, unmatched_raw)',
+    resolveCountry('MAROC', null, fakeMap),
+    { code: null, matched_by: null, unmatched_raw: 'MAROC' });
+
+// (3) blank + no expo → null
+expectResolve('blank + no expo → null (null)',
+    resolveCountry('', null, fakeMap),
+    { code: null, matched_by: null });
+
+// Integration through normalizePhone: row country + local number
+console.log('\n=== Integration — resolver + normalizer, "+" always wins ===');
+
+// Local Turkish number, resolver picks TR from row → +90
+const r1 = resolveCountry('Turkey', 'NG', fakeMap);
+expect('row=Turkey + "0532 123 45 67" → +905321234567',
+    normalizePhone('0532 123 45 67', r1.code),
+    { ok: true, e164: '+905321234567', reason: null });
+
+// "+" in input wins over resolved country — even if row-country resolution is wrong.
+// (Wiring will still call resolver; normaliser passes country to lib which ignores it for '+' input.)
+const r2 = resolveCountry('Turkey', 'NG', fakeMap);
+expect('row=Turkey + "+212 661 23 45 67" → +212661234567 (+ wins)',
+    normalizePhone('+212 661 23 45 67', r2.code),
+    { ok: true, e164: '+212661234567', reason: null });
+
+// Blank row + expo fallback
+const r3 = resolveCountry('', 'NG', fakeMap);
+expect('blank row + expo=NG + "08067781379" → +2348067781379',
+    normalizePhone('08067781379', r3.code),
+    { ok: true, e164: '+2348067781379', reason: null });
+
+// -----------------------------------------------------------------------------
 // Summary
 // -----------------------------------------------------------------------------
 console.log(`\n${'='.repeat(60)}`);

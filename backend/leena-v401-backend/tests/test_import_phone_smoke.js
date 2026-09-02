@@ -44,13 +44,25 @@ const BASE_URL = process.env.TEST_BASE_URL || 'https://leena.app';
 const TEST_JWT = process.env.TEST_JWT;
 const TEST_EXPO_ID = parseInt(process.env.TEST_EXPO_ID || '17', 10);
 
-// Fixed test emails so the same 3 rows exercise the UPDATE path on rerun.
-// Suffix chosen to survive across smoke runs without polluting real data —
-// the '@leena-test.local' domain has no MX and cannot receive mail.
+// Fixed test emails so rerun hits the UPDATE path.
+// The '@leena-test.local' domain has no MX and cannot receive mail.
+// 5 rows after Decision B (2 Sep): 3 originals + 2 Turkey rows that
+// exercise the row-country fallback (row 4 local → picks TR from row;
+// row 5 has '+' prefix → country ignored, MA wins from the '+212' input).
 const TEST_EMAILS = {
     row1: 'smoke-phone-1@leena-test.local',
     row2: 'smoke-phone-2@leena-test.local',
-    row3: 'smoke-phone-3@leena-test.local'
+    row3: 'smoke-phone-3@leena-test.local',
+    row4: 'smoke-phone-4@leena-test.local',
+    row5: 'smoke-phone-5@leena-test.local'
+};
+
+const EXPECTED_STORED = {
+    row1: '+2348012345678',    // numeric cell → NG default (expo country_code)
+    row2: '',                   // xxxxxxxxxx placeholder → empty
+    row3: '',                   // 12ab dropped, row still imports (Decision B)
+    row4: '+905321234567',      // "0532 123 45 67" local → TR from row.country
+    row5: '+212661234567'       // "+212 661 23 45 67" → + wins, country irrelevant
 };
 
 function assert(cond, msg) {
@@ -74,10 +86,12 @@ async function main() {
     console.log(`  Expo:   ${TEST_EXPO_ID} (must be country_code='NG')`);
     console.log(`  Emails: fixed for idempotency — see cleanup SQL at end\n`);
 
-    // Build a 3-row XLSX buffer in memory.
+    // Build a 5-row XLSX buffer in memory (Decision B — rows 4+5 test row-country fallback).
     //   Row 1: JS NUMBER for phone (G21 crash class — pre-fix, .trim() threw)
-    //   Row 2: 'xxxxxxxxxx' agency placeholder
-    //   Row 3: '12ab' — unfixable
+    //   Row 2: 'xxxxxxxxxx' agency placeholder → empty preserved
+    //   Row 3: '12ab' — unfixable — DROPS phone but row imports (Decision B)
+    //   Row 4: country='Turkey' + local '0532 …' — row-country resolver picks TR
+    //   Row 5: country='Turkey' + '+212 …' — '+' wins, TR ignored by library
     const rows = [
         { name: 'SmokeRow1', last_name: 'Numeric',
           email: TEST_EMAILS.row1, company: 'Test Co',
@@ -87,7 +101,13 @@ async function main() {
           phone: 'xxxxxxxxxx' },
         { name: 'SmokeRow3', last_name: 'Invalid',
           email: TEST_EMAILS.row3, company: 'Test Co',
-          phone: '12ab' }
+          phone: '12ab' },
+        { name: 'SmokeRow4', last_name: 'Turkish',
+          email: TEST_EMAILS.row4, company: 'Test Co', country: 'Turkey',
+          phone: '0532 123 45 67' },                    // local — row-country resolver picks TR
+        { name: 'SmokeRow5', last_name: 'PlusWins',
+          email: TEST_EMAILS.row5, company: 'Test Co', country: 'Turkey',
+          phone: '+212 661 23 45 67' }                  // '+' wins → +212, Turkey ignored
     ];
     const worksheet = XLSX.utils.json_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
@@ -137,25 +157,63 @@ async function main() {
     console.log(`    new_count         = ${body.new_count}`);
     console.log(`    updated_count     = ${body.updated_count}`);
     console.log(`    failed_count      = ${body.failed_count}`);
+    console.log(`    warning_count     = ${body.warning_count}`);
     console.log(`    skipped_count     = ${body.skipped_count}`);
     console.log(`    email_sent_count  = ${body.email_sent_count}`);
     console.log(`    qr_regenerated_count = ${body.qr_regenerated_count}`);
     console.log(`    custom_fields_updated_count = ${body.custom_fields_updated_count}`);
     console.log(`    errors            = ${JSON.stringify(body.errors || [], null, 2)}`);
+    console.log(`    warnings          = ${JSON.stringify(body.warnings || [], null, 2)}`);
+    console.log(`    unmatched_countries_top5 = ${JSON.stringify(body.unmatched_countries_top5 || [])}`);
     console.log(`    imported (count)  = ${Array.isArray(body.imported) ? body.imported.length : 'not-array'}`);
 
-    // Assertions — idempotent-safe.
+    // Assertions — idempotent-safe under Decision B (row3 "12ab" now imports
+    // with phone='' and a warning; row is still counted as success).
     console.log('\n  Assertions:');
     assert(body.success === true, 'body.success === true');
-    assert(body.success_count === 2,
-        `body.success_count === 2 (row1 numeric-cell + row2 xxxxxxxxxx — got ${body.success_count})`);
-    assert(body.failed_count === 1,
-        `body.failed_count === 1 (row3 "12ab" rejected — got ${body.failed_count})`);
-    assert(Array.isArray(body.errors) && body.errors.length >= 1,
-        'body.errors[] populated');
-    assert(typeof body.errors[0].message === 'string' &&
-           body.errors[0].message.startsWith('Phone rejected'),
-        `body.errors[0].message starts with "Phone rejected" (got "${body.errors[0].message}")`);
+    assert(body.success_count === 5,
+        `body.success_count === 5 (all 5 rows import — Decision B: row3 "12ab" no longer rejects the row) — got ${body.success_count}`);
+    assert(body.failed_count === 0,
+        `body.failed_count === 0 (no true failures — got ${body.failed_count})`);
+    assert(body.warning_count === 1,
+        `body.warning_count === 1 (row3 "12ab" dropped phone but kept row — got ${body.warning_count})`);
+    assert(Array.isArray(body.warnings) && body.warnings.length >= 1,
+        'body.warnings[] populated');
+    assert(typeof body.warnings[0].message === 'string' &&
+           body.warnings[0].message.startsWith('phone dropped'),
+        `body.warnings[0].message starts with "phone dropped" (got "${body.warnings[0].message}")`);
+    assert((body.errors || []).length === 0,
+        `body.errors is empty (got ${JSON.stringify(body.errors || [])})`);
+
+    // Verify stored phones via read-only DB (Suer requested — assertions above
+    // only check counts). Uses RENDER_DATABASE_READONLY_URL from .env.
+    const DB_URL = process.env.RENDER_DATABASE_READONLY_URL;
+    if (DB_URL) {
+        const { Pool } = require('pg');
+        const pool = new Pool({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
+        try {
+            const emails = Object.values(TEST_EMAILS);
+            const dbRes = await pool.query(
+                `SELECT email, phone FROM visitors
+                 WHERE expo_id = $1 AND email = ANY($2)
+                 ORDER BY email`,
+                [TEST_EXPO_ID, emails]
+            );
+            console.log(`\n  Stored-phone verification (read-only DB):`);
+            const storedByEmail = new Map(dbRes.rows.map(r => [r.email, r.phone]));
+            for (const [key, email] of Object.entries(TEST_EMAILS)) {
+                const actual = storedByEmail.get(email);
+                const expected = EXPECTED_STORED[key];
+                console.log(`    ${email.padEnd(35)} — stored='${actual}' (expected '${expected}')`);
+                assert(actual === expected,
+                    `${email}: stored phone === '${expected}' (got '${actual}')`);
+            }
+        } finally {
+            await pool.end();
+        }
+    } else {
+        console.log(`\n  ⚠️  RENDER_DATABASE_READONLY_URL not set — skipping stored-phone verification`);
+    }
 
     console.log('\n✅ ALL ASSERTIONS PASSED');
 }

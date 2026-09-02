@@ -16,6 +16,7 @@ const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
 const { processEmailTemplate } = require('../utils/email');
 const { normalizePhone } = require('../utils/phoneNormalize');
+const { getCoreCountriesMap, resolveCountry } = require('../utils/countryResolve');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB
@@ -178,14 +179,26 @@ async function processReactivationChunks(jobId, validRows, ctx) {
   console.log(`[reactivation-job-${jobId}] ✅ COMPLETED: ${created} tokens created`);
 }
 
-function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails, defaultCountry) {
-  // Sep 2026 — phones normalised to E.164 via libphonenumber-js with defaultCountry
-  // (from the target expo's country_code). Empty phones preserved.
-  // Unfixable phones → the ROW is rejected (skipped_invalid_phone), consistent with
-  // the primary import path in visitors.js.
-  // Samples: first 3 rejects, each with the Excel row number (1-indexed + header row).
-  const results = { skipped_no_email: 0, skipped_already_registered: 0, skipped_duplicate: 0, skipped_unsubscribed: 0, skipped_invalid_phone: 0, invalid_phone_samples: [] };
+function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails, defaultCountry, countriesMap) {
+  // Sep 2026 (Decision B) — phones normalised to E.164 via libphonenumber-js.
+  // Country resolution order per row:
+  //   (1) row's own country column → 2-letter code OR name-map lookup
+  //   (2) defaultCountry (target expo's country_code)
+  //   (3) null → normaliser rejects
+  // If unfixable: phone DROPPED to '' (row is NOT skipped), phone_dropped++,
+  // first 3 samples with Excel row number recorded. Row still becomes a token.
+  // Empty phones (from missing input) preserved as before.
+  // Unmatched non-blank row-country strings tracked for top-5 ops reporting.
+  const results = {
+    skipped_no_email: 0,
+    skipped_already_registered: 0,
+    skipped_duplicate: 0,
+    skipped_unsubscribed: 0,
+    phone_dropped: 0,
+    phone_dropped_samples: []
+  };
   const validRows = [];
+  const unmatchedCountries = new Map();
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     const rowNumber = i + 2; // Excel row (data starts at row 2 after the header)
@@ -194,14 +207,20 @@ function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsu
     if (unsubscribedEmails.has(email)) { results.skipped_unsubscribed++; continue; }
     if (existingVisitorEmails.has(email)) { results.skipped_already_registered++; continue; }
     if (existingTokenEmails.has(email)) { results.skipped_duplicate++; continue; }
+    const rawCountry = (row.country || row.Country || '').toString();
     const rawPhone = row.phone || row.Phone || row.mobile || '';
-    const phoneResult = normalizePhone(rawPhone, defaultCountry);
+    const resolution = resolveCountry(rawCountry, defaultCountry, countriesMap);
+    if (resolution.unmatched_raw) {
+      unmatchedCountries.set(resolution.unmatched_raw,
+        (unmatchedCountries.get(resolution.unmatched_raw) || 0) + 1);
+    }
+    const phoneResult = normalizePhone(rawPhone, resolution.code);
+    let phone = phoneResult.e164; // '' if !ok — token still gets created
     if (!phoneResult.ok) {
-      results.skipped_invalid_phone++;
-      if (results.invalid_phone_samples.length < 3) {
-        results.invalid_phone_samples.push({ row: rowNumber, email, raw: String(rawPhone).slice(0, 100), reason: phoneResult.reason });
+      results.phone_dropped++;
+      if (results.phone_dropped_samples.length < 3) {
+        results.phone_dropped_samples.push({ row: rowNumber, email, raw: String(rawPhone).slice(0, 100), reason: phoneResult.reason });
       }
-      continue;
     }
     existingTokenEmails.add(email);
     validRows.push({
@@ -209,12 +228,16 @@ function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsu
       name: (row.name || row.Name || row.first_name || row['First Name'] || '').toString().trim(),
       last_name: (row.last_name || row['Last Name'] || row.surname || '').toString().trim(),
       company: (row.company || row.Company || row.organization || '').toString().trim(),
-      country: (row.country || row.Country || '').toString().trim(),
+      country: rawCountry.trim(),
       job_title: (row.job_title || row['Job Title'] || row.title || '').toString().trim(),
-      phone: phoneResult.e164,
+      phone,
       token: generateToken()
     });
   }
+  results.unmatched_countries_top5 = [...unmatchedCountries.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([country_raw, count]) => ({ country_raw, count }));
   return { validRows, ...results };
 }
 
@@ -384,13 +407,22 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
     // Pre-fetch existing emails + unsubscribes for O(1) dedup
     const { existingVisitorEmails, existingTokenEmails, unsubscribedEmails } = await prefetchEmails(target_expo_id, organizerId);
 
-    // Filter valid rows (no DB calls) — pass expo country_code for phone normalisation
-    const { validRows, skipped_no_email, skipped_already_registered, skipped_duplicate, skipped_unsubscribed, skipped_invalid_phone, invalid_phone_samples } = prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails, targetExpo.country_code);
-    const totalSkipped = skipped_no_email + skipped_already_registered + skipped_duplicate + skipped_unsubscribed + skipped_invalid_phone;
+    // Country name→ISO2 map (cached at module scope after first load).
+    const countriesMap = await getCoreCountriesMap(pool);
 
-    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_no_email} no email, ${skipped_already_registered} already registered, ${skipped_duplicate} duplicate, ${skipped_unsubscribed} unsubscribed, ${skipped_invalid_phone} invalid phone)`);
-    if (skipped_invalid_phone > 0 && invalid_phone_samples.length > 0) {
-      console.log(`   invalid phone samples (up to 3):`, JSON.stringify(invalid_phone_samples));
+    // Filter valid rows (no DB calls) — pass expo country_code + countriesMap
+    // for phone normalisation with row-country fallback (Decision B).
+    const { validRows, skipped_no_email, skipped_already_registered, skipped_duplicate, skipped_unsubscribed, phone_dropped, phone_dropped_samples, unmatched_countries_top5 } = prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails, targetExpo.country_code, countriesMap);
+    // Decision B: phone_dropped rows are NOT skipped — they became tokens
+    // with phone=''. They are counted in valid, not in totalSkipped.
+    const totalSkipped = skipped_no_email + skipped_already_registered + skipped_duplicate + skipped_unsubscribed;
+
+    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_no_email} no email, ${skipped_already_registered} already registered, ${skipped_duplicate} duplicate, ${skipped_unsubscribed} unsubscribed, ${phone_dropped} phone-dropped)`);
+    if (phone_dropped > 0 && phone_dropped_samples.length > 0) {
+      console.log(`   phone-dropped samples (up to 3):`, JSON.stringify(phone_dropped_samples));
+    }
+    if (unmatched_countries_top5.length > 0) {
+      console.log(`   unmatched row-country top-5:`, JSON.stringify(unmatched_countries_top5));
     }
 
     // Create import job
@@ -418,8 +450,9 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
       total: rows.length,
       valid: validRows.length,
       skipped: totalSkipped,
-      skipped_invalid_phone,
-      invalid_phone_samples,
+      phone_dropped,
+      phone_dropped_samples,
+      unmatched_countries_top5,
       message: 'Campaign processing started. Poll /api/reactivation/job/' + jobId + ' for status.'
     });
 
@@ -670,19 +703,21 @@ router.post('/activate', async (req, res) => {
     const badgeId = qrCode.substring(0, 8).toUpperCase();
     const badgeUrl = generateBadgeUrl(qrCode);
 
-    // Normalise phone against the target expo's country_code (Sep 2026).
-    // Fetches the country once — activate is a single-row endpoint, not a loop.
-    // FAIL-OPEN per 2 Sep 2026 decision A-1: if the number can't be parsed,
-    // still complete the activation — store phone as '' AND drop a reject
-    // trace into custom_fields (JSONB), atomically with the INSERT. The
-    // visitor gets in; ops can fix the phone later via the detail panel and
-    // the trace tells them what came in and why it was refused.
+    // Normalise phone (Sep 2026, Decision A-1 fail-open + Decision B country order).
+    // Country resolution: (1) token's stored country → (2) expo's country_code
+    //                     → (3) null (normaliser will reject). '+' input bypasses all.
+    // FAIL-OPEN: on !ok, still complete the activation — store phone as ''
+    // AND drop a reject trace into custom_fields (JSONB) atomically with the
+    // INSERT. The visitor gets in; ops can fix the phone via the detail panel.
     const expoCcRes = await pool.query(
       `SELECT country_code FROM expos WHERE id = $1`, [tokenData.target_expo_id]
     );
-    const activateCountry = expoCcRes.rows[0]?.country_code || null;
+    const activateExpoCountry = expoCcRes.rows[0]?.country_code || null;
+    const countriesMap = await getCoreCountriesMap(pool);
+    const rowCountry = country || tokenData.country || '';
+    const activateResolution = resolveCountry(rowCountry, activateExpoCountry, countriesMap);
     const rawPhoneInput = phone || tokenData.phone || '';
-    const phoneResult = normalizePhone(rawPhoneInput, activateCountry);
+    const phoneResult = normalizePhone(rawPhoneInput, activateResolution.code);
     if (!phoneResult.ok) {
       console.warn(`[reactivation/activate] phone unfixable for token ${tokenData.id} — storing '' as phone. raw=${String(rawPhoneInput).slice(0,80)} reason=${phoneResult.reason}`);
     }

@@ -62,11 +62,13 @@ const TEST_EXPO_ID = parseInt(process.env.TEST_EXPO_ID || '17', 10);
 const DB_URL = process.env.RENDER_DATABASE_READONLY_URL;
 
 // Same fixed emails as test_import_phone_smoke.js so both tests share
-// one clean-up statement at the end.
+// one clean-up statement at the end. 5 rows after Decision B.
 const TEST_EMAILS = {
     row1: 'smoke-phone-1@leena-test.local',
     row2: 'smoke-phone-2@leena-test.local',
-    row3: 'smoke-phone-3@leena-test.local'
+    row3: 'smoke-phone-3@leena-test.local',
+    row4: 'smoke-phone-4@leena-test.local',
+    row5: 'smoke-phone-5@leena-test.local'
 };
 
 function assert(cond, msg) {
@@ -113,7 +115,13 @@ async function main() {
               phone: 'xxxxxxxxxx' },
             { name: 'SmokeRow3', last_name: 'Invalid',
               email: TEST_EMAILS.row3, company: 'Test Co',
-              phone: '12ab' }
+              phone: '12ab' },                           // Decision B: dropped, not skipped
+            { name: 'SmokeRow4', last_name: 'Turkish',
+              email: TEST_EMAILS.row4, company: 'Test Co', country: 'Turkey',
+              phone: '0532 123 45 67' },                 // row-country resolver → TR
+            { name: 'SmokeRow5', last_name: 'PlusWins',
+              email: TEST_EMAILS.row5, company: 'Test Co', country: 'Turkey',
+              phone: '+212 661 23 45 67' }               // '+' wins → +212
         ];
         const ws = XLSX.utils.json_to_sheet(rows);
         const wb = XLSX.utils.book_new();
@@ -156,34 +164,35 @@ async function main() {
 
     // Print full 202 body BEFORE asserting.
     console.log(`\n  202 response body:`);
-    console.log(`    success                = ${body.success}`);
-    console.log(`    job_id                 = ${body.job_id}`);
-    console.log(`    total                  = ${body.total}`);
-    console.log(`    valid                  = ${body.valid}`);
-    console.log(`    skipped                = ${body.skipped}`);
-    console.log(`    skipped_invalid_phone  = ${body.skipped_invalid_phone}`);
-    console.log(`    invalid_phone_samples  = ${JSON.stringify(body.invalid_phone_samples || [], null, 2).replace(/\n/g, '\n                             ')}`);
-    console.log(`    message                = ${JSON.stringify(body.message)}`);
+    console.log(`    success                    = ${body.success}`);
+    console.log(`    job_id                     = ${body.job_id}`);
+    console.log(`    total                      = ${body.total}`);
+    console.log(`    valid                      = ${body.valid}`);
+    console.log(`    skipped                    = ${body.skipped}`);
+    console.log(`    phone_dropped              = ${body.phone_dropped}`);
+    console.log(`    phone_dropped_samples      = ${JSON.stringify(body.phone_dropped_samples || [], null, 2).replace(/\n/g, '\n                                 ')}`);
+    console.log(`    unmatched_countries_top5   = ${JSON.stringify(body.unmatched_countries_top5 || [])}`);
+    console.log(`    message                    = ${JSON.stringify(body.message)}`);
 
     // Rerun-diagnostic BEFORE the strict assertions.
-    if (body.valid === 0 && body.skipped_invalid_phone === 1) {
+    if (body.valid === 0 && body.phone_dropped === 1) {
         console.error(`\n  ⚠️  Rerun shape detected: valid=0 (tokens for smoke emails already exist).`);
         console.error(`      Run the cleanup SQL at the end of this output, then retry to get a fresh-run pass.`);
     }
 
-    // Assertions on the 202 body (per Suer's spec).
+    // Assertions on the 202 body (Decision B — row 3 is DROPPED not SKIPPED).
     console.log(`\n  Assertions on 202 body:`);
     assert(body.success === true, 'body.success === true');
     assert(body.job_id !== undefined && body.job_id !== null,
         `body.job_id present (${body.job_id})`);
-    assert(body.skipped_invalid_phone === 1,
-        `body.skipped_invalid_phone === 1 (got ${body.skipped_invalid_phone})`);
-    assert(Array.isArray(body.invalid_phone_samples) && body.invalid_phone_samples.length >= 1,
-        'body.invalid_phone_samples[] populated (≥1)');
-    assert(body.invalid_phone_samples[0].row === 4,
-        `body.invalid_phone_samples[0].row === 4 — Excel row for "12ab" (got ${body.invalid_phone_samples[0].row})`);
-    assert(body.valid === 2,
-        `body.valid === 2 (got ${body.valid}) — if 0, smoke emails have stale tokens; run cleanup SQL and retry`);
+    assert(body.phone_dropped === 1,
+        `body.phone_dropped === 1 — row 3 phone dropped (got ${body.phone_dropped})`);
+    assert(Array.isArray(body.phone_dropped_samples) && body.phone_dropped_samples.length >= 1,
+        'body.phone_dropped_samples[] populated (≥1)');
+    assert(body.phone_dropped_samples[0].row === 4,
+        `body.phone_dropped_samples[0].row === 4 — Excel row for "12ab" (got ${body.phone_dropped_samples[0].row})`);
+    assert(body.valid === 5,
+        `body.valid === 5 — all 5 rows become tokens under Decision B (got ${body.valid}) — if 0, smoke emails have stale tokens; run cleanup SQL and retry`);
 
     // Poll /job/:id until completed.
     console.log(`\n  Polling /api/reactivation/job/${body.job_id} ...`);
@@ -220,8 +229,8 @@ async function main() {
             [TEST_EXPO_ID, emails]
         );
         console.log(`    reactivation_tokens for smoke emails on expo ${TEST_EXPO_ID}: ${tokRes.rows[0].n}`);
-        assert(tokRes.rows[0].n === 2,
-            `exactly 2 reactivation_tokens created for smoke emails (got ${tokRes.rows[0].n}) — row3 was rejected before token creation`);
+        assert(tokRes.rows[0].n === 5,
+            `exactly 5 reactivation_tokens created for smoke emails (got ${tokRes.rows[0].n}) — Decision B: row3 phone-drop still creates the token`);
 
         const eqRes = await pool.query(
             `SELECT COUNT(*)::int AS n FROM email_queue

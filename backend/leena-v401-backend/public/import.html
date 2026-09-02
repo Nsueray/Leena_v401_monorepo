@@ -452,6 +452,9 @@
             if (result.errors?.length) {
                 result.errors.forEach(e => { html += `<div class="result-item error">Row ${e.row}: ${e.message}</div>`; });
             }
+            if (result.warnings?.length) {
+                result.warnings.forEach(w => { html += `<div class="result-item" style="background:#fff8e1;border-left:3px solid #f59e0b;color:#92400e;"><i class="bi bi-exclamation-triangle"></i> Row ${w.row}: ${w.message}</div>`; });
+            }
             if (result.imported?.length) {
                 result.imported.slice(0, 10).forEach(i => { html += `<div class="result-item success">${i.name || 'No name'} - ${i.email}</div>`; });
                 if (result.imported.length > 10) html += `<div class="result-item">...and ${result.imported.length - 10} more</div>`;

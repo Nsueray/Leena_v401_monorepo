@@ -7,6 +7,7 @@ const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('../utils/email');
 const { normalizePhone } = require('../utils/phoneNormalize');
+const { getCoreCountriesMap, resolveCountry } = require('../utils/countryResolve');
 const authMiddleware = require('../middleware/authMiddleware');
 const dualAuth = require('../middleware/dualAuth');
 // Manual registration is a scanner-desk operation, so it accepts a scanner terminal
@@ -696,6 +697,12 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
       'booth_number', 'Booth Number', 'booth', 'Booth'
     ]);
 
+    // Load country name→ISO2 map ONCE per import (cached at module scope
+    // after first load — see utils/countryResolve.js).
+    const countriesMap = await getCoreCountriesMap(pool);
+    // Track unmatched row-country strings for ops-side alias learning.
+    const unmatchedCountries = new Map(); // string → count
+
     // Process each row
     const results = {
       success_count: 0,
@@ -703,11 +710,14 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
       updated_count: 0,
       skipped_count: 0,
       failed_count: 0,
+      warning_count: 0,               // Decision B — phone drops warn, don't fail
       email_sent_count: 0,
       qr_regenerated_count: 0,
       custom_fields_updated_count: 0,
       imported: [],
-      errors: []
+      errors: [],
+      warnings: [],                   // Decision B — { row, raw_value, message } per drop
+      unmatched_countries_top5: []    // filled after the loop
     };
 
     for (let i = 0; i < rows.length; i++) {
@@ -721,22 +731,32 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
         const email = row.email || row.Email || row.EMAIL || row.e_mail || '';
         const company = row.company || row.Company || row.COMPANY || row.organization || row.Organisation || '';
         const country = row.country || row.Country || row.COUNTRY || '';
-        // Phone: coerce/normalise via libphonenumber-js against the expo's country_code.
-        // Sep 2026 — closes G21 (numeric cells crashing on .trim()) and produces one
-        // consistent E.164 shape at write time. Empty/blank → e164='' (preserved).
-        // Unfixable → skip THIS row, listed in results.errors with row number + raw value.
+        // Phone: coerce/normalise via libphonenumber-js.
+        // Country resolution order (Decision B, 2 Sep 2026):
+        //   (1) row's own country column → 2-letter code OR case-insensitive
+        //       name match against core_countries.name
+        //   (2) expo.country_code
+        //   (3) null → normaliser rejects with "no country context"
+        // A leading '+' or '00' always wins upstream (library ignores default).
+        // Unfixable → phone is DROPPED to '' (row still imports), warning pushed
+        // into results.warnings, warning_count++. The row is NOT rejected.
+        // failed_count stays reserved for email failure (the primary key).
         const rawPhone = row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || row.tel || '';
-        const phoneResult = normalizePhone(rawPhone, expoCountryCode);
+        const resolution = resolveCountry(country, expoCountryCode, countriesMap);
+        if (resolution.unmatched_raw) {
+          unmatchedCountries.set(resolution.unmatched_raw,
+            (unmatchedCountries.get(resolution.unmatched_raw) || 0) + 1);
+        }
+        const phoneResult = normalizePhone(rawPhone, resolution.code);
+        let phone = phoneResult.e164; // '' if !ok — row proceeds with empty phone
         if (!phoneResult.ok) {
-          results.errors.push({
+          results.warnings.push({
             row: rowNum,
             raw_value: String(rawPhone).slice(0, 100),
-            message: `Phone rejected: ${phoneResult.reason}`
+            message: `phone dropped: ${phoneResult.reason}`
           });
-          results.failed_count++;
-          continue;
+          results.warning_count++;
         }
-        const phone = phoneResult.e164;
         const job_title = row.job_title || row['Job Title'] || row.title || row.Title || row.position || row.Position || '';
         const website = row.website || row.Website || row.web || row.url || '';
         const visitor_type_val = visitor_type || row.visitor_type || row['Visitor Type'] || row.type || 'visitor';
@@ -993,7 +1013,19 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
       }
     }
 
-    console.log(`✅ Import complete: ${results.success_count} success, ${results.failed_count} failed`);
+    // Top-5 unmatched row-country strings — ops alias-learning surface (Decision B).
+    results.unmatched_countries_top5 = [...unmatchedCountries.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([country_raw, count]) => ({ country_raw, count }));
+
+    console.log(`✅ Import complete: ${results.success_count} success, ${results.failed_count} failed, ${results.warning_count} warnings`);
+    if (results.warning_count > 0) {
+      console.log(`   phone-dropped samples (up to 3):`, JSON.stringify(results.warnings.slice(0, 3)));
+    }
+    if (results.unmatched_countries_top5.length > 0) {
+      console.log(`   unmatched row-country top-5:`, JSON.stringify(results.unmatched_countries_top5));
+    }
 
     // Save import log
     try {

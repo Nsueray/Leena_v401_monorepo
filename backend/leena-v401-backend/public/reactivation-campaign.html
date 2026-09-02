@@ -327,8 +327,8 @@
                                     <strong id="resultSkippedNoEmail">0</strong>
                                 </div>
                                 <div class="results-item">
-                                    <span>Invalid Phone (Skipped) <small id="resultInvalidPhoneRows" style="color:var(--text-secondary);font-weight:normal;"></small></span>
-                                    <strong id="resultSkippedInvalidPhone">0</strong>
+                                    <span>Phone dropped <small id="resultPhoneDroppedRows" style="color:var(--text-secondary);font-weight:normal;"></small></span>
+                                    <strong id="resultPhoneDropped">0</strong>
                                 </div>
                             </div>
                         </div>
@@ -873,10 +873,10 @@
                     document.getElementById('resultSkippedRegistered').textContent = '-';
                     document.getElementById('resultSkippedDuplicate').textContent = '-';
                     document.getElementById('resultSkippedNoEmail').textContent = data.skipped || 0;
-                    document.getElementById('resultSkippedInvalidPhone').textContent = data.skipped_invalid_phone || 0;
-                    document.getElementById('resultInvalidPhoneRows').textContent =
-                        (data.invalid_phone_samples && data.invalid_phone_samples.length)
-                            ? '(rows ' + data.invalid_phone_samples.map(s => s.row).join(', ') + ')'
+                    document.getElementById('resultPhoneDropped').textContent = data.phone_dropped || 0;
+                    document.getElementById('resultPhoneDroppedRows').textContent =
+                        (data.phone_dropped_samples && data.phone_dropped_samples.length)
+                            ? '(rows ' + data.phone_dropped_samples.map(s => s.row).join(', ') + ')'
                             : '';
 
                     // Show progress bar
@@ -929,10 +929,10 @@
                 document.getElementById('resultSkippedRegistered').textContent = data.results?.skipped_already_registered || 0;
                 document.getElementById('resultSkippedDuplicate').textContent = data.results?.skipped_duplicate || 0;
                 document.getElementById('resultSkippedNoEmail').textContent = data.results?.skipped_no_email || 0;
-                document.getElementById('resultSkippedInvalidPhone').textContent = data.results?.skipped_invalid_phone || 0;
-                document.getElementById('resultInvalidPhoneRows').textContent =
-                    (data.results?.invalid_phone_samples && data.results.invalid_phone_samples.length)
-                        ? '(rows ' + data.results.invalid_phone_samples.map(s => s.row).join(', ') + ')'
+                document.getElementById('resultPhoneDropped').textContent = data.results?.phone_dropped || 0;
+                document.getElementById('resultPhoneDroppedRows').textContent =
+                    (data.results?.phone_dropped_samples && data.results.phone_dropped_samples.length)
+                        ? '(rows ' + data.results.phone_dropped_samples.map(s => s.row).join(', ') + ')'
                         : '';
                 document.getElementById('resultsBox').style.display = 'block';
                 showAlert(`Campaign created! ${data.results?.created || 0} emails queued for sending.`, 'success');
