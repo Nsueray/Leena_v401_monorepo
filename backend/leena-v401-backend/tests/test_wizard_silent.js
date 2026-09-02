@@ -691,6 +691,125 @@ async function main() {
             console.log(`    Second-run campaign_recipients total: ${rec2Res.rows[0].n}`);
             assert(rec2Res.rows[0].n === 5,
                 `second-run campaign_recipients sum === 5 (3 activate + 2 register) (got ${rec2Res.rows[0].n})`);
+
+            // ============================================================
+            // STEP 7 — Step-1 normaliser (Suer 2 Sep, post-G3-UI-diff)
+            // ============================================================
+            // The wizard's /build writes campaign_steps directly (see
+            // campaignBuilder.js:723-729), bypassing routes/campaigns.js:
+            // 383-384 which forces step_number=1 → delay_hours=0,
+            // condition='all'. The G3 UI now disables step-1's delay +
+            // condition inputs, but an API caller (or a future UI
+            // regression) could still POST activate_steps[0] with
+            // delay_hours=120 / condition='not_registered' and have the
+            // first email land 5 days late with reminders-only semantics —
+            // the exact failure mode campaigns.js's override was written
+            // to prevent.
+            //
+            // The backend guard in campaignBuilder.js normalises (does NOT
+            // reject) matching the existing endpoint's behaviour. This
+            // step sends the offending shape and verifies the DB row is
+            // clean.
+            console.log(`\n---- STEP 7: Step-1 normaliser regression guard ----`);
+            // Re-segment to get a fresh preview_token (previous one has
+            // been consumed; the 30-min TTL doesn't apply — used tokens
+            // can't be reused safely because Phase 2 mints tokens for the
+            // whole g2_activate list).
+            console.log(`  Third /segment call (for a fresh preview_token):`);
+            const seg3Form = new FormData();
+            seg3Form.append('file', new Blob([fullBuffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }), 'wizard_smoke.xlsx');
+            seg3Form.append('target_expo_id', String(TEST_EXPO_ID));
+            const seg3Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/segment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` },
+                body: seg3Form
+            });
+            if (!seg3Res.ok) {
+                const t = await seg3Res.text().catch(() => '');
+                throw new Error(`third /segment HTTP ${seg3Res.status}: ${t.slice(0, 200)}`);
+            }
+            const seg3Body = await seg3Res.json();
+            const preview3Token = seg3Body.preview_token;
+
+            const runTag3 = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '-run3';
+            const jobStartTime3 = new Date();
+            console.log(`\n  Third /build — DELIBERATELY sending step-1 with delay_hours=120 and condition='not_registered':`);
+            const build3Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/build`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    preview_token: preview3Token,
+                    activate_steps: [
+                        // This is the offending shape — the backend MUST normalise.
+                        { template_id: probeTemplateId, delay_hours: 120, condition: 'not_registered' }
+                    ],
+                    register_steps: [
+                        { template_id: probeTemplateId, delay_hours: 240, condition: 'not_opened' }
+                    ],
+                    activate_name: `${CAMPAIGN_TAG} Activate ${runTag3}`,
+                    register_name: `${CAMPAIGN_TAG} Register ${runTag3}`,
+                    skip_template_validation: true
+                })
+            });
+            if (build3Res.status !== 202) {
+                const t = await build3Res.text().catch(() => '');
+                throw new Error(`third /build HTTP ${build3Res.status}: ${t.slice(0, 300)}`);
+            }
+            const built3 = await build3Res.json();
+            console.log(`    /build returned job_id=${built3.job_id}`);
+
+            // Poll the third job to completion.
+            const pollDeadline3 = Date.now() + 60000;
+            let job3 = null;
+            while (Date.now() < pollDeadline3) {
+                const jr3 = await fetch(`${BASE_URL}/api/campaigns/reactivation/job/${built3.job_id}`, {
+                    headers: { 'Authorization': `Bearer ${TEST_JWT}` }
+                });
+                job3 = await jr3.json();
+                if (job3.status === 'completed' || job3.status === 'failed') break;
+                await new Promise(r => setTimeout(r, 1500));
+            }
+            assert(job3 && job3.status === 'completed',
+                `third job completed (final=${job3 && job3.status})`);
+
+            // DB check — for the two campaigns created by this run, the
+            // step_number=1 row must have delay_hours=0 and condition='all'
+            // for BOTH waves (activate normalised from 120/not_registered,
+            // register normalised from 240/not_opened).
+            const camp3Res = await pool.query(
+                `SELECT id, name FROM email_campaigns
+                 WHERE expo_id = $1 AND created_at >= $2 AND name LIKE $3
+                 ORDER BY id ASC`,
+                [TEST_EXPO_ID, jobStartTime3.toISOString(), CAMPAIGN_TAG + '%']
+            );
+            console.log(`    Third-run campaigns: ${camp3Res.rows.length}`);
+            for (const row of camp3Res.rows) {
+                console.log(`      #${row.id}  name='${row.name}'`);
+            }
+            assert(camp3Res.rows.length === 2,
+                `third run created 2 campaigns (got ${camp3Res.rows.length})`);
+
+            const camp3Ids = camp3Res.rows.map(r => r.id);
+            const step1Res = await pool.query(
+                `SELECT campaign_id, step_number, delay_hours, condition FROM campaign_steps
+                 WHERE campaign_id = ANY($1) AND step_number = 1
+                 ORDER BY campaign_id`,
+                [camp3Ids]
+            );
+            console.log(`    step_number=1 rows (must be 0h + 'all' for both waves):`);
+            for (const row of step1Res.rows) {
+                console.log(`      campaign_id=${row.campaign_id}  delay_hours=${row.delay_hours}  condition='${row.condition}'`);
+            }
+            assert(step1Res.rows.length === 2,
+                `two step_number=1 rows (one per wave) (got ${step1Res.rows.length})`);
+            for (const row of step1Res.rows) {
+                assert(row.delay_hours === 0,
+                    `campaign ${row.campaign_id} step_number=1 delay_hours === 0 (got ${row.delay_hours}) — normaliser fired`);
+                assert(row.condition === 'all',
+                    `campaign ${row.campaign_id} step_number=1 condition === 'all' (got '${row.condition}') — normaliser fired`);
+            }
         } finally {
             await pool.end();
         }

@@ -151,7 +151,10 @@
         .wizard-wave-block h4 { margin:0 0 10px; font-size:13px; color:var(--text-primary); }
         .wizard-step-row { display:grid; grid-template-columns:minmax(180px,2fr) 100px 130px auto auto; gap:8px; align-items:center; margin-bottom:6px; }
         .wizard-step-row select, .wizard-step-row input[type="number"] { padding:6px 10px; font-size:13px; border:1px solid var(--border-color); border-radius:4px; background:#fff; }
+        .wizard-step-row select:disabled, .wizard-step-row input[type="number"]:disabled { background:#f8fafc; color:var(--text-muted); cursor:not-allowed; }
         .wizard-step-row button { white-space:nowrap; }
+        .wizard-step-header { display:grid; grid-template-columns:minmax(180px,2fr) 100px 130px auto auto; gap:8px; padding:0 10px; margin-bottom:4px; font-size:11px; color:var(--text-muted); font-weight:500; text-transform:uppercase; letter-spacing:0.4px; }
+        .wizard-drip-hint { font-size:11px; color:var(--text-muted); margin-top:8px; line-height:1.5; }
         .wizard-validation { grid-column:1 / -1; padding:6px 10px; border-radius:4px; font-size:12px; margin-top:2px; margin-bottom:6px; }
         .wizard-validation.ok { background:#d1fae5; color:#065f46; }
         .wizard-validation.warn { background:#fef3c7; color:#92400e; }
@@ -388,6 +391,40 @@
                 <!-- WIZARD Tab (G3) — 5-step flow                                  -->
                 <!-- ============================================================ -->
                 <div id="wizardTab" class="tab-content">
+                    <div class="page-info-box" id="wizardInfoBox" style="display:none;">
+                        <button class="info-box-close" onclick="closeWizardInfoBox()" title="Close">&#10005;</button>
+                        <div class="info-box-toggle" id="wizardInfoBoxToggle" onclick="toggleWizardInfoBox()">&#8505;&#65039; What does the Wizard do?</div>
+                        <div class="info-box-content" id="wizardInfoBoxContent">
+                            <div class="info-en">
+                                <strong>Campaign Wizard</strong> — turns one uploaded Excel file into two ready-to-send drip campaigns, split automatically by whether each person is already in our database.
+                                <ul>
+                                    <li><strong>ACTIVATE wave</strong> — people already in our database from any past expo. They get a one-click token link that activates their badge on the target expo. No re-registration needed.</li>
+                                    <li><strong>REGISTER wave</strong> — people NOT in our database at all. They get a link to the registration form.</li>
+                                </ul>
+                                <strong>What it does NOT do:</strong> it does not separate people who <em>attended</em> (checked in) from people who <em>registered but did not show up</em>. Both land in ACTIVATE. To message those two groups differently, prepare two Excel files and run the wizard twice.
+                                <br><br>
+                                <strong>Typical 4-step drip:</strong>
+                                <table style="border-collapse:collapse; margin:8px 0; font-size:12px;">
+                                    <thead>
+                                        <tr style="border-bottom:1px solid #dbeafe;">
+                                            <th style="text-align:left; padding:4px 16px 4px 0;">Step</th>
+                                            <th style="text-align:left; padding:4px 16px 4px 0;">Delay from previous</th>
+                                            <th style="text-align:left; padding:4px 0;">Send to</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr><td style="padding:2px 16px 2px 0;">1</td><td style="padding:2px 16px 2px 0;">0h (fires when you activate the campaign)</td><td style="padding:2px 0;"><code>all</code></td></tr>
+                                        <tr><td style="padding:2px 16px 2px 0;">2</td><td style="padding:2px 16px 2px 0;">120h (5 days)</td><td style="padding:2px 0;"><code>not_registered</code></td></tr>
+                                        <tr><td style="padding:2px 16px 2px 0;">3</td><td style="padding:2px 16px 2px 0;">120h (5 days)</td><td style="padding:2px 0;"><code>not_registered</code></td></tr>
+                                        <tr><td style="padding:2px 16px 2px 0;">4</td><td style="padding:2px 16px 2px 0;">120h (5 days)</td><td style="padding:2px 0;"><code>not_registered</code></td></tr>
+                                    </tbody>
+                                </table>
+                                <strong>Draft-only:</strong> the wizard produces campaigns in <strong>DRAFT</strong> status. Nothing sends until you open the <a href="email-campaigns.html">Email Campaigns</a> page and click Activate. Activating the campaign fires step 1 immediately.
+                                <br><br>
+                                <strong>Validation pills on the Templates panel:</strong> a <span style="color:#991b1b;">red</span> pill blocks the Build button — fix the template. An <span style="color:#92400e;">amber</span> pill does <em>not</em> block — it is a warning worth reading.
+                            </div>
+                        </div>
+                    </div>
                     <div class="wizard-steps" id="wizardStepBadges">
                         <div class="wizard-step-badge active" data-step="1">1. Source</div>
                         <div class="wizard-step-arrow">→</div>
@@ -466,15 +503,31 @@
                             <h4><i class="bi bi-envelope-check"></i> ACTIVATE wave <span id="wActivateCount" style="color:var(--text-muted); font-weight:normal;"></span></h4>
                             <div class="form-group"><label class="form-label" style="font-size:12px;">Campaign name (optional)</label><input type="text" id="wActivateName" class="form-select" placeholder="Auto: {expo} Activate Wave"></div>
                             <label class="form-label" style="font-size:12px;">Steps</label>
+                            <div class="wizard-step-header">
+                                <div>Template</div>
+                                <div>Delay (hours)</div>
+                                <div>Send to</div>
+                                <div></div>
+                                <div></div>
+                            </div>
                             <div id="wActivateSteps"></div>
                             <button class="btn btn-sm btn-secondary" onclick="wAddStep('activate')" style="margin-top:4px;"><i class="bi bi-plus"></i> Add step</button>
+                            <div class="wizard-drip-hint">Typical drip: <strong>0h → 120h → 120h → 120h</strong> (every 5 days), with step 1 <strong>all</strong> and later steps <strong>not_registered</strong> so people who already registered stop receiving reminders.</div>
                         </div>
                         <div class="wizard-wave-block" id="wWaveRegister">
                             <h4><i class="bi bi-envelope-plus"></i> REGISTER wave <span id="wRegisterCount" style="color:var(--text-muted); font-weight:normal;"></span></h4>
                             <div class="form-group"><label class="form-label" style="font-size:12px;">Campaign name (optional)</label><input type="text" id="wRegisterName" class="form-select" placeholder="Auto: {expo} Register Wave"></div>
                             <label class="form-label" style="font-size:12px;">Steps</label>
+                            <div class="wizard-step-header">
+                                <div>Template</div>
+                                <div>Delay (hours)</div>
+                                <div>Send to</div>
+                                <div></div>
+                                <div></div>
+                            </div>
                             <div id="wRegisterSteps"></div>
                             <button class="btn btn-sm btn-secondary" onclick="wAddStep('register')" style="margin-top:4px;"><i class="bi bi-plus"></i> Add step</button>
+                            <div class="wizard-drip-hint">Typical drip: <strong>0h → 120h → 120h → 120h</strong> (every 5 days), with step 1 <strong>all</strong> and later steps <strong>not_registered</strong> so people who already registered stop receiving reminders.</div>
                         </div>
                         <div class="wizard-nav">
                             <button class="btn btn-secondary" onclick="wBackTo(2)">← Back to preview</button>
@@ -1461,6 +1514,34 @@ function wInitTab() {
         const sel = localStorage.getItem('selectedExpoId');
         if (sel) target.value = sel;
     }
+    initWizardInfoBox();
+}
+
+// Wizard-tab info box (separate localStorage key from the page-level info box
+// so the two collapse independently).
+function closeWizardInfoBox() {
+    const b = document.getElementById('wizardInfoBox');
+    if (!b) return;
+    b.querySelector('.info-box-content').style.display = 'none';
+    b.querySelector('.info-box-close').style.display = 'none';
+    document.getElementById('wizardInfoBoxToggle').style.display = 'block';
+    b.style.padding = '8px 20px';
+    localStorage.setItem('wizardInfoBox_closed', '1');
+}
+function toggleWizardInfoBox() {
+    const b = document.getElementById('wizardInfoBox');
+    if (!b) return;
+    b.querySelector('.info-box-content').style.display = '';
+    b.querySelector('.info-box-close').style.display = '';
+    document.getElementById('wizardInfoBoxToggle').style.display = 'none';
+    b.style.padding = '16px 20px';
+    localStorage.removeItem('wizardInfoBox_closed');
+}
+function initWizardInfoBox() {
+    const b = document.getElementById('wizardInfoBox');
+    if (!b) return;
+    b.style.display = 'block';
+    if (localStorage.getItem('wizardInfoBox_closed') === '1') closeWizardInfoBox();
 }
 
 async function wGoToPreview() {
@@ -1598,9 +1679,20 @@ function wRenderSteps(wave) {
     if (arr.length === 0) { container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; margin-bottom:8px;">No steps yet.</div>'; return; }
     const activeTemplates = (Array.isArray(templates) ? templates : []).filter(t => t.is_active);
     const conds = ['all','not_opened','opened','not_clicked','clicked','not_registered','registered'];
+    // Step 1 (index 0) is forced by the backend at campaigns.js:383-384/891-892:
+    // delay_hours=0, condition='all'. Match the contract in the UI so we're
+    // not silently overridden — mutate state before render + disable inputs.
+    if (arr.length > 0) {
+        arr[0].delay_hours = 0;
+        arr[0].condition = 'all';
+    }
+    const delayTip = 'Hours after the PREVIOUS step was sent. Step 1 is always 0 and fires when you activate the campaign.';
+    const condTip = "Who gets this step. Step 1 is always 'all'.";
     let html = '';
     for (let i = 0; i < arr.length; i++) {
         const s = arr[i];
+        const isStep1 = (i === 0);
+        const step1Attr = isStep1 ? ' disabled' : '';
         const tplOpts = activeTemplates.map(t => '<option value="' + t.id + '"' + (s.template_id === t.id ? ' selected' : '') + '>' + wEscapeHtml(t.name) + '</option>').join('');
         const condOpts = conds.map(c => '<option value="' + c + '"' + (s.condition === c ? ' selected' : '') + '>' + c + '</option>').join('');
         html +=
@@ -1608,9 +1700,9 @@ function wRenderSteps(wave) {
                 '<select onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'template_id\', parseInt(this.value, 10) || null)">' +
                     '<option value="">Template...</option>' + tplOpts +
                 '</select>' +
-                '<input type="number" min="0" step="1" value="' + s.delay_hours + '" title="Delay hours from previous step" ' +
+                '<input type="number" min="0" step="1" value="' + s.delay_hours + '" title="' + wEscapeHtml(delayTip) + '"' + step1Attr + ' ' +
                     'onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'delay_hours\', parseInt(this.value, 10) || 0)">' +
-                '<select onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'condition\', this.value)">' + condOpts + '</select>' +
+                '<select title="' + wEscapeHtml(condTip) + '"' + step1Attr + ' onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'condition\', this.value)">' + condOpts + '</select>' +
                 '<button class="btn btn-sm btn-secondary" ' + (s.template_id ? '' : 'disabled') + ' onclick="wValidate(\'' + wave + '\', ' + i + ')">Validate</button>' +
                 '<button class="btn btn-sm" style="color:var(--danger);" onclick="wRemoveStep(\'' + wave + '\', ' + i + ')" title="Remove">&times;</button>' +
                 (s.validation ? wRenderValidation(s.validation) : '') +

@@ -650,6 +650,33 @@ router.post('/reactivation/build', async (req, res) => {
             return res.status(400).json({ success: false, error: 'At least one of activate_steps or register_steps must be non-empty' });
         }
 
+        // ---- Step-1 normaliser (Suer 2 Sep, post-G3-UI-diff) ------------
+        // Wizard /build INSERTs into campaign_steps directly (:723-729
+        // below), bypassing the step-1 override in
+        // routes/campaigns.js:383-384 (POST /:id/steps forces
+        // `step_number === 1` → delay_hours = 0, condition = 'all').
+        // The G3 UI disables step-1's delay/condition inputs, but an API
+        // caller (or a future UI regression) could still POST activate_steps[0]
+        // with delay_hours=120 / condition='not_registered' and have the
+        // first email land 5 days late with reminders-only semantics.
+        // Mirror the existing endpoint's behaviour: NORMALISE (not reject),
+        // log once per wave when incoming values differed.
+        const normaliseStep1 = (arr, waveLabel) => {
+            if (arr.length === 0) return;
+            const s0 = arr[0];
+            const beforeDelay = s0.delay_hours;
+            const beforeCond = s0.condition;
+            if (beforeDelay !== 0 || (beforeCond != null && beforeCond !== 'all')) {
+                console.log(`[wizard/build] step-1 normalised for ${waveLabel} wave: `
+                    + `delay_hours ${beforeDelay} → 0, condition ${beforeCond} → 'all' `
+                    + `(mirrors campaigns.js:383-384)`);
+            }
+            s0.delay_hours = 0;
+            s0.condition = 'all';
+        };
+        normaliseStep1(activate_steps, 'activate');
+        normaliseStep1(register_steps, 'register');
+
         // ---- Template validation (Piece 6, unless skip flag set) ---------
         // Blocks on error-severity issues; warnings pass through.
         // WAVE-AWARE (Fix 3): activate-wave templates must wire {{activation_url}}
