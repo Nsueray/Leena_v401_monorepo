@@ -138,6 +138,10 @@ psql "postgresql://leena_v401_db_user:xlM5m9TWwT4gXqqiicMA6QjZboJ6njmu@dpg-d2smv
 
 ### Database Access
 
+**Quick reference (memorize this — the two commands, no exceptions):**
+- Render Shell (Suer, writes): `psql "$DATABASE_INTERNAL_URL"`
+- Claude Code (read-only):     `psql "$RENDER_DATABASE_READONLY_URL"`  — WARP off, IP allowlisted
+
 **Read-only (Claude Code, local development):**
 - Connection: `process.env.RENDER_DATABASE_READONLY_URL`
 - User: `claude_readonly`
