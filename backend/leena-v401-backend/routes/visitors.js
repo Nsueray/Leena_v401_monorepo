@@ -638,11 +638,23 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
       return res.status(400).json({ success: false, message: 'Excel file is empty' });
     }
 
-    // Fetch expo name once (used in email templates)
+    // Fetch expo name + country_code once
+    // - name is used in email templates
+    // - country_code is the default for phone normalisation (Sep 2026 rewrite)
+    //   Passed into normalizePhone(raw, expoCountryCode) on the row loop below.
+    //   NULL for test/placeholder expos — normalizer then rejects any local
+    //   number that lacks a '+' prefix (that is the correct behaviour for an
+    //   expo with no geography — see IMPORT_PHONE_NORMALISATION_20260901.md §5).
     let expoName = '';
+    let expoCountryCode = null;
     if (expo_id) {
-      const expoResult = await pool.query(`SELECT name FROM expos WHERE id = $1`, [expo_id]);
-      if (expoResult.rows.length) expoName = expoResult.rows[0].name;
+      const expoResult = await pool.query(
+        `SELECT name, country_code FROM expos WHERE id = $1`, [expo_id]
+      );
+      if (expoResult.rows.length) {
+        expoName = expoResult.rows[0].name;
+        expoCountryCode = expoResult.rows[0].country_code;
+      }
     }
 
     // Get email template if needed
@@ -709,7 +721,22 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
         const email = row.email || row.Email || row.EMAIL || row.e_mail || '';
         const company = row.company || row.Company || row.COMPANY || row.organization || row.Organisation || '';
         const country = row.country || row.Country || row.COUNTRY || '';
-        const phone = row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || row.tel || '';
+        // Phone: coerce/normalise via libphonenumber-js against the expo's country_code.
+        // Sep 2026 — closes G21 (numeric cells crashing on .trim()) and produces one
+        // consistent E.164 shape at write time. Empty/blank → e164='' (preserved).
+        // Unfixable → skip THIS row, listed in results.errors with row number + raw value.
+        const rawPhone = row.phone || row.Phone || row.PHONE || row.mobile || row.Mobile || row.tel || '';
+        const phoneResult = normalizePhone(rawPhone, expoCountryCode);
+        if (!phoneResult.ok) {
+          results.errors.push({
+            row: rowNum,
+            raw_value: String(rawPhone).slice(0, 100),
+            message: `Phone rejected: ${phoneResult.reason}`
+          });
+          results.failed_count++;
+          continue;
+        }
+        const phone = phoneResult.e164;
         const job_title = row.job_title || row['Job Title'] || row.title || row.Title || row.position || row.Position || '';
         const website = row.website || row.Website || row.web || row.url || '';
         const visitor_type_val = visitor_type || row.visitor_type || row['Visitor Type'] || row.type || 'visitor';
@@ -785,7 +812,7 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
               updated_at = NOW()
             WHERE id = $13`,
             [name.trim(), last_name.trim(), company.trim(), country.trim(),
-             job_title.trim(), phone.trim(), visitor_type_val, sector.trim(),
+             job_title.trim(), phone, visitor_type_val, sector.trim(),
              (row.booth_number || row['Booth Number'] || row.booth || row.Booth || '').toString().trim(),
              mergedCustomFields,
              currentQrCode,
@@ -881,7 +908,7 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
           company.trim(),
           country.trim(),
           job_title.trim(),
-          phone.trim(),
+          phone,
           website.trim(),
           source,
           origin,

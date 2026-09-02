@@ -326,6 +326,10 @@
                                     <span>No Email (Skipped)</span>
                                     <strong id="resultSkippedNoEmail">0</strong>
                                 </div>
+                                <div class="results-item">
+                                    <span>Invalid Phone (Skipped) <small id="resultInvalidPhoneRows" style="color:var(--text-secondary);font-weight:normal;"></small></span>
+                                    <strong id="resultSkippedInvalidPhone">0</strong>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -869,6 +873,11 @@
                     document.getElementById('resultSkippedRegistered').textContent = '-';
                     document.getElementById('resultSkippedDuplicate').textContent = '-';
                     document.getElementById('resultSkippedNoEmail').textContent = data.skipped || 0;
+                    document.getElementById('resultSkippedInvalidPhone').textContent = data.skipped_invalid_phone || 0;
+                    document.getElementById('resultInvalidPhoneRows').textContent =
+                        (data.invalid_phone_samples && data.invalid_phone_samples.length)
+                            ? '(rows ' + data.invalid_phone_samples.map(s => s.row).join(', ') + ')'
+                            : '';
 
                     // Show progress bar
                     let progressHtml = `<div style="margin-top:12px;"><div style="background:#e5e7eb;border-radius:8px;height:20px;overflow:hidden;"><div id="progressFill" style="background:var(--primary);height:100%;width:0%;transition:width 0.5s;border-radius:8px;"></div></div><p id="progressText" style="font-size:12px;color:var(--text-muted);margin-top:6px;">Processing... 0 / ${data.valid || data.total}</p></div>`;
@@ -920,6 +929,11 @@
                 document.getElementById('resultSkippedRegistered').textContent = data.results?.skipped_already_registered || 0;
                 document.getElementById('resultSkippedDuplicate').textContent = data.results?.skipped_duplicate || 0;
                 document.getElementById('resultSkippedNoEmail').textContent = data.results?.skipped_no_email || 0;
+                document.getElementById('resultSkippedInvalidPhone').textContent = data.results?.skipped_invalid_phone || 0;
+                document.getElementById('resultInvalidPhoneRows').textContent =
+                    (data.results?.invalid_phone_samples && data.results.invalid_phone_samples.length)
+                        ? '(rows ' + data.results.invalid_phone_samples.map(s => s.row).join(', ') + ')'
+                        : '';
                 document.getElementById('resultsBox').style.display = 'block';
                 showAlert(`Campaign created! ${data.results?.created || 0} emails queued for sending.`, 'success');
 

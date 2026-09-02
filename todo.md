@@ -20,7 +20,7 @@
 | 1 | **Campaign wizard (Phase 2)** | P1 | **SIEMA deadline ~8 Sep** — the binding date on this list |
 | 2 | **App-log surface for Claude Code diagnostics** | **P1** | **New — surfaced by v4.0.11 segment-forensics.** Either ship Render logs to a Claude-readable sink, wire `LOG_LEVEL=debug` to `console.log` at each POST handler entry/exit, or add a lightweight `logs/access.log` on the Render disk. G26. **Diagnosis without app logs costs ~2 h that a 5-minute grep would replace** — the M1-M4 failure reconstruction is the reference case. |
 | 3 | **Wire segment smoke test into CI** | **P1** | **New — file exists at `backend/leena-v401-backend/tests/test_email_segments_smoke.js`.** Runs 10 k-recipient `/send`, asserts response <5 s + Mode 2 shape. Add to `npm test`; run on every PR touching `routes/emailSegments.js`, `email_worker.js`, or `utils/email.js`. Needs `TEST_JWT`/`TEST_BASE_URL`/`DATABASE_URL` on staging service. Would have caught the Mode-1 regression on its own PR. |
-| 4 | **Import phone coercion** | P1 | `String(v).trim()` + restore the `+` for 234-typed ints. **Third agency file failed.** See G21: Excel stores phones as numbers and it is invisible in the UI |
+| 4 | **Import phone coercion** | P1 | `String(v).trim()` + restore the `+` for 234-typed ints. **Third agency file failed.** See G21: Excel stores phones as numbers and it is invisible in the UI. **In flight 2 Sep — libphonenumber-js normalisation deployed, pending expo-17 verification before this item closes.** |
 | 5 | **"Copy URL" per terminal purpose + param unification** | P1 | Button always emits `qrscanner.html?terminalKey=`. Make it purpose-aware **and** unify on `terminal_key` everywhere (`conference-scanner` uses `terminal_key`, `bulk-badge-print` uses `key`). See G22 |
 | 6 | **`delivered_count` snapshot timing** | P1 | All campaign types, not just single-step. See G23 |
 | 7 | **Certificate Templates admin page** | P1 | May's Option 3. Ends the hardcoded `expoId`-switch (v4.0.10) |
@@ -29,8 +29,9 @@
 | 10 | **p95 response-time alarm on `/api/email-segments/send`** | **P2** | **New — surfaced by v4.0.11.** 30 s threshold would have alerted on Yaprak's first noshow_any attempt today. Extends naturally to `/api/email-send/bulk` and `/api/reactivation/create-from-excel`. |
 | 11 | **Restore Claude Code's DB inbound-IP as standing item** | **P2** | **New — recurring G4.** WARP/VPN egress-IP drift blocked read-only DB access mid-segment-diagnosis; had to work analytically for 20 min. Standing checklist item at start of any prod-diagnosis session: `psql $RENDER_DATABASE_READONLY_URL -c 'SELECT 1'` — if it fails, refresh whitelist BEFORE touching anything else. |
 | 12 | **Manual-reg form parity with form config** | P2 | Read required fields from `forms.fields`, kill silent `N/A`/`Nigeria` defaults |
-| 13 | **Phone cleanup: 840 malformed `+2340…` rows** | P2 | Trunk zero not stripped before `+234` prefix; not dialable |
-| 14 | **Conference stats: exclude/flag test certificates** | P3 | Page reads 2 issued when both are smoke tests |
+| 13 | **Phone cleanup: 5,148 malformed `+CC0…` rows** | P2 | Trunk zero not stripped before country code; not dialable. **Corrected 2 Sep from earlier stale "840" figure — actual count measured across all expos: NG `+2340…` 3,142 + MA `+2120…` 900 + GH `+2330…` 813 + KE `+2540…` 2 + minor others. See IMPORT_PHONE_NORMALISATION_20260901.md §2. Dry-run SQL in §7 of the same doc; not run.** |
+| 14 | **Phone normalise Phase 2 — public form + Zoho webhook** | P2 | Extend Sep-2026 normaliser to `routes/visitors.js:215` (public form submit) and `routes/webhook.js:57` (Zoho). Same fail-open behaviour as `/activate` (store `''`, don't reject the flow). **Do only after the import deploy has run clean for 1 week** — if the normaliser is wrong for a whole country, the import path can be rolled back; the public form is real-time visitor traffic where mistakes are more visible. |
+| 15 | **Conference stats: exclude/flag test certificates** | P3 | Page reads 2 issued when both are smoke tests |
 
 ### Carried, unchanged
 - SendGrid bounce webhook → automated `email_unsubscribes` (G9: **zero** bounce visibility)

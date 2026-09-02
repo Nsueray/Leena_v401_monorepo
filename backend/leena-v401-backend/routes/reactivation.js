@@ -15,6 +15,7 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { generateBadgeUrl } = require('../utils/qrcode');
 const { processEmailTemplate } = require('../utils/email');
+const { normalizePhone } = require('../utils/phoneNormalize');
 const authMiddleware = require('../middleware/authMiddleware');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } }); // 50MB
@@ -177,15 +178,31 @@ async function processReactivationChunks(jobId, validRows, ctx) {
   console.log(`[reactivation-job-${jobId}] ✅ COMPLETED: ${created} tokens created`);
 }
 
-function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails) {
-  const results = { skipped_no_email: 0, skipped_already_registered: 0, skipped_duplicate: 0, skipped_unsubscribed: 0 };
+function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails, defaultCountry) {
+  // Sep 2026 — phones normalised to E.164 via libphonenumber-js with defaultCountry
+  // (from the target expo's country_code). Empty phones preserved.
+  // Unfixable phones → the ROW is rejected (skipped_invalid_phone), consistent with
+  // the primary import path in visitors.js.
+  // Samples: first 3 rejects, each with the Excel row number (1-indexed + header row).
+  const results = { skipped_no_email: 0, skipped_already_registered: 0, skipped_duplicate: 0, skipped_unsubscribed: 0, skipped_invalid_phone: 0, invalid_phone_samples: [] };
   const validRows = [];
-  for (const row of rows) {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNumber = i + 2; // Excel row (data starts at row 2 after the header)
     const email = (row.email || row.Email || row.EMAIL || '').toString().trim().toLowerCase();
     if (!email) { results.skipped_no_email++; continue; }
     if (unsubscribedEmails.has(email)) { results.skipped_unsubscribed++; continue; }
     if (existingVisitorEmails.has(email)) { results.skipped_already_registered++; continue; }
     if (existingTokenEmails.has(email)) { results.skipped_duplicate++; continue; }
+    const rawPhone = row.phone || row.Phone || row.mobile || '';
+    const phoneResult = normalizePhone(rawPhone, defaultCountry);
+    if (!phoneResult.ok) {
+      results.skipped_invalid_phone++;
+      if (results.invalid_phone_samples.length < 3) {
+        results.invalid_phone_samples.push({ row: rowNumber, email, raw: String(rawPhone).slice(0, 100), reason: phoneResult.reason });
+      }
+      continue;
+    }
     existingTokenEmails.add(email);
     validRows.push({
       email,
@@ -194,7 +211,7 @@ function prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsu
       company: (row.company || row.Company || row.organization || '').toString().trim(),
       country: (row.country || row.Country || '').toString().trim(),
       job_title: (row.job_title || row['Job Title'] || row.title || '').toString().trim(),
-      phone: (row.phone || row.Phone || row.mobile || '').toString().trim(),
+      phone: phoneResult.e164,
       token: generateToken()
     });
   }
@@ -333,7 +350,7 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
 
     // Verify target expo belongs to organizer
     const expoCheck = await pool.query(
-      'SELECT id, name FROM expos WHERE id = $1 AND organizer_id = $2',
+      'SELECT id, name, country_code FROM expos WHERE id = $1 AND organizer_id = $2',
       [target_expo_id, organizerId]
     );
     if (expoCheck.rows.length === 0) {
@@ -367,11 +384,14 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
     // Pre-fetch existing emails + unsubscribes for O(1) dedup
     const { existingVisitorEmails, existingTokenEmails, unsubscribedEmails } = await prefetchEmails(target_expo_id, organizerId);
 
-    // Filter valid rows (no DB calls)
-    const { validRows, skipped_no_email, skipped_already_registered, skipped_duplicate, skipped_unsubscribed } = prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails);
-    const totalSkipped = skipped_no_email + skipped_already_registered + skipped_duplicate + skipped_unsubscribed;
+    // Filter valid rows (no DB calls) — pass expo country_code for phone normalisation
+    const { validRows, skipped_no_email, skipped_already_registered, skipped_duplicate, skipped_unsubscribed, skipped_invalid_phone, invalid_phone_samples } = prepareExcelRows(rows, existingVisitorEmails, existingTokenEmails, unsubscribedEmails, targetExpo.country_code);
+    const totalSkipped = skipped_no_email + skipped_already_registered + skipped_duplicate + skipped_unsubscribed + skipped_invalid_phone;
 
-    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_no_email} no email, ${skipped_already_registered} already registered, ${skipped_duplicate} duplicate, ${skipped_unsubscribed} unsubscribed)`);
+    console.log(`📊 ${validRows.length} valid rows after filtering (${skipped_no_email} no email, ${skipped_already_registered} already registered, ${skipped_duplicate} duplicate, ${skipped_unsubscribed} unsubscribed, ${skipped_invalid_phone} invalid phone)`);
+    if (skipped_invalid_phone > 0 && invalid_phone_samples.length > 0) {
+      console.log(`   invalid phone samples (up to 3):`, JSON.stringify(invalid_phone_samples));
+    }
 
     // Create import job
     const jobRes = await pool.query(
@@ -398,6 +418,8 @@ router.post('/create-from-excel', authMiddleware, upload.single('file'), async (
       total: rows.length,
       valid: validRows.length,
       skipped: totalSkipped,
+      skipped_invalid_phone,
+      invalid_phone_samples,
       message: 'Campaign processing started. Poll /api/reactivation/job/' + jobId + ' for status.'
     });
 
@@ -648,14 +670,41 @@ router.post('/activate', async (req, res) => {
     const badgeId = qrCode.substring(0, 8).toUpperCase();
     const badgeUrl = generateBadgeUrl(qrCode);
 
+    // Normalise phone against the target expo's country_code (Sep 2026).
+    // Fetches the country once — activate is a single-row endpoint, not a loop.
+    // FAIL-OPEN per 2 Sep 2026 decision A-1: if the number can't be parsed,
+    // still complete the activation — store phone as '' AND drop a reject
+    // trace into custom_fields (JSONB), atomically with the INSERT. The
+    // visitor gets in; ops can fix the phone later via the detail panel and
+    // the trace tells them what came in and why it was refused.
+    const expoCcRes = await pool.query(
+      `SELECT country_code FROM expos WHERE id = $1`, [tokenData.target_expo_id]
+    );
+    const activateCountry = expoCcRes.rows[0]?.country_code || null;
+    const rawPhoneInput = phone || tokenData.phone || '';
+    const phoneResult = normalizePhone(rawPhoneInput, activateCountry);
+    if (!phoneResult.ok) {
+      console.warn(`[reactivation/activate] phone unfixable for token ${tokenData.id} — storing '' as phone. raw=${String(rawPhoneInput).slice(0,80)} reason=${phoneResult.reason}`);
+    }
+    const phoneToStore = phoneResult.ok ? phoneResult.e164 : '';
+    // custom_fields payload: NULL on success (INSERT stays clean); JSON blob on
+    // reject with raw input (≤80 chars), the reason string, and an ISO timestamp.
+    // Cast in-query as $16::jsonb so pg driver serialises correctly.
+    const rejectTrace = phoneResult.ok ? null : JSON.stringify({
+      phone_raw: String(rawPhoneInput).slice(0, 80),
+      phone_reject_reason: phoneResult.reason,
+      phone_rejected_at: new Date().toISOString()
+    });
+
     const visitorResult = await pool.query(`
       INSERT INTO visitors (
         organizer_id, expo_id,
         name, last_name, email, company, country, job_title, phone,
         source, origin, visitor_type,
         qr_code, badge_id, badge_url,
+        custom_fields,
         created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16::jsonb, NOW())
       RETURNING *
     `, [
       tokenData.organizer_id,
@@ -666,13 +715,14 @@ router.post('/activate', async (req, res) => {
       company || tokenData.company,
       country || tokenData.country,
       job_title || tokenData.job_title,
-      phone || tokenData.phone,
+      phoneToStore,
       'reactivation',
       'reactivation_campaign',
       'visitor',
       qrCode,
       badgeId,
-      badgeUrl
+      badgeUrl,
+      rejectTrace
     ]);
 
     const newVisitor = visitorResult.rows[0];
