@@ -923,6 +923,158 @@ async function main() {
                 `8b: g2_raw + g3_raw both === 0 — filter is on source list, not post-hoc (rows never entered buckets)`);
             assert(seg8b.counts.tokens_to_mint === 0,
                 `8b: tokens_to_mint === 0 (no G2 mailable → nothing to mint)`);
+
+            // ============================================================
+            // STEP 9 — Holdout at build time (Suer 3 Sep, Delivery A)
+            // ============================================================
+            // 5-row fixture, holdout_pct=20:
+            //   G2 mailable = 3 → round(3 * 0.20) = 1 holdout, 2 active
+            //   G3 mailable = 2 → round(2 * 0.20) = 0 holdout, 2 active
+            // Assertions:
+            //   202 body: holdout_activate === 1, holdout_register === 0
+            //   Job completes
+            //   Activate campaign has 1 status='holdout' + 2 status='active'
+            //   Holdout row's next_step_due_at IS NULL
+            //   NO new reactivation_token minted for the held-out email
+            //     (measured "since jobStart9" — pre-existing tokens from
+            //     STEP 3 for the G2 seeds are excluded from the delta)
+            //   Follow-up /segment reports the held-out email inside
+            //     already_in_another_campaign (proves cr.status IN
+            //     ('active','holdout') is what the overlap query uses)
+            console.log(`\n---- STEP 9: Holdout at build time (holdout_pct=20) ----`);
+
+            // Fresh /segment for a new preview_token (all previous consumed).
+            const seg9Form = new FormData();
+            seg9Form.append('file', new Blob([fullBuffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }), 'wizard_smoke.xlsx');
+            seg9Form.append('target_expo_id', String(TEST_EXPO_ID));
+            const seg9Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/segment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` },
+                body: seg9Form
+            });
+            if (!seg9Res.ok) {
+                const t = await seg9Res.text().catch(() => '');
+                throw new Error(`9 /segment HTTP ${seg9Res.status}: ${t.slice(0, 200)}`);
+            }
+            const seg9 = await seg9Res.json();
+            const preview9Token = seg9.preview_token;
+
+            const runTag9 = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '-holdout';
+            const jobStartTime9 = new Date();
+            console.log(`\n  /build with holdout_pct=20:`);
+            const build9Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/build`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    preview_token: preview9Token,
+                    activate_steps: [{ template_id: probeTemplateId, delay_hours: 0, condition: 'all' }],
+                    register_steps: [{ template_id: probeTemplateId, delay_hours: 0, condition: 'all' }],
+                    activate_name: `${CAMPAIGN_TAG} Activate ${runTag9}`,
+                    register_name: `${CAMPAIGN_TAG} Register ${runTag9}`,
+                    skip_template_validation: true,
+                    holdout_pct: 20
+                })
+            });
+            if (build9Res.status !== 202) {
+                const t = await build9Res.text().catch(() => '');
+                throw new Error(`9 /build HTTP ${build9Res.status}: ${t.slice(0, 300)}`);
+            }
+            const built9 = await build9Res.json();
+            console.log(`    202 body: ${JSON.stringify(built9)}`);
+
+            console.log(`\n  9 shape + value assertions on 202 body:`);
+            assert(typeof built9.holdout_activate === 'number',
+                `built9.holdout_activate is a number (got ${JSON.stringify(built9.holdout_activate)})`);
+            assert(typeof built9.holdout_register === 'number',
+                `built9.holdout_register is a number`);
+            assert(built9.holdout_activate === 1,
+                `built9.holdout_activate === 1 (round(3 G2 mailable × 20%)) (got ${built9.holdout_activate})`);
+            assert(built9.holdout_register === 0,
+                `built9.holdout_register === 0 (round(2 G3 mailable × 20%) = 0) (got ${built9.holdout_register})`);
+
+            // Poll to completion.
+            const pollDeadline9 = Date.now() + 60000;
+            let job9 = null;
+            while (Date.now() < pollDeadline9) {
+                const jr9 = await fetch(`${BASE_URL}/api/campaigns/reactivation/job/${built9.job_id}`, {
+                    headers: { 'Authorization': `Bearer ${TEST_JWT}` }
+                });
+                job9 = await jr9.json();
+                if (job9.status === 'completed' || job9.status === 'failed') break;
+                await new Promise(r => setTimeout(r, 1500));
+            }
+            assert(job9 && job9.status === 'completed',
+                `9 job completed (final=${job9 && job9.status}, error=${job9 && job9.error_message})`);
+
+            // Find the newly-created activate campaign.
+            const activateName9 = `${CAMPAIGN_TAG} Activate ${runTag9}`;
+            const camp9Res = await pool.query(
+                `SELECT id FROM email_campaigns WHERE expo_id = $1 AND name = $2`,
+                [TEST_EXPO_ID, activateName9]
+            );
+            assert(camp9Res.rows.length === 1,
+                `activate campaign '${activateName9}' created (got ${camp9Res.rows.length} matches)`);
+            const activateCamp9Id = camp9Res.rows[0].id;
+
+            // Status counts + next_step_due_at NULL for holdout row.
+            const statusCounts = await pool.query(
+                `SELECT status, COUNT(*)::int AS n,
+                        COUNT(*) FILTER (WHERE next_step_due_at IS NULL)::int AS null_due,
+                        COUNT(*) FILTER (WHERE next_step_due_at IS NOT NULL)::int AS nonnull_due
+                 FROM campaign_recipients WHERE campaign_id = $1
+                 GROUP BY status ORDER BY status`,
+                [activateCamp9Id]
+            );
+            console.log(`\n  Activate campaign ${activateCamp9Id} recipient status:`);
+            for (const row of statusCounts.rows) {
+                console.log(`    status='${row.status}'  n=${row.n}  next_step_due_at NULL=${row.null_due} non-null=${row.nonnull_due}`);
+            }
+            const holdoutRow = statusCounts.rows.find(r => r.status === 'holdout');
+            const activeRow = statusCounts.rows.find(r => r.status === 'active');
+            assert(holdoutRow && holdoutRow.n === 1,
+                `activate campaign has exactly 1 status='holdout' row (got ${holdoutRow ? holdoutRow.n : 0})`);
+            assert(activeRow && activeRow.n === 2,
+                `activate campaign has exactly 2 status='active' rows (got ${activeRow ? activeRow.n : 0})`);
+            assert(holdoutRow.null_due === 1 && holdoutRow.nonnull_due === 0,
+                `holdout row has next_step_due_at NULL (${holdoutRow.null_due}/1)`);
+
+            // Get the held-out email and verify NO new token was minted for it.
+            const holdoutEmailRes = await pool.query(
+                `SELECT email FROM campaign_recipients WHERE campaign_id = $1 AND status = 'holdout' LIMIT 1`,
+                [activateCamp9Id]
+            );
+            const heldOutEmail = holdoutEmailRes.rows[0].email;
+            console.log(`\n  Held-out email (randomly selected): ${heldOutEmail}`);
+            const newTokRes = await pool.query(
+                `SELECT COUNT(*)::int AS n FROM reactivation_tokens
+                 WHERE target_expo_id = $1 AND email = $2 AND created_at >= $3`,
+                [TEST_EXPO_ID, heldOutEmail, jobStartTime9.toISOString()]
+            );
+            console.log(`    NEW tokens (since jobStart9) for held-out email: ${newTokRes.rows[0].n}`);
+            assert(newTokRes.rows[0].n === 0,
+                `NO new reactivation_token minted for held-out email '${heldOutEmail}' since jobStart9 (got ${newTokRes.rows[0].n})`);
+
+            // Follow-up /segment: held-out email must appear in the overlap set,
+            // proving the query filters cr.status IN ('active','holdout').
+            const seg10Form = new FormData();
+            seg10Form.append('file', new Blob([fullBuffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }), 'wizard_smoke.xlsx');
+            seg10Form.append('target_expo_id', String(TEST_EXPO_ID));
+            const seg10Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/segment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` },
+                body: seg10Form
+            });
+            const seg10 = await seg10Res.json();
+            console.log(`\n  Follow-up /segment already_in_another_campaign = ${seg10.counts.already_in_another_campaign}`);
+            assert(seg10.counts.already_in_another_campaign === 5,
+                `follow-up /segment reports all 5 smoke emails overlap (holdout included) (got ${seg10.counts.already_in_another_campaign})`);
+            const activateInOthers = (seg10.other_campaigns || []).some(oc => oc.id === activateCamp9Id);
+            assert(activateInOthers,
+                `the new activate campaign ${activateCamp9Id} appears in other_campaigns list (proves overlap query includes cr.status='holdout')`);
         } finally {
             await pool.end();
         }

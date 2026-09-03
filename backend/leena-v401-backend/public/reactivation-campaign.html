@@ -439,6 +439,8 @@
                                 </table>
                                 <strong>Draft-only:</strong> the wizard produces campaigns in <strong>DRAFT</strong> status. Nothing sends until you open the <a href="email-campaigns.html">Email Campaigns</a> page and click Activate. Activating the campaign fires step 1 immediately.
                                 <br><br>
+                                <strong>Holdout (control group):</strong> on the Confirm panel you can set a <strong>Holdout %</strong> (0–20). A random slice of mailable recipients gets NO email and NO token — they land in <code>campaign_recipients</code> with <code>status='holdout'</code> so we can compare their fair-registration rate to the mailed group afterwards. Recommended <strong>5–10%</strong> for a campaign whose real lift you want to measure. Holdouts count as taken across campaigns: if you build a second campaign against the same list, the wizard's overlap warning will flag them (so we never accidentally mail the control group in a later run).
+                                <br><br>
                                 <strong>Validation pills on the Templates panel:</strong> a <span style="color:#991b1b;">red</span> pill blocks the Build button — fix the template. An <span style="color:#92400e;">amber</span> pill does <em>not</em> block — it is a warning worth reading.
                             </div>
                         </div>
@@ -603,6 +605,22 @@
                     <div id="wizardPanel4" class="wizard-panel" style="display:none;">
                         <h3>Ready to build</h3>
                         <div id="wConfirmSummary"></div>
+
+                        <!-- Holdout % (Suer 3 Sep, Delivery A) — control group. -->
+                        <div class="form-group" style="margin-top:20px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md);">
+                            <label class="form-label" style="font-size:13px; margin-bottom:4px;">
+                                Holdout % <span style="color:var(--text-muted); font-weight:normal; font-size:12px;">(control group — receives nothing)</span>
+                            </label>
+                            <input type="number" id="wHoldoutPct" min="0" max="20" step="1" value="0"
+                                   style="width:80px; padding:6px 10px; font-size:13px; border:1px solid var(--border-color); border-radius:4px;"
+                                   oninput="wUpdateHoldoutSummary()">
+                            <span style="font-size:12px; color:var(--text-muted); margin-left:8px;">%</span>
+                            <div class="form-hint" style="font-size:11px; margin-top:6px; line-height:1.5;">
+                                A random % of mailable recipients gets <strong>no email and no token</strong>. Compare their fair-registration rate to the mailed rate after the fair to measure real lift. Recommended <strong>5–10%</strong> for a first-of-kind campaign. Range 0–20.
+                            </div>
+                            <div id="wHoldoutSummaryLine" style="font-size:12px; color:var(--text-secondary); margin-top:8px; display:none;"></div>
+                        </div>
+
                         <div style="font-size:12px; color:var(--text-muted); margin-top:16px; padding:10px 12px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md);">All campaigns land in <strong>draft</strong>. Nothing sends until you activate them from the <a href="email-campaigns.html">Email Campaigns</a> page.</div>
                         <div class="wizard-nav">
                             <button class="btn btn-secondary" onclick="wBackTo(3)">← Back to templates</button>
@@ -1968,6 +1986,39 @@ function wGoToConfirm() {
     html += '</div>';
     document.getElementById('wConfirmSummary').innerHTML = html;
     wSetStep(4);
+    // Compute the holdout summary line from the current input value (default 0).
+    wUpdateHoldoutSummary();
+}
+
+// Recompute the holdout summary line without touching wConfirmSummary.
+// Called on every keystroke of the wHoldoutPct input (oninput handler).
+// Per-wave counts use round(mailable × pct/100) matching the backend's
+// selection math at :856+ so what the operator sees equals what /build
+// will insert.
+function wUpdateHoldoutSummary() {
+    const c = wizard.previewCounts;
+    if (!c) return;
+    const pctEl = document.getElementById('wHoldoutPct');
+    const line = document.getElementById('wHoldoutSummaryLine');
+    if (!pctEl || !line) return;
+    let pct = parseInt(pctEl.value, 10);
+    if (isNaN(pct) || pct < 0) pct = 0;
+    if (pct > 20) { pct = 20; pctEl.value = '20'; }
+    const g2Mailable = Number(c.g2_activate_mailable || 0);
+    const g3Mailable = Number(c.g3_register_mailable || 0);
+    const g2Hold = pct > 0 ? Math.round(g2Mailable * pct / 100) : 0;
+    const g3Hold = pct > 0 ? Math.round(g3Mailable * pct / 100) : 0;
+    if (pct === 0) {
+        line.style.display = 'none';
+        return;
+    }
+    let text = '';
+    if (g2Hold > 0) text += 'ACTIVATE wave holdout: <strong>' + g2Hold.toLocaleString() + '</strong> of ' + g2Mailable.toLocaleString() + ' — no email, no token.';
+    if (g2Hold > 0 && g3Hold > 0) text += '<br>';
+    if (g3Hold > 0) text += 'REGISTER wave holdout: <strong>' + g3Hold.toLocaleString() + '</strong> of ' + g3Mailable.toLocaleString() + ' — no email.';
+    if (g2Hold === 0 && g3Hold === 0) text = '<em>0 holdout — the mailable pool is too small for ' + pct + '% to round up. Try a higher %.</em>';
+    line.innerHTML = text;
+    line.style.display = 'block';
 }
 
 async function wBuild() {
@@ -1985,6 +2036,8 @@ async function wBuild() {
         const regName = document.getElementById('wRegisterName').value.trim();
         if (actName) body.activate_name = actName;
         if (regName) body.register_name = regName;
+        const holdoutPct = parseInt(document.getElementById('wHoldoutPct').value, 10) || 0;
+        if (holdoutPct > 0) body.holdout_pct = holdoutPct;
         const res = await fetch(API_URL + '/campaigns/reactivation/build', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token'), 'Content-Type': 'application/json' },
@@ -2070,6 +2123,10 @@ function wReset() {
     document.getElementById('wRegisterName').value = '';
     document.getElementById('wActivateSteps').innerHTML = '';
     document.getElementById('wRegisterSteps').innerHTML = '';
+    const holdoutInput = document.getElementById('wHoldoutPct');
+    if (holdoutInput) holdoutInput.value = '0';
+    const holdoutLine = document.getElementById('wHoldoutSummaryLine');
+    if (holdoutLine) holdoutLine.style.display = 'none';
     document.getElementById('wJobDone').style.display = 'none';
     document.getElementById('wJobFailed').style.display = 'none';
     document.getElementById('wJobFill').classList.remove('completed');

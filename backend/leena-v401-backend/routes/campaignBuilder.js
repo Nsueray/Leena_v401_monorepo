@@ -465,11 +465,16 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
                 [target_expo_id]
             ),
             pool.query(
+                // cr.status IN ('active','holdout') per Suer 3 Sep Delivery A —
+                // held-out people are enrolled in ANOTHER campaign for this
+                // expo. If we only checked 'active', a second campaign would
+                // silently mail the control group and the lift measurement
+                // would be contaminated. Holdouts still count as taken.
                 `SELECT LOWER(TRIM(cr.email)) AS email, cr.campaign_id,
                         ec.name AS campaign_name, ec.status AS campaign_status
                  FROM campaign_recipients cr
                  JOIN email_campaigns ec ON ec.id = cr.campaign_id
-                 WHERE cr.status = 'active'
+                 WHERE cr.status IN ('active','holdout')
                    AND ec.expo_id = $1
                    AND ec.organizer_id = $2
                    AND LOWER(TRIM(cr.email)) = ANY($3)`,
@@ -718,11 +723,25 @@ router.post('/reactivation/build', async (req, res) => {
             register_steps = [],
             activate_name,
             register_name,
-            skip_template_validation
+            skip_template_validation,
+            holdout_pct
         } = req.body || {};
 
         if (!preview_token) {
             return res.status(400).json({ success: false, error: 'preview_token is required' });
+        }
+
+        // Holdout percent (Suer 3 Sep, Delivery A). Integer 0-20, default 0.
+        // Selection is deferred until AFTER preview + step validation (below)
+        // so an invalid preview_token / template still returns the right
+        // error before we touch randomness or the mailable lists.
+        let holdoutPct = 0;
+        if (holdout_pct != null) {
+            const parsed = Number(holdout_pct);
+            if (!Number.isInteger(parsed) || parsed < 0 || parsed > 20) {
+                return res.status(400).json({ success: false, error: 'holdout_pct must be an integer between 0 and 20' });
+            }
+            holdoutPct = parsed;
         }
         const preview = readPreview(preview_token);
         if (!preview) {
@@ -831,6 +850,58 @@ router.post('/reactivation/build', async (req, res) => {
             }
         }
 
+        // ---- Holdout selection (Suer 3 Sep, Delivery A) -----------------
+        // Per wave, after unsub filtering, randomly select
+        // round(N × holdoutPct/100) recipients. These land in
+        // campaign_recipients with status='holdout' and next_step_due_at
+        // NULL. Two send paths are already gated on status='active' —
+        // campaigns.js:917-919 (activation UPDATE) and email_worker.js:
+        // 347-349 (scheduler pickup) — so holdout rows are unreachable
+        // by every send path. checkCampaignCompletion at email_worker.js:
+        // 671-674 checks NOT EXISTS(status='active'), so holdouts do
+        // not keep the campaign in status='active' forever.
+        //
+        // Fisher-Yates shuffle for real randomness (Array.sort(() =>
+        // Math.random() - 0.5) is not a uniform shuffle).
+        //
+        // Selection MUST happen here, before setImmediate — Phase 2 at
+        // :862 iterates preview.g2_activate and mints tokens for every
+        // non-unsub, non-hasToken row. Holdout emails are excluded from
+        // the mint filter so no reactivation_tokens row is ever created
+        // for them. Chosen from the closure so both the 202 response
+        // (below) and the orchestrator (setImmediate) see the same sets.
+        function fisherYatesShuffle(arr) {
+            const out = arr.slice();
+            for (let i = out.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [out[i], out[j]] = [out[j], out[i]];
+            }
+            return out;
+        }
+        const g2MailableForHoldout = preview.g2_activate.filter(r => !r._unsub);
+        const g3MailableForHoldout = preview.g3_register.filter(r => !r._unsub);
+        const holdoutG2Count = holdoutPct > 0
+            ? Math.round(g2MailableForHoldout.length * holdoutPct / 100)
+            : 0;
+        const holdoutG3Count = holdoutPct > 0
+            ? Math.round(g3MailableForHoldout.length * holdoutPct / 100)
+            : 0;
+        const S_holdoutG2 = new Set();
+        const S_holdoutG3 = new Set();
+        if (holdoutG2Count > 0) {
+            const shuffled = fisherYatesShuffle(g2MailableForHoldout);
+            for (let i = 0; i < holdoutG2Count; i++) S_holdoutG2.add(shuffled[i].email);
+        }
+        if (holdoutG3Count > 0) {
+            const shuffled = fisherYatesShuffle(g3MailableForHoldout);
+            for (let i = 0; i < holdoutG3Count; i++) S_holdoutG3.add(shuffled[i].email);
+        }
+        if (holdoutPct > 0) {
+            console.log(`[wizard/build] holdout selection at pct=${holdoutPct}: `
+                + `G2 ${holdoutG2Count}/${g2MailableForHoldout.length}, `
+                + `G3 ${holdoutG3Count}/${g3MailableForHoldout.length}`);
+        }
+
         // ---- Create the job row up front so caller can poll immediately --
         const totalRows = preview.g2_activate.length + preview.g3_register.length;
         const jobRes = await pool.query(
@@ -859,7 +930,12 @@ router.post('/reactivation/build', async (req, res) => {
                 phase = 'phase_2_mint_tokens';
                 console.log(`[wizard/build ${jobId}] ${phase} START`);
 
-                const tokensNeeded = preview.g2_activate.filter(r => !r._unsub && !r._hasToken);
+                // Holdout G2 emails are excluded from token minting — they
+                // land in campaign_recipients with status='holdout' and
+                // get NO reactivation_token. Verified by STEP 9 assertion.
+                const tokensNeeded = preview.g2_activate.filter(r =>
+                    !r._unsub && !r._hasToken && !S_holdoutG2.has(r.email)
+                );
                 let truncatedCount = 0;
                 const tokenValidRows = tokensNeeded.map(r => {
                     const { row: t, truncated } = truncateRowFields(r);
@@ -913,6 +989,25 @@ router.post('/reactivation/build', async (req, res) => {
                     const tokenByEmail = new Map(tokenLookup.rows.map(r => [r.email, r.token]));
                     const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
                     for (const r of g2Mailable) {
+                        const isHoldout = S_holdoutG2.has(r.email);
+                        if (isHoldout) {
+                            // Holdout: NO token, NO activation_url. The row exists
+                            // in campaign_recipients so Delivery B can count them
+                            // as the control group. Phase 6 sets status='holdout'.
+                            g2Recipients.push({
+                                email: r.email,
+                                first_name: r.name || null,
+                                last_name: r.last_name || null,
+                                company: r.company || null,
+                                extra_fields: {
+                                    country: r.country || '',
+                                    job_title: r.job_title || '',
+                                    expo_name: preview.target_expo_name
+                                },
+                                _holdout: true
+                            });
+                            continue;
+                        }
                         const tok = tokenByEmail.get(r.email);
                         if (!tok) continue; // token missing (chunk error) — skip; will surface in job.failed_count
                         g2Recipients.push({
@@ -925,7 +1020,8 @@ router.post('/reactivation/build', async (req, res) => {
                                 country: r.country || '',
                                 job_title: r.job_title || '',
                                 expo_name: preview.target_expo_name
-                            }
+                            },
+                            _holdout: false
                         });
                     }
                 }
@@ -942,6 +1038,7 @@ router.post('/reactivation/build', async (req, res) => {
                     first_name: r.name || null,
                     last_name: r.last_name || null,
                     company: r.company || null,
+                    _holdout: S_holdoutG3.has(r.email),
                     extra_fields: {
                         country: r.country || '',
                         job_title: r.job_title || '',
@@ -1010,12 +1107,22 @@ router.post('/reactivation/build', async (req, res) => {
                         const valueClauses = [];
                         const params = [];
                         chunk.forEach((r, idx) => {
-                            const b = idx * 6;
-                            valueClauses.push(`($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6})`);
-                            params.push(campaignId, r.email, r.first_name, r.last_name, r.company, JSON.stringify(r.extra_fields));
+                            const b = idx * 7;
+                            valueClauses.push(`($${b+1},$${b+2},$${b+3},$${b+4},$${b+5},$${b+6},$${b+7})`);
+                            // Per-row status: 'holdout' for the control group,
+                            // 'active' for everyone else. VARCHAR(30) column,
+                            // no CHECK constraint (verified). next_step_due_at
+                            // stays NULL (column NULLABLE, no default) — both
+                            // send-path filters at campaigns.js:917-919 and
+                            // email_worker.js:347-349 miss holdout rows.
+                            params.push(
+                                campaignId, r.email, r.first_name, r.last_name, r.company,
+                                JSON.stringify(r.extra_fields),
+                                r._holdout ? 'holdout' : 'active'
+                            );
                         });
                         const insRes = await pool.query(
-                            `INSERT INTO campaign_recipients (campaign_id, email, first_name, last_name, company, extra_fields)
+                            `INSERT INTO campaign_recipients (campaign_id, email, first_name, last_name, company, extra_fields, status)
                              VALUES ${valueClauses.join(',')}
                              ON CONFLICT (campaign_id, email) DO NOTHING`,
                             params
@@ -1068,7 +1175,15 @@ router.post('/reactivation/build', async (req, res) => {
             job_id: jobId,
             g2_activate_planned: preview.g2_activate.filter(r => !r._unsub).length,
             g3_register_planned: preview.g3_register.filter(r => !r._unsub).length,
-            tokens_to_mint: preview.g2_activate.filter(r => !r._unsub && !r._hasToken).length,
+            // Tokens actually minted — excludes both existing pending
+            // tokens (reused) AND the holdout set.
+            tokens_to_mint: preview.g2_activate.filter(r =>
+                !r._unsub && !r._hasToken && !S_holdoutG2.has(r.email)
+            ).length,
+            // Holdout counts (Suer 3 Sep, Delivery A). Both are 0 when
+            // holdout_pct is 0 or omitted — unchanged for the default case.
+            holdout_activate: holdoutG2Count,
+            holdout_register: holdoutG3Count,
             target_expo_id: preview.target_expo_id,
             target_expo_name: preview.target_expo_name,
             message: `Wizard job accepted. Poll /api/campaigns/reactivation/job/${jobId} for status. All campaigns will land in DRAFT — activate them from the Email Campaigns page when ready.`
