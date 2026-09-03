@@ -563,6 +563,33 @@ async function main() {
                     `campaign_steps row for campaign ${row.campaign_id} points at probe template ${probeTemplateId} (got ${row.template_id})`);
             }
 
+            // 5f — Phone reached the token (Suer 3 Sep Part B item 4).
+            // Fixture seeded phones on smoke-wizard-1..3 (G2). Their tokens
+            // were minted at STEP 3 (this test's first /build). Query with
+            // created_at >= jobStartTime (STEP 3's, NOT STEP 9's) — STEP 9
+            // hits the reuse path so no new tokens are minted for these
+            // emails. Path traced with path:line: campaignBuilder.js:391
+            // (normalize) → :111 (truncate) → :972 processReactivationChunks
+            // → reactivation.js:131 tokenParams.push(..., r.phone, ...).
+            const phoneRes = await pool.query(
+                `SELECT email, phone FROM reactivation_tokens
+                 WHERE target_expo_id = $1 AND email = ANY($2) AND created_at >= $3
+                 ORDER BY email`,
+                [TEST_EXPO_ID, G2_SEED_EMAILS, jobStartTime.toISOString()]
+            );
+            console.log(`\n    Phones on tokens minted by STEP 3 (G2 seeds):`);
+            for (const row of phoneRes.rows) {
+                console.log(`      ${row.email}: ${JSON.stringify(row.phone)}`);
+            }
+            assert(phoneRes.rows.length === 3,
+                `all 3 G2 seed emails have a minted token from STEP 3 (got ${phoneRes.rows.length})`);
+            const nonEmptyPhones = phoneRes.rows.filter(r => r.phone && r.phone.length > 0);
+            assert(nonEmptyPhones.length >= 1,
+                `at least one minted token carries a non-empty phone from the fixture (got ${nonEmptyPhones.length}/3 non-empty)`);
+            const e164Phones = phoneRes.rows.filter(r => r.phone && r.phone.startsWith('+'));
+            assert(e164Phones.length >= 1,
+                `at least one minted token has an E.164 phone (starts with +) — proves resolveCountry+normalizePhone ran (got ${e164Phones.length}/3 E.164)`);
+
             // ============================================================
             // STEP 6 — SECOND-RUN mailable + reuse invariant (Suer 2 Sep)
             // ============================================================
@@ -1061,31 +1088,10 @@ async function main() {
             assert(newTokRes.rows[0].n === 0,
                 `NO new reactivation_token minted for held-out email '${heldOutEmail}' since jobStart9 (got ${newTokRes.rows[0].n})`);
 
-            // ---- Phone reached the token (Suer 3 Sep Part B item 4) ----
-            // Fixture seeded phones on smoke-wizard-1..3 (G2). Normaliser
-            // runs in campaignBuilder.js Excel reader → truncateRowFields
-            // → processReactivationChunks INSERT into reactivation_tokens.
-            // Assert at least one of the minted tokens for the G2 seed
-            // emails has a non-empty E.164 phone. Robust to the random
-            // holdout: 3 minted total minus 1 held-out = 2 tokens exist;
-            // at least one of the two carries the seeded phone.
-            const phoneRes = await pool.query(
-                `SELECT email, phone FROM reactivation_tokens
-                 WHERE target_expo_id = $1 AND email = ANY($2) AND created_at >= $3
-                 ORDER BY email`,
-                [TEST_EXPO_ID, G2_SEED_EMAILS, jobStartTime9.toISOString()]
-            );
-            console.log(`\n  Phones on minted tokens (G2 seeds, since jobStart9):`);
-            for (const row of phoneRes.rows) {
-                console.log(`    ${row.email}: ${JSON.stringify(row.phone)}`);
-            }
-            const nonEmptyPhones = phoneRes.rows.filter(r => r.phone && r.phone.length > 0);
-            assert(nonEmptyPhones.length >= 1,
-                `at least one minted token carries a non-empty phone from the fixture (got ${nonEmptyPhones.length} non-empty out of ${phoneRes.rows.length})`);
-            // At least one should be E.164 (starts with +) — proves normaliser fired.
-            const e164Phones = phoneRes.rows.filter(r => r.phone && r.phone.startsWith('+'));
-            assert(e164Phones.length >= 1,
-                `at least one minted token has an E.164 phone (starts with +) — proves normalizePhone ran (got ${e164Phones.length} E.164)`);
+            // (Phone reached-the-token assertion moved to STEP 5f — those
+            // tokens were minted at STEP 3, not STEP 9 which reuses them.
+            // A jobStart9-scoped SELECT here returned 0 rows and silently
+            // "passed" — test bug caught by Suer 3 Sep.)
 
             // ---- form_id ownership check fires (Suer 3 Sep Part B item 3) ----
             // Negative test: a fresh /segment + /build with form_id pointing

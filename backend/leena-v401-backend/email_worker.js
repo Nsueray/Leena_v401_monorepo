@@ -148,6 +148,27 @@ async function logToEmailLogs(task, status, recipientEmail, emailSubject) {
 // PROCESS: Single email task (unchanged logic, extracted for batch use)
 // ============================================================
 
+// Suer 3 Sep — safety-net fallback for the campaign From display name.
+// Small module-scoped cache: campaign_id → expo name (or '' when the
+// campaign has no expo_id, so we don't re-query on every task). Cache
+// entries live until worker restart; fine because campaign→expo binding
+// never changes after creation.
+const _expoNameByCampaign = new Map();
+async function _getExpoNameForCampaign(campaignId) {
+  if (_expoNameByCampaign.has(campaignId)) return _expoNameByCampaign.get(campaignId);
+  try {
+    const r = await pool.query(
+      `SELECT e.name FROM email_campaigns c LEFT JOIN expos e ON e.id = c.expo_id WHERE c.id = $1`,
+      [campaignId]
+    );
+    const name = (r.rows[0] && r.rows[0].name) || '';
+    _expoNameByCampaign.set(campaignId, name);
+    return name;
+  } catch (_) {
+    return ''; // non-fatal — falls through to null in the caller
+  }
+}
+
 async function processTask(task) {
   try {
     let recipientEmail, emailSubject, emailHtml;
@@ -235,9 +256,15 @@ async function processTask(task) {
     // Campaign From display name (Suer 3 Sep). Env-var gated + campaign-only.
     // Badge / certificate / single-recipient tasks lack task.campaign_id, so
     // they always receive fromName=null and keep the bare-email behaviour.
-    // Currently one global name per Render worker restart. Per-campaign name
-    // is P2 (needs email_campaigns.from_display_name column + wizard field).
-    const fromName = isCampaignTask ? (process.env.CAMPAIGN_SENDER_NAME || null) : null;
+    // Fallback (Suer 3 Sep — safety net): when CAMPAIGN_SENDER_NAME isn't
+    // set, fall back to the expo's name so at least the recipient sees
+    // something contextual rather than bare noreply@leena.app. Cached at
+    // module scope (see _expoNameByCampaign) — one query per NEW campaign
+    // id, then O(1) for the rest of that campaign's drain.
+    let fromName = null;
+    if (isCampaignTask) {
+      fromName = process.env.CAMPAIGN_SENDER_NAME || (await _getExpoNameForCampaign(task.campaign_id)) || null;
+    }
 
     // Send email
     const sent = await sendEmailWithReplyTo(
