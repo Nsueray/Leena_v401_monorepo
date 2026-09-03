@@ -1075,6 +1075,66 @@ async function main() {
             const activateInOthers = (seg10.other_campaigns || []).some(oc => oc.id === activateCamp9Id);
             assert(activateInOthers,
                 `the new activate campaign ${activateCamp9Id} appears in other_campaigns list (proves overlap query includes cr.status='holdout')`);
+
+            // ============================================================
+            // STEP 10 — /lift on the STEP 9 campaign (Delivery B)
+            // ============================================================
+            // Called BEFORE the finally-cleanup so the campaign still exists.
+            // Campaign is the STEP 9 activate campaign (activateCamp9Id):
+            //   3 recipients total → 2 status='active' + 1 status='holdout'
+            //   Nobody activated during the test → registered=0 in both buckets
+            //   Target expo TEST_EXPO_ID = 17, [TEST] Bridge, start_date 2026-09-30
+            //   → expo_started === false today (3 Sep)
+            console.log(`\n---- STEP 10: /lift on STEP 9 campaign ${activateCamp9Id} ----`);
+            const liftRes = await fetch(`${BASE_URL}/api/campaigns/${activateCamp9Id}/lift`, {
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` }
+            });
+            if (!liftRes.ok) {
+                const t = await liftRes.text().catch(() => '');
+                throw new Error(`/lift HTTP ${liftRes.status}: ${t.slice(0, 200)}`);
+            }
+            const lift = await liftRes.json();
+            console.log(`    /lift body: ${JSON.stringify(lift)}`);
+
+            console.log(`\n  10 shape + value assertions:`);
+            assert(lift.success === true, `lift.success === true`);
+            assert(lift.campaign_id === activateCamp9Id,
+                `lift.campaign_id === ${activateCamp9Id} (got ${lift.campaign_id})`);
+            assert(lift.expo_id === TEST_EXPO_ID,
+                `lift.expo_id === ${TEST_EXPO_ID} (got ${lift.expo_id})`);
+            assert(typeof lift.expo_started === 'boolean',
+                `lift.expo_started is boolean (got ${typeof lift.expo_started})`);
+            assert(lift.expo_started === false,
+                `lift.expo_started === false (target expo 17 start_date is future) (got ${lift.expo_started})`);
+
+            assert(lift.mailed && typeof lift.mailed === 'object',
+                `lift.mailed is an object`);
+            assert(lift.mailed.total === 2,
+                `lift.mailed.total === 2 (2 status='active' rows in campaign ${activateCamp9Id}) (got ${lift.mailed.total})`);
+            assert(lift.mailed.registered === 0,
+                `lift.mailed.registered === 0 (nobody activated during the test) (got ${lift.mailed.registered})`);
+            assert(typeof lift.mailed.rate_pct === 'number',
+                `lift.mailed.rate_pct is a number (got ${typeof lift.mailed.rate_pct})`);
+            assert(typeof lift.mailed.checked_in === 'number',
+                `lift.mailed.checked_in is a number`);
+            assert(typeof lift.mailed.checkin_rate_pct === 'number',
+                `lift.mailed.checkin_rate_pct is a number`);
+
+            assert(lift.holdout && typeof lift.holdout === 'object',
+                `lift.holdout is an object (not null — STEP 9 built 1 holdout row)`);
+            assert(lift.holdout.total === 1,
+                `lift.holdout.total === 1 (1 status='holdout' row in campaign ${activateCamp9Id}) (got ${lift.holdout.total})`);
+            assert(lift.holdout.registered === 0,
+                `lift.holdout.registered === 0 (nobody activated during the test) (got ${lift.holdout.registered})`);
+            assert(typeof lift.holdout.rate_pct === 'number',
+                `lift.holdout.rate_pct is a number`);
+
+            assert(typeof lift.lift_pts_registered === 'number',
+                `lift.lift_pts_registered is a number when both buckets non-empty (got ${typeof lift.lift_pts_registered})`);
+            assert(lift.lift_pts_registered === 0,
+                `lift.lift_pts_registered === 0 (both mailed and holdout at 0% registration) (got ${lift.lift_pts_registered})`);
+            assert(typeof lift.lift_pts_checked_in === 'number',
+                `lift.lift_pts_checked_in is a number`);
         } finally {
             await pool.end();
         }

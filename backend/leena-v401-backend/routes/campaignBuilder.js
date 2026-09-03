@@ -1220,6 +1220,139 @@ router.get('/reactivation/job/:id', async (req, res) => {
     }
 });
 
+// ============================================================
+// LIFT REPORT (Delivery B, Suer 3 Sep) — GET /api/campaigns/:id/lift
+// ============================================================
+//
+// Read-only. Split the campaign's recipients into two buckets:
+//   mailed  = status != 'holdout'   (active / completed / unsubscribed)
+//   holdout = status = 'holdout'
+// For each bucket, count how many registered on the campaign's expo
+// (a visitors row whose lower(trim(email)) matches) and how many checked
+// in (any checkin on such a visitor for that expo).
+//
+// Response:
+//   { success, campaign_id, expo_id, expo_started,
+//     mailed:  { total, registered, rate_pct, checked_in, checkin_rate_pct },
+//     holdout: null | { total, registered, rate_pct, checked_in, checkin_rate_pct },
+//     lift_pts_registered: null | number,   // mailed.rate_pct - holdout.rate_pct
+//     lift_pts_checked_in: null | number }
+//
+// holdout is null for pre-holdout-era campaigns (no rows carry status='holdout').
+// lift_* are null when holdout is null OR either bucket is empty.
+//
+// expo_started (bool) = expos.start_date <= CURRENT_DATE — the UI reads this
+// to label pre-fair numbers "registration only — check-in data arrives when
+// the fair opens".
+//
+// The email-JOIN pattern is deliberate — CAMPAIGN_UI_DESIGN_20260819.md §3.2
+// noted campaign_recipients.visitor_id is 0% populated for excel-uploaded
+// lists (Suer's from-expo path sets it, wizard's build path does not).
+// Joining on lower(trim(email)) is the only reliable path today.
+//
+// Mounted at /api/campaigns/:id/lift; Express matches this AFTER campaigns.js
+// (mounted first) has failed to find a handler for the '/:id/lift' pattern
+// (campaigns.js has GET /:id but no /:id/lift).
+router.get('/:id/lift', async (req, res) => {
+    try {
+        const organizerId = req.organizer_id || 1;
+        const campaignId = parseInt(req.params.id, 10);
+        if (!campaignId || campaignId < 1) {
+            return res.status(400).json({ success: false, error: 'campaign id must be a positive integer' });
+        }
+
+        // Auth-scoped lookup + expo_started flag in one shot.
+        // LEFT JOIN because expos row could conceivably be missing; then
+        // expo_started falls to false (safest for the UI copy).
+        const campRes = await pool.query(
+            `SELECT ec.id, ec.expo_id,
+                    COALESCE(e.start_date <= CURRENT_DATE, false) AS expo_started
+             FROM email_campaigns ec
+             LEFT JOIN expos e ON e.id = ec.expo_id
+             WHERE ec.id = $1 AND ec.organizer_id = $2`,
+            [campaignId, organizerId]
+        );
+        if (campRes.rows.length === 0) {
+            return res.status(404).json({ success: false, error: 'Campaign not found' });
+        }
+        const { expo_id, expo_started } = campRes.rows[0];
+
+        // Dry-run verified against campaign 15 pre-deploy — SQL parses,
+        // planner uses nested loops on the visitor + checkin joins.
+        const liftRes = await pool.query(`
+            WITH cr_grouped AS (
+                SELECT cr.id,
+                       CASE WHEN cr.status = 'holdout' THEN 'holdout' ELSE 'mailed' END AS bucket,
+                       LOWER(TRIM(cr.email)) AS email
+                FROM campaign_recipients cr
+                WHERE cr.campaign_id = $1
+            ),
+            campaign_expo AS (
+                SELECT expo_id FROM email_campaigns WHERE id = $1
+            ),
+            registered AS (
+                SELECT DISTINCT cg.id
+                FROM cr_grouped cg
+                JOIN visitors v ON LOWER(TRIM(v.email)) = cg.email
+                JOIN campaign_expo ce ON v.expo_id = ce.expo_id
+            ),
+            checked_in AS (
+                SELECT DISTINCT cg.id
+                FROM cr_grouped cg
+                JOIN visitors v ON LOWER(TRIM(v.email)) = cg.email
+                JOIN campaign_expo ce ON v.expo_id = ce.expo_id
+                JOIN checkins ck ON ck.visitor_id = v.id AND ck.expo_id = ce.expo_id
+            )
+            SELECT
+                cg.bucket,
+                COUNT(*)::int AS total,
+                COUNT(*) FILTER (WHERE cg.id IN (SELECT id FROM registered))::int AS registered,
+                COUNT(*) FILTER (WHERE cg.id IN (SELECT id FROM checked_in))::int  AS checked_in
+            FROM cr_grouped cg
+            GROUP BY cg.bucket
+            ORDER BY cg.bucket
+        `, [campaignId]);
+
+        const round1 = (n) => Number((Math.round(n * 10) / 10).toFixed(1));
+        const mkBucket = (row) => ({
+            total: row.total,
+            registered: row.registered,
+            rate_pct: row.total > 0 ? round1(row.registered * 100 / row.total) : 0,
+            checked_in: row.checked_in,
+            checkin_rate_pct: row.total > 0 ? round1(row.checked_in * 100 / row.total) : 0
+        });
+
+        let mailed = { total: 0, registered: 0, rate_pct: 0, checked_in: 0, checkin_rate_pct: 0 };
+        let holdout = null;
+        for (const row of liftRes.rows) {
+            if (row.bucket === 'holdout') holdout = mkBucket(row);
+            else mailed = mkBucket(row);
+        }
+
+        // Lift only meaningful when both buckets are non-empty.
+        let lift_pts_registered = null;
+        let lift_pts_checked_in = null;
+        if (holdout && mailed.total > 0 && holdout.total > 0) {
+            lift_pts_registered = round1(mailed.rate_pct - holdout.rate_pct);
+            lift_pts_checked_in = round1(mailed.checkin_rate_pct - holdout.checkin_rate_pct);
+        }
+
+        res.json({
+            success: true,
+            campaign_id: campaignId,
+            expo_id,
+            expo_started: !!expo_started,
+            mailed,
+            holdout,
+            lift_pts_registered,
+            lift_pts_checked_in
+        });
+    } catch (err) {
+        console.error('[campaign-wizard/lift] error:', err.message);
+        res.status(500).json({ success: false, error: 'Lift lookup failed' });
+    }
+});
+
 module.exports = router;
 // Named exports for direct unit testing (no HTTP round-trip, no DB).
 // Mirrors reactivation.js's `.processReactivationChunks` / `.generateToken`

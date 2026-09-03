@@ -862,7 +862,11 @@
 
         const registered = currentCampaign.campaign.registered_count || 0;
 
-        let html = `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
+        // Placeholder for the holdout lift line. Populated async by
+        // wLiftFetch() below; stays display:none if the campaign has no
+        // holdout rows (pre-holdout-era campaigns get no line at all).
+        let html = `<div id="wLiftLine" style="display:none;"></div>`;
+        html += `<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;">
             <div class="stat-card"><div class="stat-value">${total}</div><div class="stat-label">Total Recipients</div></div>
             <div class="stat-card"><div class="stat-value" style="color:var(--success);">${active}</div><div class="stat-label">Active</div></div>
             <div class="stat-card"><div class="stat-value" style="color:var(--info);">${completed}</div><div class="stat-label">Completed</div></div>
@@ -904,6 +908,49 @@
         </div>`;
 
         document.getElementById('tabStats').innerHTML = html;
+
+        // Async fetch — no await so the stats render immediately;
+        // the lift line appears once the /lift call returns. Silently
+        // no-ops for pre-holdout campaigns (holdout=null → no line).
+        wLiftFetch(currentCampaign.campaign.id);
+    }
+
+    // Delivery B — Suer 3 Sep. One line on the Stats tab when the
+    // campaign has holdout rows. Silent on pre-holdout campaigns and
+    // on any network / API error (Stats tab still renders fine either
+    // way). Only touches the placeholder div added at the top of
+    // renderStats — does not modify any other element on this page.
+    async function wLiftFetch(campaignId) {
+        try {
+            const res = await fetch('/api/campaigns/' + campaignId + '/lift', {
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (!data.success || !data.holdout) return;
+            if (!data.mailed || data.mailed.total === 0 || data.holdout.total === 0) return;
+            const el = document.getElementById('wLiftLine');
+            if (!el) return;
+            const liftReg = data.lift_pts_registered;
+            const liftRegSign = liftReg >= 0 ? '+' : '';
+            let text = '<strong>Mailed:</strong> ' + data.mailed.rate_pct + '% registered'
+                     + ' &middot; <strong>Holdout:</strong> ' + data.holdout.rate_pct + '%'
+                     + ' &middot; <strong>Lift</strong> ' + liftRegSign + liftReg + ' pts';
+            if (data.expo_started && data.lift_pts_checked_in !== null) {
+                const liftCi = data.lift_pts_checked_in;
+                const liftCiSign = liftCi >= 0 ? '+' : '';
+                text += '<br><small style="color:var(--text-muted);">Check-in: Mailed '
+                      + data.mailed.checkin_rate_pct + '% &middot; Holdout '
+                      + data.holdout.checkin_rate_pct + '% &middot; Lift '
+                      + liftCiSign + liftCi + ' pts</small>';
+            } else {
+                text += '<br><small style="color:var(--text-muted);">Registration only &mdash; check-in data arrives when the fair opens.</small>';
+            }
+            el.innerHTML = text;
+            el.style.cssText = 'display:block;padding:12px 16px;background:#f0f9ff;border:1px solid #93c5fd;border-radius:8px;font-size:14px;margin-bottom:16px;';
+        } catch (err) {
+            // Silent — Stats tab already rendered without the lift line.
+        }
     }
 
     // ============================================================
