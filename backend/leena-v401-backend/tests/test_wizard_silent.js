@@ -810,6 +810,119 @@ async function main() {
                 assert(row.condition === 'all',
                     `campaign ${row.campaign_id} step_number=1 condition === 'all' (got '${row.condition}') — normaliser fired`);
             }
+
+            // ============================================================
+            // STEP 8 — Cross-campaign overlap detection + exclusion
+            // (Suer 3 Sep — bug: same email in two wizard-built campaigns
+            // gets step 1 of BOTH; segmentation never consulted
+            // campaign_recipients before this change)
+            // ============================================================
+            // By this point STEP 3 + STEP 6 + STEP 7 have created 6 campaigns
+            // named '[SMOKE-WIZARD]%' on target expo TEST_EXPO_ID. All 5
+            // smoke emails are enrolled in some subset of those campaigns
+            // (activate campaigns hold smoke-wizard-1..3 = 3 G2 emails; register
+            // campaigns hold smoke-wizard-4..5 = 2 G3 emails).
+            //
+            // 8a — /segment without the flag. Assert:
+            //   already_in_another_campaign === 5      (all 5 smoke emails overlap)
+            //   g2/g3/mailable/tokens_to_mint unchanged from STEP 6 second-run
+            //   (drafts count as overlap; g1/g2/g3 depend on visitors table, not campaigns)
+            // 8b — /segment WITH the flag. Assert:
+            //   excluded_already_in_campaign === 5
+            //   g2_activate_mailable + g3_register_mailable === 0 (all 5 filtered out
+            //   before bucketing, so all mailable numbers collapse to 0)
+            //
+            // Drafts count from this change forward, so no activation needed
+            // inside the test — STEP 6/7's draft campaigns are the fixture.
+            console.log(`\n---- STEP 8: cross-campaign overlap detection + exclusion ----`);
+
+            // ---- 8a: without the flag (default false) ----
+            console.log(`\n  8a: /segment (default, exclude_already_in_campaign not sent):`);
+            const seg8aForm = new FormData();
+            seg8aForm.append('file', new Blob([fullBuffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }), 'wizard_smoke.xlsx');
+            seg8aForm.append('target_expo_id', String(TEST_EXPO_ID));
+            const seg8aRes = await fetch(`${BASE_URL}/api/campaigns/reactivation/segment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` },
+                body: seg8aForm
+            });
+            if (!seg8aRes.ok) {
+                const t = await seg8aRes.text().catch(() => '');
+                throw new Error(`8a /segment HTTP ${seg8aRes.status}: ${t.slice(0, 200)}`);
+            }
+            const seg8a = await seg8aRes.json();
+            console.log(`    counts: ${JSON.stringify(seg8a.counts)}`);
+            console.log(`    other_campaigns.length: ${Array.isArray(seg8a.other_campaigns) ? seg8a.other_campaigns.length : 'MISSING'}`);
+            if (Array.isArray(seg8a.other_campaigns)) {
+                for (const oc of seg8a.other_campaigns) {
+                    console.log(`      #${oc.id} '${oc.name}' status='${oc.status}' overlap_count=${oc.overlap_count}`);
+                }
+            }
+
+            console.log(`\n  8a shape + value assertions:`);
+            assert(typeof seg8a.counts.already_in_another_campaign === 'number',
+                `counts.already_in_another_campaign is a number (got ${JSON.stringify(seg8a.counts.already_in_another_campaign)})`);
+            assert(typeof seg8a.counts.excluded_already_in_campaign === 'number',
+                `counts.excluded_already_in_campaign is a number`);
+            assert(Array.isArray(seg8a.other_campaigns),
+                `other_campaigns is an array (top-level, alongside counts — NOT inside counts)`);
+            assert(seg8a.counts.excluded_already_in_campaign === 0,
+                `8a: excluded === 0 when flag not set (got ${seg8a.counts.excluded_already_in_campaign})`);
+            assert(seg8a.counts.already_in_another_campaign === 5,
+                `8a: already_in_another_campaign === 5 — all 5 smoke emails overlap the earlier [SMOKE-WIZARD] campaigns (got ${seg8a.counts.already_in_another_campaign})`);
+            // Byte-identical assertion for g1/g2/g3/to_mint against STEP 6 shape:
+            // seeded 3 G2 on expo 11, 2 G3, tokens still exist from earlier runs.
+            assert(seg8a.counts.g1_already_registered_target === 0,
+                `8a: g1 unchanged === 0 (got ${seg8a.counts.g1_already_registered_target})`);
+            assert(seg8a.counts.g2_activate_mailable === 3,
+                `8a: g2_mailable unchanged === 3 (got ${seg8a.counts.g2_activate_mailable})`);
+            assert(seg8a.counts.g3_register_mailable === 2,
+                `8a: g3_mailable unchanged === 2 (got ${seg8a.counts.g3_register_mailable})`);
+            assert(seg8a.counts.tokens_to_mint === 0,
+                `8a: tokens_to_mint unchanged === 0 (all 3 G2 tokens exist from earlier runs) (got ${seg8a.counts.tokens_to_mint})`);
+            // Every overlap campaign should be tagged [SMOKE-WIZARD].
+            for (const oc of seg8a.other_campaigns) {
+                assert(oc.name && oc.name.indexOf(CAMPAIGN_TAG) === 0,
+                    `8a: overlap campaign #${oc.id} name starts with '${CAMPAIGN_TAG}' (got '${oc.name}')`);
+            }
+
+            // ---- 8b: WITH the flag ----
+            console.log(`\n  8b: /segment with exclude_already_in_campaign=true:`);
+            const seg8bForm = new FormData();
+            seg8bForm.append('file', new Blob([fullBuffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }), 'wizard_smoke.xlsx');
+            seg8bForm.append('target_expo_id', String(TEST_EXPO_ID));
+            seg8bForm.append('exclude_already_in_campaign', 'true');
+            const seg8bRes = await fetch(`${BASE_URL}/api/campaigns/reactivation/segment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` },
+                body: seg8bForm
+            });
+            if (!seg8bRes.ok) {
+                const t = await seg8bRes.text().catch(() => '');
+                throw new Error(`8b /segment HTTP ${seg8bRes.status}: ${t.slice(0, 200)}`);
+            }
+            const seg8b = await seg8bRes.json();
+            console.log(`    counts: ${JSON.stringify(seg8b.counts)}`);
+
+            console.log(`\n  8b value assertions (exclusion applied BEFORE bucketing):`);
+            assert(seg8b.counts.excluded_already_in_campaign === 5,
+                `8b: excluded === 5 — all 5 smoke emails filtered out (got ${seg8b.counts.excluded_already_in_campaign})`);
+            assert(seg8b.counts.already_in_another_campaign === 0,
+                `8b: already_in_another_campaign === 0 after exclusion — filtered emails no longer counted (got ${seg8b.counts.already_in_another_campaign})`);
+            assert(seg8b.counts.g1_already_registered_target === 0,
+                `8b: g1 === 0 after exclusion (got ${seg8b.counts.g1_already_registered_target})`);
+            assert(seg8b.counts.g2_activate_mailable === 0,
+                `8b: g2_mailable === 0 (all 3 G2 emails were in overlap set → excluded) (got ${seg8b.counts.g2_activate_mailable})`);
+            assert(seg8b.counts.g3_register_mailable === 0,
+                `8b: g3_mailable === 0 (both G3 emails were in overlap set → excluded) (got ${seg8b.counts.g3_register_mailable})`);
+            assert(seg8b.counts.g2_activate_raw === 0 && seg8b.counts.g3_register_raw === 0,
+                `8b: g2_raw + g3_raw both === 0 — filter is on source list, not post-hoc (rows never entered buckets)`);
+            assert(seg8b.counts.tokens_to_mint === 0,
+                `8b: tokens_to_mint === 0 (no G2 mailable → nothing to mint)`);
         } finally {
             await pool.end();
         }

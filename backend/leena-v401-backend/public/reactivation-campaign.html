@@ -153,6 +153,12 @@
         .wizard-preview-headline .wph-secondary { font-size:13px; color:var(--text-secondary); margin-top:4px; }
         .wizard-preview-headline .wph-breakdown { color:var(--text-muted); font-size:12px; margin-left:4px; }
         .wizard-preview-g1-note { padding:10px 14px; background:#fef3c7; border:1px solid #fde68a; border-radius:var(--radius-md); font-size:13px; color:#92400e; margin-bottom:10px; }
+        /* Cross-campaign overlap warning (Suer 3 Sep) — same amber palette
+           as G1 but with an action button on the right. */
+        .wizard-preview-crosscampaign-note { padding:10px 14px; background:#fef3c7; border:1px solid #fde68a; border-radius:var(--radius-md); font-size:13px; color:#92400e; margin-bottom:10px; display:flex; align-items:flex-start; gap:12px; }
+        .wizard-preview-crosscampaign-note .wpcc-body { flex:1; }
+        .wizard-preview-crosscampaign-note .wpcc-body strong { color:#92400e; }
+        .wizard-preview-crosscampaign-note button { white-space:nowrap; flex-shrink:0; }
         .wizard-preview-note { padding:8px 14px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md); font-size:12px; color:var(--text-muted); margin-bottom:10px; }
         .wizard-preview-details { margin-top:12px; }
         .wizard-preview-details summary { cursor:pointer; font-size:12px; color:var(--text-secondary); font-weight:500; padding:6px 0; user-select:none; list-style-position:outside; }
@@ -500,6 +506,25 @@
                                 <strong><span id="wPvG1">-</span></strong> people are ALREADY registered on <strong><span id="wPvG1TargetName">-</span></strong> — they are excluded and will receive nothing.
                             </div>
 
+                            <!-- Cross-campaign overlap warning (Suer 3 Sep). Only shown when
+                                 already_in_another_campaign > 0. Copy is set from wRenderPreview
+                                 based on whether every overlapping campaign is a draft or at
+                                 least one is active. Clicking the button re-runs /segment with
+                                 exclude_already_in_campaign=true and adopts the new preview_token. -->
+                            <div class="wizard-preview-crosscampaign-note" id="wPvCrossCampaignNote" style="display:none;">
+                                <div class="wpcc-body">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <span id="wPvCrossCampaignText">-</span>
+                                </div>
+                                <button class="btn btn-sm btn-warning" onclick="wRemoveCrossCampaignOverlap()">Remove them from this campaign</button>
+                            </div>
+
+                            <!-- Muted confirmation after the button is clicked. -->
+                            <div class="wizard-preview-note" id="wPvCrossCampaignExcludedNote" style="display:none;">
+                                <i class="bi bi-check-circle"></i>
+                                <span id="wPvCrossCampaignExcludedCount">-</span> people excluded — they are already in another campaign for this expo.
+                            </div>
+
                             <!-- Register wave empty: only shown when g3_mailable = 0. -->
                             <div class="wizard-preview-note" id="wPvG3NoneNote" style="display:none;">
                                 Register wave: none in this source (everyone is already in our database).
@@ -519,6 +544,8 @@
                                     <div class="label wPvG3Row"><strong>G3 — register wave, mailable</strong></div><div class="value wPvG3Row" id="wPvG3">-</div>
                                     <div class="label wPvG3Row" style="padding-left:24px; font-size:12px;">... raw</div><div class="value wPvG3Row" style="font-size:12px;" id="wPvG3Raw">-</div>
                                     <div class="label" style="padding-left:24px; font-size:12px;">Unsubscribed hits (G2+G3)</div><div class="value" style="font-size:12px;" id="wPvUnsub">-</div>
+                                    <div class="label">Already in another campaign on this expo</div><div class="value" id="wPvCrossCampaign">-</div>
+                                    <div class="label wPvCrossExclRow" style="padding-left:24px; font-size:12px;">... excluded from this campaign</div><div class="value wPvCrossExclRow" style="font-size:12px;" id="wPvCrossExcl">-</div>
                                 </div>
                             </details>
                             <div style="font-size:11px; color:var(--text-muted); margin-top:12px;">Preview cached server-side for 30 minutes. Still zero writes.</div>
@@ -1578,7 +1605,12 @@ function initWizardInfoBox() {
     if (localStorage.getItem('wizardInfoBox_closed') === '1') closeWizardInfoBox();
 }
 
-async function wGoToPreview() {
+async function wGoToPreview(excludeCrossCampaign) {
+    // Optional param — default false. Onclick handlers on Panel 1 pass
+    // no args; wRemoveCrossCampaignOverlap passes true.
+    // "Back to source" (wBackTo(1)) does not persist the flag — the next
+    // Preview click starts fresh with default false, per Suer's spec.
+    const excludeFlag = excludeCrossCampaign === true;
     const target = document.getElementById('wTargetExpo').value;
     if (!target) { showAlert('Pick a target expo', 'danger'); return; }
     if (wizard.sourceType === 'excel' && !wizard.file) { showAlert('Upload an Excel file', 'danger'); return; }
@@ -1601,20 +1633,27 @@ async function wGoToPreview() {
             const fd = new FormData();
             fd.append('file', wizard.file);
             fd.append('target_expo_id', wizard.targetExpoId);
+            if (excludeFlag) fd.append('exclude_already_in_campaign', 'true');
             response = await fetch(API_URL + '/campaigns/reactivation/segment', {
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + token },
                 body: fd
             });
         } else {
+            const jsonBody = { target_expo_id: wizard.targetExpoId, source_expo_ids: wizard.sourceExpoIds };
+            if (excludeFlag) jsonBody.exclude_already_in_campaign = true;
             response = await fetch(API_URL + '/campaigns/reactivation/segment', {
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target_expo_id: wizard.targetExpoId, source_expo_ids: wizard.sourceExpoIds })
+                body: JSON.stringify(jsonBody)
             });
         }
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Preview failed');
+        // NEW preview_token replaces the old one. /build reads
+        // wizard.previewToken at :1885; the exclusion propagates through
+        // the orchestrator because the server-side cache keyed by this
+        // token holds the already-filtered g2/g3 lists.
         wizard.previewToken = data.preview_token;
         wizard.previewCounts = data.counts;
         wRenderPreview(data);
@@ -1696,6 +1735,62 @@ function wRenderPreview(data) {
         g3NoneNote.style.display = 'none';
         for (const el of g3Rows) el.style.display = '';
     }
+
+    // ---- Cross-campaign overlap (Suer 3 Sep) ---------------------------
+    // Two mutually exclusive display states:
+    //   (a) already_in_another_campaign > 0 → amber warning + Remove button
+    //   (b) excluded_already_in_campaign > 0 → muted "N excluded" confirmation
+    //   both 0 → both hidden.
+    // Both figures always populate the Details ledger rows.
+    const alreadyInOther = Number(c.already_in_another_campaign || 0);
+    const excludedInOther = Number(c.excluded_already_in_campaign || 0);
+    document.getElementById('wPvCrossCampaign').textContent = alreadyInOther.toLocaleString();
+    document.getElementById('wPvCrossExcl').textContent    = excludedInOther.toLocaleString();
+
+    const ccNote = document.getElementById('wPvCrossCampaignNote');
+    const ccExclNote = document.getElementById('wPvCrossCampaignExcludedNote');
+    if (alreadyInOther > 0) {
+        // Case (a): show warning. Copy depends on whether every overlap is
+        // a draft or at least one is active — Suer's Sunday-drafts vs
+        // Monday-launch distinction.
+        const others = Array.isArray(data.other_campaigns) ? data.other_campaigns : [];
+        const allDraft = others.length > 0 && others.every(oc => oc.status === 'draft');
+        const top3Names = others.slice(0, 3).map(oc => oc.name).join(', ');
+        const namesTrail = top3Names ? ' (' + top3Names + ')' : '';
+        let copy;
+        if (allDraft) {
+            copy = alreadyInOther.toLocaleString()
+                + ' of these people are also in another campaign for this expo that has not been sent yet'
+                + namesTrail + '. If you activate both, they will receive both.';
+        } else {
+            copy = alreadyInOther.toLocaleString()
+                + ' of these people are already receiving another campaign for this expo'
+                + namesTrail + '.';
+        }
+        document.getElementById('wPvCrossCampaignText').textContent = copy;
+        ccNote.style.display = 'flex';
+        ccExclNote.style.display = 'none';
+    } else if (excludedInOther > 0) {
+        // Case (b): show confirmation. Warning + button gone.
+        document.getElementById('wPvCrossCampaignExcludedCount').textContent = excludedInOther.toLocaleString();
+        ccExclNote.style.display = 'block';
+        ccNote.style.display = 'none';
+    } else {
+        ccNote.style.display = 'none';
+        ccExclNote.style.display = 'none';
+    }
+}
+
+// Button handler for the "Remove them from this campaign" action.
+// Re-runs the SAME /segment call with exclude_already_in_campaign=true,
+// which returns a NEW preview_token. wGoToPreview writes that token to
+// wizard.previewToken at :1618 above — /build reads that same field at
+// the packSteps call site (:1885), so the exclusion flows all the way
+// through to the orchestrator.
+// Client-side filtering would leave the server-side preview cache
+// unchanged and the build would still enrol everyone.
+function wRemoveCrossCampaignOverlap() {
+    wGoToPreview(true);
 }
 
 function wGoToTemplates() {

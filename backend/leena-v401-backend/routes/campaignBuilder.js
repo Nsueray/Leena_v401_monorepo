@@ -334,6 +334,16 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
             return res.status(400).json({ success: false, error: 'target_expo_id is required' });
         }
 
+        // Cross-campaign overlap flag (Suer 3 Sep). Opt-in — default false.
+        // When true, source rows whose email is an active recipient of ANY
+        // other campaign on this expo are dropped from cleanList BEFORE
+        // bucketing (see :460+). Applied as a source-list filter, NOT a
+        // post-hoc count subtraction, so g1/g2/g3 stay internally consistent.
+        // Accepted as body field on both multipart (multer parses to string)
+        // and JSON. String 'true' / boolean true both count.
+        const excludeCrossCampaign = req.body.exclude_already_in_campaign === true
+            || req.body.exclude_already_in_campaign === 'true';
+
         // Verify target expo belongs to organizer
         const expoCheck = await pool.query(
             'SELECT id, name, country_code FROM expos WHERE id = $1 AND organizer_id = $2',
@@ -419,7 +429,25 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
 
         // ---- Pre-fetch DB sets (mirrors reactivation.js prefetchEmails
         // pattern) — one shot each, O(1) lookup per row -----------------
-        const [targetVisitorsRes, otherVisitorsRes, unsubRes, existingTokensRes] = await Promise.all([
+        // 5th query (Suer 3 Sep) — cross-campaign overlap detection.
+        // Emails that are ACTIVE recipients of ANY other campaign on the
+        // target expo, INCLUDING drafts. Drafts count because ops routinely
+        // build several campaigns as drafts and activate them together
+        // (Suer's Sunday-build / Monday-launch pattern); a draft-skip would
+        // silence the warning in exactly the situation it exists for.
+        // Filter is `cr.status = 'active'` — verified enum values in prod
+        // are ('active', 'completed', 'unsubscribed'); 'completed'
+        // recipients have finished their drip and won't receive again;
+        // 'unsubscribed' obviously excluded.
+        // The currently-being-built campaign is out of scope — it doesn't
+        // exist yet at segment time, so no exclusion is needed.
+        // Bounded by the source-list emails (`= ANY($3)`) so worst-case
+        // response size scales with source, not with the expo's active
+        // recipient count. On expo 7 (37,384 active recipients today) an
+        // unbounded query returned ~7 MB; bounded returns only the actual
+        // overlap rows, typically <1 MB.
+        const cleanEmailsArray = cleanList.map(r => r.email);
+        const [targetVisitorsRes, otherVisitorsRes, unsubRes, existingTokensRes, crossCampaignRes] = await Promise.all([
             pool.query(
                 'SELECT LOWER(TRIM(email)) AS email FROM visitors WHERE expo_id = $1 AND email IS NOT NULL',
                 [target_expo_id]
@@ -435,12 +463,82 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
             pool.query(
                 'SELECT LOWER(TRIM(email)) AS email FROM reactivation_tokens WHERE target_expo_id = $1',
                 [target_expo_id]
+            ),
+            pool.query(
+                `SELECT LOWER(TRIM(cr.email)) AS email, cr.campaign_id,
+                        ec.name AS campaign_name, ec.status AS campaign_status
+                 FROM campaign_recipients cr
+                 JOIN email_campaigns ec ON ec.id = cr.campaign_id
+                 WHERE cr.status = 'active'
+                   AND ec.expo_id = $1
+                   AND ec.organizer_id = $2
+                   AND LOWER(TRIM(cr.email)) = ANY($3)`,
+                [target_expo_id, organizerId, cleanEmailsArray]
             )
         ]);
         const S_target = new Set(targetVisitorsRes.rows.map(r => r.email));
         const S_other  = new Set(otherVisitorsRes.rows.map(r => r.email));
         const S_unsub  = new Set(unsubRes.rows.map(r => r.email));
         const S_tokens = new Set(existingTokensRes.rows.map(r => r.email));
+
+        // ---- Build overlap map: email → [{campaign_id, name, status}] --
+        // O(1) lookup per source row. Non-empty even for a fresh expo if
+        // another organizer campaign on the same expo has active recipients.
+        const S_crossCampaignEmails = new Set();          // for filter/count
+        const overlapCampaignsByEmail = new Map();        // email → [{...}]
+        const overlapByCampaign = new Map();              // campaign_id → {id, name, status, overlap_count}
+        for (const row of crossCampaignRes.rows) {
+            S_crossCampaignEmails.add(row.email);
+            if (!overlapCampaignsByEmail.has(row.email)) overlapCampaignsByEmail.set(row.email, []);
+            overlapCampaignsByEmail.get(row.email).push({
+                id: row.campaign_id, name: row.campaign_name, status: row.campaign_status
+            });
+        }
+
+        // ---- Apply exclusion filter if opt-in (BEFORE bucketing) -------
+        // Filter is on the SOURCE list, not the count — g1/g2/g3 stay
+        // internally consistent. Only counts rows whose email actually
+        // intersects with the overlap set (a rerun with the flag but zero
+        // overlap has excluded_already_in_campaign=0).
+        let excluded_already_in_campaign = 0;
+        if (excludeCrossCampaign && S_crossCampaignEmails.size > 0) {
+            const filtered = [];
+            for (const row of cleanList) {
+                if (S_crossCampaignEmails.has(row.email)) {
+                    excluded_already_in_campaign++;
+                } else {
+                    filtered.push(row);
+                }
+            }
+            // Rebind — the bucketing loop below reads `cleanList`.
+            cleanList.length = 0;
+            for (const r of filtered) cleanList.push(r);
+        }
+
+        // ---- Count cross-campaign overlap for the WARNING path ---------
+        // Distinct from the exclusion count: this is what the amber warning
+        // shows before the operator clicks "Remove them". Also compute the
+        // per-campaign overlap breakdown for the top-5 list.
+        // When excludeCrossCampaign=true, cleanList no longer contains
+        // overlapping emails so this count is 0 by construction — the UI
+        // reads the excluded count instead.
+        let already_in_another_campaign = 0;
+        for (const row of cleanList) {
+            if (S_crossCampaignEmails.has(row.email)) {
+                already_in_another_campaign++;
+                const camps = overlapCampaignsByEmail.get(row.email) || [];
+                for (const c of camps) {
+                    if (!overlapByCampaign.has(c.id)) {
+                        overlapByCampaign.set(c.id, { id: c.id, name: c.name, status: c.status, overlap_count: 0 });
+                    }
+                    overlapByCampaign.get(c.id).overlap_count++;
+                }
+            }
+        }
+        // Top 5 campaigns by overlap desc. Deterministic tiebreaker on id.
+        const other_campaigns = Array.from(overlapByCampaign.values())
+            .sort((a, b) => b.overlap_count - a.overlap_count || a.id - b.id)
+            .slice(0, 5);
 
         // ---- Bucket every clean email into G1 / G2 / G3 ---------------
         // Priority per REACTIVATION_SEGMENTATION_SQL_20260818.md §STEP 1:
@@ -522,7 +620,17 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
                 // Same formula and same key name as /build's :921
                 // response — the two are contracted to match.
                 tokens_to_mint: g2_tokens_to_mint,
+                // Cross-campaign overlap (Suer 3 Sep). Detection-only: never
+                // filters unless exclude_already_in_campaign=true. Zero when
+                // the source has no overlap with active recipients on this
+                // expo (which is the byte-identical-count assertion baseline).
+                already_in_another_campaign,
+                excluded_already_in_campaign,
             },
+            // Alongside counts (not inside): top 5 overlapping campaigns
+            // ordered by overlap count desc. Each carries status so the UI
+            // can distinguish draft-only overlap from at-least-one-active.
+            other_campaigns,
             preview_expires_at: new Date(Date.now() + PREVIEW_TTL_MS).toISOString(),
             note: 'Zero writes. Preview is cached server-side for 30 minutes. Pass preview_token to POST /reactivation/build to commit.'
         });
