@@ -1054,6 +1054,68 @@ router.post('/reactivation/build', async (req, res) => {
                 }
 
                 // -------------------------------------------------------------
+                // Phase 2b — PROPAGATE current build's form_id + phone into
+                // EXISTING pending tokens that Phase 3 is about to reuse.
+                //
+                // Bug (Suer 3 Sep, live 4-recipient test on expo 9):
+                // Phase 2's mint filter (:1015) skips rows with _hasToken=true.
+                // Phase 3 (:1061) then SELECTs tokens for the FULL g2 mailable
+                // list — picking up both freshly-minted AND pre-existing
+                // pending tokens. The pre-existing tokens keep their ORIGINAL
+                // form_id (probably NULL → default yellow theme) and their
+                // ORIGINAL phone (probably empty). The Confirm-panel's
+                // choices of form 59 + a phone-carrying source row therefore
+                // had no effect on repeat runs.
+                //
+                // Fix: for every "reused" pending token (email in g2_mailable,
+                // has_token=true, not held out, status='pending'), UPDATE:
+                //   form_id → always to formIdForActivation (may be NULL)
+                //   phone   → only when the token's current phone is empty
+                //             (never clobber a good phone with an empty one)
+                //
+                // Chunked at 1000 rows/statement to stay well under PG's
+                // ~65k param limit. Each row uses 2 params (email, phone);
+                // form_id + expo_id are shared. WHERE status='pending' per
+                // Suer's spec: never touch activated/expired tokens.
+                phase = 'phase_2b_update_reused_tokens';
+                const reusedRows = preview.g2_activate.filter(r =>
+                    !r._unsub && r._hasToken && !S_holdoutG2.has(r.email)
+                );
+                if (reusedRows.length > 0) {
+                    const REUSE_CHUNK = 1000;
+                    let reusedUpdated = 0;
+                    for (let i = 0; i < reusedRows.length; i += REUSE_CHUNK) {
+                        const chunk = reusedRows.slice(i, i + REUSE_CHUNK);
+                        // Truncate phone to VARCHAR(255) via truncateRowFields
+                        // (email is already normalised at segment time).
+                        const truncated = chunk.map(r => truncateRowFields(r).row);
+                        const valueClauses = [];
+                        const params = [formIdForActivation, preview.target_expo_id];
+                        truncated.forEach((r, idx) => {
+                            const b = 3 + idx * 2;
+                            valueClauses.push(`($${b}::text, $${b+1}::text)`);
+                            params.push(r.email, r.phone || '');
+                        });
+                        // Note: reactivation_tokens has no updated_at column
+                        // (verified read-only 3 Sep) — no touch column to set.
+                        const upd = await pool.query(
+                            `UPDATE reactivation_tokens rt
+                             SET form_id = $1,
+                                 phone = CASE WHEN COALESCE(rt.phone, '') = '' THEN v.phone ELSE rt.phone END
+                             FROM (VALUES ${valueClauses.join(', ')}) AS v(email, phone)
+                             WHERE rt.target_expo_id = $2
+                               AND rt.status = 'pending'
+                               AND rt.email = v.email`,
+                            params
+                        );
+                        reusedUpdated += upd.rowCount;
+                    }
+                    console.log(`[wizard/build ${jobId}] phase_2b DONE — updated ${reusedUpdated}/${reusedRows.length} reused pending tokens with form_id=${formIdForActivation === null ? 'NULL' : formIdForActivation} + empty-only phone`);
+                } else {
+                    console.log(`[wizard/build ${jobId}] phase_2b SKIP — no reused tokens (all G2 either minted fresh or held out)`);
+                }
+
+                // -------------------------------------------------------------
                 // Phase 3 — BUILD G2 RECIPIENT ROWS with activation_url.
                 // Includes freshly-minted AND pre-existing tokens (both
                 // preview.g2_activate emails that aren't unsub).

@@ -141,7 +141,7 @@ function assert(cond, msg) {
     console.log(`  ✓ ${msg}`);
 }
 
-function emitCleanupSql(probeTemplateId) {
+function emitCleanupSql(probeTemplateId, probeFormId) {
     const allEmails = Object.values(TEST_EMAILS).map(e => `'${e}'`).join(', ');
     const g2SeedEmails = G2_SEED_EMAILS.map(e => `'${e}'`).join(', ');
     console.log(`\n=== Cleanup SQL (run in Render Shell if any programmatic cleanup failed) ===`);
@@ -162,14 +162,21 @@ function emitCleanupSql(probeTemplateId) {
     console.log(`  -- this is the belt-and-braces if the API delete failed):`);
     console.log(`  DELETE FROM email_templates`);
     console.log(`  WHERE name LIKE '${PROBE_TEMPLATE_NAME_PREFIX}%';`);
+    console.log(`  -- In-flight probe form (deleted by API in normal flow;`);
+    console.log(`  -- this is the belt-and-braces if the API delete failed):`);
+    console.log(`  DELETE FROM forms`);
+    console.log(`  WHERE name LIKE '${PROBE_TEMPLATE_NAME_PREFIX}%' AND expo_id = ${TEST_EXPO_ID};`);
     if (probeTemplateId) {
         console.log(`  -- (This run's probe template id was ${probeTemplateId}.)`);
     }
+    if (probeFormId) {
+        console.log(`  -- (This run's probe form id was ${probeFormId}.)`);
+    }
 }
 
-async function programmaticCleanup(probeTemplateId) {
-    // Delete the probe template via API. Belt-and-braces cleanup SQL is
-    // always printed, so a failure here does NOT stop the test — just
+async function programmaticCleanup(probeTemplateId, probeFormId) {
+    // Delete the probe template + probe form via API. Belt-and-braces cleanup
+    // SQL is always printed, so a failure here does NOT stop the test — just
     // logged for visibility.
     if (probeTemplateId) {
         try {
@@ -180,6 +187,17 @@ async function programmaticCleanup(probeTemplateId) {
             console.log(`  Programmatic probe-template DELETE returned ${del.status}`);
         } catch (e) {
             console.log(`  Programmatic probe-template DELETE errored: ${e.message}`);
+        }
+    }
+    if (probeFormId) {
+        try {
+            const del = await fetch(`${BASE_URL}/api/forms/${probeFormId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` }
+            });
+            console.log(`  Programmatic probe-form DELETE returned ${del.status}`);
+        } catch (e) {
+            console.log(`  Programmatic probe-form DELETE errored: ${e.message}`);
         }
     }
 }
@@ -222,10 +240,11 @@ async function main() {
     const seedBuffer = XLSX.write(seedWb, { type: 'buffer', bookType: 'xlsx' });
 
     let probeTemplateId = null;
+    let probeFormId = null;
 
     try {
         // ================================================================
-        // STEP 0 — create the probe template + seed G2 visitors
+        // STEP 0 — create the probe template + probe form + seed G2 visitors
         // ================================================================
         console.log(`\n---- STEP 0a: create in-flight probe template ----`);
         const tpRes = await fetch(`${BASE_URL}/api/email-templates`, {
@@ -246,6 +265,34 @@ async function main() {
         probeTemplateId = tpBody.template && tpBody.template.id;
         assert(typeof probeTemplateId === 'number' && probeTemplateId > 0,
             `probe template created (id=${probeTemplateId})`);
+
+        // Probe form (visitor-type) on TEST_EXPO_ID — needed by STEP 6 to
+        // exercise the Phase 2b reuse-branch UPDATE. wPopulateActivationForms
+        // only lists visitor_type='visitor' forms, matching the wizard UI.
+        console.log(`\n---- STEP 0a2: create in-flight probe form on expo ${TEST_EXPO_ID} ----`);
+        const pfRes = await fetch(`${BASE_URL}/api/forms`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${TEST_JWT}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name: `${PROBE_TEMPLATE_NAME_PREFIX} form ${new Date().toISOString().slice(0, 19)}`,
+                description: 'wizard smoke probe form (auto-deleted)',
+                expo_id: TEST_EXPO_ID,
+                fields: [],
+                is_active: false,
+                visitor_type: 'visitor',
+                source: 'form',
+                origin: 'manual_entry'
+            })
+        });
+        if (pfRes.status !== 201 && pfRes.status !== 200) {
+            const t = await pfRes.text().catch(() => '');
+            throw new Error(`probe form create failed HTTP ${pfRes.status}: ${t.slice(0, 200)}`);
+        }
+        const pfBody = await pfRes.json();
+        // /api/forms POST returns the raw row (RETURNING *), not {form: {...}}.
+        probeFormId = (pfBody.form && pfBody.form.id) || pfBody.id;
+        assert(typeof probeFormId === 'number' && probeFormId > 0,
+            `probe form created (id=${probeFormId}) on expo ${TEST_EXPO_ID}`);
 
         console.log(`\n---- STEP 0b: seed 3 G2 visitors on expo ${G2_SEED_EXPO_ID} via /api/visitors/import ----`);
         const seedForm = new FormData();
@@ -620,6 +667,30 @@ async function main() {
             assert(preRun2.rows[0].n === 3,
                 `pre-second-run baseline: 3 tokens exist for G2 seed emails (got ${preRun2.rows[0].n})`);
 
+            // Snapshot form_id + phone BEFORE second build so we can prove
+            // Phase 2b (campaignBuilder.js:1057+) UPDATE'd them:
+            //   - STEP 3's build passed no form_id → tokens.form_id = NULL
+            //   - STEP 3's phone reader gave rows 1-3 non-empty E.164 phones
+            // After the second build (which passes form_id = probeFormId),
+            // the reused tokens must have form_id = probeFormId AND their
+            // pre-existing phones untouched (COALESCE guard).
+            const preFormPhoneSnap = await pool.query(
+                `SELECT email, form_id, phone FROM reactivation_tokens
+                 WHERE target_expo_id = $1 AND email = ANY($2)
+                 ORDER BY email`,
+                [TEST_EXPO_ID, G2_SEED_EMAILS]
+            );
+            console.log(`  Pre-second-run form_id/phone snapshot:`);
+            preFormPhoneSnap.rows.forEach(r =>
+                console.log(`    ${r.email}: form_id=${r.form_id === null ? 'NULL' : r.form_id}, phone='${r.phone || ''}'`)
+            );
+            const preFormIds = new Set(preFormPhoneSnap.rows.map(r => r.form_id));
+            assert(preFormIds.size === 1 && preFormIds.has(null),
+                `pre-second-run: all 3 tokens have form_id=NULL (STEP 3 didn't pass form_id)`);
+            const preNonEmptyPhones = preFormPhoneSnap.rows.filter(r => r.phone && r.phone.length > 0);
+            assert(preNonEmptyPhones.length >= 1,
+                `pre-second-run: at least one token has a non-empty phone (got ${preNonEmptyPhones.length}/3)`);
+
             // Second segment run — same fixture, same target.
             console.log(`\n  Second /segment call (same fixture, same target):`);
             const seg2Form = new FormData();
@@ -659,6 +730,10 @@ async function main() {
                     register_steps: [{ template_id: probeTemplateId, delay_hours: 0, condition: 'all' }],
                     activate_name: `${CAMPAIGN_TAG} Activate ${runTag2}`,
                     register_name: `${CAMPAIGN_TAG} Register ${runTag2}`,
+                    // Phase 2b UPDATE trigger — first build did NOT pass form_id
+                    // (tokens.form_id = NULL). Second build passes probeFormId
+                    // so we can prove the reuse branch propagated it.
+                    form_id: probeFormId,
                     skip_template_validation: true
                 })
             });
@@ -700,6 +775,30 @@ async function main() {
             console.log(`    Post-second-run tokens on target for G2 seed emails: ${postRun2.rows[0].n}`);
             assert(postRun2.rows[0].n === 3,
                 `no new tokens minted by second run — total still 3 (got ${postRun2.rows[0].n}) — token reuse invariant holds`);
+
+            // Phase 2b reuse-branch UPDATE assertion (Suer 3 Sep fix).
+            // form_id must have moved from NULL → probeFormId for all 3
+            // reused tokens; phones must be UNCHANGED (STEP 3 seeded them
+            // non-empty; the CASE WHEN COALESCE guard must never clobber).
+            const postFormPhoneSnap = await pool.query(
+                `SELECT email, form_id, phone FROM reactivation_tokens
+                 WHERE target_expo_id = $1 AND email = ANY($2)
+                 ORDER BY email`,
+                [TEST_EXPO_ID, G2_SEED_EMAILS]
+            );
+            console.log(`  Post-second-run form_id/phone snapshot:`);
+            postFormPhoneSnap.rows.forEach(r =>
+                console.log(`    ${r.email}: form_id=${r.form_id === null ? 'NULL' : r.form_id}, phone='${r.phone || ''}'`)
+            );
+            const postFormIds = new Set(postFormPhoneSnap.rows.map(r => r.form_id));
+            assert(postFormIds.size === 1 && postFormIds.has(probeFormId),
+                `Phase 2b: all 3 reused tokens now have form_id=${probeFormId} (got set: ${JSON.stringify([...postFormIds])})`);
+            const preByEmail = new Map(preFormPhoneSnap.rows.map(r => [r.email, r.phone || '']));
+            const phonesUnchanged = postFormPhoneSnap.rows.every(r =>
+                (r.phone || '') === preByEmail.get(r.email)
+            );
+            assert(phonesUnchanged,
+                `Phase 2b: all 3 reused tokens' phones UNCHANGED (COALESCE guard held — no clobber of pre-existing non-empty phones)`);
 
             // Second-run campaign recipients count == g2_planned + g3_planned.
             const camp2Res = await pool.query(
@@ -1222,17 +1321,17 @@ async function main() {
         // Programmatic cleanup runs whether we passed or failed. Emitted SQL
         // is belt-and-braces for anything that didn't clean up.
         console.log(`\n---- Programmatic cleanup ----`);
-        await programmaticCleanup(probeTemplateId);
+        await programmaticCleanup(probeTemplateId, probeFormId);
     }
 }
 
 main()
-    .then(() => { emitCleanupSql(null); process.exit(0); })
+    .then(() => { emitCleanupSql(null, null); process.exit(0); })
     .catch(err => {
         console.error(`\n❌ TEST FAILED: ${err.message}`);
-        // probeTemplateId is out of scope here — cleanup SQL always fires
-        // the LIKE-name DELETE, which catches this run's row and any prior
-        // leftover ones.
-        emitCleanupSql(null);
+        // probeTemplateId + probeFormId are out of scope here — cleanup SQL
+        // always fires the LIKE-name DELETE, which catches this run's row
+        // and any prior leftover ones.
+        emitCleanupSql(null, null);
         process.exit(1);
     });
