@@ -61,16 +61,24 @@ async function sendEmail(to, subject, html) {
  * @param {object} [extraHeaders] - Optional additional headers (e.g. List-Unsubscribe)
  * @returns {Promise<boolean>}
  */
-async function sendEmailWithReplyTo(to, subject, html, replyToEmail, extraHeaders) {
+async function sendEmailWithReplyTo(to, subject, html, replyToEmail, extraHeaders, fromName) {
     try {
         if (!process.env.SENDGRID_API_KEY) {
             console.log('SendGrid not configured. Skipping send.');
             return true;
         }
 
+        const fromEmail = process.env.SENDER_EMAIL || 'noreply@leena.app';
+        // Optional display name (Suer 3 Sep). When set, SendGrid renders
+        // From as "<fromName> <fromEmail>" per RFC 5322. When null/undefined
+        // (default), bare email exactly as today. Only the campaign send
+        // path passes it — badge / certificate / single-recipient / bulk
+        // paths that route through this wrapper all omit → bare email.
+        const from = fromName ? { email: fromEmail, name: fromName } : fromEmail;
+
         const msg = {
             to,
-            from: process.env.SENDER_EMAIL || 'noreply@leena.app',
+            from,
             replyTo: replyToEmail,
             subject,
             html,
@@ -78,7 +86,7 @@ async function sendEmailWithReplyTo(to, subject, html, replyToEmail, extraHeader
         };
 
         await sgMail.send(msg);
-        console.log(`📧 Email sent to: ${to} (reply-to: ${replyToEmail})`);
+        console.log(`📧 Email sent to: ${to} (reply-to: ${replyToEmail}${fromName ? ', from-name: ' + fromName : ''})`);
         return true;
     } catch (err) {
         console.error(`❌ SendGrid error to ${to}:`, err.message || err);

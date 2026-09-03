@@ -227,9 +227,17 @@ async function processTask(task) {
     }
 
     // Build List-Unsubscribe headers for campaign emails (RFC 8058)
-    const extraHeaders = (task.campaign_id && task.campaign_recipient_id)
+    const isCampaignTask = task.campaign_id && task.campaign_recipient_id;
+    const extraHeaders = isCampaignTask
       ? getListUnsubscribeHeaders(task.campaign_id, task.campaign_recipient_id, recipientEmail)
       : undefined;
+
+    // Campaign From display name (Suer 3 Sep). Env-var gated + campaign-only.
+    // Badge / certificate / single-recipient tasks lack task.campaign_id, so
+    // they always receive fromName=null and keep the bare-email behaviour.
+    // Currently one global name per Render worker restart. Per-campaign name
+    // is P2 (needs email_campaigns.from_display_name column + wizard field).
+    const fromName = isCampaignTask ? (process.env.CAMPAIGN_SENDER_NAME || null) : null;
 
     // Send email
     const sent = await sendEmailWithReplyTo(
@@ -237,7 +245,8 @@ async function processTask(task) {
       emailSubject,
       emailHtml,
       'reply@replies.leena.app',
-      extraHeaders
+      extraHeaders,
+      fromName
     );
 
     if (sent) {
@@ -311,11 +320,16 @@ async function processCampaign(campaign) {
   let enqueued = 0;
 
   // Cache sender display name for unsubscribe link (expo name > organizer name)
+  // + country_code for footer language branching (Suer 3 Sep, audit §8).
   let organizerName = 'Organizer';
+  let expoCountryCode = null;
   try {
     if (campaign.expo_id) {
-      const expoRes = await pool.query('SELECT name FROM expos WHERE id = $1', [campaign.expo_id]);
-      if (expoRes.rows.length > 0 && expoRes.rows[0].name) organizerName = expoRes.rows[0].name;
+      const expoRes = await pool.query('SELECT name, country_code FROM expos WHERE id = $1', [campaign.expo_id]);
+      if (expoRes.rows.length > 0) {
+        if (expoRes.rows[0].name) organizerName = expoRes.rows[0].name;
+        expoCountryCode = expoRes.rows[0].country_code || null;
+      }
     }
     if (organizerName === 'Organizer') {
       const orgRes = await pool.query('SELECT name FROM organizers WHERE id = $1', [campaign.organizer_id]);
@@ -379,7 +393,7 @@ async function processCampaign(campaign) {
 
     for (const recipient of recipients) {
       try {
-        const result = await processRecipient(campaign, recipient, stepsMap, organizerName);
+        const result = await processRecipient(campaign, recipient, stepsMap, organizerName, expoCountryCode);
         if (result === 'enqueued') enqueued++;
       } catch (err) {
         console.error(`[CAMPAIGN SCHEDULER] Recipient ${recipient.email} error: ${err.message}`);
@@ -402,7 +416,7 @@ async function processCampaign(campaign) {
   return enqueued;
 }
 
-async function processRecipient(campaign, recipient, stepsMap, organizerName) {
+async function processRecipient(campaign, recipient, stepsMap, organizerName, expoCountryCode) {
   const nextStepNum = recipient.current_step + 1;
   const step = stepsMap[nextStepNum];
 
@@ -426,7 +440,7 @@ async function processRecipient(campaign, recipient, stepsMap, organizerName) {
   }
 
   // Condition passed → enqueue email
-  await enqueueStepEmail(campaign, recipient, step, organizerName);
+  await enqueueStepEmail(campaign, recipient, step, organizerName, expoCountryCode);
   console.log(`[CAMPAIGN SCHEDULER] Enqueued step ${nextStepNum} for ${recipient.email} (campaign ${campaign.id})`);
 
   // Compute next_step_due_at for step after this one
@@ -528,7 +542,7 @@ async function evaluateCondition(condition, recipient, stepsMap, campaign) {
   return true; // Unknown condition → proceed
 }
 
-async function enqueueStepEmail(campaign, recipient, step, organizerName) {
+async function enqueueStepEmail(campaign, recipient, step, organizerName, expoCountryCode) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -593,7 +607,7 @@ async function enqueueStepEmail(campaign, recipient, step, organizerName) {
 
     // Inject unsubscribe link
     const unsubToken = generateUnsubscribeToken(campaign.id, recipient.id, recipient.email);
-    html = injectUnsubscribeLink(html, unsubToken, organizerName);
+    html = injectUnsubscribeLink(html, unsubToken, organizerName, expoCountryCode);
 
     // Append _lc campaign token to Leena form links FIRST (before click wrap)
     html = appendCampaignTokenToFormLinks(html, unsubToken);

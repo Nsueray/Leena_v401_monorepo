@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+    <title>Activez votre laissez-passer visiteur - Leena EMS</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #FECC00;
+            --primary-dark: #111827;
+            --bg-light: #f6f7fb;
+            --card-bg: #ffffff;
+            --text-dark: #111827;
+            --text-muted: #6b7280;
+            --border: #e5e7eb;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--bg-light);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 520px;
+            width: 100%;
+        }
+        
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: 0 8px 24px rgba(17, 24, 39, 0.08);
+            overflow: hidden;
+        }
+        
+        .card-header {
+            background: var(--primary);
+            padding: 28px;
+            text-align: center;
+        }
+        
+        .card-header h1 {
+            color: var(--text-dark);
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .card-header p {
+            color: var(--text-dark);
+            opacity: 0.8;
+            font-size: 14px;
+        }
+        
+        .card-body {
+            padding: 28px;
+        }
+        
+        .expo-info {
+            background: #f3f4f6;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .expo-info h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+        
+        .expo-info p {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin: 4px 0;
+        }
+        
+        .form-section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .form-section-title i {
+            color: var(--primary);
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-dark);
+            margin-bottom: 6px;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.2s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(254, 204, 0, 0.15);
+        }
+        
+        .form-control:disabled {
+            background: #f9fafb;
+            color: var(--text-muted);
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 14px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background: var(--primary);
+            color: var(--text-dark);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(254, 204, 0, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+        
+        .alert {
+            padding: 14px 16px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        
+        .alert-danger {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+        
+        .alert-success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        
+        .loading-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        
+        .spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .success-state {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: var(--success);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        
+        .success-icon i {
+            font-size: 40px;
+            color: white;
+        }
+        
+        .success-state h2 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 12px;
+        }
+        
+        .success-state p {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        
+        .badge-info {
+            background: #f3f4f6;
+            border-radius: 12px;
+            padding: 16px;
+            margin-top: 16px;
+        }
+        
+        .badge-info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .badge-info-item:last-child {
+            border-bottom: none;
+        }
+        
+        .badge-info-label {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        
+        .badge-info-value {
+            color: var(--text-dark);
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .error-state {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        
+        .error-icon {
+            width: 80px;
+            height: 80px;
+            background: #fee2e2;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        
+        .error-icon i {
+            font-size: 40px;
+            color: var(--danger);
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }
+        
+        @media (max-width: 480px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-state">
+                <div class="spinner"></div>
+                <p>Vérification de votre lien d'activation…</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="errorState" class="error-state" style="display: none;">
+                <div class="error-icon">
+                    <i class="bi bi-x-lg"></i>
+                </div>
+                <h2>Échec de l'activation</h2>
+                <p id="errorMessage">Ce lien est invalide ou a expiré.</p>
+            </div>
+
+            <!-- Form State -->
+            <div id="formState" style="display: none;">
+                <div class="card-header">
+                    <h1><i class="bi bi-person-check"></i> Activez votre laissez-passer</h1>
+                    <p>Confirmez vos informations pour obtenir votre badge visiteur</p>
+                </div>
+
+                <div class="card-body">
+                    <div class="expo-info">
+                        <h3 id="expoName">Chargement…</h3>
+                        <p><i class="bi bi-calendar3"></i> <span id="expoDates">-</span></p>
+                        <p><i class="bi bi-geo-alt"></i> <span id="expoLocation">-</span></p>
+                    </div>
+
+                    <div id="alertBox" class="alert" style="display: none;"></div>
+
+                    <form id="activationForm">
+                        <div class="form-section-title">
+                            <i class="bi bi-person"></i> Vos informations
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Prénom *</label>
+                                <input type="text" class="form-control" id="name" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Nom</label>
+                                <input type="text" class="form-control" id="lastName">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">E-mail</label>
+                            <input type="email" class="form-control" id="email" disabled>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Société *</label>
+                            <input type="text" class="form-control" id="company" required>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">Pays</label>
+                                <input type="text" class="form-control" id="country">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Fonction *</label>
+                                <input type="text" class="form-control" id="jobTitle" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">Téléphone *</label>
+                            <input type="tel" class="form-control" id="phone" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-check-circle"></i>
+                            Confirmer et activer mon laissez-passer
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Success State -->
+            <div id="successState" style="display: none;">
+                <div class="card-header" style="background: var(--success);">
+                    <h1 style="color: white;"><i class="bi bi-check-circle"></i> Confirmé</h1>
+                    <p style="color: white; opacity: 0.9;">Votre laissez-passer visiteur a été activé</p>
+                </div>
+
+                <div class="card-body">
+                    <div class="success-state">
+                        <div class="success-icon">
+                            <i class="bi bi-check-lg"></i>
+                        </div>
+                        <h2>Tout est prêt</h2>
+                        <p>L'e-mail de confirmation avec votre badge est en cours d'envoi. Veuillez vérifier votre boîte de réception.</p>
+
+                        <div class="badge-info">
+                            <div class="badge-info-item">
+                                <span class="badge-info-label">Nom</span>
+                                <span class="badge-info-value" id="successName">-</span>
+                            </div>
+                            <div class="badge-info-item">
+                                <span class="badge-info-label">E-mail</span>
+                                <span class="badge-info-value" id="successEmail">-</span>
+                            </div>
+                            <div class="badge-info-item">
+                                <span class="badge-info-label">Identifiant du badge</span>
+                                <span class="badge-info-value" id="successBadgeId">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            Propulsé par Leena EMS · © Elan Expo
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api/reactivation';
+        let currentToken = null;
+        // Campaign attribution token, when the visitor arrived from a campaign email.
+        // Mirrors form-public.html:375-377 — forwarded to /activate so the activation
+        // is recorded as a 'registered' event against the campaign recipient.
+        let campaignToken = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            currentToken = urlParams.get('token');
+            campaignToken = urlParams.get('_lc');
+
+            if (!currentToken) {
+                showError("Aucun jeton d'activation n'a été fourni. Veuillez utiliser le lien reçu par e-mail.");
+                return;
+            }
+
+            verifyToken();
+        });
+
+        async function verifyToken() {
+            try {
+                const response = await fetch(`${API_URL}/verify/${currentToken}`);
+                const data = await response.json();
+
+                if (!response.ok) {
+                    if (data.already_activated) {
+                        showError("Ce laissez-passer a déjà été activé. Consultez votre e-mail pour retrouver votre badge.");
+                    } else {
+                        // Server-side error messages remain in English (Suer 3 Sep,
+                        // Approach B accepted trade-off) — the French fallback
+                        // covers the case where the server omits an error message.
+                        showError(data.error || "Lien d'activation invalide ou expiré.");
+                    }
+                    return;
+                }
+
+                // Populate form
+                document.getElementById('name').value = data.visitor.name || '';
+                document.getElementById('lastName').value = data.visitor.last_name || '';
+                document.getElementById('email').value = data.visitor.email || '';
+                document.getElementById('company').value = data.visitor.company || '';
+                document.getElementById('country').value = data.visitor.country || '';
+                document.getElementById('jobTitle').value = data.visitor.job_title || '';
+                document.getElementById('phone').value = data.visitor.phone || '';
+
+                // Populate expo info
+                document.getElementById('expoName').textContent = data.expo.name;
+                
+                if (data.expo.start_date) {
+                    const startDate = new Date(data.expo.start_date);
+                    const endDate = data.expo.end_date ? new Date(data.expo.end_date) : null;
+                    const options = { day: 'numeric', month: 'long', year: 'numeric' };
+                    
+                    let dateStr = startDate.toLocaleDateString('fr-FR', options);
+                    if (endDate && endDate > startDate) {
+                        dateStr = `${startDate.getDate()}–${endDate.toLocaleDateString('fr-FR', options)}`;
+                    }
+                    document.getElementById('expoDates').textContent = dateStr;
+                }
+                
+                document.getElementById('expoLocation').textContent = data.expo.location || 'À confirmer';
+
+                // Apply form design if available
+                if (data.form_config) applyFormStyle(data.form_config);
+
+                showForm();
+
+            } catch (err) {
+                console.error('Verify error:', err);
+                showError("La vérification de votre lien d'activation a échoué. Veuillez réessayer.");
+            }
+        }
+
+        document.getElementById('activationForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-width:2px;margin:0;"></span> Traitement en cours…';
+
+            try {
+                const response = await fetch(`${API_URL}/activate`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: currentToken,
+                        _lc: campaignToken || undefined,
+                        name: document.getElementById('name').value.trim(),
+                        last_name: document.getElementById('lastName').value.trim(),
+                        company: document.getElementById('company').value.trim(),
+                        country: document.getElementById('country').value.trim(),
+                        job_title: document.getElementById('jobTitle').value.trim(),
+                        phone: document.getElementById('phone').value.trim()
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    // Server-side error message stays English by design; French
+                    // fallback covers a missing data.error.
+                    showAlert(data.error || "L'activation a échoué. Veuillez réessayer.", 'danger');
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Confirmer et activer mon laissez-passer';
+                    return;
+                }
+
+                // Show success
+                document.getElementById('successName').textContent = data.visitor.name || '-';
+                document.getElementById('successEmail').textContent = data.visitor.email || '-';
+                document.getElementById('successBadgeId').textContent = data.visitor.badge_id || '-';
+
+                showSuccess();
+
+            } catch (err) {
+                console.error('Activation error:', err);
+                showAlert("Une erreur s'est produite. Veuillez réessayer.", 'danger');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Confirmer et activer mon laissez-passer';
+            }
+        });
+
+        function showForm() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'none';
+            document.getElementById('formState').style.display = 'block';
+            document.getElementById('successState').style.display = 'none';
+        }
+
+        function showError(message) {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'block';
+            document.getElementById('formState').style.display = 'none';
+            document.getElementById('successState').style.display = 'none';
+            document.getElementById('errorMessage').textContent = message;
+        }
+
+        function showSuccess() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'none';
+            document.getElementById('formState').style.display = 'none';
+            document.getElementById('successState').style.display = 'block';
+        }
+
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.className = `alert alert-${type}`;
+            alertBox.textContent = message;
+            alertBox.style.display = 'block';
+        }
+
+        // Apply form design from config (if form_config provided by verify endpoint)
+        function applyFormStyle(config) {
+            if (typeof config === 'string') { try { config = JSON.parse(config); } catch(e) { return; } }
+            if (!config || !config.style) return; // null → keep hardcoded yellow theme
+
+            const s = config.style;
+
+            // Font
+            if (s.fontFamily && s.fontFamily !== 'system-ui') {
+                const link = document.createElement('link');
+                link.href = `https://fonts.googleapis.com/css2?family=${s.fontFamily.replace(/ /g, '+')}:wght@400;500;600;700&display=swap`;
+                link.rel = 'stylesheet';
+                document.head.appendChild(link);
+                document.body.style.fontFamily = `'${s.fontFamily}', system-ui, sans-serif`;
+            }
+
+            // Background
+            if (s.backgroundColor) document.body.style.background = s.backgroundColor;
+
+            // Header
+            const header = document.querySelector('.card-header');
+            if (header) {
+                if (s.headerBannerImage) {
+                    header.style.background = `url(${s.headerBannerImage}) center/cover no-repeat`;
+                    header.querySelectorAll('h1, p').forEach(el => el.style.color = 'white');
+                } else if (s.headerGradientEnd) {
+                    header.style.background = `linear-gradient(135deg, ${s.headerBannerColor}, ${s.headerGradientEnd})`;
+                    header.querySelectorAll('h1, p').forEach(el => el.style.color = 'white');
+                } else if (s.headerBannerColor) {
+                    header.style.background = s.headerBannerColor;
+                }
+                if (s.headerHeight) header.style.minHeight = s.headerHeight + 'px';
+            }
+
+            // Button + inputs
+            const styleTag = document.createElement('style');
+            styleTag.textContent = `
+                .btn-primary { background: ${s.primaryColor || '#FECC00'} !important; }
+                .btn-primary:hover { box-shadow: 0 8px 20px ${s.primaryColor || '#FECC00'}40 !important; }
+                .form-control:focus { border-color: ${s.primaryColor || '#FECC00'} !important; box-shadow: 0 0 0 3px ${s.primaryColor || '#FECC00'}25 !important; }
+                ${s.borderRadius ? `.form-control, .btn, .card { border-radius: ${s.borderRadius}px !important; }` : ''}
+            `;
+            document.head.appendChild(styleTag);
+
+            if (s.buttonText) {
+                const btn = document.getElementById('submitBtn');
+                if (btn) btn.innerHTML = `<i class="bi bi-check-circle"></i> ${s.buttonText}`;
+            }
+        }
+    </script>
+</body>
+</html>

@@ -196,9 +196,14 @@ async function main() {
 
     // ---- STEP 0a — build the fixture buffer once, reuse for both imports.
     const rows = [
-        { name: 'W1', email: TEST_EMAILS.row1, company: 'Test Co' },
-        { name: 'W2', email: TEST_EMAILS.row2, company: 'Test Co' },
-        { name: 'W3', email: TEST_EMAILS.row3, company: 'Test Co' },
+        // Phone: JS number for row1 (agency-Excel shape, G21), Moroccan
+        // local for row2 (should normalise to +212), Turkish for row3
+        // (should normalise to +90), empty for row4-5. Target expo 17 has
+        // country_code=NG (Nigeria) — so plain locals should end up +234
+        // per the normaliser's default-country resolution.
+        { name: 'W1', email: TEST_EMAILS.row1, company: 'Test Co', phone: 2348012345678 },
+        { name: 'W2', email: TEST_EMAILS.row2, company: 'Test Co', phone: '+212 661 23 45 67' },
+        { name: 'W3', email: TEST_EMAILS.row3, company: 'Test Co', phone: '0532 123 45 67', country: 'Turkey' },
         { name: 'W4', email: TEST_EMAILS.row4, company: 'Test Co' },
         { name: 'W5', email: TEST_EMAILS.row5, company: 'Test Co' }
     ];
@@ -1055,6 +1060,73 @@ async function main() {
             console.log(`    NEW tokens (since jobStart9) for held-out email: ${newTokRes.rows[0].n}`);
             assert(newTokRes.rows[0].n === 0,
                 `NO new reactivation_token minted for held-out email '${heldOutEmail}' since jobStart9 (got ${newTokRes.rows[0].n})`);
+
+            // ---- Phone reached the token (Suer 3 Sep Part B item 4) ----
+            // Fixture seeded phones on smoke-wizard-1..3 (G2). Normaliser
+            // runs in campaignBuilder.js Excel reader → truncateRowFields
+            // → processReactivationChunks INSERT into reactivation_tokens.
+            // Assert at least one of the minted tokens for the G2 seed
+            // emails has a non-empty E.164 phone. Robust to the random
+            // holdout: 3 minted total minus 1 held-out = 2 tokens exist;
+            // at least one of the two carries the seeded phone.
+            const phoneRes = await pool.query(
+                `SELECT email, phone FROM reactivation_tokens
+                 WHERE target_expo_id = $1 AND email = ANY($2) AND created_at >= $3
+                 ORDER BY email`,
+                [TEST_EXPO_ID, G2_SEED_EMAILS, jobStartTime9.toISOString()]
+            );
+            console.log(`\n  Phones on minted tokens (G2 seeds, since jobStart9):`);
+            for (const row of phoneRes.rows) {
+                console.log(`    ${row.email}: ${JSON.stringify(row.phone)}`);
+            }
+            const nonEmptyPhones = phoneRes.rows.filter(r => r.phone && r.phone.length > 0);
+            assert(nonEmptyPhones.length >= 1,
+                `at least one minted token carries a non-empty phone from the fixture (got ${nonEmptyPhones.length} non-empty out of ${phoneRes.rows.length})`);
+            // At least one should be E.164 (starts with +) — proves normaliser fired.
+            const e164Phones = phoneRes.rows.filter(r => r.phone && r.phone.startsWith('+'));
+            assert(e164Phones.length >= 1,
+                `at least one minted token has an E.164 phone (starts with +) — proves normalizePhone ran (got ${e164Phones.length} E.164)`);
+
+            // ---- form_id ownership check fires (Suer 3 Sep Part B item 3) ----
+            // Negative test: a fresh /segment + /build with form_id pointing
+            // at a form that belongs to a DIFFERENT expo (form 42 lives on
+            // expo 11, target here is expo 17) must return 404. Proves the
+            // ownership scope check runs and rejects mis-scoped forms.
+            // Positive form_id round-trip (form_id lands in reactivation_tokens)
+            // deferred — expo 17 has no forms today; validated by code trace:
+            // form_id → processReactivationChunks options → reactivation.js:131
+            // tokenParams.push(..., r.phone, form_id || null).
+            console.log(`\n  form_id ownership check — negative test:`);
+            const segForForm = new FormData();
+            segForForm.append('file', new Blob([fullBuffer], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }), 'wizard_smoke.xlsx');
+            segForForm.append('target_expo_id', String(TEST_EXPO_ID));
+            const segForFormRes = await fetch(`${BASE_URL}/api/campaigns/reactivation/segment`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}` },
+                body: segForForm
+            });
+            if (!segForFormRes.ok) throw new Error(`form_id negative test /segment failed: ${segForFormRes.status}`);
+            const segForFormBody = await segForFormRes.json();
+            const badFormBuildRes = await fetch(`${BASE_URL}/api/campaigns/reactivation/build`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TEST_JWT}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    preview_token: segForFormBody.preview_token,
+                    activate_steps: [{ template_id: probeTemplateId, delay_hours: 0, condition: 'all' }],
+                    register_steps: [],
+                    activate_name: `${CAMPAIGN_TAG} FormNeg ${new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')}`,
+                    skip_template_validation: true,
+                    form_id: 42  // exists on expo 11, NOT expo 17 → must 404
+                })
+            });
+            console.log(`    /build with form_id=42 (wrong expo) → HTTP ${badFormBuildRes.status}`);
+            assert(badFormBuildRes.status === 404,
+                `form_id validation rejects form belonging to another expo — HTTP 404 (got ${badFormBuildRes.status})`);
+            const badFormBody = await badFormBuildRes.json();
+            assert(badFormBody.error && badFormBody.error.indexOf('form_id') >= 0,
+                `error message mentions form_id (got: ${JSON.stringify(badFormBody.error)})`);
 
             // Follow-up /segment: held-out email must appear in the overlap set,
             // proving the query filters cr.status IN ('active','holdout').

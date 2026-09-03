@@ -3,7 +3,9 @@
  * Leena EMS v403 — Email Campaigns
  *
  * - injectTrackingPixel(html, eventId) — adds 1x1 transparent pixel before </body>
- * - injectUnsubscribeLink(html, token, organizerName) — adds footer with unsubscribe link
+ * - injectUnsubscribeLink(html, token, organizerName, expoCountryCode) — adds footer
+ *   with unsubscribe link + Morocco postal address; sentence in French when
+ *   expoCountryCode === 'MA', English otherwise (including NULL / undefined)
  * - generateUnsubscribeToken(campaignId, recipientId, email) — HMAC-based token
  * - verifyUnsubscribeToken(token) — validates and returns { campaignId, recipientId, email }
  */
@@ -38,26 +40,28 @@ function injectTrackingPixel(html, eventId) {
  * Inject an unsubscribe footer link into email HTML.
  * Inserted immediately before </body>. If no </body>, appended at end.
  */
-function injectUnsubscribeLink(html, token, organizerName) {
+function injectUnsubscribeLink(html, token, organizerName, expoCountryCode) {
   if (!html || !token) return html || '';
 
   const unsubUrl = `${BASE_URL}/api/email-track/unsubscribe/${token}`;
-  // Physical address on its own lines satisfies US CAN-SPAM §316.5(a)(5)
-  // — required for commercial email. Built into the footer template
-  // directly (not appended via .replace on the sentence) so that any
-  // future change to the wording cannot silently drop the address line.
-  // Campaign-only injection point (email_worker.js:596 inside
-  // enqueueStepEmail; badge/certificate/single sends bypass this helper).
+  // Physical address on its own lines satisfies US CAN-SPAM §316.5(a)(5).
+  // Campaign-only injection (email_worker.js:596 inside enqueueStepEmail;
+  // badge / certificate / single sends bypass this helper).
   //
-  // Morocco entity (Suer 2 Sep) — the fair on this domain's next launch is
-  // SIEMA (Casablanca), and the operating entity for SIEMA is Elan Expo
-  // Maroc SARL. UTF-8 preserved: "2ème" (U+00E8) and "N°" (U+00B0).
-  // ⚠️ HARDCODED — see P2 todo "Footer postal address should come from the
-  // expo's organiser entity, not a constant". Fine for SIEMA (Morocco);
-  // wrong for a subsequent Nigeria/Ghana/Kenya campaign on the same code.
+  // Sentence language branches on the target expo's country_code
+  // (Suer 3 Sep audit §8): 'MA' → French; anything else → English.
+  // Address block stays hardcoded Morocco per P2 (fine for SIEMA; the
+  // per-organiser-office lookup remains post-fair work).
+  // UTF-8 preserved: "2ème" (è = U+00E8, C3 A8) / "N°" (° = U+00B0, C2 B0).
+  const isFrench = expoCountryCode === 'MA';
+  const sentence = isFrench
+    ? `Si vous ne souhaitez plus recevoir ces e-mails de ${organizerName || 'cet organisateur'}, `
+      + `<a href="${unsubUrl}" style="color:#888;text-decoration:underline;">désabonnez-vous ici</a>.`
+    : `If you no longer wish to receive these emails from ${organizerName || 'this organizer'}, `
+      + `<a href="${unsubUrl}" style="color:#888;text-decoration:underline;">unsubscribe here</a>.`;
+
   const footer = `<div style="text-align:center;margin-top:20px;padding:16px;font-size:11px;color:#888;border-top:1px solid #eee;">`
-    + `If you no longer wish to receive these emails from ${organizerName || 'this organizer'}, `
-    + `<a href="${unsubUrl}" style="color:#888;text-decoration:underline;">unsubscribe here</a>.`
+    + sentence
     + `<br>ELAN EXPO MAROC SARL`
     + `<br>30, Bd Rahal El Meskini, 2ème Etage, Appart N° 5, Casablanca, Morocco`
     + `<br>+212 650 219 756`

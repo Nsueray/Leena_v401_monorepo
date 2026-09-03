@@ -441,6 +441,10 @@
                                 <br><br>
                                 <strong>Holdout (control group):</strong> on the Confirm panel you can set a <strong>Holdout %</strong> (0–20). A random slice of mailable recipients gets NO email and NO token — they land in <code>campaign_recipients</code> with <code>status='holdout'</code> so we can compare their fair-registration rate to the mailed group afterwards. Recommended <strong>5–10%</strong> for a campaign whose real lift you want to measure. Holdouts count as taken across campaigns: if you build a second campaign against the same list, the wizard's overlap warning will flag them (so we never accidentally mail the control group in a later run).
                                 <br><br>
+                                <strong>Activation page language:</strong> also on Confirm. Choose English (default, <code>reactivate.html</code>) or Français (<code>reactivate-fr.html</code>) for what activate-wave recipients see when they click the link. Register wave is unaffected. Server-side error messages remain in English regardless.
+                                <br><br>
+                                <strong>Activation page design:</strong> also on Confirm. Pick any visitor form to inherit its colours + banner on the activation page (both English + French pages read the same form config). Default = yellow theme.
+                                <br><br>
                                 <strong>Validation pills on the Templates panel:</strong> a <span style="color:#991b1b;">red</span> pill blocks the Build button — fix the template. An <span style="color:#92400e;">amber</span> pill does <em>not</em> block — it is a warning worth reading.
                             </div>
                         </div>
@@ -605,6 +609,38 @@
                     <div id="wizardPanel4" class="wizard-panel" style="display:none;">
                         <h3>Ready to build</h3>
                         <div id="wConfirmSummary"></div>
+
+                        <!-- Activation page language (Suer 3 Sep, Check 2, Approach B). -->
+                        <!-- Only meaningful when there is at least one activate step; -->
+                        <!-- wGoToConfirm hides the whole group when actSteps === 0. -->
+                        <div id="wActivationLangGroup" class="form-group" style="margin-top:20px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md);">
+                            <label class="form-label" style="font-size:13px; margin-bottom:4px;">
+                                Activation page language <span style="color:var(--text-muted); font-weight:normal; font-size:12px;">(what recipients see when they click the activate link)</span>
+                            </label>
+                            <select id="wActivationLang" class="form-select" style="max-width:220px; padding:6px 10px; font-size:13px;"
+                                    onchange="this.dataset.userTouched = '1';">
+                                <option value="en" selected>English</option>
+                                <option value="fr">Français</option>
+                            </select>
+                            <div class="form-hint" style="font-size:11px; margin-top:6px; line-height:1.5;">
+                                Activate-wave recipients get a link to <code>reactivate.html</code> (English) or <code>reactivate-fr.html</code> (French). Register wave is unaffected — it uses the public form's own language. Server-side error messages remain in English.
+                            </div>
+                        </div>
+
+                        <!-- Activation page design (Suer 3 Sep, audit §6b). Only meaningful -->
+                        <!-- with activate steps; wGoToConfirm hides when actSteps === 0. -->
+                        <!-- Populated from GET /api/forms/expo/:id (visitor forms only) on entry. -->
+                        <div id="wActivationFormGroup" class="form-group" style="margin-top:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md);">
+                            <label class="form-label" style="font-size:13px; margin-bottom:4px;">
+                                Activation page design <span style="color:var(--text-muted); font-weight:normal; font-size:12px;">(colours + banner on the activation page)</span>
+                            </label>
+                            <select id="wActivationForm" class="form-select" style="max-width:320px; padding:6px 10px; font-size:13px;">
+                                <option value="">(default — yellow theme)</option>
+                            </select>
+                            <div class="form-hint" style="font-size:11px; margin-top:6px; line-height:1.5;">
+                                Pick a form to inherit its colours + banner on the activation page. Register wave is unaffected — it uses its own form's design. Applies to both English + French activation pages.
+                            </div>
+                        </div>
 
                         <!-- Holdout % (Suer 3 Sep, Delivery A) — control group. -->
                         <div class="form-group" style="margin-top:20px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border-color); border-radius:var(--radius-md);">
@@ -1674,6 +1710,9 @@ async function wGoToPreview(excludeCrossCampaign) {
         // token holds the already-filtered g2/g3 lists.
         wizard.previewToken = data.preview_token;
         wizard.previewCounts = data.counts;
+        // Cache the target country_code so the Confirm panel can default
+        // the activation-language select (MA → Français, else English).
+        wizard.targetCountryCode = data.target_country_code || null;
         wRenderPreview(data);
         document.getElementById('wPreviewLoading').style.display = 'none';
         document.getElementById('wPreviewBody').style.display = 'block';
@@ -1988,6 +2027,60 @@ function wGoToConfirm() {
     wSetStep(4);
     // Compute the holdout summary line from the current input value (default 0).
     wUpdateHoldoutSummary();
+    // Activation page language group only meaningful with activate steps.
+    // No activate steps → no activation_url ever built → hide the group.
+    const langGroup = document.getElementById('wActivationLangGroup');
+    if (langGroup) langGroup.style.display = actSteps.length > 0 ? 'block' : 'none';
+    // Default the language select from target expo's country_code:
+    // 'MA' → 'fr' preselected; anything else → 'en'. Overridable by the
+    // operator. Only touches the select if it's still on its initial
+    // value (never overrides an intentional pick — e.g. if the operator
+    // switched to en on a MA expo, going Back and Preview again keeps en).
+    const langSelPre = document.getElementById('wActivationLang');
+    if (langSelPre && !langSelPre.dataset.userTouched) {
+        langSelPre.value = wizard.targetCountryCode === 'MA' ? 'fr' : 'en';
+    }
+    // Same visibility rule for the activation-page-design group.
+    // Populated async — Stats-tab renders instantly and the select fills in.
+    const formGroup = document.getElementById('wActivationFormGroup');
+    if (formGroup) {
+        formGroup.style.display = actSteps.length > 0 ? 'block' : 'none';
+        if (actSteps.length > 0 && wizard.targetExpoId) wPopulateActivationForms(wizard.targetExpoId);
+    }
+}
+
+// Populate the wActivationForm select from GET /api/forms/expo/:id.
+// Filter to visitor_type='visitor' (activation is a visitor flow). First
+// option "(default — yellow theme)" preserved; if the fetch fails or
+// returns nothing, the default option stays selected. Silent failure —
+// activation still works, just with the default theme.
+async function wPopulateActivationForms(targetExpoId) {
+    const sel = document.getElementById('wActivationForm');
+    if (!sel) return;
+    // Preserve the operator's current pick when re-populating.
+    const previouslySelected = sel.value;
+    try {
+        const res = await fetch(API_URL + '/forms/expo/' + targetExpoId, {
+            headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const forms = Array.isArray(data) ? data : (data.forms || []);
+        // Clear options (except the default first one).
+        while (sel.options.length > 1) sel.remove(1);
+        for (const f of forms) {
+            if (f.visitor_type !== 'visitor') continue;
+            const opt = document.createElement('option');
+            opt.value = f.id;
+            opt.textContent = f.name + '  [#' + f.id + ']';
+            sel.appendChild(opt);
+        }
+        if (previouslySelected && [...sel.options].some(o => o.value === previouslySelected)) {
+            sel.value = previouslySelected;
+        }
+    } catch (err) {
+        // Silent — default option stays selected.
+    }
 }
 
 // Recompute the holdout summary line without touching wConfirmSummary.
@@ -2038,6 +2131,16 @@ async function wBuild() {
         if (regName) body.register_name = regName;
         const holdoutPct = parseInt(document.getElementById('wHoldoutPct').value, 10) || 0;
         if (holdoutPct > 0) body.holdout_pct = holdoutPct;
+        // Only send activation_lang if non-default — keeps the request body
+        // minimal and lets a pre-fix backend see byte-identical input.
+        const activationLangEl = document.getElementById('wActivationLang');
+        const activationLang = activationLangEl ? activationLangEl.value : 'en';
+        if (activationLang && activationLang !== 'en') body.activation_lang = activationLang;
+        // Same shape for the activation-page form design — only sent if
+        // the operator picked one (empty string / "(default)" → omit).
+        const activationFormEl = document.getElementById('wActivationForm');
+        const activationFormId = activationFormEl ? activationFormEl.value : '';
+        if (activationFormId) body.form_id = parseInt(activationFormId, 10);
         const res = await fetch(API_URL + '/campaigns/reactivation/build', {
             method: 'POST',
             headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token'), 'Content-Type': 'application/json' },
@@ -2127,6 +2230,13 @@ function wReset() {
     if (holdoutInput) holdoutInput.value = '0';
     const holdoutLine = document.getElementById('wHoldoutSummaryLine');
     if (holdoutLine) holdoutLine.style.display = 'none';
+    const langSel = document.getElementById('wActivationLang');
+    if (langSel) {
+        langSel.value = 'en';
+        delete langSel.dataset.userTouched;
+    }
+    const formSel = document.getElementById('wActivationForm');
+    if (formSel) formSel.value = '';
     document.getElementById('wJobDone').style.display = 'none';
     document.getElementById('wJobFailed').style.display = 'none';
     document.getElementById('wJobFill').classList.remove('completed');

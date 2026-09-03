@@ -30,6 +30,8 @@ const authMiddleware = require('../middleware/authMiddleware');
 // Called with emailTemplate=null to enforce silent mode (verified live 2 Sep
 // on jobs 35/36: tokens created, 0 email_queue rows).
 const { processReactivationChunks, generateToken } = require('./reactivation');
+const { normalizePhone } = require('../utils/phoneNormalize');
+const { getCoreCountriesMap, resolveCountry } = require('../utils/countryResolve');
 // Valid step conditions — mirrors campaigns.js:47 exactly.
 const VALID_CONDITIONS = ['all', 'not_opened', 'opened', 'not_clicked', 'clicked', 'not_registered', 'registered'];
 
@@ -355,8 +357,18 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
         const targetExpo = expoCheck.rows[0];
 
         // ---- Build the raw email list from the input source -----------
-        let rawEmails = [];          // [{ email, name, last_name, company, country, job_title }]
+        let rawEmails = [];          // [{ email, name, last_name, company, country, job_title, phone }]
         let sourceKind = null;
+        // Target expo country_code = phone default WHEN the row does not
+        // carry its own country. Full pattern mirrors prepareExcelRows at
+        // reactivation.js:228-235: resolveCountry(rowCountry, targetCountry,
+        // countriesMap) → normalizePhone(rawPhone, resolution.code).
+        // Suer 3 Sep Change B: naive "targetCountryCode alone" was wrong —
+        // a French "06…" on a MA-target campaign would have become +212.
+        // Row country wins when present + known; falls back to target when
+        // missing. Countries map cached at getCoreCountriesMap level.
+        const targetCountryCode = targetExpo.country_code || null;
+        const countriesMap = await getCoreCountriesMap(pool);
         if (req.file) {
             sourceKind = 'excel';
             const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
@@ -364,13 +376,25 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
             const sheet = workbook.Sheets[sheetName];
             const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
             for (const row of rows) {
+                const rawCountry = String(row.country || row.Country || '').trim();
+                // Phone: Excel numeric cells arrive as JS numbers → String()
+                // coercion, then resolveCountry-first-then-normalize per the
+                // reactivation.js:228-235 pattern. Row's own country wins.
+                const rawPhone = String(row.phone || row.Phone || row.Mobile || row.mobile || row.PHONE || '').trim();
+                const resolution = resolveCountry(rawCountry, targetCountryCode, countriesMap);
+                const phoneResult = normalizePhone(rawPhone, resolution.code);
                 rawEmails.push({
                     email: normEmail(row.email || row.Email || row.EMAIL || ''),
                     name: String(row.name || row.Name || row.first_name || row['First Name'] || '').trim(),
                     last_name: String(row.last_name || row['Last Name'] || row.surname || '').trim(),
                     company: String(row.company || row.Company || row.organization || '').trim(),
-                    country: String(row.country || row.Country || '').trim(),
+                    country: rawCountry,
                     job_title: String(row.job_title || row['Job Title'] || row.title || '').trim(),
+                    // Unfixable → empty (visitor retypes on reactivate.html).
+                    // Fixable → E.164 (visitor sees pre-filled field). Byte-
+                    // through to reactivation_tokens.phone via truncateRowFields
+                    // at :110 (already reads row.phone).
+                    phone: phoneResult.ok ? phoneResult.e164 : '',
                 });
             }
         } else if (req.body.source_expo_ids) {
@@ -395,7 +419,7 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
             const srcRes = await pool.query(`
                 SELECT DISTINCT ON (LOWER(TRIM(email)))
                     LOWER(TRIM(email)) AS email,
-                    name, last_name, company, country, job_title
+                    name, last_name, company, country, job_title, phone
                 FROM visitors
                 WHERE expo_id = ANY($1)
                   AND email IS NOT NULL AND TRIM(email) <> ''
@@ -405,7 +429,12 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
                 email: r.email,
                 name: r.name || '', last_name: r.last_name || '',
                 company: r.company || '', country: r.country || '',
-                job_title: r.job_title || ''
+                job_title: r.job_title || '',
+                // Trust the source visitor row's phone (already normalised
+                // by Sep-2 phone deploy for anything written since). No
+                // re-normalisation here — legacy rows keep their historical
+                // format; that is deliberate.
+                phone: r.phone || ''
             }));
         } else {
             return res.status(400).json({
@@ -609,6 +638,10 @@ router.post('/reactivation/segment', upload.single('file'), async (req, res) => 
             preview_token: previewToken,
             target_expo_id,
             target_expo_name: targetExpo.name,
+            // Suer 3 Sep Small Add — the wizard's Confirm-panel activation
+            // language select defaults from this. 'MA' → Français
+            // preselected; anything else → English. Overridable.
+            target_country_code: targetExpo.country_code || null,
             source_kind: sourceKind,
             source_size: total_verified,
             counts: {
@@ -724,11 +757,37 @@ router.post('/reactivation/build', async (req, res) => {
             activate_name,
             register_name,
             skip_template_validation,
-            holdout_pct
+            holdout_pct,
+            activation_lang,
+            form_id
         } = req.body || {};
 
         if (!preview_token) {
             return res.status(400).json({ success: false, error: 'preview_token is required' });
+        }
+
+        // Activation-page language (Suer 3 Sep). Optional. 'en' (default)
+        // routes to /reactivate.html; 'fr' to /reactivate-fr.html. Both
+        // consume the same /verify/:token and /activate endpoints — only
+        // the client-facing HTML differs. Rejected values → 400.
+        let activationLang = 'en';
+        if (activation_lang != null) {
+            if (activation_lang !== 'en' && activation_lang !== 'fr') {
+                return res.status(400).json({ success: false, error: 'activation_lang must be "en" or "fr"' });
+            }
+            activationLang = activation_lang;
+        }
+
+        // Activation form design (Suer 3 Sep, audit §6b). Shape check
+        // only here — DB ownership check runs after preview cache load
+        // (target expo id is on the preview, not the body).
+        let formIdForActivation = null;
+        if (form_id != null && form_id !== '') {
+            const parsedFormId = parseInt(form_id, 10);
+            if (!Number.isInteger(parsedFormId) || parsedFormId < 1) {
+                return res.status(400).json({ success: false, error: 'form_id must be a positive integer' });
+            }
+            formIdForActivation = parsedFormId; // scope check deferred
         }
 
         // Holdout percent (Suer 3 Sep, Delivery A). Integer 0-20, default 0.
@@ -749,6 +808,25 @@ router.post('/reactivation/build', async (req, res) => {
                 success: false,
                 error: 'preview_token expired or not found — re-run POST /reactivation/segment'
             });
+        }
+
+        // ---- Form-design ownership check (Suer 3 Sep, audit §6b) ---------
+        // Deferred until preview loads so we can scope by target_expo_id.
+        // Form must belong to both target expo AND caller's organizer.
+        // /verify/:token later reads f.config via LEFT JOIN forms ON
+        // rt.form_id = f.id (reactivation.js:600-610); a NULL form_id
+        // falls back to default yellow theme.
+        if (formIdForActivation != null) {
+            const formCheck = await pool.query(
+                `SELECT id FROM forms WHERE id = $1 AND expo_id = $2 AND organizer_id = $3`,
+                [formIdForActivation, preview.target_expo_id, organizerId]
+            );
+            if (formCheck.rows.length === 0) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'form_id not found for the target expo + your organizer'
+                });
+            }
         }
 
         // ---- Validate step configs shape ---------------------------------
@@ -959,11 +1037,16 @@ router.post('/reactivation/build', async (req, res) => {
                     await processReactivationChunks(jobId, tokenValidRows, {
                         target_expo_id: preview.target_expo_id,
                         organizerId,
-                        template_id: null,          // silent
-                        form_id: null,
-                        emailTemplate: null,        // silent (guarded at reactivation.js:133)
+                        template_id: null,                    // silent
+                        // form_id (Suer 3 Sep audit §6b): flows into
+                        // reactivation_tokens.form_id via prepareExcelRows;
+                        // /verify/:token later joins forms.config → the
+                        // activation page gets SIEMA branding when set.
+                        // NULL preserves prior default-theme behaviour.
+                        form_id: formIdForActivation,
+                        emailTemplate: null,                  // silent
                         targetExpo,
-                        source_expo_id: null        // not the from-expo path
+                        source_expo_id: null                  // not from-expo
                     });
                     console.log(`[wizard/build ${jobId}] ${phase} DONE — minted ${tokenValidRows.length} tokens`);
                 } else {
@@ -988,6 +1071,10 @@ router.post('/reactivation/build', async (req, res) => {
                     );
                     const tokenByEmail = new Map(tokenLookup.rows.map(r => [r.email, r.token]));
                     const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+                    // Activation page filename per activationLang. Both pages
+                    // consume the same /verify/:token + /activate endpoints;
+                    // only the client-facing HTML + strings differ.
+                    const activationPage = activationLang === 'fr' ? 'reactivate-fr.html' : 'reactivate.html';
                     for (const r of g2Mailable) {
                         const isHoldout = S_holdoutG2.has(r.email);
                         if (isHoldout) {
@@ -1016,7 +1103,7 @@ router.post('/reactivation/build', async (req, res) => {
                             last_name: r.last_name || null,
                             company: r.company || null,
                             extra_fields: {
-                                activation_url: `${baseUrl}/reactivate.html?token=${tok}`,
+                                activation_url: `${baseUrl}/${activationPage}?token=${tok}`,
                                 country: r.country || '',
                                 job_title: r.job_title || '',
                                 expo_name: preview.target_expo_name
@@ -1184,6 +1271,12 @@ router.post('/reactivation/build', async (req, res) => {
             // holdout_pct is 0 or omitted — unchanged for the default case.
             holdout_activate: holdoutG2Count,
             holdout_register: holdoutG3Count,
+            // Echo the activation page language chosen (Suer 3 Sep).
+            // Default 'en' when the field is omitted.
+            activation_lang: activationLang,
+            // Echo the form_id used for activation-page design (or null
+            // when default theme). Suer 3 Sep audit §6b.
+            activation_form_id: formIdForActivation,
             target_expo_id: preview.target_expo_id,
             target_expo_name: preview.target_expo_name,
             message: `Wizard job accepted. Poll /api/campaigns/reactivation/job/${jobId} for status. All campaigns will land in DRAFT — activate them from the Email Campaigns page when ready.`
