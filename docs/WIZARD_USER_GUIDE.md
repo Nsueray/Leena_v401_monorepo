@@ -11,7 +11,7 @@ Everything in the wizard is preview-side and reversible until you click **Build*
 1. **Source** — pick a target expo and a source (Excel upload OR one/many past expos).
 2. **Preview** — see counts before anything is written. G1/G2/G3 buckets, tokens to mint, overlap warnings.
 3. **Templates** — one or more steps per wave. Each step's template is validated in-place.
-4. **Confirm** — human-readable summary + the **Holdout %** input (see below).
+4. **Confirm** — summary + **Holdout %**, **Activation page language**, **Activation page design** (see below).
 5. **Build** — progress bar. On success, two draft campaigns appear on the *Email Campaigns* page.
 
 ## The two waves
@@ -64,6 +64,35 @@ Two copies:
 Click **Remove them from this campaign** to filter those people out before Build. The button re-runs Preview with a new server-side list and confirms with *"N people excluded — they are already in another campaign for this expo."* Only click if you don't want them mailed twice.
 
 The wizard **does not** filter automatically. Some overlap is intentional (e.g. a "last-chance" campaign that deliberately re-hits a specific slice) — the wizard only surfaces the fact.
+
+## Activation page language
+
+On the **Confirm panel**, choose the language of the activation page recipients land on when they click the activate CTA. This is the language of `reactivate.html` (English) or `reactivate-fr.html` (French) — not the language of your email templates.
+
+**Default:** auto-preselected from the target expo's country code (`MA` → **Français**, everything else → English). You can override for that session; the choice is sticky within the wizard flow. It picks up the country default again the next time you start a fresh wizard.
+
+The same token works for either page — language is per-URL, not per-token. Changing the setting affects only which URL the CTA points at.
+
+## Activation page design
+
+Choose which **form's design** the activation page renders with. The dropdown lists your visitor-type forms for the target expo; the default is *"(default — yellow theme)"*.
+
+If you pick a form (e.g. form 59 for SIEMA), the activation page inherits that form's design config: primary color, header/footer banners, fonts, button text, border radius. Recipients see the campaign's branded activation page instead of the yellow default.
+
+**How this reaches the token:** on new tokens, the choice is written at mint time. On **reused** pending tokens (from a previous wizard run for the same recipient), the choice is written by Phase 2b — the wizard updates the token's `form_id` on every Build so a re-run of the wizard with a different form design will change what those recipients see.
+
+## Phone number prefill
+
+When you upload Excel with a `phone` column, each row's phone is normalised to **E.164** (starts with `+`) at Preview time and stored on the recipient's token. When the person clicks the activation CTA, the phone field on `reactivate.html` / `reactivate-fr.html` is prefilled — they don't have to type it.
+
+**Country resolution order for a local number (no `+`):**
+1. **Row's own `country` column** (Excel or from-expo source) — e.g. `France` for a French visitor whose target expo is Morocco → phone becomes `+33…`.
+2. **Target expo's country** — fallback when the row has no country.
+3. If neither is known → phone is stored empty (row still goes through).
+
+A leading `+` always wins. Junk phones (`xxxxxxxxxx`, `12ab`) are stored empty; the row is not rejected.
+
+**Re-running the wizard for the same recipient?** If the token's phone is empty and the new source row has one, Phase 2b fills it. If the token already has a phone, the wizard **never overwrites** it — good data is protected.
 
 ## Holdout (control group) — measure real lift
 
