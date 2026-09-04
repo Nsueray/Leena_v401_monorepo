@@ -265,3 +265,75 @@ WHERE campaign_recipient_id IN (
 -- email_queue rows exist even in status='cancelled')
 UPDATE email_campaigns SET status='completed' WHERE id = <YOUR_CAMPAIGN_ID>;
 ```
+
+---
+
+## Live proof — production expo 9, 4 Sep 2026
+
+Suer's run against production, addresses `elif@elan-expo.com` (registered
+on expo 9 between build and activate) and `suer@elan-expo.com` (never
+registered on expo 9).
+
+**Landmark commits.** The wizard + worker changes shipped as `87c6c4c`
+(4 Sep 07:25 UTC). The legacy activation-gate fix in `routes/campaigns.js`
+shipped as `3120810` (4 Sep 08:14 UTC) after the first Activate attempt
+returned `Step 1 must have delay=0 and condition=all` — the legacy gate
+had not yet accepted `not_registered`.
+
+### Timeline
+
+| UTC | Event |
+|---|---|
+| **07:47:21** | Wizard Build — `email_campaigns id=77` created, `status='draft'` |
+| **07:50:53** | `elif@elan-expo.com` registered on expo 9 via `form-public.html?id=59` → `visitors id=72855, source='public_form', origin='public'` |
+| **08:14:17** | `routes/campaigns.js` gate fix live (commit `3120810`) |
+| **08:26:37** | Activate — `status='active'`, both recipients' `next_step_due_at = NOW()` |
+| **08:26:39** | Worker picks up both recipients; campaign completes (only one step) |
+| **08:26:41** | SendGrid accepts the one queued mail for suer |
+
+### `campaign_steps` for campaign 77 — the fix landed
+
+```
+ step_number | template_id | delay_hours |   condition
+-------------+-------------+-------------+----------------
+           1 |          74 |           0 | not_registered
+```
+
+`condition='not_registered'` on `step_number=1` was preserved through:
+- wizard `normaliseStep1` (delay-only force, condition preserved — `campaignBuilder.js:858-905`)
+- legacy activation gate (delay-only check, condition validated by `VALID_CONDITIONS` — `campaigns.js:902-908`)
+- worker `evaluateCondition` (guard-move at `email_worker.js:485-486` allows the registration branch to reach its SQL on step 1)
+
+### The two recipient rows, verbatim
+
+```
+       email        | current_step |  status   | next_step_due_at |  last_step_sent_at  | queue_rows | latest_queue_status | is_registered
+--------------------+--------------+-----------+------------------+---------------------+------------+---------------------+---------------
+ elif@elan-expo.com |            1 | completed |                  |                     |          0 |                     | t
+ suer@elan-expo.com |            1 | completed |                  | 2026-09-04 08:26:39 |          1 | sent                | f
+```
+
+**Reading the row shape:**
+- `current_step = 1` for both — the scheduler advanced past step 1 either way. `elif`'s advance came from the skip path (`email_worker.js:465` `advanceRecipient` after `conditionPassed === false`); `suer`'s came from the enqueue path (`:470` `enqueueStepEmail` then `:474` `computeNextDue`).
+- `status = 'completed'` for both — this is a single-step campaign, so completion followed step 1 in both branches.
+- `queue_rows = 0` for `elif` — the load-bearing evidence. `not_registered` returned `false` (because `is_registered = t`), so `enqueueStepEmail` never ran, and no `email_queue` row was ever created.
+- `queue_rows = 1, latest_queue_status = 'sent'` for `suer` — `not_registered` returned `true` (because `is_registered = f`), `enqueueStepEmail` fired at `08:26:39`, SendGrid accepted at `08:26:41`.
+- `last_step_sent_at` is `NULL` for elif (nothing sent) and `08:26:39` for suer (matches the queue row's `created_at`, which is what the worker writes at enqueue time).
+- `next_step_due_at = NULL` for both because there is no step 2 (`computeNextDue` at `email_worker.js` marks recipient completed when no more steps exist).
+
+### The one queue row that DID land (for `suer`)
+
+```
+   id   | campaign_recipient_id |  recipient_email   | status |       created       |       sent_at
+--------+-----------------------+--------------------+--------+---------------------+---------------------
+ 434990 |                156916 | suer@elan-expo.com | sent   | 2026-09-04 08:26:39 | 2026-09-04 08:26:41
+```
+
+Two-second gap between enqueue and send matches `PROCESS_INTERVAL = 2000 ms` (`email_worker.js:21`) — one worker cycle. No `elif`-addressed row present at all.
+
+### End-to-end proof
+
+- Wizard wrote `condition='not_registered'` on step 1 ✓ (visible in `campaign_steps`)
+- Legacy activation gate accepted it ✓ (Activate returned success at 08:26:37, no `400 Step 1 must have delay=0 and condition=all`)
+- Worker honoured it at send time ✓ (elif skipped; suer sent)
+- The "built at 07:47, registered at 07:50, activated at 08:26" sequence is exactly the "built Friday / registered over weekend / activated Monday" pattern the change was written to close, in miniature and end-to-end.
