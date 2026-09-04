@@ -824,23 +824,27 @@ async function main() {
                 `second-run campaign_recipients sum === 5 (3 activate + 2 register) (got ${rec2Res.rows[0].n})`);
 
             // ============================================================
-            // STEP 7 — Step-1 normaliser (Suer 2 Sep, post-G3-UI-diff)
+            // STEP 7 — Step-1 normaliser (Suer 2 Sep, wizard diverges 3 Sep)
             // ============================================================
             // The wizard's /build writes campaign_steps directly (see
             // campaignBuilder.js:723-729), bypassing routes/campaigns.js:
             // 383-384 which forces step_number=1 → delay_hours=0,
-            // condition='all'. The G3 UI now disables step-1's delay +
-            // condition inputs, but an API caller (or a future UI
-            // regression) could still POST activate_steps[0] with
-            // delay_hours=120 / condition='not_registered' and have the
-            // first email land 5 days late with reminders-only semantics —
-            // the exact failure mode campaigns.js's override was written
-            // to prevent.
+            // condition='all'. The wizard mirrors delay_hours=0 (step 1
+            // always fires on activation) but DELIBERATELY DIVERGES on
+            // condition: any VALID_CONDITIONS value is preserved. The
+            // recipient list is frozen at build, so on expo 9 where
+            // registrations arrive at ~600/day a Friday build activated
+            // Monday would mail ~1000 people who registered in between if
+            // step 1 were forced to 'all'.
             //
-            // The backend guard in campaignBuilder.js normalises (does NOT
-            // reject) matching the existing endpoint's behaviour. This
-            // step sends the offending shape and verifies the DB row is
-            // clean.
+            // Assertion below (post-3-Sep):
+            //   delay_hours forced to 0 (both waves) — normaliser fired
+            //   condition PRESERVED as sent (both waves) — divergence held
+            //
+            // Worker-side proof (email_worker.js:485 guard-move) is not
+            // reachable from a unit test without a live drain — verified
+            // in the production smoke protocol documented in the deploy
+            // doc DEPLOY_STEP1_NOT_REGISTERED_20260904.md.
             console.log(`\n---- STEP 7: Step-1 normaliser regression guard ----`);
             // Re-segment to get a fresh preview_token (previous one has
             // been consumed; the 30-min TTL doesn't apply — used tokens
@@ -866,17 +870,19 @@ async function main() {
 
             const runTag3 = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '-run3';
             const jobStartTime3 = new Date();
-            console.log(`\n  Third /build — DELIBERATELY sending step-1 with delay_hours=120 and condition='not_registered':`);
+            console.log(`\n  Third /build — step-1 with delay_hours=120 (must normalise to 0) and condition='not_registered' (must be PRESERVED):`);
             const build3Res = await fetch(`${BASE_URL}/api/campaigns/reactivation/build`, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${TEST_JWT}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     preview_token: preview3Token,
                     activate_steps: [
-                        // This is the offending shape — the backend MUST normalise.
+                        // delay MUST be normalised to 0; condition MUST be preserved.
                         { template_id: probeTemplateId, delay_hours: 120, condition: 'not_registered' }
                     ],
                     register_steps: [
+                        // Same shape, different valid non-'all' condition to
+                        // prove the divergence is not hardcoded to one value.
                         { template_id: probeTemplateId, delay_hours: 240, condition: 'not_opened' }
                     ],
                     activate_name: `${CAMPAIGN_TAG} Activate ${runTag3}`,
@@ -906,9 +912,9 @@ async function main() {
                 `third job completed (final=${job3 && job3.status})`);
 
             // DB check — for the two campaigns created by this run, the
-            // step_number=1 row must have delay_hours=0 and condition='all'
-            // for BOTH waves (activate normalised from 120/not_registered,
-            // register normalised from 240/not_opened).
+            // step_number=1 row must have delay_hours=0 (both waves,
+            // normalised from 120/240) AND the SENT condition preserved
+            // per wave (activate='not_registered', register='not_opened').
             const camp3Res = await pool.query(
                 `SELECT id, name FROM email_campaigns
                  WHERE expo_id = $1 AND created_at >= $2 AND name LIKE $3
@@ -922,6 +928,17 @@ async function main() {
             assert(camp3Res.rows.length === 2,
                 `third run created 2 campaigns (got ${camp3Res.rows.length})`);
 
+            // Map campaign_id → wave via the name prefix so we can assert
+            // the CORRECT preserved condition per wave, not just "any
+            // non-'all' string".
+            const camp3WaveById = new Map();
+            for (const row of camp3Res.rows) {
+                if (row.name.startsWith(`${CAMPAIGN_TAG} Activate ${runTag3}`)) camp3WaveById.set(row.id, 'activate');
+                else if (row.name.startsWith(`${CAMPAIGN_TAG} Register ${runTag3}`)) camp3WaveById.set(row.id, 'register');
+            }
+            assert(camp3WaveById.size === 2,
+                `both wave campaigns identifiable by name (got ${camp3WaveById.size} of 2)`);
+
             const camp3Ids = camp3Res.rows.map(r => r.id);
             const step1Res = await pool.query(
                 `SELECT campaign_id, step_number, delay_hours, condition FROM campaign_steps
@@ -929,17 +946,19 @@ async function main() {
                  ORDER BY campaign_id`,
                 [camp3Ids]
             );
-            console.log(`    step_number=1 rows (must be 0h + 'all' for both waves):`);
+            console.log(`    step_number=1 rows (delay MUST be 0; condition MUST be preserved per wave):`);
             for (const row of step1Res.rows) {
-                console.log(`      campaign_id=${row.campaign_id}  delay_hours=${row.delay_hours}  condition='${row.condition}'`);
+                console.log(`      campaign_id=${row.campaign_id}  wave=${camp3WaveById.get(row.campaign_id)}  delay_hours=${row.delay_hours}  condition='${row.condition}'`);
             }
             assert(step1Res.rows.length === 2,
                 `two step_number=1 rows (one per wave) (got ${step1Res.rows.length})`);
+            const expectedCond = { activate: 'not_registered', register: 'not_opened' };
             for (const row of step1Res.rows) {
+                const wave = camp3WaveById.get(row.campaign_id);
                 assert(row.delay_hours === 0,
-                    `campaign ${row.campaign_id} step_number=1 delay_hours === 0 (got ${row.delay_hours}) — normaliser fired`);
-                assert(row.condition === 'all',
-                    `campaign ${row.campaign_id} step_number=1 condition === 'all' (got '${row.condition}') — normaliser fired`);
+                    `${wave} campaign ${row.campaign_id} step_number=1 delay_hours === 0 (got ${row.delay_hours}) — normaliser fired`);
+                assert(row.condition === expectedCond[wave],
+                    `${wave} campaign ${row.campaign_id} step_number=1 condition === '${expectedCond[wave]}' (got '${row.condition}') — condition PRESERVED by wizard divergence (3 Sep), not forced to 'all'`);
             }
 
             // ============================================================

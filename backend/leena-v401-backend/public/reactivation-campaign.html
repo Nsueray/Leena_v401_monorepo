@@ -431,7 +431,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr><td style="padding:2px 16px 2px 0;">1</td><td style="padding:2px 16px 2px 0;">0h (fires when you activate the campaign)</td><td style="padding:2px 0;"><code>all</code></td></tr>
+                                        <tr><td style="padding:2px 16px 2px 0;">1</td><td style="padding:2px 16px 2px 0;">0h (fires when you activate the campaign)</td><td style="padding:2px 0;"><code>not_registered</code></td></tr>
                                         <tr><td style="padding:2px 16px 2px 0;">2</td><td style="padding:2px 16px 2px 0;">120h (5 days)</td><td style="padding:2px 0;"><code>not_registered</code></td></tr>
                                         <tr><td style="padding:2px 16px 2px 0;">3</td><td style="padding:2px 16px 2px 0;">120h (5 days)</td><td style="padding:2px 0;"><code>not_registered</code></td></tr>
                                         <tr><td style="padding:2px 16px 2px 0;">4</td><td style="padding:2px 16px 2px 0;">120h (5 days)</td><td style="padding:2px 0;"><code>not_registered</code></td></tr>
@@ -579,7 +579,7 @@
                             </div>
                             <div id="wActivateSteps"></div>
                             <button class="btn btn-sm btn-secondary" onclick="wAddStep('activate')" style="margin-top:4px;"><i class="bi bi-plus"></i> Add step</button>
-                            <div class="wizard-drip-hint">Typical drip: <strong>0h → 120h → 120h → 120h</strong> (every 5 days), with step 1 <strong>all</strong> and later steps <strong>not_registered</strong> so people who already registered stop receiving reminders.</div>
+                            <div class="wizard-drip-hint">Typical drip: <strong>0h → 120h → 120h → 120h</strong> (every 5 days), with every step <strong>not_registered</strong> so anyone who has registered by any route — including between build and activation — stops receiving reminders.</div>
                         </div>
                         <div class="wizard-wave-block" id="wWaveRegister">
                             <h4><i class="bi bi-envelope-plus"></i> REGISTER wave <span id="wRegisterCount" style="color:var(--text-muted); font-weight:normal;"></span></h4>
@@ -594,7 +594,7 @@
                             </div>
                             <div id="wRegisterSteps"></div>
                             <button class="btn btn-sm btn-secondary" onclick="wAddStep('register')" style="margin-top:4px;"><i class="bi bi-plus"></i> Add step</button>
-                            <div class="wizard-drip-hint">Typical drip: <strong>0h → 120h → 120h → 120h</strong> (every 5 days), with step 1 <strong>all</strong> and later steps <strong>not_registered</strong> so people who already registered stop receiving reminders.</div>
+                            <div class="wizard-drip-hint">Typical drip: <strong>0h → 120h → 120h → 120h</strong> (every 5 days), with every step <strong>not_registered</strong> so anyone who has registered by any route — including between build and activation — stops receiving reminders.</div>
                         </div>
                         <div class="wizard-nav">
                             <button class="btn btn-secondary" onclick="wBackTo(2)">← Back to preview</button>
@@ -1907,30 +1907,36 @@ function wRenderSteps(wave) {
     if (arr.length === 0) { container.innerHTML = '<div style="color:var(--text-muted); font-size:12px; margin-bottom:8px;">No steps yet.</div>'; return; }
     const activeTemplates = (Array.isArray(templates) ? templates : []).filter(t => t.is_active);
     const conds = ['all','not_opened','opened','not_clicked','clicked','not_registered','registered'];
-    // Step 1 (index 0) is forced by the backend at campaigns.js:383-384/891-892:
-    // delay_hours=0, condition='all'. Match the contract in the UI so we're
-    // not silently overridden — mutate state before render + disable inputs.
+    // Step 1 (index 0): delay is forced 0 by backend AND UI (fires on
+    // activation). Condition is FREE from 3 Sep — the wizard freezes the
+    // recipient list at build; 'not_registered' asks the worker to skip
+    // anyone who registered by any route between build and activation
+    // (relies on email_worker.js:485 guard-move, same deploy). Default
+    // for a fresh row is 'not_registered' so the safe reactivation
+    // pattern is one-click. Delay locked to 0 on every render regardless.
     if (arr.length > 0) {
         arr[0].delay_hours = 0;
-        arr[0].condition = 'all';
+        if (arr[0].condition == null) arr[0].condition = 'not_registered';
     }
     const delayTip = 'Hours after the PREVIOUS step was sent. Step 1 is always 0 and fires when you activate the campaign.';
-    const condTip = "Who gets this step. Step 1 is always 'all'.";
+    const condTipStep1 = "Step 1 fires when you activate. 'not_registered' skips anyone who registered between build and activation.";
+    const condTipLater = "Who gets this step.";
     let html = '';
     for (let i = 0; i < arr.length; i++) {
         const s = arr[i];
         const isStep1 = (i === 0);
-        const step1Attr = isStep1 ? ' disabled' : '';
+        const delayAttr = isStep1 ? ' disabled' : '';
         const tplOpts = activeTemplates.map(t => '<option value="' + t.id + '"' + (s.template_id === t.id ? ' selected' : '') + '>' + wEscapeHtml(t.name) + '</option>').join('');
         const condOpts = conds.map(c => '<option value="' + c + '"' + (s.condition === c ? ' selected' : '') + '>' + c + '</option>').join('');
+        const condTip = isStep1 ? condTipStep1 : condTipLater;
         html +=
             '<div class="wizard-step-row">' +
                 '<select onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'template_id\', parseInt(this.value, 10) || null)">' +
                     '<option value="">Template...</option>' + tplOpts +
                 '</select>' +
-                '<input type="number" min="0" step="1" value="' + s.delay_hours + '" title="' + wEscapeHtml(delayTip) + '"' + step1Attr + ' ' +
+                '<input type="number" min="0" step="1" value="' + s.delay_hours + '" title="' + wEscapeHtml(delayTip) + '"' + delayAttr + ' ' +
                     'onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'delay_hours\', parseInt(this.value, 10) || 0)">' +
-                '<select title="' + wEscapeHtml(condTip) + '"' + step1Attr + ' onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'condition\', this.value)">' + condOpts + '</select>' +
+                '<select title="' + wEscapeHtml(condTip) + '" onchange="wUpdateStep(\'' + wave + '\', ' + i + ', \'condition\', this.value)">' + condOpts + '</select>' +
                 '<button class="btn btn-sm btn-secondary" ' + (s.template_id ? '' : 'disabled') + ' onclick="wValidate(\'' + wave + '\', ' + i + ')">Validate</button>' +
                 '<button class="btn btn-sm" style="color:var(--danger);" onclick="wRemoveStep(\'' + wave + '\', ' + i + ')" title="Remove">&times;</button>' +
                 (s.validation ? wRenderValidation(s.validation) : '') +

@@ -855,29 +855,47 @@ router.post('/reactivation/build', async (req, res) => {
             return res.status(400).json({ success: false, error: 'At least one of activate_steps or register_steps must be non-empty' });
         }
 
-        // ---- Step-1 normaliser (Suer 2 Sep, post-G3-UI-diff) ------------
+        // ---- Step-1 normaliser (Suer 2 Sep, wizard diverges 3 Sep) ------
         // Wizard /build INSERTs into campaign_steps directly (:723-729
-        // below), bypassing the step-1 override in
-        // routes/campaigns.js:383-384 (POST /:id/steps forces
-        // `step_number === 1` → delay_hours = 0, condition = 'all').
-        // The G3 UI disables step-1's delay/condition inputs, but an API
-        // caller (or a future UI regression) could still POST activate_steps[0]
-        // with delay_hours=120 / condition='not_registered' and have the
-        // first email land 5 days late with reminders-only semantics.
-        // Mirror the existing endpoint's behaviour: NORMALISE (not reject),
-        // log once per wave when incoming values differed.
+        // below), bypassing routes/campaigns.js:383-384 (POST /:id/steps
+        // forces step_number === 1 → delay_hours = 0, condition = 'all').
+        //
+        // The legacy endpoint keeps its own rule. The wizard DELIBERATELY
+        // DIVERGES on condition (Suer 3 Sep): the wizard freezes the
+        // recipient list at build, and on expo 9 registrations arrive at
+        // hundreds/day, so a campaign built Friday and activated Monday
+        // would send "activate your badge" to ~1000 people who registered
+        // in between. Step 1 = 'not_registered' asks the worker to skip
+        // anyone who registered by any route between build and activation.
+        //
+        // Delay stays forced to 0 (step 1 always fires on activation);
+        // condition is preserved as sent, defaulting to 'all' only when
+        // the caller omitted it. Any value the step-condition allowlist
+        // (VALID_CONDITIONS) already accepts is allowed.
+        //
+        // WORKER SIDE: this relies on the guard-move in
+        // email_worker.js:485 → the `if (!prevStep) return true;` guard
+        // was previously above the not_registered / registered block and
+        // silently no-op'd it on step 1 (current_step = 0 → prevStep
+        // undefined). Moved into the open/click branches only, so the
+        // registration check (self-contained on recipient + campaign)
+        // reaches the SQL on step 1. Shipped in the same deploy.
         const normaliseStep1 = (arr, waveLabel) => {
             if (arr.length === 0) return;
             const s0 = arr[0];
             const beforeDelay = s0.delay_hours;
             const beforeCond = s0.condition;
-            if (beforeDelay !== 0 || (beforeCond != null && beforeCond !== 'all')) {
-                console.log(`[wizard/build] step-1 normalised for ${waveLabel} wave: `
-                    + `delay_hours ${beforeDelay} → 0, condition ${beforeCond} → 'all' `
-                    + `(mirrors campaigns.js:383-384)`);
+            if (beforeDelay !== 0) {
+                console.log(`[wizard/build] step-1 delay_hours normalised for ${waveLabel} wave: `
+                    + `${beforeDelay} → 0 (mirrors campaigns.js:383)`);
             }
             s0.delay_hours = 0;
-            s0.condition = 'all';
+            // Condition: preserve caller's value; default 'all' only when
+            // absent. Validated by the earlier VALID_CONDITIONS check at
+            // :849, so any set value is already known-good.
+            if (beforeCond == null) {
+                s0.condition = 'all';
+            }
         };
         normaliseStep1(activate_steps, 'activate');
         normaliseStep1(register_steps, 'register');

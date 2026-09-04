@@ -479,13 +479,17 @@ async function processRecipient(campaign, recipient, stepsMap, organizerName, ex
 async function evaluateCondition(condition, recipient, stepsMap, campaign) {
   if (condition === 'all') return true;
 
-  // Find the previous step's ID to check events
+  // Find the previous step's ID (only needed by open/click checks).
+  // The registration check further down is self-contained on recipient +
+  // campaign, so it MUST NOT be short-circuited by a missing prevStep —
+  // otherwise 'not_registered' on step 1 (current_step = 0) silently
+  // no-ops. See wizard step-1 change (3 Sep) + docs/sessions deploy doc.
   const prevStepNum = recipient.current_step;
   const prevStep = stepsMap[prevStepNum];
-  if (!prevStep) return true;
 
   // Check open events
   if (condition === 'not_opened' || condition === 'opened') {
+    if (!prevStep) return true;
     const openRes = await pool.query(
       `SELECT id FROM email_events WHERE recipient_id = $1 AND step_id = $2 AND event_type = 'opened' LIMIT 1`,
       [recipient.id, prevStep.id]
@@ -497,6 +501,7 @@ async function evaluateCondition(condition, recipient, stepsMap, campaign) {
 
   // Check click events
   if (condition === 'not_clicked' || condition === 'clicked') {
+    if (!prevStep) return true;
     const clickRes = await pool.query(
       `SELECT id FROM email_events WHERE recipient_id = $1 AND step_id = $2 AND event_type = 'clicked' LIMIT 1`,
       [recipient.id, prevStep.id]

@@ -51,19 +51,19 @@ Two drafts land after Build, both `status='draft'`:
 
 | Step | Template | Delay from previous | Send-to | Fires (assumes activation Mon 7 Sep 11:00 Istanbul) |
 |---|---|---|---|---|
-| 1 | 74 `01_invitation` | 0 h | `all` | **Mon 7 Sep** |
+| 1 | 74 `01_invitation` | 0 h | `not_registered` | **Mon 7 Sep** |
 | 2 | 75 `02_univers_exposants` | 72 h | `not_registered` | **Thu 10 Sep** |
 | 3 | 76 `03_programme_conferences` | 96 h | `not_registered` | **Mon 14 Sep** |
 | 4 | 77 `04_plan_de_visite` | 72 h | `not_registered` | **Thu 17 Sep** |
 | 5 | 78 `05_dernier_appel` | 96 h | `not_registered` | **Mon 21 Sep** |
 
-Total: 0 → 72 → 96 → 72 → 96 h. Backend `normaliseStep1` forces step 1 `delay_hours=0 / condition='all'` regardless.
+Total: 0 → 72 → 96 → 72 → 96 h. Backend `normaliseStep1` forces step 1 `delay_hours=0`; condition is PRESERVED as sent (wizard divergence, 3 Sep — see `docs/sessions/DEPLOY_STEP1_NOT_REGISTERED_20260904.md`).
 
 ### Register wave (3 steps, templates 79–81)
 
 | Step | Template | Delay from previous | Send-to | Fires (assumes activation Mon 7 Sep 13:00 Istanbul) |
 |---|---|---|---|---|
-| 1 | 79 `R1_invitation` | 0 h | `all` | **Mon 7 Sep** |
+| 1 | 79 `R1_invitation` | 0 h | `not_registered` | **Mon 7 Sep** |
 | 2 | 80 `R2_plan_de_visite` | 240 h | `not_registered` | **Thu 17 Sep** |
 | 3 | 81 `R3_dernier_appel` | 96 h | `not_registered` | **Mon 21 Sep** |
 

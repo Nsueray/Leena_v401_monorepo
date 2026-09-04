@@ -26,12 +26,16 @@ Everything in the wizard is preview-side and reversible until you click **Build*
 
 | Step | Delay from previous | Send to |
 |---|---|---|
-| 1 | 0h (fires when you activate the campaign) | `all` |
+| 1 | 0h (fires when you activate the campaign) | `not_registered` |
 | 2 | 120h (5 days) | `not_registered` |
 | 3 | 120h (5 days) | `not_registered` |
 | 4 | 120h (5 days) | `not_registered` |
 
-Step 1's delay + condition are forced by the backend to `0` / `all` — the UI disables those inputs on row 1. Later steps use `not_registered` so people who register in between stop receiving reminders.
+Step 1's delay is forced by the backend to `0` — the UI disables the delay input on row 1 and the email fires immediately on activation. **Step 1's condition is free** (since 3 Sep 2026); a fresh row defaults to `not_registered`.
+
+**Why `not_registered` on step 1.** The wizard freezes the recipient list at Build. If you build on Friday and activate on Monday, anyone who registered over the weekend is still on the list. Setting step 1 to `not_registered` asks the worker to check registration status *at send time* and skip those people, so build timing stops mattering. Registration is checked by ANY route (Zoho, public form, reactivation token activation, previously-mailed campaign click) — one-way: it can only ever suppress a send, never cause an extra one.
+
+Leave step 1 as `all` only for a wave you deliberately want to hit everyone regardless of registration (e.g. a save-the-date or a survey).
 
 ## Template validation
 
