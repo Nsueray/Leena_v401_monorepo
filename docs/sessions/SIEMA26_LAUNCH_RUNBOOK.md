@@ -1,10 +1,21 @@
 # SIEMA26 — Launch Runbook
 
-> Operational plan for the SIEMA FoodExpo 2026 (`expo_id=9`, Casablanca, **22-24 Sep 2026**) email launch on **Mon 7 Sep**. Decisions locked 3 Sep; MillionVerifier pass runs overnight (3 → 4 Sep) and produces the final wizard file.
+> **STATE — BUILT 4 Sep 15:26 UTC.** Both drafts exist on production expo 9. **Monday = activation only, no other prep.**
+>
+> Campaign ids and full build report: `docs/sessions/SIEMA26_BUILD_20260904.md`.
+>
+> - **Campaign 78** — `Morocco Siema Expo 2026 Leena Registered – Re-activation` (activate wave / G2 bucket). 16,472 active + 867 holdout. 5 steps (templates 74-78). Activate Mon 8 Sep 11:00 Istanbul.
+> - **Campaign 79** — `Morocco Siema Expo 2026 Past Visitors – Registration` (register wave / G3 bucket). 16,350 active + 861 holdout. 3 steps (templates 79-81). Activate Mon 8 Sep 13:00 Istanbul.
+>
+> All 8 steps `condition='not_registered'` (see `DEPLOY_STEP1_NOT_REGISTERED_20260904.md` for the code that made step-1 `not_registered` honourable). All 16,471 minted tokens carry `form_id=59`. 15,735 phones in E.164.
+>
+> Operational plan below written 3 Sep before Yaprak ran the wizard. State-of-affairs sections (source list, wizard settings, drip topology, activation window, monitoring) held true through build — kept as reference. **Pre-flight checklist §6 is closed** (build happened; template re-audit PASS in the build doc).
 >
 > Companion docs:
 > - `DEPLOY_SIEMA_BATCH_20260903.md` — the 8 code commits behind the wizard state used here
 > - `MANUAL_DB_CHANGES_20260903.md` — the preheader / subject / test-token DB ops
+> - `DEPLOY_STEP1_NOT_REGISTERED_20260904.md` — the 4 Sep code deploys that made `not_registered` on step 1 work end-to-end (used for the first time in this build)
+> - `SIEMA26_BUILD_20260904.md` — the actual build numbers + template re-audit + Monday plan
 > - `docs/campaigns/SIEMA26/` — the 8 launch templates dumped from DB (reference set)
 
 ---

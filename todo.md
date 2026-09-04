@@ -1,8 +1,26 @@
 # Leena EMS — TODO & Roadmap
 
-> Son güncelleme: **31 Ağustos 2026, fuar-sonrası gün 4** (önceki: 28 Ağustos)
+> Son güncelleme: **4 Eylül 2026, SIEMA26 BUILT** (önceki: 31 Ağustos)
 > Aktif modül: Leena EMS Core + Email Campaigns + Visitor Management + Segments
 > Admin panel: masaüstü/laptop kullanılıyor (mobil öncelik düşük)
+
+---
+
+## 🔴 P1 — before SIEMA opens Tue 22 Sep
+
+| owner | item |
+|---|---|
+| **SUER (Render Shell, SQL)** | **Disable badge-print auto-checkin on expo 9.** Currently `expos.settings.auto_checkin_on_badge_print=true` means printing a badge silently creates a `checkins` row with `source='badge-print'`. Suer decided the SIEMA check-in count must come from gate scans only. Run: `UPDATE expos SET settings = jsonb_set(COALESCE(settings,'{}'::jsonb), '{auto_checkin_on_badge_print}', 'false'::jsonb) WHERE id = 9;` Reference: check-in audit reply in transcript (`docs/sessions/DEPLOY_STEP1_NOT_REGISTERED_20260904.md` companion) + `terminalCheckins.js:293-295`. |
+| **SUER (Render Shell + terminals.html)** | **Provision gate terminals for expo 9.** Zero terminals exist today (`SELECT id FROM terminals WHERE expo_id=9` → 0 rows). Without them, no gate scanner can authenticate (`middleware/terminalAuth.js:33`). At least one `terminals` row per physical gate lane, `kind='scanner'`, `is_active=true`, `expo_id=9`. Model after expo 1's "Main T1-T4" pattern. Copy each terminal's `?terminal_key=…` URL to the tablet at that lane. |
+| **BACKEND (before SIEMA fair days start)** | **Fix `Africa/Lagos` hardcoding in `routes/reports.js` fair KPIs.** All four fair-total queries (`:833-1000`) use `AT TIME ZONE 'Africa/Lagos'`. Wrong for SIEMA (Morocco is `Africa/Casablanca` — same UTC offset in September so counts agree by coincidence, but "fair-day" boundary rolls at 01:00 Casablanca instead of 00:00). Same latent defect noted in `Bilinen Sorunlar §5`. Smallest fix: read `expos.country_code` from a subquery, map to a TZ string via a `CASE` (MA=Africa/Casablanca, NG=Africa/Lagos, GH=Africa/Accra, KE=Africa/Nairobi, others fall back to UTC), interpolate into the AT TIME ZONE clause. Or a `dialing_map`-style lookup. |
+
+## ✅ SIEMA26 4 Sep close-of-day
+
+- [x] Wizard step 1 accepts `not_registered` — `87c6c4c` (wizard `normaliseStep1` delay-only + `email_worker.js:485` guard-move + UI unlock) + `3120810` (four campaigns.js gates unified — POST/PUT/DELETE renumber/activate) + live-proof rows verified on production campaign 77 (elif skipped, suer sent). Full narrative + smoke protocol: `docs/sessions/DEPLOY_STEP1_NOT_REGISTERED_20260904.md`.
+- [x] SIEMA26 BUILT — Yaprak ran the wizard against the MV list. Campaigns 78 (16,472 active + 867 holdout) and 79 (16,350 + 861), all 8 steps `not_registered`, 16,471 tokens all `form_id=59`, 15,735 phones in E.164. Both drafts on production expo 9 at 15:26:19 UTC. **Monday = activation only**, 11:00 IST + 13:00 IST. Full report: `docs/sessions/SIEMA26_BUILD_20260904.md`.
+- [x] Template re-audit — all 8 SIEMA templates PASS every check after Yaprak's morning fix on 74. Verdict: READY.
+- [x] Send-Emails first_name defect isolated as test-path-only — full trace of the "Bonjour Güzelcik," bug to `emailSend.js:229` `emailData` never setting `first_name`. Campaign path (`email_worker.js:614-623`) unaffected. New gotcha `G38`.
+- [x] Thank-you page feature (Job B Option A) implemented on `feat/thankyou-page` branch (commit `de89247`, NOT PUSHED). Byte-identical regression proof for forms 51 + 59 via headless JS-shim harness; FR default + FR-with-override behaviour verified programmatically. Saturday-morning deploy on Suer's go.
 
 ---
 
@@ -54,7 +72,11 @@
 
 - **P2 — Scheduled campaign start.** Today (3 Sep) every campaign is manually activated via `POST /api/campaigns/:id/activate` or the *Email Campaigns* Activate button. SIEMA's 11:00-IST / 13:00-IST 2-hour stagger on 7 Sep will be done by a person clicking twice. Design: `email_campaigns.scheduled_start_at TIMESTAMPTZ NULL` column + wizard Confirm-panel field + `email_worker.js` scheduler tick picks up `status='draft' AND scheduled_start_at <= NOW()` and calls the existing activate helper (same code path as manual). Backward-compatible — draft without a scheduled_start_at behaves exactly as today.
 
-- **P2 — Form 59 (`Formulaire d'inscription des visiteurs`) missing `hear_about_event` field.** Cross-reference `docs/sessions/SIEMA_PRELAUNCH_AUDIT_20260902.md §D.2`. Recipients registering via French form 59 land in `visitors` with no `custom_fields.hear_about_event` — attribution silently lost for the French sub-segment (English form 51 carries the field). **Owner: Yaprak, before 7 Sep launch.** Not a wizard defect — the wizard doesn't touch forms.
+- **P2 — Form 59 (`Formulaire d'inscription des visiteurs`) missing `hear_about_event` field.** Cross-reference `docs/sessions/SIEMA_PRELAUNCH_AUDIT_20260902.md §D.2`. Recipients registering via French form 59 land in `visitors` with no `custom_fields.hear_about_event` — attribution silently lost for the French sub-segment (English form 51 carries the field). **Owner: Yaprak, STILL OPEN as of 4 Sep EOD.** New deadline: before **Mon 8 Sep 11:00 IST** activation. Not a wizard defect — the wizard doesn't touch forms. If not fixed by activation, the French sub-segment's attribution (which will be the majority of SIEMA registrations from Monday onwards) is lost.
+
+- **P2 — `emailSend.js` `/single` and `/bulk` never set `first_name` — Send Emails page renders `{{first_name|...}}` chains as last name.** Full narrative: G38 in CLAUDE.md + `docs/sessions/SIEMA26_BUILD_20260904.md §7`. Test-path bug only (campaign worker path is fine). Smallest fix ~10 lines: extend the visitor SELECT at `emailSend.js:76-88` (/single) and `:212-225` (/bulk) with `name, last_name` columns; in `emailData` build (`:91-100` / `:229-238`) add `first_name: visitorFirstName || recipient.name || ''` and `last_name: visitorLastName || ''` before the current spread. **Post-fair — not on the SIEMA critical path.**
+
+- **Thank-you page feature — Saturday-morning deploy.** Branch `feat/thankyou-page` (commit `de89247`) implements Job B Option A: `config.language` ('en'|'fr') + 5 optional `config.style.success*` keys editable via a collapsible "Thank-you page" section in the form-builder Design tab. Byte-identical regression proof for forms 51 + 59 via headless harness (5/5 IDENTICAL); FR default and FR + override behaviour verified programmatically. Saturday plan: Suer says "deploy" → I merge into main, push, sanity, hand over the browser click-through QA plan (create throwaway form on expo 17, verify EN default / FR default / FR + override / cleanup). Zero pushed today — branch sits local.
 
 - **P3 — `reactivate-fr.html` server-side error strings still English.** `reactivate-fr.html` (`52cc517`) translated 24 user-facing strings but the SERVER-side error responses from `POST /api/reactivation/activate` (`routes/reactivation.js`) come back in English. A French visitor who hits an error (expired token, missing field, backend 500) sees English. Deferred trade-off documented in `52cc517`. Fix: either accept the mixed language (small surface, low frequency) or add a `?lang=fr` query param to `/activate` and switch the ~6 error strings server-side.
 

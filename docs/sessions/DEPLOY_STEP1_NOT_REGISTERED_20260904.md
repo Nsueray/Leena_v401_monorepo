@@ -1,4 +1,17 @@
-# DEPLOY — wizard step 1 `not_registered` + evaluateCondition guard-move (4 Sep 2026)
+# DEPLOY — wizard step 1 `not_registered` + evaluateCondition guard-move + campaigns.js gates (4 Sep 2026)
+
+## Timeline of commits
+
+| Commit | UTC | Landed | What |
+|---|---|---|---|
+| `87c6c4c` | 07:25 | 07:25 | Wizard `normaliseStep1` (delay-only force) + `email_worker.js` guard-move + UI unlock + tests + docs |
+| `3120810` | 08:14 | 08:14 | `routes/campaigns.js` step-1 gates in POST/PUT/DELETE/activate all accept any condition |
+| `132f469` | 09:39 | — | Docs-only: live proof for `87c6c4c` + `3120810` (this file's live section) |
+| `de89247` | ~17:15 | **NOT DEPLOYED** | `feat/thankyou-page` branch — success-card language + overrides (Saturday deploy) |
+
+Legacy step-1 gate had to be relaxed the same day: **first Activate attempt on the 2-recipient live protocol returned `400 Step 1 must have delay=0 and condition=all`.** `87c6c4c` had opened the wizard + worker to `not_registered` on step 1, but `routes/campaigns.js:891` still enforced the old rule at activation time. Fixed in `3120810` before the live protocol continued.
+
+Also that same day (`3120810`): the `wAddStep` new-step default in `public/reactivation-campaign.html:1883` flipped from `'all'` to `'not_registered'`, and the now-dead `if (arr[0].condition == null)` guard at `wRenderSteps` was removed — the default lives at the push site instead. See `G40`.
 
 ## Why
 
@@ -86,6 +99,27 @@ Comment explicitly cites the legacy endpoint's own rule
 - `docs/sessions/SIEMA26_LAUNCH_RUNBOOK.md` §3 activate + register wave
   tables updated. `normaliseStep1` note updated to describe the delay-only
   force + condition preservation.
+
+### 6. `routes/campaigns.js` — four step-1 gates unified (commit `3120810`)
+
+Shipped 08:14 UTC after the first Activate attempt on the 2-recipient
+live protocol returned `400 Step 1 must have delay=0 and condition=all`.
+The wizard + worker changes from `87c6c4c` were correct in isolation,
+but the legacy step-1 gates in `routes/campaigns.js` still forced
+`condition='all'` at multiple write / activation points. All four now
+enforce delay-only, condition preserved as sent (validated by
+`VALID_CONDITIONS` on write at `:47`, `:371`, `:437`).
+
+- **`:383` POST /:id/steps CREATE** — `effectiveCondition = nextStep === 1 ? 'all' : (condition || 'all')` → `effectiveCondition = condition || 'all'`. Delay force preserved.
+- **`:444` PUT /:id/steps/:stepId UPDATE** — `effectiveCondition = isStep1 ? 'all' : (condition || step.condition)` → `effectiveCondition = condition || step.condition`. Delay force preserved. Not in Suer's brief but same bug — editing step 1 via the legacy endpoint would clobber the condition.
+- **`:483` DELETE /:id/steps/:stepId post-renumber re-enforcement** — `UPDATE ... SET delay_hours = 0, condition = 'all' WHERE step_number = 1` → `UPDATE ... SET delay_hours = 0 ...`. New step-1 keeps whatever condition its author set; only delay is forced.
+- **`:891` POST /:id/activate validation** — `if (step1.delay_hours !== 0 || step1.condition !== 'all')` → `if (step1.delay_hours !== 0)`. Message updated to name delay only.
+
+**Also in `3120810` — wizard UI defaults flipped** in `public/reactivation-campaign.html`:
+- `wAddStep` (`:1883`) — new-step push default `condition: 'all'` → `condition: 'not_registered'`. Matches the drip guidance ("every step `not_registered` for reactivation") + saves a click on fresh wizard runs.
+- `wRenderSteps` (`:1919`) — dead guard `if (arr[0].condition == null) arr[0].condition = 'not_registered'` removed. Default now lives at the push site (`wAddStep`), so the guard's `== null` branch is unreachable. See `G40`.
+
+Once `3120810` was live, Suer retried Activate on campaign 77 — success. See §Live proof below.
 
 ## Test coverage — what the smoke can and cannot prove
 
