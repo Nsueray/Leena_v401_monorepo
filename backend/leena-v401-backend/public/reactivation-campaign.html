@@ -1880,7 +1880,12 @@ function wGoToTemplates() {
 
 function wAddStep(wave) {
     const arr = wave === 'activate' ? wizard.activateSteps : wizard.registerSteps;
-    arr.push({ template_id: null, delay_hours: arr.length === 0 ? 0 : 24, condition: 'all', validation: null });
+    // Every new step defaults to 'not_registered' — matches the drip
+    // guidance (every step not_registered for reactivation). Step 1 is
+    // additionally clamped to delay_hours=0 on push and on every render.
+    // Operator can still pick any other VALID_CONDITIONS value from the
+    // dropdown.
+    arr.push({ template_id: null, delay_hours: arr.length === 0 ? 0 : 24, condition: 'not_registered', validation: null });
     wRenderSteps(wave);
     wRecomputeStep3BlockState();
 }
@@ -1911,12 +1916,12 @@ function wRenderSteps(wave) {
     // activation). Condition is FREE from 3 Sep — the wizard freezes the
     // recipient list at build; 'not_registered' asks the worker to skip
     // anyone who registered by any route between build and activation
-    // (relies on email_worker.js:485 guard-move, same deploy). Default
-    // for a fresh row is 'not_registered' so the safe reactivation
-    // pattern is one-click. Delay locked to 0 on every render regardless.
+    // (relies on email_worker.js:485 guard-move, same deploy). Delay
+    // locked to 0 on every render regardless. Condition default is set
+    // in wAddStep now (every new step defaults to 'not_registered'), so
+    // no fallback needed here.
     if (arr.length > 0) {
         arr[0].delay_hours = 0;
-        if (arr[0].condition == null) arr[0].condition = 'not_registered';
     }
     const delayTip = 'Hours after the PREVIOUS step was sent. Step 1 is always 0 and fires when you activate the campaign.';
     const condTipStep1 = "Step 1 fires when you activate. 'not_registered' skips anyone who registered between build and activation.";

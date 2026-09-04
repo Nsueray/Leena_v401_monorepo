@@ -379,9 +379,14 @@ router.post('/:id/steps', async (req, res) => {
     );
     const nextStep = maxRes.rows[0].max_num + 1;
 
-    // Step 1 constraints
+    // Step 1 constraints — delay is forced to 0 (fires on activation);
+    // condition is preserved as sent (validated by VALID_CONDITIONS gate
+    // above at :371). Default 'all' when caller omits it. Matches the
+    // wizard divergence in campaignBuilder.js normaliseStep1 so both
+    // paths accept step-1 condition='not_registered' etc. The worker
+    // honours these on step 1 via the email_worker.js:485 guard-move.
     const effectiveDelay = nextStep === 1 ? 0 : (parseInt(delay_hours) || 0);
-    const effectiveCondition = nextStep === 1 ? 'all' : (condition || 'all');
+    const effectiveCondition = condition || 'all';
 
     const result = await pool.query(
       `INSERT INTO campaign_steps (campaign_id, step_number, template_id, delay_hours, condition)
@@ -438,10 +443,14 @@ router.put('/:id/steps/:stepId', async (req, res) => {
       return res.status(400).json({ success: false, message: `condition must be one of: ${VALID_CONDITIONS.join(', ')}` });
     }
 
-    // Step 1 constraints
+    // Step 1 constraints — delay is forced to 0 (fires on activation);
+    // condition is preserved as sent (validated by VALID_CONDITIONS gate
+    // above). When caller omits condition, keep the existing
+    // step.condition rather than clobbering to 'all'. Matches the wizard
+    // divergence + email_worker.js:485 guard-move.
     const isStep1 = step.step_number === 1;
     const effectiveDelay = isStep1 ? 0 : (delay_hours !== undefined ? parseInt(delay_hours) || 0 : step.delay_hours);
-    const effectiveCondition = isStep1 ? 'all' : (condition || step.condition);
+    const effectiveCondition = condition || step.condition;
 
     const result = await pool.query(
       `UPDATE campaign_steps SET
@@ -478,9 +487,13 @@ router.delete('/:id/steps/:stepId', async (req, res) => {
       [req.params.id, deletedNum]
     );
 
-    // Re-enforce step 1 constraints if step 1 was deleted and a new step 1 exists
+    // Re-enforce step 1 delay constraint if step 1 was deleted and a
+    // new step 1 exists. Condition is PRESERVED — the new step 1
+    // already carries whatever condition its author set; only delay
+    // is forced to 0 because step 1 always fires on activation.
+    // Matches the wizard divergence + email_worker.js:485 guard-move.
     await pool.query(
-      `UPDATE campaign_steps SET delay_hours = 0, condition = 'all'
+      `UPDATE campaign_steps SET delay_hours = 0
        WHERE campaign_id = $1 AND step_number = 1`,
       [req.params.id]
     );
@@ -886,10 +899,15 @@ router.post('/:id/activate', async (req, res) => {
       return res.status(400).json({ success: false, message: `Step ${missingTemplate.step_number} has no template assigned` });
     }
 
-    // Step 1 constraints
+    // Step 1 constraints — delay is enforced (fires on activation).
+    // Condition is validated by VALID_CONDITIONS on write (POST :371 +
+    // PUT :437); any value from that set is allowed on step 1.
+    // Matches the wizard divergence in campaignBuilder.js normaliseStep1
+    // + email_worker.js:485 guard-move so step 1 condition='not_registered'
+    // (etc.) is supported end-to-end.
     const step1 = stepsRes.rows[0];
-    if (step1.step_number !== 1 || step1.delay_hours !== 0 || step1.condition !== 'all') {
-      return res.status(400).json({ success: false, message: 'Step 1 must have delay=0 and condition=all' });
+    if (step1.step_number !== 1 || step1.delay_hours !== 0) {
+      return res.status(400).json({ success: false, message: 'Step 1 must have delay=0' });
     }
 
     // Validation: recipients
