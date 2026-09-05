@@ -403,6 +403,33 @@
                             </div>
                             <div style="margin-top:12px;"><label style="font-size:12px;color:#374151;font-weight:500;">Submit Button Text</label><input type="text" id="buttonText" value="Register" onchange="updateDesignPreview()" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"></div>
                           </div>
+
+                          <!-- Thank-you page (Suer 4 Sep, Job B Option A) — collapsible so operators
+                               who don't need it don't see it; every input is optional (blank = use
+                               language default). Language default also drives <html lang> on the
+                               public form. Written to config.style.success* and config.language
+                               via getStyleConfig() + saveForm(). -->
+                          <details style="padding:16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;">
+                            <summary style="cursor:pointer;font-size:14px;font-weight:600;color:#374151;">Thank-you page</summary>
+                            <p style="margin:10px 0 12px;font-size:12px;color:#6b7280;">Controls the "Thank you" card shown after a successful submit. <strong>Language default</strong> also sets <code>&lt;html lang&gt;</code> on the public form. Leave any string blank to use the language default.</p>
+
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">Language default</label>
+                              <select id="successLanguage" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;">
+                                <option value="en">English</option>
+                                <option value="fr">Français</option>
+                              </select>
+                            </div>
+
+                            <div style="margin-top:12px;"><label style="font-size:12px;color:#374151;font-weight:500;">Title <span style="color:#9ca3af;font-weight:normal;">— default "Thank You!" / "Merci !"</span></label><input type="text" id="successTitle" placeholder="Leave blank for language default" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"></div>
+
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">Heading <span style="color:#9ca3af;font-weight:normal;">— default "Registration Successful" / "Inscription confirmée"</span></label><input type="text" id="successHeading" placeholder="Leave blank for language default" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"></div>
+
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">QR instruction <span style="color:#9ca3af;font-weight:normal;">— default "Show this QR at the entrance" / "Présentez ce QR code à l'entrée"</span></label><input type="text" id="successQrInstruction" placeholder="Leave blank for language default" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"></div>
+
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">Muted message <span style="color:#9ca3af;font-weight:normal;">— default "A copy was also emailed to you…" / "Une copie vous a également été envoyée…"</span></label><input type="text" id="successMessage" placeholder="Leave blank for language default" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"></div>
+
+                            <div style="margin-top:8px;"><label style="font-size:12px;color:#374151;font-weight:500;">Button label <span style="color:#9ca3af;font-weight:normal;">— default "Submit Another Registration" / "Envoyer une autre inscription"</span></label><input type="text" id="successButtonLabel" placeholder="Leave blank for language default" style="width:100%;padding:6px 10px;border:1px solid #d1d5db;border-radius:4px;font-size:13px;margin-top:4px;"></div>
+                          </details>
                         </div>
 
                     </div>
@@ -759,12 +786,19 @@
                 return;
             }
             
+            // config.language (Suer 4 Sep, Job B Option A) is included only
+            // when set to 'fr' — 'en' is the implicit default, so omitting
+            // the key keeps existing forms' saved config byte-identical.
+            const language = getFormLanguage();
+            const cfg = { style: getStyleConfig(), notification: getNotificationConfig() };
+            if (language) cfg.language = language;
+
             const formData = {
                 name: formName, description: formDescription, expo_id: expoId,
                 fields: formFields, is_active: isActive,
                 email_template_id: emailTemplateId ? parseInt(emailTemplateId) : null,
                 visitor_type: visitorType, source: source || null, origin: origin,
-                config: { style: getStyleConfig(), notification: getNotificationConfig() }
+                config: cfg
             };
             
             try {
@@ -1057,7 +1091,7 @@
         }
 
         function getStyleConfig() {
-            return {
+            const cfg = {
                 headerBannerImage: currentHeaderBannerImage,
                 headerBannerColor: document.getElementById('headerBannerColor').value,
                 headerGradientEnd: document.getElementById('headerGradientEnabled').checked ? document.getElementById('headerGradientEnd').value : null,
@@ -1073,6 +1107,27 @@
                 buttonText: document.getElementById('buttonText').value,
                 borderRadius: document.getElementById('borderRadius').value
             };
+            // Success card overrides (Suer 4 Sep, Job B Option A). Only
+            // included when non-blank — a form the operator never opened the
+            // "Thank-you page" section on saves a config.style byte-identical
+            // to today's, so the "no regression" guarantee holds.
+            ['successTitle','successHeading','successQrInstruction','successMessage','successButtonLabel'].forEach(k => {
+                const el = document.getElementById(k);
+                if (!el) return;
+                const v = (el.value || '').trim();
+                if (v) cfg[k] = v;
+            });
+            return cfg;
+        }
+
+        // config.language separate from style (top-level per Suer's spec).
+        // Only persisted when explicitly set to 'fr' — 'en' is the implicit
+        // default across the codebase, so omitting it keeps existing forms'
+        // saved config byte-identical.
+        function getFormLanguage() {
+            const el = document.getElementById('successLanguage');
+            const v = el ? el.value : 'en';
+            return (v === 'fr') ? 'fr' : null;
         }
 
         function loadStyleConfig(config) {
@@ -1104,6 +1159,23 @@
             document.getElementById('borderRadiusValue').textContent = s.borderRadius;
             document.getElementById('removeHeaderBanner').disabled = !currentHeaderBannerImage;
             document.getElementById('removeFooterBanner').disabled = !currentFooterBannerImage;
+
+            // Thank-you page — populate the 5 success* inputs from
+            // config.style if present, else leave blank (blank input =
+            // "use language default" contract on form-public.html).
+            // Reads raw config.style (not the s alias) so inputs stay blank
+            // rather than filling with DEFAULT_STYLE fallbacks.
+            const rawStyle = (config && config.style) || {};
+            ['successTitle','successHeading','successQrInstruction','successMessage','successButtonLabel'].forEach(k => {
+                const el = document.getElementById(k);
+                if (el) el.value = rawStyle[k] || '';
+            });
+
+            // Language select — read config.language, default 'en' when
+            // absent. Only 'fr' actually diverges from today's behaviour.
+            const langEl = document.getElementById('successLanguage');
+            if (langEl) langEl.value = (config && config.language === 'fr') ? 'fr' : 'en';
+
             updateDesignPreview();
         }
 

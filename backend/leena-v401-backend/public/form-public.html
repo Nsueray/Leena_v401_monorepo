@@ -410,6 +410,84 @@
         // #4 — when the backend returns a qr_code, render it server-side via
         // /api/qr-image/:qr (same-origin PNG, no external lib/CDN) so a visitor
         // who never gets the email can still show the QR at the entrance.
+        // ============================================================
+        // Success / error card strings — language-aware defaults + per-form
+        // override (Suer 4 Sep, Job B Option A).
+        //
+        // Resolution order for every string: config.style.<key> override →
+        // language default (EN/FR from config.language) → today's English
+        // fallback (byte-identical to the strings that were hardcoded here
+        // before this change).
+        //
+        // The 5 success keys are UI-editable in form-builder.html Design tab
+        // "Thank-you page" section. The error strings + "Your registration
+        // has been received." intentionally have no UI override — they
+        // follow language default only, matching the ship-list Suer named.
+        //
+        // esc() protects operator-supplied strings from HTML injection.
+        // English defaults contain no &<>"' chars, so escaping is a no-op
+        // for forms that don't set any keys → byte-identical rendering.
+        // ============================================================
+        const SUCCESS_DEFAULTS_EN = {
+            successTitle:         'Thank You!',
+            successHeading:       'Registration Successful',
+            successQrInstruction: 'Show this QR at the entrance',
+            successMessage:       'A copy was also emailed to you. No email? Just show this screen.',
+            successButtonLabel:   'Submit Another Registration'
+        };
+        const SUCCESS_DEFAULTS_FR = {
+            successTitle:         'Merci !',
+            successHeading:       'Inscription confirmée',
+            successQrInstruction: 'Présentez ce QR code à l\'entrée',
+            successMessage:       'Une copie vous a également été envoyée par e-mail. Pas d\'e-mail ? Montrez simplement cet écran.',
+            successButtonLabel:   'Envoyer une autre inscription'
+        };
+        const ERROR_DEFAULTS_EN = {
+            errorTitle:       'Oops!',
+            errorHeading:     'Error Loading Form',
+            errorButtonLabel: 'Try Again'
+        };
+        const ERROR_DEFAULTS_FR = {
+            errorTitle:       'Oups !',
+            errorHeading:     'Erreur de chargement du formulaire',
+            errorButtonLabel: 'Réessayer'
+        };
+        const MISC_DEFAULTS_EN = {
+            receivedNote: 'Your registration has been received.'
+        };
+        const MISC_DEFAULTS_FR = {
+            receivedNote: 'Votre inscription a bien été enregistrée.'
+        };
+
+        function esc(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // formLanguage is set by applyFormStyle from config.language; stays
+        // 'en' until then so showError firing pre-config is byte-identical
+        // to today's hardcoded English.
+        let formLanguage = 'en';
+
+        function pickSuccess(key) {
+            const override = formStyle && formStyle[key];
+            if (override) return override;
+            const map = formLanguage === 'fr' ? SUCCESS_DEFAULTS_FR : SUCCESS_DEFAULTS_EN;
+            return map[key] != null ? map[key] : SUCCESS_DEFAULTS_EN[key];
+        }
+        function pickError(key) {
+            const map = formLanguage === 'fr' ? ERROR_DEFAULTS_FR : ERROR_DEFAULTS_EN;
+            return map[key] != null ? map[key] : ERROR_DEFAULTS_EN[key];
+        }
+        function pickMisc(key) {
+            const map = formLanguage === 'fr' ? MISC_DEFAULTS_FR : MISC_DEFAULTS_EN;
+            return map[key] != null ? map[key] : MISC_DEFAULTS_EN[key];
+        }
+
         function showSuccess(qrCode) {
             const container = document.getElementById('formContent');
             const qrBlock = qrCode ? `
@@ -419,21 +497,21 @@
                                  width="200" height="200"
                                  style="display:block;margin:0 auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px;background:#fff;">
                         </div>
-                        <p style="font-weight:600;color:#0f172a;margin-bottom:4px;">Show this QR at the entrance</p>
-                        <p class="text-muted" style="font-size:13px;">A copy was also emailed to you. No email? Just show this screen.</p>
+                        <p style="font-weight:600;color:#0f172a;margin-bottom:4px;">${esc(pickSuccess('successQrInstruction'))}</p>
+                        <p class="text-muted" style="font-size:13px;">${esc(pickSuccess('successMessage'))}</p>
             ` : '';
             container.innerHTML = `
                 <div class="form-header">
-                    <h2>Thank You!</h2>
+                    <h2>${esc(pickSuccess('successTitle'))}</h2>
                 </div>
                 <div class="form-body">
                     <div class="success-message">
                         <i class="bi bi-check-circle"></i>
-                        <h4>Registration Successful</h4>
+                        <h4>${esc(pickSuccess('successHeading'))}</h4>
                         ${qrBlock}
-                        <p class="text-muted">Your registration has been received.</p>
+                        <p class="text-muted">${esc(pickMisc('receivedNote'))}</p>
                         <button class="btn btn-submit mt-3" onclick="location.reload()">
-                            <i class="bi bi-arrow-clockwise me-2"></i> Submit Another Registration
+                            <i class="bi bi-arrow-clockwise me-2"></i> ${esc(pickSuccess('successButtonLabel'))}
                         </button>
                     </div>
                 </div>
@@ -448,15 +526,15 @@
             const container = document.getElementById('formContent');
             container.innerHTML = `
                 <div class="form-header">
-                    <h2>Oops!</h2>
+                    <h2>${esc(pickError('errorTitle'))}</h2>
                 </div>
                 <div class="form-body">
                     <div class="error-state">
                         <i class="bi bi-exclamation-circle"></i>
-                        <h4>Error Loading Form</h4>
+                        <h4>${esc(pickError('errorHeading'))}</h4>
                         <p class="text-muted">${message}</p>
                         <button class="btn btn-submit mt-3" onclick="location.reload()">
-                            <i class="bi bi-arrow-clockwise me-2"></i> Try Again
+                            <i class="bi bi-arrow-clockwise me-2"></i> ${esc(pickError('errorButtonLabel'))}
                         </button>
                     </div>
                 </div>
@@ -482,7 +560,17 @@
         function applyFormStyle(config) {
             // Handle string (double-stringified) or null
             if (typeof config === 'string') { try { config = JSON.parse(config); } catch(e) { return; } }
-            if (!config || !config.style) return; // null config → keep hardcoded defaults
+
+            // Language default from config.language (Suer 4 Sep). Only 'fr'
+            // switches away from English; anything else (including null,
+            // undefined, '', or non-'fr') stays 'en'. Sets <html lang> so
+            // screen readers + Google translate pick up the right locale.
+            // Runs even when config.style is null — a language-only form
+            // (no style overrides) still gets its lang attribute set.
+            formLanguage = (config && config.language === 'fr') ? 'fr' : 'en';
+            try { document.documentElement.lang = formLanguage; } catch (e) { /* ignore */ }
+
+            if (!config || !config.style) return; // null config.style → keep hardcoded defaults
 
             const DEFAULT_STYLE = {
                 headerBannerImage: null, headerBannerColor: '#667eea', headerGradientEnd: '#764ba2', headerHeight: '200',
@@ -490,6 +578,12 @@
                 footerText: 'Powered by Leena EMS · © Elan Expo',
                 primaryColor: '#667eea', backgroundColor: '#f5f7fa', fontFamily: 'Poppins', buttonText: 'Register', borderRadius: '12'
             };
+            // DEFAULT_STYLE deliberately does NOT list the 5 success* keys.
+            // If config.style carries them, they land in formStyle and
+            // pickSuccess() picks them up as overrides; otherwise formStyle
+            // .success* is undefined and pickSuccess() falls to the
+            // language default. This is what preserves byte-identical
+            // rendering for forms that never set them (like forms 51 / 59).
             const s = { ...DEFAULT_STYLE, ...config.style };
             formStyle = s;
 
