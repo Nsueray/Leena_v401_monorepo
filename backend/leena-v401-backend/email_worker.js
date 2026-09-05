@@ -169,6 +169,25 @@ async function _getExpoNameForCampaign(campaignId) {
   }
 }
 
+// Peer cache for transactional (non-campaign) tasks (Suer 5 Sep): Map<expo_id, expo_name>.
+// Non-campaign tasks carry expo_id directly on the email_queue row; there is
+// no campaign_id to resolve. Same one-query-per-new-id pattern as the
+// campaign cache above. Both caches live until process restart.
+const _expoNameByExpoId = new Map();
+async function _getExpoNameByExpoId(expoId) {
+  if (!expoId) return '';
+  if (_expoNameByExpoId.has(expoId)) return _expoNameByExpoId.get(expoId);
+  try {
+    const r = await pool.query('SELECT name FROM expos WHERE id = $1', [expoId]);
+    const name = (r.rows[0] && r.rows[0].name) || '';
+    _expoNameByExpoId.set(expoId, name);
+    return name;
+  } catch (err) {
+    console.error(`[fromName] expo lookup by expo_id failed for ${expoId}:`, err.message);
+    return '';
+  }
+}
+
 async function processTask(task) {
   try {
     let recipientEmail, emailSubject, emailHtml;
@@ -253,18 +272,20 @@ async function processTask(task) {
       ? getListUnsubscribeHeaders(task.campaign_id, task.campaign_recipient_id, recipientEmail)
       : undefined;
 
-    // Campaign From display name (Suer 3 Sep). Env-var gated + campaign-only.
-    // Badge / certificate / single-recipient tasks lack task.campaign_id, so
-    // they always receive fromName=null and keep the bare-email behaviour.
-    // Fallback (Suer 3 Sep — safety net): when CAMPAIGN_SENDER_NAME isn't
-    // set, fall back to the expo's name so at least the recipient sees
-    // something contextual rather than bare noreply@leena.app. Cached at
-    // module scope (see _expoNameByCampaign) — one query per NEW campaign
-    // id, then O(1) for the rest of that campaign's drain.
-    let fromName = null;
-    if (isCampaignTask) {
-      fromName = process.env.CAMPAIGN_SENDER_NAME || (await _getExpoNameForCampaign(task.campaign_id)) || null;
-    }
+    // From display name (Suer 3 Sep for campaigns; extended 5 Sep to
+    // transactional). Same fallback chain for every task:
+    //   env CAMPAIGN_SENDER_NAME → expo name (from campaign_id if campaign,
+    //   else task.expo_id) → null (bare noreply@leena.app).
+    // CAMPAIGN_SENDER_NAME env var reused as-is (name is now a misnomer —
+    // it covers transactional too); scope widened via G34-safe path since
+    // every send here already runs on the worker service where the var
+    // lives. If distinct campaign vs transactional names are ever needed,
+    // introduce a TRANSACTIONAL_SENDER_NAME override on the worker.
+    let fromName = process.env.CAMPAIGN_SENDER_NAME
+      || (isCampaignTask
+          ? (await _getExpoNameForCampaign(task.campaign_id))
+          : (await _getExpoNameByExpoId(task.expo_id)))
+      || null;
 
     // Send email
     const sent = await sendEmailWithReplyTo(
