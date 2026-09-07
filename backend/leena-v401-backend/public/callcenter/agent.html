@@ -331,7 +331,8 @@ const I18N = {
     resend_ok: 'Email queued',
     resend_cooldown: 'Cooldown active — try again shortly',
     error_generic: 'Something went wrong. Try again.',
-    session_ended: 'Session ended — refresh to continue'
+    session_ended: 'Session ended — refresh to continue',
+    agent_not_allowed: 'Your name is not on the list — ask your supervisor'
   },
   fr: {
     splash_title: 'SIEMA Call Center',
@@ -423,7 +424,8 @@ const I18N = {
     resend_ok: 'E-mail en file d’attente',
     resend_cooldown: 'Attente en cours — réessayez dans quelques instants',
     error_generic: 'Une erreur est survenue. Réessayez.',
-    session_ended: 'Session expirée — rechargez la page'
+    session_ended: 'Session expirée — rechargez la page',
+    agent_not_allowed: 'Votre nom n’est pas sur la liste — demandez à votre superviseur'
   },
   tr: {
     splash_title: 'SIEMA Çağrı Merkezi',
@@ -515,7 +517,8 @@ const I18N = {
     resend_ok: 'E-posta sıraya alındı',
     resend_cooldown: 'Bekleme süresi — birazdan tekrar deneyin',
     error_generic: 'Bir hata oluştu. Tekrar deneyin.',
-    session_ended: 'Oturum sona erdi — sayfayı yenileyin'
+    session_ended: 'Oturum sona erdi — sayfayı yenileyin',
+    agent_not_allowed: 'Adınız listede yok — süpervizörünüze sorun'
   }
 };
 
@@ -561,7 +564,12 @@ document.getElementById('langTr').onclick = () => setLang('tr');
 // Splash + auth
 // ================================================================
 function getAuth() {
-  return { key: sessionStorage.getItem('cc_key') || '', agent: sessionStorage.getItem('cc_agent') || '' };
+  // Normalise on read so pre-Stage-4d sessions (with un-uppercased agent
+  // names cached in sessionStorage) send the same shape the backend now
+  // expects. Cheap — one string op per request.
+  const raw = sessionStorage.getItem('cc_agent') || '';
+  const agent = String(raw).trim().replace(/\s+/g, ' ').toUpperCase();
+  return { key: sessionStorage.getItem('cc_key') || '', agent };
 }
 function showSplash() {
   document.getElementById('splash').style.display = 'block';
@@ -572,28 +580,72 @@ function hideSplash() {
   document.getElementById('splash').style.display = 'none';
   document.getElementById('main').style.display = 'block';
   const { agent } = getAuth();
+  // Display the stored value as-is — splash + boot already normalised
+  // it (Stage 4d), so this is guaranteed to match what the DB sees.
   document.getElementById('agentDisplay').textContent = agent;
 }
 document.getElementById('splashEnter').onclick = () => splashSubmit();
 document.getElementById('splashKey').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('splashAgent').focus(); });
 document.getElementById('splashAgent').addEventListener('keydown', e => { if (e.key === 'Enter') splashSubmit(); });
+
+// Stage 4d — client-side normalisation must match the backend at
+// middleware/callCenterAgentAuth.js. Same three ops in the same order:
+// trim, collapse internal whitespace, uppercase. Locale-independent
+// toUpperCase (NOT toLocaleUpperCase) so Turkish 'i' becomes 'I' not 'İ'.
+function normaliseAgent(s) {
+  return String(s == null ? '' : s).trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+// Uppercase the agent input as the user types. Preserves cursor
+// position so typing feels natural. Value stays whatever the user
+// typed but capitalised — mirrors what the backend will see.
+(function wireSplashAgentUppercase() {
+  const el = document.getElementById('splashAgent');
+  el.addEventListener('input', e => {
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const up = el.value.toUpperCase();
+    if (up !== el.value) {
+      el.value = up;
+      try { el.setSelectionRange(start, end); } catch (_) { /* ignore */ }
+    }
+  });
+})();
+
 async function splashSubmit() {
   const key = document.getElementById('splashKey').value.trim();
-  const agent = document.getElementById('splashAgent').value.trim();
-  if (!key || !agent) { document.getElementById('splashError').style.display = 'block'; return; }
+  const agent = normaliseAgent(document.getElementById('splashAgent').value);
+  const err = document.getElementById('splashError');
+  if (!key || !agent) { err.textContent = t('splash_wrong_key'); err.style.display = 'block'; return; }
   // Test the credentials with a lightweight ping — /stats/me hits both agent + key.
   const r = await fetch(`/api/callcenter/stats/me?agent=${encodeURIComponent(agent)}`, {
     headers: { 'x-callcenter-key': key }
   }).catch(() => null);
-  if (!r || (r.status !== 200 && r.status !== 400)) {
-    // 400 is "bad agent shape" — surface as a wrong-key/wrong-agent message.
-    document.getElementById('splashError').style.display = 'block';
+  if (!r) { err.textContent = t('splash_wrong_key'); err.style.display = 'block'; return; }
+  if (r.status === 200) {
+    // OK — key + agent both valid, cache and proceed
+    sessionStorage.setItem('cc_key', key);
+    sessionStorage.setItem('cc_agent', agent);
+    err.style.display = 'none';
+    hideSplash();
+    init();
     return;
   }
-  sessionStorage.setItem('cc_key', key);
-  sessionStorage.setItem('cc_agent', agent);
-  hideSplash();
-  init();
+  if (r.status === 400) {
+    // Distinguish AGENT_NOT_ALLOWED (specific toast) from INVALID_AGENT
+    // (bad shape — treat as wrong-key/wrong-agent for the user).
+    const j = await r.json().catch(() => ({}));
+    if (j && j.code === 'AGENT_NOT_ALLOWED') {
+      err.textContent = t('agent_not_allowed');
+    } else {
+      err.textContent = t('splash_wrong_key');
+    }
+    err.style.display = 'block';
+    return;
+  }
+  // 401 (wrong key) / 503 (env unset) / anything else — generic wrong-key
+  err.textContent = t('splash_wrong_key');
+  err.style.display = 'block';
 }
 
 // ================================================================
@@ -1029,7 +1081,9 @@ function fmtCasa(iso) {
   const qAgent = q.get('agent');
   if (qKey && qAgent && !key) {
     document.getElementById('splashKey').value = qKey;
-    document.getElementById('splashAgent').value = qAgent;
+    // Normalise the URL-supplied agent before it hits the splash input
+    // so the user sees the same uppercase value the backend will store.
+    document.getElementById('splashAgent').value = normaliseAgent(qAgent);
     // Clean the URL — never keep credentials in history
     const clean = new URL(location.href);
     clean.searchParams.delete('key'); clean.searchParams.delete('agent');

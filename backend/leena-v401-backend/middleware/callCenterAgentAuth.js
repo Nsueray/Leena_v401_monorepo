@@ -43,9 +43,15 @@ async function callCenterAgentAuth(req, res, next) {
       });
     }
 
-    // Agent name from query (?agent=Name). Trimmed, length-capped.
-    // Character allow-list matches the design's R-1 mitigation.
-    const rawAgent = String(req.query.agent || '').trim();
+    // Agent name from query (?agent=Name). Normalisation (Stage 4d, 7 Sep):
+    // trim → collapse internal whitespace → uppercase (locale-independent
+    // .toUpperCase(), NOT toLocaleUpperCase — Turkish dotted-i must NOT
+    // fire here since the accepted-charset regex below is ASCII-only).
+    // Every downstream write (callcenter_leads.claimed_by) and every read
+    // (per-agent stats) uses the normalised value; the client mirrors the
+    // same normalisation on the splash input so what agents see == what
+    // the DB stores.
+    const rawAgent = String(req.query.agent || '').trim().replace(/\s+/g, ' ').toUpperCase();
     if (!rawAgent) {
       return res.status(400).json({
         success: false,
@@ -53,12 +59,34 @@ async function callCenterAgentAuth(req, res, next) {
         code: 'MISSING_AGENT'
       });
     }
-    if (rawAgent.length > 40 || !/^[A-Za-z][A-Za-z0-9 _-]{0,40}$/.test(rawAgent)) {
+    if (rawAgent.length > 40 || !/^[A-Z][A-Z0-9 _-]{0,40}$/.test(rawAgent)) {
       return res.status(400).json({
         success: false,
-        error: 'agent must match /^[A-Za-z][A-Za-z0-9 _-]{0,40}$/',
+        error: 'agent must match /^[A-Z][A-Z0-9 _-]{0,40}$/ after normalisation',
         code: 'INVALID_AGENT'
       });
+    }
+
+    // Optional allowlist via CALLCENTER_AGENTS env var (comma-separated).
+    // Compared after the same trim/collapse/uppercase normalisation so
+    // "nihat" in the env matches "Nihat" from the URL. When the env var
+    // is unset OR empty-after-trim, any valid name passes (same as the
+    // pre-4d shape). When set, unknown names 400 AGENT_NOT_ALLOWED — the
+    // client's splash renders a specific EN/FR/TR toast for this code.
+    const allowRaw = String(process.env.CALLCENTER_AGENTS || '').trim();
+    if (allowRaw) {
+      const allowed = new Set(
+        allowRaw.split(',')
+          .map(s => s.trim().replace(/\s+/g, ' ').toUpperCase())
+          .filter(Boolean)
+      );
+      if (!allowed.has(rawAgent)) {
+        return res.status(400).json({
+          success: false,
+          error: 'agent name is not on the CALLCENTER_AGENTS list',
+          code: 'AGENT_NOT_ALLOWED'
+        });
+      }
     }
 
     req.agent = rawAgent;
