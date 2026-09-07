@@ -96,6 +96,31 @@
     .admin-actions .primary { background: var(--info); color: white; border-color: var(--info); }
     .admin-actions .primary:disabled { background: #93c5fd; border-color: #93c5fd; }
 
+    /* Import section */
+    .import-box { display: grid; grid-template-columns: 1fr; gap: 10px; }
+    .import-box .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .import-box input[type=file] { flex: 1; min-width: 200px; padding: 6px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+    .import-box input[type=number] { width: 100px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+    .import-box label { font-size: 12px; color: var(--muted); font-weight: 600; }
+    .import-box .btn { padding: 10px 16px; border: 1px solid var(--border); background: white; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .import-box .btn.primary { background: var(--info); color: white; border-color: var(--info); }
+    .import-box .btn.success { background: var(--ok); color: white; border-color: var(--ok); }
+    .import-box .btn:disabled { background: #f3f4f6; color: var(--muted); cursor: not-allowed; }
+    .import-progress { display: none; margin-top: 6px; color: var(--muted); font-size: 12px; font-style: italic; }
+    .import-progress.show { display: block; }
+    .import-result { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-top: 10px; font-size: 13px; display: none; }
+    .import-result.show { display: block; }
+    .import-result h4 { margin: 0 0 8px; font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+    .import-result table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .import-result table th, .import-result table td { padding: 4px 6px; border-bottom: 1px solid var(--border); text-align: left; }
+    .import-result table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .import-result table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .import-result .totals { display: flex; gap: 16px; flex-wrap: wrap; margin: 8px 0; font-size: 12px; }
+    .import-result .totals span { padding: 4px 10px; background: white; border: 1px solid var(--border); border-radius: 999px; }
+    .import-result .totals .ok { color: var(--ok); border-color: #a7f3d0; }
+    .import-result .totals .warn { color: var(--warn); border-color: #fcd34d; }
+    .import-result .totals .bad { color: var(--bad); border-color: #fca5a5; }
+
     #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 200; display: none; max-width: 360px; text-align: center; }
   </style>
 </head>
@@ -129,6 +154,27 @@
     <div class="admin-actions">
       <button class="primary" id="btnExport"><i class="bi bi-download"></i> <span data-i18n="export_xlsx">Export xlsx</span></button>
       <button id="btnReport"><i class="bi bi-envelope"></i> <span data-i18n="send_report_now">Send daily report now</span></button>
+    </div>
+
+    <!-- Import section (Stage 5) -->
+    <div class="section">
+      <h3 data-i18n="import_title">Import call list (xlsx)</h3>
+      <div class="import-box">
+        <div class="row">
+          <input type="file" id="importFile" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+          <label for="importExpoId" data-i18n="import_expo_label">Expo id:</label>
+          <input type="number" id="importExpoId" min="1" step="1">
+        </div>
+        <div class="row">
+          <button class="btn primary" id="btnImportDryRun"><i class="bi bi-eye"></i> <span data-i18n="import_dry_run">Step 1 · Dry-run</span></button>
+          <button class="btn success" id="btnImportConfirm" disabled><i class="bi bi-cloud-upload"></i> <span data-i18n="import_confirm">Step 2 · Confirm import</span></button>
+          <span class="import-progress" id="importProgress" data-i18n="import_progress">Uploading…</span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);" data-i18n="import_help">
+          Sheets accepted: A_activate / B_registered / C_register. Rows without a phone are skipped. Phones already in the call-center table on this expo are skipped.
+        </div>
+        <div class="import-result" id="importResult"></div>
+      </div>
     </div>
 
     <div class="kpi-grid">
@@ -221,7 +267,25 @@ const I18N = {
     report_sent: 'Report queued',
     report_confirm: 'Send the daily report now to CALLCENTER_REPORT_TO?',
     err_generic: 'Something went wrong.',
-    empty_calls: 'No calls yet today.'
+    empty_calls: 'No calls yet today.',
+    // Import section (Stage 5)
+    import_title: 'Import call list (xlsx)',
+    import_expo_label: 'Expo id:',
+    import_dry_run: 'Step 1 · Dry-run',
+    import_confirm: 'Step 2 · Confirm import',
+    import_progress: 'Uploading…',
+    import_help: 'Sheets accepted: A_activate / B_registered / C_register. Rows without a phone are skipped. Phones already in the call-center table on this expo are skipped.',
+    import_pick_file: 'Choose an xlsx file first.',
+    import_pick_expo: 'Set an expo id first (SIEMA = 9).',
+    import_dry_ok: 'Dry-run complete. Review the counts and click Confirm to insert.',
+    import_done: 'Import complete.',
+    import_th_sheet: 'Sheet', import_th_segment: 'Segment', import_th_read: 'Rows read',
+    import_th_no_phone: 'No phone', import_th_dupe: 'Duplicate', import_th_valid: 'Valid',
+    import_th_inserted: 'Inserted',
+    import_total_read: 'Read: {n}', import_total_valid: 'Valid: {n}',
+    import_total_no_phone: 'No phone: {n}', import_total_dupe: 'Duplicate: {n}',
+    import_source: 'Source: {name}', import_existing: 'Existing on expo: {n}',
+    import_confirm_msg: 'Insert {n} rows into callcenter_leads for expo {expo}?'
   },
   fr: {
     splash_title: 'Session admin requise',
@@ -258,7 +322,24 @@ const I18N = {
     report_sent: 'Rapport en file',
     report_confirm: 'Envoyer le rapport quotidien maintenant à CALLCENTER_REPORT_TO ?',
     err_generic: 'Une erreur est survenue.',
-    empty_calls: 'Aucun appel aujourd’hui.'
+    empty_calls: 'Aucun appel aujourd’hui.',
+    import_title: 'Importer une liste d’appels (xlsx)',
+    import_expo_label: 'Expo id :',
+    import_dry_run: 'Étape 1 · Simulation',
+    import_confirm: 'Étape 2 · Confirmer l’import',
+    import_progress: 'Chargement…',
+    import_help: 'Feuilles acceptées : A_activate / B_registered / C_register. Les lignes sans téléphone sont ignorées. Les téléphones déjà présents pour cet expo sont ignorés.',
+    import_pick_file: 'Choisissez d’abord un fichier xlsx.',
+    import_pick_expo: 'Indiquez d’abord un expo id (SIEMA = 9).',
+    import_dry_ok: 'Simulation terminée. Vérifiez les chiffres puis cliquez sur Confirmer.',
+    import_done: 'Import terminé.',
+    import_th_sheet: 'Feuille', import_th_segment: 'Segment', import_th_read: 'Lignes lues',
+    import_th_no_phone: 'Sans téléphone', import_th_dupe: 'Doublon', import_th_valid: 'Valides',
+    import_th_inserted: 'Insérées',
+    import_total_read: 'Lues : {n}', import_total_valid: 'Valides : {n}',
+    import_total_no_phone: 'Sans téléphone : {n}', import_total_dupe: 'Doublons : {n}',
+    import_source: 'Source : {name}', import_existing: 'Existant sur l’expo : {n}',
+    import_confirm_msg: 'Insérer {n} lignes dans callcenter_leads pour l’expo {expo} ?'
   }
 };
 let lang = (new URLSearchParams(location.search).get('lang') === 'fr' || sessionStorage.getItem('cc_adm_lang') === 'fr') ? 'fr' : 'en';
@@ -453,6 +534,136 @@ document.getElementById('btnReport').onclick = async () => {
   } catch (e) { toast(t('err_generic')); }
   finally { btn.disabled = false; }
 };
+
+// ================================================================
+// Stage 5 — Admin import (dry-run then confirm)
+// ================================================================
+// Default expo id from the sidebar selection (localStorage key
+// 'selectedExpoId' is set by the standard dashboard flow — see the
+// admin sidebars on all Leena pages).
+(function seedExpoId() {
+  const el = document.getElementById('importExpoId');
+  const stored = parseInt(localStorage.getItem('selectedExpoId'), 10);
+  if (el && stored && !isNaN(stored) && stored > 0) el.value = stored;
+})();
+
+// Cache the last dry-run so Confirm posts the same file (multer needs
+// the raw multipart again; we re-attach the File object from the input).
+let _lastDryRun = null;
+
+async function _sendImport(dryRun) {
+  const fileEl = document.getElementById('importFile');
+  const expoEl = document.getElementById('importExpoId');
+  const resEl = document.getElementById('importResult');
+  const progEl = document.getElementById('importProgress');
+  const btnDry = document.getElementById('btnImportDryRun');
+  const btnGo = document.getElementById('btnImportConfirm');
+
+  if (!fileEl.files || fileEl.files.length === 0) { toast(t('import_pick_file')); return; }
+  const expoId = parseInt(expoEl.value, 10);
+  if (!expoId || isNaN(expoId) || expoId < 1) { toast(t('import_pick_expo')); return; }
+
+  const fd = new FormData();
+  fd.append('file', fileEl.files[0]);
+  fd.append('expo_id', String(expoId));
+  fd.append('dry_run', dryRun ? 'true' : 'false');
+
+  progEl.classList.add('show');
+  btnDry.disabled = true; btnGo.disabled = true;
+  resEl.classList.remove('show');
+
+  try {
+    const r = await fetch('/api/callcenter/admin/import', {
+      method: 'POST',
+      headers: authHeaders(),          // Bearer JWT; NO content-type (browser sets multipart boundary)
+      body: fd
+    });
+    const j = await r.json();
+    if (!j.success) {
+      toast(j.error || t('err_generic'));
+      return;
+    }
+    _renderImportResult(j, dryRun);
+    if (dryRun) {
+      _lastDryRun = j;
+      toast(t('import_dry_ok'), 3500);
+      btnGo.disabled = (j.totals.valid === 0);
+    } else {
+      _lastDryRun = null;
+      toast(t('import_done'), 3500);
+      btnGo.disabled = true;
+      // Also refresh the live dashboard to pick up the newly-inserted rows
+      refresh();
+    }
+  } catch (e) {
+    console.error('[import] error:', e);
+    toast(t('err_generic'));
+  } finally {
+    progEl.classList.remove('show');
+    btnDry.disabled = false;
+  }
+}
+
+function _renderImportResult(j, wasDryRun) {
+  const resEl = document.getElementById('importResult');
+  const rows = [];
+  const inserted = j.inserted_by_segment || {};
+  for (const [sheet, s] of Object.entries(j.per_sheet || {})) {
+    rows.push(`<tr>
+      <td><strong>${escapeHtml(sheet)}</strong></td>
+      <td>${escapeHtml(s.segment)}</td>
+      <td class="num">${s.read}</td>
+      <td class="num">${s.no_phone}</td>
+      <td class="num">${s.dupe}</td>
+      <td class="num">${s.valid}</td>
+      ${!wasDryRun ? `<td class="num"><strong>${inserted[s.segment] || 0}</strong></td>` : ''}
+    </tr>`);
+  }
+  const totals = j.totals || {};
+  const insertedTotal = (inserted.A || 0) + (inserted.B || 0) + (inserted.C || 0);
+  resEl.innerHTML = `
+    <h4>${escapeHtml(wasDryRun ? t('import_dry_run') : t('import_done'))}</h4>
+    <div class="totals">
+      <span>${escapeHtml(t('import_source', { name: j.source || '' }))}</span>
+      <span>${escapeHtml(t('import_existing', { n: j.existing_leads_on_expo || 0 }))}</span>
+      <span class="ok">${escapeHtml(t('import_total_valid', { n: totals.valid || 0 }))}</span>
+      ${totals.no_phone ? `<span class="warn">${escapeHtml(t('import_total_no_phone', { n: totals.no_phone }))}</span>` : ''}
+      ${totals.dupe ? `<span class="warn">${escapeHtml(t('import_total_dupe', { n: totals.dupe }))}</span>` : ''}
+      <span>${escapeHtml(t('import_total_read', { n: totals.read || 0 }))}</span>
+      ${!wasDryRun ? `<span class="ok"><strong>${escapeHtml(t('import_th_inserted'))}: ${insertedTotal}</strong></span>` : ''}
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>${escapeHtml(t('import_th_sheet'))}</th>
+          <th>${escapeHtml(t('import_th_segment'))}</th>
+          <th class="num">${escapeHtml(t('import_th_read'))}</th>
+          <th class="num">${escapeHtml(t('import_th_no_phone'))}</th>
+          <th class="num">${escapeHtml(t('import_th_dupe'))}</th>
+          <th class="num">${escapeHtml(t('import_th_valid'))}</th>
+          ${!wasDryRun ? `<th class="num">${escapeHtml(t('import_th_inserted'))}</th>` : ''}
+        </tr>
+      </thead>
+      <tbody>${rows.join('') || `<tr><td colspan="${wasDryRun ? 6 : 7}" style="text-align:center;color:var(--muted);">—</td></tr>`}</tbody>
+    </table>
+  `;
+  resEl.classList.add('show');
+}
+
+document.getElementById('btnImportDryRun').onclick = () => _sendImport(true);
+document.getElementById('btnImportConfirm').onclick = () => {
+  if (!_lastDryRun) return;
+  const total = _lastDryRun.totals.valid || 0;
+  if (total === 0) return;
+  if (!confirm(t('import_confirm_msg', { n: total, expo: _lastDryRun.expo_id }))) return;
+  _sendImport(false);
+};
+// Any new file selection resets the confirm state — force a fresh dry-run
+document.getElementById('importFile').addEventListener('change', () => {
+  _lastDryRun = null;
+  document.getElementById('btnImportConfirm').disabled = true;
+  document.getElementById('importResult').classList.remove('show');
+});
 
 // ================================================================
 // Helpers

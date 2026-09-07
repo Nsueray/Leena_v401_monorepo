@@ -17,6 +17,7 @@
 
 const express = require('express');
 const XLSX = require('xlsx');
+const multer = require('multer');
 
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -25,6 +26,15 @@ const supervisorAuth = require('../middleware/callCenterSupervisorAuth');
 const { processEmailTemplate } = require('../utils/email');
 
 const router = express.Router();
+
+// Multer setup for xlsx import — mirrors routes/visitors.js:22 shape
+// (memory storage; the file buffer is passed straight to XLSX.read).
+// 25 MB cap — the largest known SIEMA call-center xlsx is ~10.8 MB
+// (yesterday's SIEMA26_callcenter_20260907.xlsx dump); 25 MB gives 2× headroom.
+const uploadCallcenter = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
+});
 
 // ============================================================
 // Constants + small helpers
@@ -232,6 +242,7 @@ router.get('/health', (req, res) => {
       'GET  /stats/live  (supervisor)',
       'GET  /stats/agent/:name  (supervisor)',
       'GET  /admin/dump  (JWT)',
+      'POST /admin/import  (JWT, multipart xlsx) — dry_run=true|false, expo_id',
       'POST /report/send-now  (JWT)'
     ]
   });
@@ -938,6 +949,195 @@ router.get('/admin/dump', authMiddleware, async (req, res) => {
 // Reads CALLCENTER_REPORT_TO env var. Builds an HTML body with today's
 // per-agent numbers + outcome breakdown + totals + registered-after-call.
 // Queues one Mode 1 email_queue row. Worker drains it in one cycle.
+// ============================================================
+// POST /api/callcenter/admin/import — xlsx bulk import (JWT)
+// ============================================================
+// Two-step:
+//   dry_run=true (default)  → returns per-sheet counts, missing-phone, dupes
+//                               against existing callcenter_leads on (expo_id, phone).
+//                               No writes.
+//   dry_run=false           → INSERT rows. source = original filename.
+//                               Phones already present on (expo_id, phone-key) skipped.
+//
+// Sheet name convention (from Stage-1 design + the 7 Sep dump script):
+//   A_activate   → segment='A'
+//   B_registered → segment='B'
+//   C_register   → segment='C'
+// Any other sheet is ignored.
+//
+// Column names accepted, case-insensitive:
+//   email | name / first_name | last_name | company | country | phone
+// A rows additionally get reactivation_token looked up from
+// reactivation_tokens where email+target_expo_id match.
+//
+// Mirrors routes/visitors.js:606 upload+XLSX shape (line 22 multer +
+// 631-634 sheet read). Same memory-buffer pattern; no on-disk temp file.
+router.post('/admin/import', authMiddleware, uploadCallcenter.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded', code: 'NO_FILE' });
+    }
+    const expoId = parseInt(req.body.expo_id, 10);
+    if (!expoId || isNaN(expoId)) {
+      return res.status(400).json({ success: false, error: 'expo_id is required (integer)', code: 'NO_EXPO' });
+    }
+    const dryRun = String(req.body.dry_run || 'true') !== 'false';
+    const sourceName = String(req.file.originalname || 'unknown.xlsx').slice(0, 50);
+
+    // Parse workbook
+    const wb = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const SHEET_TO_SEGMENT = { 'A_activate': 'A', 'B_registered': 'B', 'C_register': 'C' };
+
+    // Row normaliser — case-insensitive header lookup, first non-empty match wins.
+    // Preserves the ordering + trimming discipline used by the 7 Sep export.
+    const rowGet = (row, ...keys) => {
+      const lowerMap = {};
+      for (const k of Object.keys(row)) lowerMap[k.toLowerCase().trim()] = row[k];
+      for (const key of keys) {
+        const v = lowerMap[key.toLowerCase()];
+        if (v != null && String(v).trim() !== '') return String(v).trim();
+      }
+      return '';
+    };
+    // Phone key for dedupe — digits-only. Matches the wa.me/normalisation
+    // shape and keeps "+212..." vs "00212..." from being counted as different.
+    const phoneKey = raw => String(raw || '').replace(/[^\d]/g, '');
+
+    // Collect + shape rows
+    const perSheet = {};        // { A: {read, no_phone, dupe, valid}, ... }
+    const validRowsBySegment = { A: [], B: [], C: [] };
+
+    // Pre-load existing (expo_id, phone-digit-key) so dedupe is O(1) per row.
+    // Small enough on any single expo (SIEMA-scale = ~32k leads).
+    const existingRes = await pool.query(
+      `SELECT phone FROM callcenter_leads WHERE expo_id = $1 AND COALESCE(phone,'') <> ''`,
+      [expoId]
+    );
+    const existingKeys = new Set(existingRes.rows.map(r => phoneKey(r.phone)));
+
+    for (const sheetName of wb.SheetNames) {
+      const segment = SHEET_TO_SEGMENT[sheetName];
+      if (!segment) continue; // skip Summary + anything else
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+      const stats = { read: rows.length, no_phone: 0, dupe: 0, valid: 0 };
+
+      // Per-sheet dedupe (in case the same phone appears twice inside the file itself)
+      const sheetSeen = new Set();
+
+      for (const row of rows) {
+        const email = rowGet(row, 'email').toLowerCase();
+        const phoneRaw = rowGet(row, 'phone');
+        const key = phoneKey(phoneRaw);
+        if (!key) { stats.no_phone++; continue; }
+        if (existingKeys.has(key) || sheetSeen.has(key)) { stats.dupe++; continue; }
+        sheetSeen.add(key);
+        stats.valid++;
+        validRowsBySegment[segment].push({
+          email,
+          phone: phoneRaw,
+          first_name: rowGet(row, 'first_name', 'name'),
+          last_name: rowGet(row, 'last_name'),
+          company: rowGet(row, 'company'),
+          country: rowGet(row, 'country')
+        });
+      }
+      perSheet[sheetName] = { segment, ...stats };
+    }
+
+    // Dry-run — return counts, no writes
+    const summary = {
+      source: sourceName,
+      expo_id: expoId,
+      per_sheet: perSheet,
+      totals: {
+        read:     Object.values(perSheet).reduce((s, x) => s + x.read, 0),
+        no_phone: Object.values(perSheet).reduce((s, x) => s + x.no_phone, 0),
+        dupe:     Object.values(perSheet).reduce((s, x) => s + x.dupe, 0),
+        valid:    Object.values(perSheet).reduce((s, x) => s + x.valid, 0)
+      },
+      existing_leads_on_expo: existingKeys.size
+    };
+
+    if (dryRun) {
+      return res.json({ success: true, dry_run: true, ...summary });
+    }
+
+    // Real import — batch INSERT per segment, chunked at 500 rows per statement.
+    // Segment A rows also fetch reactivation_token by email + target_expo_id
+    // (read-only lookup on reactivation_tokens; not written).
+    const client = await pool.connect();
+    const insertedBySegment = { A: 0, B: 0, C: 0 };
+    try {
+      await client.query('BEGIN');
+
+      for (const segment of ['A', 'B', 'C']) {
+        const rows = validRowsBySegment[segment];
+        if (rows.length === 0) continue;
+
+        // For A: fetch existing tokens for these emails in bulk.
+        const tokenByEmail = new Map();
+        if (segment === 'A') {
+          const emails = rows.map(r => r.email).filter(Boolean);
+          if (emails.length > 0) {
+            const tr = await client.query(
+              `SELECT lower(email) AS email, token
+               FROM reactivation_tokens
+               WHERE target_expo_id = $1 AND lower(email) = ANY($2)`,
+              [expoId, emails]
+            );
+            for (const r of tr.rows) tokenByEmail.set(r.email, r.token);
+          }
+        }
+
+        const CHUNK = 500;
+        for (let i = 0; i < rows.length; i += CHUNK) {
+          const chunk = rows.slice(i, i + CHUNK);
+          const values = [];
+          const params = [];
+          let p = 1;
+          for (const r of chunk) {
+            values.push(`($${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, $${p++}, 'new')`);
+            params.push(
+              segment, sourceName, expoId,
+              r.email || '', r.phone || '',
+              r.first_name || null, r.last_name || null,
+              r.company || null, r.country || null,
+              segment === 'A' ? (tokenByEmail.get(r.email) || null) : null
+            );
+          }
+          const q = `INSERT INTO callcenter_leads
+                       (segment, source, expo_id, email, phone,
+                        first_name, last_name, company, country,
+                        reactivation_token, status)
+                     VALUES ${values.join(',')}`;
+          const ins = await client.query(q, params);
+          insertedBySegment[segment] += ins.rowCount || 0;
+        }
+      }
+
+      await client.query('COMMIT');
+    } catch (txErr) {
+      try { await client.query('ROLLBACK'); } catch (_) {}
+      client.release();
+      console.error('[callcenter /admin/import] tx error:', txErr.message);
+      return res.status(500).json({ success: false, error: 'import failed: ' + txErr.message, code: 'IMPORT_TX_ERROR' });
+    }
+    client.release();
+
+    _cacheBust();
+    return res.json({
+      success: true,
+      dry_run: false,
+      inserted_by_segment: insertedBySegment,
+      inserted_total: insertedBySegment.A + insertedBySegment.B + insertedBySegment.C,
+      ...summary
+    });
+  } catch (err) {
+    console.error('[callcenter /admin/import] Error:', err.message);
+    return res.status(500).json({ success: false, error: 'import failed', code: 'IMPORT_ERROR' });
+  }
+});
+
 router.post('/report/send-now', authMiddleware, async (req, res) => {
   // CALLCENTER_REPORT_TO may be a single email or a comma-separated list.
   // Split, trim, drop empties + non-emails, dedupe (case-insensitive).

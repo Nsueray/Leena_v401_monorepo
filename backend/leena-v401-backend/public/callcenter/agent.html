@@ -120,12 +120,15 @@
     /* Fix data toggle */
     details.fix { margin: 12px 0; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 8px; }
     details.fix summary { cursor: pointer; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    details.fix summary .fix-hint-inline { font-weight: 400; font-size: 11px; color: var(--text-muted); }
     details.fix input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-top: 4px; margin-bottom: 8px; }
     details.fix label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
 
-    /* Secondary action buttons */
-    .action-row { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
-    .btn-action { flex: 1 1 45%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); background: white; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: var(--text); touch-action: manipulation; }
+    /* Secondary action buttons — 2-column grid of action-items (button + hint) */
+    .action-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; margin: 10px 0; }
+    .action-item { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+    .action-hint { font-size: 11px; color: var(--text-muted); line-height: 1.3; text-align: center; padding: 0 2px; }
+    .btn-action { width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); background: white; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: var(--text); touch-action: manipulation; }
     .btn-action:active { transform: scale(0.98); }
     .btn-action.wa { background: #25d366; color: white; border-color: #25d366; }
     .btn-action.copy { background: #f3f4f6; }
@@ -251,10 +254,14 @@ const I18N = {
 
     attended_2025: 'Came in 2025',
     tel_link: 'Call',
+    // Segment pills — plain-language for the agent card header (Stage 4c-b).
+    pill_A: 'Had a badge in 2025 — activate',
+    pill_B: 'Registered for 2026',
+    pill_C: 'Not registered yet',
     mail_sent: 'Mail sent',
     mail_pending: 'Mail pending',
     mail_failed: 'Mail failed',
-    mail_none: 'No mail yet',
+    mail_none: 'No email sent yet',
     opened_yes: 'opened',
     opened_no: 'not opened',
     clicked_yes: 'clicked',
@@ -291,6 +298,12 @@ const I18N = {
     action_resend: 'Resend email',
     action_register: 'Register now',
     resend_hint: 'Wrong email? Use Register now — the activation link is tied to the old address.',
+    // One-line hints under each action button (Stage 4c-c)
+    action_whatsapp_hint: 'Opens WhatsApp with the link ready to send',
+    action_copy_hint: 'Copies the link to paste elsewhere',
+    action_resend_hint: 'Sends the same email again to the same address',
+    action_register_hint: 'Opens the registration form — fill it in with the person',
+    fix_data_hint: 'Corrects our list only — does not register anyone',
 
     skip: 'Skip',
     save_next: 'Save → Next',
@@ -337,10 +350,13 @@ const I18N = {
 
     attended_2025: 'Est venu en 2025',
     tel_link: 'Appeler',
+    pill_A: 'Avait un badge en 2025 — à activer',
+    pill_B: 'Inscrit pour 2026',
+    pill_C: 'Pas encore inscrit',
     mail_sent: 'E-mail envoyé',
     mail_pending: 'E-mail en attente',
     mail_failed: 'E-mail échoué',
-    mail_none: 'Pas d’e-mail',
+    mail_none: 'Aucun e-mail envoyé pour l’instant',
     opened_yes: 'ouvert',
     opened_no: 'pas ouvert',
     clicked_yes: 'cliqué',
@@ -377,6 +393,11 @@ const I18N = {
     action_resend: 'Renvoyer l’e-mail',
     action_register: 'Inscrire maintenant',
     resend_hint: 'Mauvais e-mail ? Utilisez Inscrire maintenant — le lien d’activation est associé à l’ancienne adresse.',
+    action_whatsapp_hint: 'Ouvre WhatsApp avec le lien prêt à envoyer',
+    action_copy_hint: 'Copie le lien pour le coller ailleurs',
+    action_resend_hint: 'Renvoie le même e-mail à la même adresse',
+    action_register_hint: 'Ouvre le formulaire d’inscription — remplissez-le avec la personne',
+    fix_data_hint: 'Corrige uniquement notre liste — n’inscrit personne',
 
     skip: 'Passer',
     save_next: 'Enregistrer → Suivant',
@@ -421,10 +442,13 @@ const I18N = {
 
     attended_2025: '2025’te geldi',
     tel_link: 'Ara',
+    pill_A: '2025’te rozeti vardı — aktive edilecek',
+    pill_B: '2026’ya kayıtlı',
+    pill_C: 'Henüz kayıtsız',
     mail_sent: 'E-posta gönderildi',
     mail_pending: 'E-posta beklemede',
     mail_failed: 'E-posta başarısız',
-    mail_none: 'Henüz e-posta yok',
+    mail_none: 'Henüz e-posta gönderilmedi',
     opened_yes: 'açıldı',
     opened_no: 'açılmadı',
     clicked_yes: 'tıklandı',
@@ -461,6 +485,11 @@ const I18N = {
     action_resend: 'E-postayı tekrar gönder',
     action_register: 'Şimdi kaydet',
     resend_hint: 'E-posta yanlış mı? Şimdi kaydet düğmesini kullanın — aktivasyon bağlantısı eski adrese bağlı.',
+    action_whatsapp_hint: 'WhatsApp’ı bağlantı hazır olarak açar',
+    action_copy_hint: 'Bağlantıyı başka bir yere yapıştırmak için kopyalar',
+    action_resend_hint: 'Aynı e-postayı aynı adrese tekrar gönderir',
+    action_register_hint: 'Kayıt formunu açar — kişiyle birlikte doldurun',
+    fix_data_hint: 'Sadece listemizi düzeltir — kimseyi kaydetmez',
 
     skip: 'Atla',
     save_next: 'Kaydet → Sonraki',
@@ -595,7 +624,14 @@ async function ccFetch(path, opts = {}) {
   const url = `/api/callcenter${path}${sep}agent=${encodeURIComponent(agent)}`;
   const headers = { 'x-callcenter-key': key, 'content-type': 'application/json', ...(opts.headers || {}) };
   const r = await fetch(url, { ...opts, headers });
-  if (r.status === 401 || r.status === 400) {
+  // Auth-only statuses drop to splash: 401 (wrong/missing key or agent) +
+  // 503 (env var CALLCENTER_KEY not set on the server). Business errors —
+  // 400 (bad outcome/segment/id), 404 (route missing), 409 (not owned),
+  // 429 (cooldown), 500 (server) — are returned to the caller so their own
+  // `else { toast(j.error) }` branch shows the server's message and keeps
+  // the current card. Yaprak's Resend on a token-less lead was 400 and was
+  // dropping to splash before this fix (Stage 4c-a, 7 Sep).
+  if (r.status === 401 || r.status === 503) {
     sessionStorage.removeItem('cc_key');
     sessionStorage.removeItem('cc_agent');
     toast(t('session_ended'), 3000);
@@ -657,12 +693,15 @@ async function loadNext() {
 function renderCard(lead) {
   const container = document.getElementById('cardContainer');
   const seg = lead.segment;
-  const segLabelKey = seg === 'A' ? 'segment_A' : (seg === 'B' ? 'segment_B' : 'segment_C');
+  // Plain-language pill label (Stage 4c-b) — was `segment_A.split(' — ')[0] + ' · Activate'`
+  // before, which was a mix of technical + brand-side. The pill_* keys read
+  // naturally in all three languages.
+  const pillLabel = t('pill_' + seg);
   const attended = lead.attended_2025 === 'yes';
 
   container.innerHTML = `
     <div class="card-cc">
-      <span class="segment-pill segment-${seg}">${escapeHtml(t(segLabelKey).split(' — ')[0])}${seg === 'A' ? ' · Activate' : seg === 'B' ? ' · Registered' : ' · Register'}</span>
+      <span class="segment-pill segment-${seg}">${escapeHtml(pillLabel)}</span>
       ${(seg === 'A' && attended) ? `<span class="attended-chip"><i class="bi bi-star-fill"></i> ${escapeHtml(t('attended_2025'))}</span>` : ''}
 
       <div class="lead-name">${escapeHtml([lead.first_name, lead.last_name].filter(Boolean).join(' ') || '—')}</div>
@@ -695,15 +734,27 @@ function renderCard(lead) {
       <textarea class="note" id="noteInput" placeholder="${escapeAttr(t('note_placeholder'))}"></textarea>
 
       <div class="action-row">
-        <a class="btn-action wa" href="#" id="btnWhatsApp"><i class="bi bi-whatsapp"></i> ${escapeHtml(t('action_whatsapp'))}</a>
-        <button class="btn-action copy" id="btnCopy"><i class="bi bi-clipboard"></i> ${escapeHtml(t('action_copy'))}</button>
-        ${seg === 'A' ? `<button class="btn-action resend" id="btnResend"><i class="bi bi-envelope-arrow-up"></i> ${escapeHtml(t('action_resend'))}</button>` : ''}
-        <a class="btn-action register" href="/form-public.html?id=59" target="_blank" rel="noopener"><i class="bi bi-pencil-square"></i> ${escapeHtml(t('action_register'))}</a>
+        <div class="action-item">
+          <a class="btn-action wa" href="#" id="btnWhatsApp"><i class="bi bi-whatsapp"></i> ${escapeHtml(t('action_whatsapp'))}</a>
+          <div class="action-hint">${escapeHtml(t('action_whatsapp_hint'))}</div>
+        </div>
+        <div class="action-item">
+          <button class="btn-action copy" id="btnCopy"><i class="bi bi-clipboard"></i> ${escapeHtml(t('action_copy'))}</button>
+          <div class="action-hint">${escapeHtml(t('action_copy_hint'))}</div>
+        </div>
+        ${seg === 'A' ? `<div class="action-item">
+          <button class="btn-action resend" id="btnResend"><i class="bi bi-envelope-arrow-up"></i> ${escapeHtml(t('action_resend'))}</button>
+          <div class="action-hint">${escapeHtml(t('action_resend_hint'))}</div>
+        </div>` : ''}
+        <div class="action-item">
+          <a class="btn-action register" href="/form-public.html?id=59" target="_blank" rel="noopener"><i class="bi bi-pencil-square"></i> ${escapeHtml(t('action_register'))}</a>
+          <div class="action-hint">${escapeHtml(t('action_register_hint'))}</div>
+        </div>
       </div>
       ${seg === 'A' ? `<div class="resend-hint"><i class="bi bi-info-circle"></i> ${escapeHtml(t('resend_hint'))}</div>` : ''}
 
       <details class="fix">
-        <summary>${escapeHtml(t('fix_data'))}</summary>
+        <summary>${escapeHtml(t('fix_data'))} <span class="fix-hint-inline">— ${escapeHtml(t('fix_data_hint'))}</span></summary>
         <label>${escapeHtml(t('field_phone'))}</label>
         <input type="tel" id="fixPhone" value="${escapeAttr(lead.phone || '')}">
         <label>${escapeHtml(t('field_first_name'))}</label>
