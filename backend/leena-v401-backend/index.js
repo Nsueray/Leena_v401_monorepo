@@ -115,6 +115,8 @@ let unsubscribeRoutes;
 try { unsubscribeRoutes = require('./routes/unsubscribes'); console.log('✓ Unsubscribe admin routes loaded'); } catch (err) { console.error('✗ Failed to load unsubscribe routes:', err.message); }
 let campaignBuilderRoutes;
 try { campaignBuilderRoutes = require('./routes/campaignBuilder'); console.log('✓ Campaign Wizard (builder) routes loaded'); } catch (err) { console.error('✗ Failed to load campaignBuilder routes:', err.message); }
+let callcenterRoutes;
+try { callcenterRoutes = require('./routes/callcenter'); console.log('✓ Call-Center routes loaded'); } catch (err) { console.error('✗ Failed to load callcenter routes:', err.message); }
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
@@ -153,6 +155,7 @@ if (commissionRoutes) app.use('/api/commissions', commissionRoutes); // ✅ M2 c
 if (payoutRoutes) app.use('/api/agents', payoutRoutes); // ✅ PAYOUT P1 agent payout + statement
 if (officeRoutes) app.use('/api/offices', officeRoutes); // ✅ PS1 offices reference (read-only)
 if (cashForecastRoutes) app.use('/api/cash-forecast', cashForecastRoutes); // ✅ PS3-B cash forecast (office x due, EUR, derived)
+if (callcenterRoutes) app.use('/api/callcenter', callcenterRoutes); // ✅ Call-center dialer (isolated module — Stage 2, skeleton only)
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
 const authMiddleware = require('./middleware/authMiddleware');

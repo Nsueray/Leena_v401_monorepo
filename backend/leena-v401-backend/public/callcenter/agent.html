@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <title>SIEMA Call Center — Agent</title>
+  <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+  <style>
+    /* Mobile-first — 70% of agents on phones. Base = single column, ≤480px card. */
+    :root {
+      --seg-a: #ea580c;      /* orange — Activate */
+      --seg-b: #059669;      /* green  — Registered (warm) */
+      --seg-c: #2563eb;      /* blue   — Register (cold) */
+      --outcome-will: #059669;
+      --outcome-callback: #d97706;
+      --outcome-red: #dc2626;
+      --outcome-whatsapp: #25d366;
+      --chip-ok: #10b981;
+      --chip-warn: #f59e0b;
+      --chip-bad: #ef4444;
+      --chip-mute: #9ca3af;
+      --bg: #f5f7fa;
+      --card-bg: #fff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --text-muted: #6b7280;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+    a { color: inherit; }
+
+    /* Splash */
+    #splash { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 999; padding: 24px; }
+    #splash .box { max-width: 400px; margin: 40px auto 0; background: white; padding: 24px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); }
+    #splash h2 { margin: 0 0 8px; font-size: 20px; }
+    #splash p { margin: 0 0 16px; color: var(--text-muted); font-size: 14px; }
+    #splash label { display: block; font-size: 12px; color: var(--text-muted); margin-top: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+    #splash input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
+    #splash button { width: 100%; padding: 14px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    #splashError { margin-top: 8px; color: var(--chip-bad); font-size: 13px; display: none; }
+
+    /* Header */
+    header { background: white; border-bottom: 1px solid var(--border); padding: 12px 16px; position: sticky; top: 0; z-index: 50; }
+    header .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    header .brand { font-weight: 700; font-size: 15px; }
+    header .brand small { color: var(--text-muted); font-weight: 400; margin-left: 6px; }
+    header .meta { font-size: 12px; color: var(--text-muted); margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    header select { border: 1px solid var(--border); background: white; padding: 4px 6px; border-radius: 4px; font-size: 12px; }
+    header .lang-btn { background: none; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    header .lang-btn.active { background: #2563eb; color: white; border-color: #2563eb; }
+
+    /* Layout — mobile-first single column, ≥900px slim right rail */
+    .layout { max-width: 480px; margin: 0 auto; padding: 16px 12px 120px; }
+    @media (min-width: 900px) {
+      .layout { display: grid; grid-template-columns: minmax(0, 480px) 260px; gap: 24px; max-width: 780px; padding-bottom: 24px; }
+      .right-rail { position: sticky; top: 80px; align-self: start; }
+    }
+    @media (max-width: 899px) {
+      .right-rail { display: none; }
+    }
+
+    /* Card */
+    .card-cc { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    .segment-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: white; }
+    .segment-A { background: var(--seg-a); }
+    .segment-B { background: var(--seg-b); }
+    .segment-C { background: var(--seg-c); }
+
+    .lead-name { font-size: 18px; font-weight: 700; margin: 10px 0 2px; }
+    .lead-meta { font-size: 13px; color: var(--text-muted); margin-bottom: 12px; }
+
+    .attended-chip { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; background: #fef3c7; color: #92400e; margin-left: 6px; }
+    .attended-chip i { margin-right: 2px; }
+
+    .phone-block { margin: 12px 0; }
+    .phone-block a { display: block; padding: 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; font-size: 22px; font-weight: 700; text-align: center; text-decoration: none; letter-spacing: 1px; }
+    .phone-block a:active { background: #dbeafe; }
+
+    /* Mail-status strip */
+    .status-strip { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 14px; font-size: 12px; }
+    .chip { padding: 3px 8px; border-radius: 999px; display: inline-flex; align-items: center; gap: 4px; font-weight: 500; }
+    .chip-ok { background: #d1fae5; color: #065f46; }
+    .chip-warn { background: #fef3c7; color: #92400e; }
+    .chip-bad { background: #fee2e2; color: #991b1b; }
+    .chip-mute { background: #f3f4f6; color: #4b5563; }
+    .chip .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+    .dot-ok { background: var(--chip-ok); }
+    .dot-warn { background: var(--chip-warn); }
+    .dot-mute { background: var(--chip-mute); }
+
+    /* Script (collapsible) */
+    details.script { background: #f9fafb; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+    details.script summary { cursor: pointer; font-weight: 600; font-size: 13px; color: var(--text-muted); }
+    details.script[open] summary { margin-bottom: 8px; }
+    details.script p { margin: 0; font-size: 14px; line-height: 1.5; color: var(--text); font-style: italic; }
+
+    /* Outcome buttons */
+    .outcomes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 14px 0 12px; }
+    .outcomes.single-col { grid-template-columns: 1fr; }
+    .btn-outcome { min-height: 48px; padding: 10px 8px; border: 1px solid var(--border); border-radius: 8px; background: white; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; touch-action: manipulation; }
+    .btn-outcome:active { transform: scale(0.98); }
+    .btn-outcome.selected { color: white; border-color: transparent; }
+    .btn-outcome.o-will.selected { background: var(--outcome-will); }
+    .btn-outcome.o-callback.selected, .btn-outcome.o-no-answer.selected { background: var(--outcome-callback); }
+    .btn-outcome.o-wrong.selected, .btn-outcome.o-not-interested.selected, .btn-outcome.o-wont-come.selected { background: var(--outcome-red); }
+    .btn-outcome.o-whatsapp.selected { background: var(--outcome-whatsapp); }
+    .btn-outcome.o-registered.selected { background: #64748b; }
+
+    /* Callback hours (revealed on callback selection) */
+    .callback-hours { margin: -4px 0 12px; display: none; }
+    .callback-hours.show { display: block; }
+    .callback-hours label { font-size: 12px; color: var(--text-muted); margin-right: 8px; }
+    .callback-hours select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+
+    /* Note */
+    textarea.note { width: 100%; min-height: 60px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; font-family: inherit; resize: vertical; }
+
+    /* Fix data toggle */
+    details.fix { margin: 12px 0; padding: 10px 12px; border: 1px dashed var(--border); border-radius: 8px; }
+    details.fix summary { cursor: pointer; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    details.fix input { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; margin-top: 4px; margin-bottom: 8px; }
+    details.fix label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    /* Secondary action buttons */
+    .action-row { display: flex; gap: 8px; margin: 10px 0; flex-wrap: wrap; }
+    .btn-action { flex: 1 1 45%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--border); background: white; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; color: var(--text); touch-action: manipulation; }
+    .btn-action:active { transform: scale(0.98); }
+    .btn-action.wa { background: #25d366; color: white; border-color: #25d366; }
+    .btn-action.copy { background: #f3f4f6; }
+    .btn-action.resend { background: #2563eb; color: white; border-color: #2563eb; }
+    .btn-action.resend:disabled { background: #9ca3af; border-color: #9ca3af; cursor: not-allowed; }
+    .btn-action.register { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
+
+    /* Sticky bottom bar for skip/save (mobile — the thumbs-reach zone) */
+    .sticky-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 8px; z-index: 40; }
+    .sticky-bar button { flex: 1; min-height: 52px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; border: 1px solid var(--border); touch-action: manipulation; }
+    .sticky-bar .btn-skip { background: white; color: var(--text); }
+    .sticky-bar .btn-save { background: #2563eb; color: white; border-color: #2563eb; flex: 2; }
+    .sticky-bar .btn-save:disabled { background: #9ca3af; border-color: #9ca3af; cursor: not-allowed; }
+    @media (min-width: 900px) {
+      .sticky-bar { position: static; padding: 10px 0 0; border-top: none; }
+    }
+
+    /* Right rail (desktop only) */
+    .right-rail { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+    .right-rail h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); margin: 0 0 12px; }
+    .tally-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+    .tally-row:last-child { border-bottom: none; }
+    .tally-row .n { font-weight: 700; }
+    .tally-total { padding-top: 8px; margin-top: 4px; border-top: 2px solid var(--border); font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; }
+    .pool-block { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); }
+    .pool-block strong { color: var(--text); }
+
+    /* Empty state */
+    .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); }
+    .empty .big { font-size: 48px; margin-bottom: 12px; }
+
+    /* Toast */
+    #toast { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%); background: #111; color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 200; display: none; max-width: 360px; text-align: center; }
+
+    /* Loading */
+    .loading { text-align: center; padding: 40px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+
+<!-- Splash: key + agent name (only once, then sessionStorage) -->
+<div id="splash">
+  <div class="box">
+    <h2 data-i18n="splash_title">SIEMA Call Center</h2>
+    <p data-i18n="splash_intro">Enter the access key and your name to start.</p>
+    <label data-i18n="splash_key">Access key</label>
+    <input type="password" id="splashKey" autocomplete="off" autocorrect="off" autocapitalize="off">
+    <label data-i18n="splash_agent">Your name</label>
+    <input type="text" id="splashAgent" autocomplete="off">
+    <button id="splashEnter" data-i18n="splash_enter">Enter</button>
+    <div id="splashError" data-i18n="splash_wrong_key">Invalid key</div>
+  </div>
+</div>
+
+<!-- Main -->
+<div id="main" style="display:none;">
+  <header>
+    <div class="row">
+      <div class="brand">SIEMA <small id="agentDisplay">…</small></div>
+      <div>
+        <button class="lang-btn" id="langEn">EN</button>
+        <button class="lang-btn" id="langFr">FR</button>
+      </div>
+    </div>
+    <div class="meta">
+      <span data-i18n="segment_label">Segment:</span>
+      <select id="segmentSelect">
+        <option value="any" data-i18n="segment_any">Any</option>
+        <option value="A" data-i18n="segment_A">A — Activate (past visitors)</option>
+        <option value="B" data-i18n="segment_B">B — Already registered (warm)</option>
+        <option value="C" data-i18n="segment_C">C — Register (cold)</option>
+      </select>
+      <span id="metaPool"></span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <main>
+      <div id="cardContainer">
+        <div class="loading" data-i18n="loading">Loading…</div>
+      </div>
+    </main>
+
+    <aside class="right-rail" id="rightRail" style="display:none;">
+      <h3 data-i18n="your_session">Your session</h3>
+      <div id="tallyBody"></div>
+      <div class="pool-block" id="poolBlock"></div>
+    </aside>
+  </div>
+
+  <div class="sticky-bar" id="stickyBar" style="display:none;">
+    <button class="btn-skip" id="btnSkip" data-i18n="skip">Skip</button>
+    <button class="btn-save" id="btnSave" data-i18n="save_next">Save → Next</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ================================================================
+// i18n — single object per page (design §4)
+// ================================================================
+const I18N = {
+  en: {
+    splash_title: 'SIEMA Call Center',
+    splash_intro: 'Enter the access key and your name to start.',
+    splash_key: 'Access key',
+    splash_agent: 'Your name',
+    splash_enter: 'Enter',
+    splash_wrong_key: 'Invalid key or agent name',
+    segment_label: 'Segment:',
+    segment_A: 'A — Activate (past visitors)',
+    segment_B: 'B — Already registered (warm)',
+    segment_C: 'C — Register (cold)',
+    segment_any: 'Any',
+    loading: 'Loading…',
+    no_leads: 'No leads left in this segment. Good work!',
+
+    attended_2025: 'Came in 2025',
+    tel_link: 'Call',
+    mail_sent: 'Mail sent',
+    mail_pending: 'Mail pending',
+    mail_failed: 'Mail failed',
+    mail_none: 'No mail yet',
+    opened_yes: 'opened',
+    opened_no: 'not opened',
+    clicked_yes: 'clicked',
+    registered_on: 'Registered on',
+    badge_mail_sent: 'badge mail sent',
+    badge_mail_none: 'badge mail not sent',
+
+    script_toggle: 'Script',
+    script_A: "Hello, I'm calling from SIEMA FoodExpo 2026, in Casablanca 22-24 September. You visited us in 2025 — would you like me to resend your entry pass?",
+    script_B: "Hello, I'm calling to confirm your registration for SIEMA FoodExpo 2026, 22-24 September in Casablanca. Have you received your entry pass?",
+    script_C: "Hello, I'm calling from SIEMA FoodExpo 2026, in Casablanca 22-24 September — the largest food-industry expo in Morocco. May I send you a free entry pass?",
+
+    outcome_will: 'Will come',
+    outcome_wont: "Won't come",
+    outcome_whatsapp: 'No mail → WhatsApp',
+    outcome_callback: 'Callback',
+    outcome_no_answer: 'No answer',
+    outcome_wrong: 'Wrong number',
+    outcome_not_interested: 'Not interested',
+    outcome_registered: 'Already registered',
+    note_placeholder: 'Note (optional)',
+    callback_in: 'Call back in',
+    hours: 'hours',
+
+    fix_data: 'Fix data',
+    field_phone: 'Phone',
+    field_first_name: 'First name',
+    field_last_name: 'Last name',
+    field_company: 'Company',
+    field_email: 'Email',
+
+    action_whatsapp: 'WhatsApp',
+    action_copy: 'Copy link',
+    action_resend: 'Resend email',
+    action_register: 'Register now',
+
+    skip: 'Skip',
+    save_next: 'Save → Next',
+
+    your_session: 'Your session',
+    tally_calls: 'Calls',
+    tally_will: 'Will come',
+    tally_whatsapp: 'WhatsApp sent',
+    tally_callback: 'Callback',
+    tally_no_answer: 'No answer',
+    tally_wrong: 'Wrong number',
+    pool_remaining: 'Pool remaining:',
+
+    // Outcome-required message
+    select_outcome: 'Select an outcome first',
+
+    // WhatsApp prefilled messages (interpolate {url})
+    wa_A: 'Hello, this is Elan Expo for SIEMA FoodExpo 2026 (22-24 Sep, Casablanca). Your entry pass — one click: {url}',
+    wa_B: 'Hello, this is Elan Expo for SIEMA FoodExpo 2026 (22-24 Sep, Casablanca). Here is your entry link: {url}',
+    wa_C: 'Hello, this is Elan Expo for SIEMA FoodExpo 2026 (22-24 Sep, Casablanca). Register free here: {url}',
+
+    saved: 'Saved',
+    released: 'Released back to pool',
+    copied: 'Link copied',
+    resend_ok: 'Email queued',
+    resend_cooldown: 'Cooldown active — try again shortly',
+    error_generic: 'Something went wrong. Try again.',
+    session_ended: 'Session ended — refresh to continue'
+  },
+  fr: {
+    splash_title: 'SIEMA Call Center',
+    splash_intro: 'Entrez la clé d’accès et votre prénom.',
+    splash_key: 'Clé d’accès',
+    splash_agent: 'Votre prénom',
+    splash_enter: 'Entrer',
+    splash_wrong_key: 'Clé ou nom invalide',
+    segment_label: 'Segment :',
+    segment_A: 'A — Réactivation (anciens visiteurs)',
+    segment_B: 'B — Déjà inscrit (rappel)',
+    segment_C: 'C — Inscription (froid)',
+    segment_any: 'Tout',
+    loading: 'Chargement…',
+    no_leads: 'Plus de fiches dans ce segment. Bien joué !',
+
+    attended_2025: 'Est venu en 2025',
+    tel_link: 'Appeler',
+    mail_sent: 'E-mail envoyé',
+    mail_pending: 'E-mail en attente',
+    mail_failed: 'E-mail échoué',
+    mail_none: 'Pas d’e-mail',
+    opened_yes: 'ouvert',
+    opened_no: 'pas ouvert',
+    clicked_yes: 'cliqué',
+    registered_on: 'Inscrit le',
+    badge_mail_sent: 'badge envoyé',
+    badge_mail_none: 'badge non envoyé',
+
+    script_toggle: 'Script',
+    script_A: 'Bonjour, je vous appelle du SIEMA FoodExpo 2026, à Casablanca du 22 au 24 septembre. Vous nous aviez rendu visite en 2025 — souhaitez-vous que je vous renvoie votre laissez-passer ?',
+    script_B: 'Bonjour, j’appelle pour confirmer votre inscription au SIEMA FoodExpo 2026, du 22 au 24 septembre à Casablanca. Avez-vous bien reçu votre laissez-passer ?',
+    script_C: 'Bonjour, je vous appelle du SIEMA FoodExpo 2026, à Casablanca du 22 au 24 septembre — le plus grand salon agroalimentaire du Maroc. Puis-je vous envoyer une entrée gratuite ?',
+
+    outcome_will: 'Viendra',
+    outcome_wont: 'Ne viendra pas',
+    outcome_whatsapp: 'Pas d’e-mail → WhatsApp',
+    outcome_callback: 'Rappel',
+    outcome_no_answer: 'Sans réponse',
+    outcome_wrong: 'Mauvais numéro',
+    outcome_not_interested: 'Pas intéressé',
+    outcome_registered: 'Déjà inscrit',
+    note_placeholder: 'Note (facultatif)',
+    callback_in: 'Rappeler dans',
+    hours: 'heures',
+
+    fix_data: 'Corriger les données',
+    field_phone: 'Téléphone',
+    field_first_name: 'Prénom',
+    field_last_name: 'Nom',
+    field_company: 'Société',
+    field_email: 'E-mail',
+
+    action_whatsapp: 'WhatsApp',
+    action_copy: 'Copier le lien',
+    action_resend: 'Renvoyer l’e-mail',
+    action_register: 'Inscrire maintenant',
+
+    skip: 'Passer',
+    save_next: 'Enregistrer → Suivant',
+
+    your_session: 'Votre session',
+    tally_calls: 'Appels',
+    tally_will: 'Viendra',
+    tally_whatsapp: 'WhatsApp envoyé',
+    tally_callback: 'Rappel',
+    tally_no_answer: 'Sans réponse',
+    tally_wrong: 'Mauvais numéro',
+    pool_remaining: 'File d’attente :',
+
+    select_outcome: 'Sélectionnez un résultat',
+
+    wa_A: 'Bonjour, Elan Expo pour SIEMA FoodExpo 2026 (22-24 sept., Casablanca). Votre laissez-passer en un clic : {url}',
+    wa_B: 'Bonjour, Elan Expo pour SIEMA FoodExpo 2026 (22-24 sept., Casablanca). Voici votre lien d’entrée : {url}',
+    wa_C: 'Bonjour, Elan Expo pour SIEMA FoodExpo 2026 (22-24 sept., Casablanca). Inscription gratuite ici : {url}',
+
+    saved: 'Enregistré',
+    released: 'Retour à la file',
+    copied: 'Lien copié',
+    resend_ok: 'E-mail en file d’attente',
+    resend_cooldown: 'Attente en cours — réessayez dans quelques instants',
+    error_generic: 'Une erreur est survenue. Réessayez.',
+    session_ended: 'Session expirée — rechargez la page'
+  }
+};
+
+let lang = (new URLSearchParams(location.search).get('lang') === 'fr' || sessionStorage.getItem('cc_lang') === 'fr') ? 'fr' : 'en';
+function t(key, params) {
+  let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  if (params) for (const k in params) s = s.replace(`{${k}}`, params[k]);
+  return s;
+}
+function applyI18nAttributes() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const k = el.getAttribute('data-i18n');
+    const s = t(k);
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.setAttribute('placeholder', s);
+    else el.textContent = s;
+  });
+  document.getElementById('langEn').classList.toggle('active', lang === 'en');
+  document.getElementById('langFr').classList.toggle('active', lang === 'fr');
+}
+function setLang(l) {
+  lang = l;
+  sessionStorage.setItem('cc_lang', l);
+  applyI18nAttributes();
+  if (currentLead) renderCard(currentLead);
+}
+document.getElementById('langEn').onclick = () => setLang('en');
+document.getElementById('langFr').onclick = () => setLang('fr');
+
+// ================================================================
+// Splash + auth
+// ================================================================
+function getAuth() {
+  return { key: sessionStorage.getItem('cc_key') || '', agent: sessionStorage.getItem('cc_agent') || '' };
+}
+function showSplash() {
+  document.getElementById('splash').style.display = 'block';
+  document.getElementById('main').style.display = 'none';
+  document.getElementById('splashKey').focus();
+}
+function hideSplash() {
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('main').style.display = 'block';
+  const { agent } = getAuth();
+  document.getElementById('agentDisplay').textContent = agent;
+}
+document.getElementById('splashEnter').onclick = () => splashSubmit();
+document.getElementById('splashKey').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('splashAgent').focus(); });
+document.getElementById('splashAgent').addEventListener('keydown', e => { if (e.key === 'Enter') splashSubmit(); });
+async function splashSubmit() {
+  const key = document.getElementById('splashKey').value.trim();
+  const agent = document.getElementById('splashAgent').value.trim();
+  if (!key || !agent) { document.getElementById('splashError').style.display = 'block'; return; }
+  // Test the credentials with a lightweight ping — /stats/me hits both agent + key.
+  const r = await fetch(`/api/callcenter/stats/me?agent=${encodeURIComponent(agent)}`, {
+    headers: { 'x-callcenter-key': key }
+  }).catch(() => null);
+  if (!r || (r.status !== 200 && r.status !== 400)) {
+    // 400 is "bad agent shape" — surface as a wrong-key/wrong-agent message.
+    document.getElementById('splashError').style.display = 'block';
+    return;
+  }
+  sessionStorage.setItem('cc_key', key);
+  sessionStorage.setItem('cc_agent', agent);
+  hideSplash();
+  init();
+}
+
+// ================================================================
+// State
+// ================================================================
+let currentLead = null;
+let selectedOutcome = null;
+let callbackHours = 1;
+let resendCooldownUntil = 0;
+
+// ================================================================
+// Toast
+// ================================================================
+function toast(msg, ms = 1800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(el._to);
+  el._to = setTimeout(() => { el.style.display = 'none'; }, ms);
+}
+
+// ================================================================
+// Fetch wrapper
+// ================================================================
+async function ccFetch(path, opts = {}) {
+  const { key, agent } = getAuth();
+  const sep = path.includes('?') ? '&' : '?';
+  const url = `/api/callcenter${path}${sep}agent=${encodeURIComponent(agent)}`;
+  const headers = { 'x-callcenter-key': key, 'content-type': 'application/json', ...(opts.headers || {}) };
+  const r = await fetch(url, { ...opts, headers });
+  if (r.status === 401 || r.status === 400) {
+    sessionStorage.removeItem('cc_key');
+    sessionStorage.removeItem('cc_agent');
+    toast(t('session_ended'), 3000);
+    setTimeout(showSplash, 1200);
+    throw new Error('auth');
+  }
+  return r;
+}
+
+// ================================================================
+// Init
+// ================================================================
+function init() {
+  applyI18nAttributes();
+  document.getElementById('segmentSelect').value = sessionStorage.getItem('cc_segment') || 'any';
+  document.getElementById('segmentSelect').onchange = () => {
+    sessionStorage.setItem('cc_segment', document.getElementById('segmentSelect').value);
+    loadNext();
+  };
+  document.getElementById('btnSkip').onclick = doSkip;
+  document.getElementById('btnSave').onclick = doSave;
+  loadNext();
+  if (window.matchMedia && window.matchMedia('(min-width: 900px)').matches) {
+    document.getElementById('rightRail').style.display = 'block';
+    refreshTally();
+    setInterval(refreshTally, 30000);
+  }
+}
+
+// ================================================================
+// Load next
+// ================================================================
+async function loadNext() {
+  currentLead = null;
+  selectedOutcome = null;
+  document.getElementById('cardContainer').innerHTML = `<div class="loading">${escapeHtml(t('loading'))}</div>`;
+  document.getElementById('stickyBar').style.display = 'none';
+  try {
+    const segment = document.getElementById('segmentSelect').value || 'any';
+    const r = await ccFetch('/next', { method: 'POST', body: JSON.stringify({ segment }) });
+    const j = await r.json();
+    if (!j.success) { toast(t('error_generic')); return; }
+    updatePoolMeta(j.remaining_pool);
+    if (!j.lead) {
+      document.getElementById('cardContainer').innerHTML = `<div class="empty"><div class="big">🎉</div><div>${escapeHtml(t('no_leads'))}</div></div>`;
+      return;
+    }
+    currentLead = j.lead;
+    renderCard(j.lead);
+    refreshTally();
+  } catch (e) {
+    if (e.message !== 'auth') { console.error(e); toast(t('error_generic')); }
+  }
+}
+
+// ================================================================
+// Render card
+// ================================================================
+function renderCard(lead) {
+  const container = document.getElementById('cardContainer');
+  const seg = lead.segment;
+  const segLabelKey = seg === 'A' ? 'segment_A' : (seg === 'B' ? 'segment_B' : 'segment_C');
+  const attended = lead.attended_2025 === 'yes';
+
+  container.innerHTML = `
+    <div class="card-cc">
+      <span class="segment-pill segment-${seg}">${escapeHtml(t(segLabelKey).split(' — ')[0])}${seg === 'A' ? ' · Activate' : seg === 'B' ? ' · Registered' : ' · Register'}</span>
+      ${(seg === 'A' && attended) ? `<span class="attended-chip"><i class="bi bi-star-fill"></i> ${escapeHtml(t('attended_2025'))}</span>` : ''}
+
+      <div class="lead-name">${escapeHtml([lead.first_name, lead.last_name].filter(Boolean).join(' ') || '—')}</div>
+      <div class="lead-meta">
+        ${escapeHtml(lead.company || '')}${lead.company && lead.country ? ' · ' : ''}${escapeHtml(lead.country || '')}
+      </div>
+
+      <div class="phone-block">
+        <a href="tel:${escapeAttr(lead.phone)}">📞 ${escapeHtml(lead.phone)}</a>
+      </div>
+
+      ${renderStatusStrip(lead)}
+
+      <details class="script">
+        <summary>${escapeHtml(t('script_toggle'))}</summary>
+        <p>${escapeHtml(t('script_' + seg))}</p>
+      </details>
+
+      <div id="outcomeBlock">${renderOutcomeButtons(seg)}</div>
+      <div class="callback-hours" id="callbackHours">
+        <label>${escapeHtml(t('callback_in'))}</label>
+        <select id="callbackHoursSelect">
+          <option value="1">1 ${t('hours')}</option>
+          <option value="2">2 ${t('hours')}</option>
+          <option value="4">4 ${t('hours')}</option>
+          <option value="24">24 ${t('hours')}</option>
+        </select>
+      </div>
+
+      <textarea class="note" id="noteInput" placeholder="${escapeAttr(t('note_placeholder'))}"></textarea>
+
+      <div class="action-row">
+        <a class="btn-action wa" href="#" id="btnWhatsApp"><i class="bi bi-whatsapp"></i> ${escapeHtml(t('action_whatsapp'))}</a>
+        <button class="btn-action copy" id="btnCopy"><i class="bi bi-clipboard"></i> ${escapeHtml(t('action_copy'))}</button>
+        ${seg === 'A' ? `<button class="btn-action resend" id="btnResend"><i class="bi bi-envelope-arrow-up"></i> ${escapeHtml(t('action_resend'))}</button>` : ''}
+        <a class="btn-action register" href="/form-public.html?id=59" target="_blank" rel="noopener"><i class="bi bi-pencil-square"></i> ${escapeHtml(t('action_register'))}</a>
+      </div>
+
+      <details class="fix">
+        <summary>${escapeHtml(t('fix_data'))}</summary>
+        <label>${escapeHtml(t('field_phone'))}</label>
+        <input type="tel" id="fixPhone" value="${escapeAttr(lead.phone || '')}">
+        <label>${escapeHtml(t('field_first_name'))}</label>
+        <input type="text" id="fixFirstName" value="${escapeAttr(lead.first_name || '')}">
+        <label>${escapeHtml(t('field_last_name'))}</label>
+        <input type="text" id="fixLastName" value="${escapeAttr(lead.last_name || '')}">
+        <label>${escapeHtml(t('field_company'))}</label>
+        <input type="text" id="fixCompany" value="${escapeAttr(lead.company || '')}">
+        <label>${escapeHtml(t('field_email'))}</label>
+        <input type="email" id="fixEmail" value="${escapeAttr(lead.email || '')}">
+      </details>
+    </div>
+  `;
+  document.getElementById('stickyBar').style.display = 'flex';
+  document.getElementById('btnSave').disabled = true;
+  // Wire action buttons
+  document.getElementById('btnWhatsApp').onclick = (e) => { e.preventDefault(); openWhatsApp(lead); };
+  document.getElementById('btnCopy').onclick = () => copyActionLink(lead);
+  const resendBtn = document.getElementById('btnResend');
+  if (resendBtn) resendBtn.onclick = doResend;
+  // Outcome buttons
+  document.querySelectorAll('.btn-outcome').forEach(btn => {
+    btn.onclick = () => selectOutcome(btn.dataset.outcome);
+  });
+}
+
+function renderStatusStrip(lead) {
+  const chips = [];
+  if (lead.segment === 'B') {
+    // B: registration + badge-mail
+    if (lead.mail_status === 'sent' && lead.mail_sent_at) {
+      chips.push(`<span class="chip chip-ok"><i class="bi bi-envelope-check"></i> ${escapeHtml(t('badge_mail_sent'))} · ${escapeHtml(fmtCasa(lead.mail_sent_at))}</span>`);
+    } else if (lead.mail_status === 'pending') {
+      chips.push(`<span class="chip chip-mute">⏳ ${escapeHtml(t('mail_pending'))}</span>`);
+    } else if (lead.mail_status === 'failed') {
+      chips.push(`<span class="chip chip-bad">⚠️ ${escapeHtml(t('mail_failed'))}</span>`);
+    } else {
+      chips.push(`<span class="chip chip-mute">${escapeHtml(t('badge_mail_none'))}</span>`);
+    }
+  } else {
+    // A / C: campaign mail + open + click
+    if (lead.mail_status === 'sent' && lead.mail_sent_at) {
+      chips.push(`<span class="chip chip-ok"><i class="bi bi-envelope-check"></i> ${escapeHtml(t('mail_sent'))} · ${escapeHtml(fmtCasa(lead.mail_sent_at))}</span>`);
+    } else if (lead.mail_status === 'pending') {
+      chips.push(`<span class="chip chip-mute">⏳ ${escapeHtml(t('mail_pending'))}</span>`);
+    } else if (lead.mail_status === 'failed') {
+      chips.push(`<span class="chip chip-bad">⚠️ ${escapeHtml(t('mail_failed'))}</span>`);
+    } else {
+      chips.push(`<span class="chip chip-mute">${escapeHtml(t('mail_none'))}</span>`);
+    }
+    // Opened
+    if (lead.opened_at) {
+      chips.push(`<span class="chip chip-ok"><span class="dot dot-ok"></span> ${escapeHtml(t('opened_yes'))}</span>`);
+    } else if (lead.mail_status === 'sent') {
+      chips.push(`<span class="chip chip-warn"><span class="dot dot-warn"></span> ${escapeHtml(t('opened_no'))}</span>`);
+    }
+    // Clicked
+    if (lead.clicked_at) {
+      chips.push(`<span class="chip chip-ok"><i class="bi bi-check2-circle"></i> ${escapeHtml(t('clicked_yes'))}</span>`);
+    }
+  }
+  return `<div class="status-strip">${chips.join('')}</div>`;
+}
+
+function renderOutcomeButtons(segment) {
+  // Segment B reduced set (Suer 7 Sep): will / wont / callback / no_answer / wrong.
+  // A + C get the full set. Outcome codes match backend VALID_OUTCOMES.
+  const b = (i18nKey, code, klass) => `<button class="btn-outcome ${klass}" data-outcome="${code}">${escapeHtml(t(i18nKey))}</button>`;
+  if (segment === 'B') {
+    return `<div class="outcomes">
+      ${b('outcome_will',       'mail_will_come',           'o-will')}
+      ${b('outcome_wont',       'mail_wont_come',           'o-wont-come')}
+      ${b('outcome_callback',   'callback',                 'o-callback')}
+      ${b('outcome_no_answer',  'no_answer',                'o-no-answer')}
+      ${b('outcome_wrong',      'wrong_number',             'o-wrong')}
+    </div>`;
+  }
+  return `<div class="outcomes">
+    ${b('outcome_will',           'mail_will_come',          'o-will')}
+    ${b('outcome_wont',           'mail_wont_come',          'o-wont-come')}
+    ${b('outcome_whatsapp',       'no_mail_whatsapp_sent',   'o-whatsapp')}
+    ${b('outcome_callback',       'callback',                'o-callback')}
+    ${b('outcome_no_answer',      'no_answer',               'o-no-answer')}
+    ${b('outcome_wrong',          'wrong_number',            'o-wrong')}
+    ${b('outcome_not_interested', 'not_interested',          'o-not-interested')}
+    ${b('outcome_registered',     'registered_meanwhile',    'o-registered')}
+  </div>`;
+}
+
+function selectOutcome(code) {
+  selectedOutcome = code;
+  document.querySelectorAll('.btn-outcome').forEach(btn => {
+    btn.classList.toggle('selected', btn.dataset.outcome === code);
+  });
+  document.getElementById('callbackHours').classList.toggle('show', code === 'callback');
+  document.getElementById('btnSave').disabled = false;
+}
+
+// ================================================================
+// Actions
+// ================================================================
+function normalizePhoneForWa(phone) {
+  return String(phone || '').replace(/[^\d]/g, ''); // wa.me wants digits only, no +
+}
+
+function buildActionLink(lead) {
+  if (lead.segment === 'A' && lead.reactivation_token) {
+    // reactivate-fr.html for MA, reactivate.html otherwise — matches worker/wizard shape
+    // callcenter_leads.expo_id + expo.country_code isn't available client-side, so use MA-default
+    // for SIEMA (all leads on expo 9). Broaden later.
+    return `${location.origin}/reactivate-fr.html?token=${encodeURIComponent(lead.reactivation_token)}`;
+  }
+  // B or C — form 59 (SIEMA visitor form)
+  return `${location.origin}/form-public.html?id=59`;
+}
+
+function openWhatsApp(lead) {
+  const url = buildActionLink(lead);
+  const msgKey = 'wa_' + lead.segment;
+  const message = t(msgKey, { url });
+  const wa = `https://wa.me/${normalizePhoneForWa(lead.phone)}?text=${encodeURIComponent(message)}`;
+  window.open(wa, '_blank', 'noopener');
+}
+
+async function copyActionLink(lead) {
+  const url = buildActionLink(lead);
+  try {
+    await navigator.clipboard.writeText(url);
+    toast(t('copied'));
+  } catch {
+    // Fallback for browsers without clipboard API
+    const ta = document.createElement('textarea');
+    ta.value = url; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast(t('copied')); } catch {}
+    document.body.removeChild(ta);
+  }
+}
+
+async function doResend() {
+  if (!currentLead) return;
+  const btn = document.getElementById('btnResend');
+  if (Date.now() < resendCooldownUntil) { toast(t('resend_cooldown')); return; }
+  btn.disabled = true;
+  try {
+    const r = await ccFetch(`/resend/${currentLead.id}`, { method: 'POST', body: '{}' });
+    const j = await r.json();
+    if (j.success) {
+      toast(t('resend_ok'));
+      resendCooldownUntil = Date.now() + 2 * 60 * 1000;
+      setTimeout(() => { if (document.getElementById('btnResend')) document.getElementById('btnResend').disabled = false; }, 2 * 60 * 1000);
+    } else if (j.code === 'RESEND_COOLDOWN') {
+      toast(t('resend_cooldown'));
+      resendCooldownUntil = Date.now() + 2 * 60 * 1000;
+    } else {
+      toast(j.error || t('error_generic'));
+      btn.disabled = false;
+    }
+  } catch (e) {
+    if (e.message !== 'auth') { toast(t('error_generic')); btn.disabled = false; }
+  }
+}
+
+async function doSkip() {
+  if (!currentLead) { loadNext(); return; }
+  try {
+    await ccFetch(`/skip/${currentLead.id}`, { method: 'POST', body: '{}' });
+    toast(t('released'));
+    loadNext();
+  } catch (e) {
+    if (e.message !== 'auth') { toast(t('error_generic')); }
+  }
+}
+
+async function doSave() {
+  if (!currentLead) return;
+  if (!selectedOutcome) { toast(t('select_outcome')); return; }
+  const body = {
+    outcome: selectedOutcome,
+    note: document.getElementById('noteInput').value || undefined
+  };
+  if (selectedOutcome === 'callback') {
+    body.callback_hours = parseInt(document.getElementById('callbackHoursSelect').value, 10) || 1;
+  }
+  const patch = {};
+  const cur = currentLead;
+  const readFix = (id, orig) => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const v = el.value.trim();
+    return (v && v !== (orig || '')) ? v : null;
+  };
+  const patchMap = {
+    phone: readFix('fixPhone', cur.phone),
+    first_name: readFix('fixFirstName', cur.first_name),
+    last_name: readFix('fixLastName', cur.last_name),
+    company: readFix('fixCompany', cur.company),
+    email: readFix('fixEmail', cur.email)
+  };
+  for (const k in patchMap) if (patchMap[k] !== null) patch[k] = patchMap[k];
+  if (Object.keys(patch).length > 0) body.patch = patch;
+
+  document.getElementById('btnSave').disabled = true;
+  try {
+    const r = await ccFetch(`/outcome/${currentLead.id}`, { method: 'POST', body: JSON.stringify(body) });
+    const j = await r.json();
+    if (j.success) {
+      toast(t('saved'));
+      loadNext();
+    } else {
+      toast(j.error || t('error_generic'));
+      document.getElementById('btnSave').disabled = false;
+    }
+  } catch (e) {
+    if (e.message !== 'auth') { toast(t('error_generic')); document.getElementById('btnSave').disabled = false; }
+  }
+}
+
+// ================================================================
+// Right rail — tally + pool
+// ================================================================
+async function refreshTally() {
+  if (!document.getElementById('rightRail') || document.getElementById('rightRail').style.display === 'none') return;
+  try {
+    const r = await ccFetch('/stats/me', { method: 'GET' });
+    const j = await r.json();
+    if (!j.success) return;
+    const rows = [
+      ['tally_will',       j.outcomes.mail_will_come         || 0],
+      ['tally_wont',       j.outcomes.mail_wont_come         || 0],
+      ['tally_whatsapp',   j.outcomes.no_mail_whatsapp_sent  || 0],
+      ['tally_callback',   j.outcomes.callback               || 0],
+      ['tally_no_answer',  j.outcomes.no_answer              || 0],
+      ['tally_wrong',      j.outcomes.wrong_number           || 0]
+    ];
+    document.getElementById('tallyBody').innerHTML =
+      rows.map(([k, n]) => `<div class="tally-row"><span>${escapeHtml(t(k))}</span><span class="n">${n}</span></div>`).join('') +
+      `<div class="tally-total"><span>${escapeHtml(t('tally_calls'))}</span><span>${j.calls_today || 0}</span></div>`;
+    document.getElementById('poolBlock').innerHTML =
+      `<div>${escapeHtml(t('pool_remaining'))} <strong>${(j.pool && j.pool.total) || 0}</strong></div>`;
+    updatePoolMeta((j.pool && j.pool.total) || 0);
+  } catch (e) { /* silent */ }
+}
+function updatePoolMeta(n) {
+  document.getElementById('metaPool').textContent = ` · ${t('pool_remaining')} ${n}`;
+}
+
+// ================================================================
+// Utils
+// ================================================================
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function escapeAttr(s) { return escapeHtml(s); }
+function fmtCasa(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat(lang === 'fr' ? 'fr-MA' : 'en-GB', {
+    timeZone: 'Africa/Casablanca',
+    day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+  }).format(d);
+}
+
+// ================================================================
+// Boot
+// ================================================================
+(function boot() {
+  applyI18nAttributes();
+  const { key, agent } = getAuth();
+  // URL params ?agent= and ?key= (query) — one-time convenience for the initial handshake
+  const q = new URLSearchParams(location.search);
+  const qKey = q.get('key');
+  const qAgent = q.get('agent');
+  if (qKey && qAgent && !key) {
+    document.getElementById('splashKey').value = qKey;
+    document.getElementById('splashAgent').value = qAgent;
+    // Clean the URL — never keep credentials in history
+    const clean = new URL(location.href);
+    clean.searchParams.delete('key'); clean.searchParams.delete('agent');
+    history.replaceState({}, '', clean.pathname + (clean.search || ''));
+  }
+  if (!key || !agent) { showSplash(); return; }
+  hideSplash();
+  init();
+})();
+</script>
+</body>
+</html>

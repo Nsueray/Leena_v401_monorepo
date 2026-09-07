@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SIEMA Call Center — Admin</title>
+  <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css">
+  <style>
+    /* Same styles as supervisor.html — kept in sync manually (small enough surface). */
+    :root {
+      --bg: #f5f7fa; --card: #fff; --border: #e5e7eb;
+      --text: #111827; --muted: #6b7280;
+      --ok: #059669; --warn: #d97706; --bad: #dc2626; --info: #2563eb; --wa: #25d366;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; -webkit-text-size-adjust: 100%; }
+
+    /* Splash — JWT redirect if missing */
+    #splash { display: none; position: fixed; inset: 0; background: var(--bg); z-index: 999; padding: 24px; text-align: center; padding-top: 80px; }
+    #splash h2 { font-size: 20px; }
+    #splash p { color: var(--muted); font-size: 14px; }
+    #splash a { display: inline-block; margin-top: 20px; padding: 12px 24px; background: var(--info); color: white; text-decoration: none; border-radius: 8px; font-weight: 600; }
+
+    header { background: white; border-bottom: 1px solid var(--border); padding: 12px 16px; position: sticky; top: 0; z-index: 50; }
+    header .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    header .brand { font-weight: 700; font-size: 15px; }
+    header .brand small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+    header .meta { font-size: 12px; color: var(--muted); margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+    header .lang-btn { background: none; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px; cursor: pointer; }
+    header .lang-btn.active { background: var(--info); color: white; border-color: var(--info); }
+    header .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 4px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% {opacity:1;} 50% {opacity:0.4;} }
+
+    .container-cc { max-width: 1200px; margin: 0 auto; padding: 16px 12px 40px; }
+
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+    .kpi .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .kpi .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .kpi.will .value { color: var(--ok); }
+    .kpi.wa .value { color: var(--wa); }
+    .kpi.reg .value { color: var(--info); }
+
+    .section { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+    .section h3 { margin: 0 0 12px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }
+
+    .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    table.cc { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
+    table.cc th, table.cc td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+    table.cc th { background: #f9fafb; font-weight: 600; color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; }
+    table.cc td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    table.cc tr:hover { background: #f9fafb; }
+
+    .bar-row { display: grid; grid-template-columns: 160px 1fr 60px; gap: 8px; align-items: center; margin-bottom: 6px; font-size: 13px; }
+    .bar-track { background: #f3f4f6; border-radius: 999px; height: 14px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--info); border-radius: 999px; transition: width 0.3s; }
+    .bar-fill.o-will { background: var(--ok); }
+    .bar-fill.o-wa { background: var(--wa); }
+    .bar-fill.o-callback, .bar-fill.o-no-answer { background: var(--warn); }
+    .bar-fill.o-wrong, .bar-fill.o-not-int { background: var(--bad); }
+    .bar-fill.o-reg { background: #64748b; }
+    .bar-n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+
+    .hourly { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; align-items: end; height: 100px; padding: 0 4px; }
+    .hourly .bar { background: var(--info); border-radius: 3px 3px 0 0; min-height: 2px; position: relative; }
+    .hourly .bar:hover::after { content: attr(data-tt); position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); background: #111; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; white-space: nowrap; }
+    .hourly-labels { display: grid; grid-template-columns: repeat(24, 1fr); gap: 2px; font-size: 10px; color: var(--muted); text-align: center; margin-top: 2px; padding: 0 4px; }
+    .hourly-labels span { visibility: hidden; }
+    .hourly-labels span:nth-child(4n+1) { visibility: visible; }
+
+    .last-20 { font-size: 13px; }
+    .last-20 .row-l { display: grid; grid-template-columns: 90px 40px auto auto 1fr; gap: 8px; padding: 6px 0; border-bottom: 1px solid #f3f4f6; align-items: center; }
+    .last-20 .t { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .last-20 .s { font-weight: 700; }
+    .last-20 .s-A { color: #ea580c; } .last-20 .s-B { color: var(--ok); } .last-20 .s-C { color: var(--info); }
+    .last-20 .o { padding: 2px 6px; border-radius: 999px; background: #f3f4f6; font-size: 11px; }
+    .last-20 .o.o-will { background: #d1fae5; color: #065f46; }
+    .last-20 .o.o-wa { background: #dcfce7; color: #14532d; }
+    .last-20 .o.o-callback, .last-20 .o.o-no-answer { background: #fef3c7; color: #92400e; }
+    .last-20 .o.o-wrong, .last-20 .o.o-not-int { background: #fee2e2; color: #991b1b; }
+    .last-20 .o.o-reg { background: #e5e7eb; color: #374151; }
+    @media (max-width: 640px) {
+      .last-20 .row-l { grid-template-columns: 70px 30px 1fr; }
+      .last-20 .row-l .name-cell, .last-20 .row-l .agent-cell { display: none; }
+    }
+
+    .cached-banner { background: #fef3c7; color: #92400e; padding: 6px 10px; border-radius: 6px; font-size: 12px; display: none; margin-bottom: 12px; }
+    .cached-banner.show { display: block; }
+
+    /* Admin action bar */
+    .admin-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+    .admin-actions button { padding: 10px 16px; border: 1px solid var(--border); background: white; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+    .admin-actions button:disabled { background: #f3f4f6; color: var(--muted); cursor: not-allowed; }
+    .admin-actions .primary { background: var(--info); color: white; border-color: var(--info); }
+    .admin-actions .primary:disabled { background: #93c5fd; border-color: #93c5fd; }
+
+    #toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #111; color: white; padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 200; display: none; max-width: 360px; text-align: center; }
+  </style>
+</head>
+<body>
+
+<div id="splash">
+  <h2 data-i18n="splash_title">Admin login required</h2>
+  <p data-i18n="splash_intro">This page needs a Leena admin session.</p>
+  <a href="/login.html" data-i18n="splash_go_login">Go to login</a>
+</div>
+
+<div id="main" style="display:none;">
+  <header>
+    <div class="row">
+      <div class="brand">SIEMA <small data-i18n="admin_label">Admin · Live</small></div>
+      <div>
+        <button class="lang-btn" id="langEn">EN</button>
+        <button class="lang-btn" id="langFr">FR</button>
+      </div>
+    </div>
+    <div class="meta">
+      <span><span class="live-dot"></span><span data-i18n="last_update">Last update</span>: <span id="lastUpdate">—</span></span>
+      <span data-i18n="auto_refresh_note">Auto-refresh every 30 s</span>
+    </div>
+  </header>
+
+  <div class="container-cc">
+    <div class="cached-banner" id="cachedBanner" data-i18n="cached_note">Showing cached data (updated within the last 15 s).</div>
+
+    <!-- Admin actions -->
+    <div class="admin-actions">
+      <button class="primary" id="btnExport"><i class="bi bi-download"></i> <span data-i18n="export_xlsx">Export xlsx</span></button>
+      <button id="btnReport"><i class="bi bi-envelope"></i> <span data-i18n="send_report_now">Send daily report now</span></button>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi"><div class="label" data-i18n="kpi_calls_today">Calls today</div><div class="value" id="kpiCalls">—</div></div>
+      <div class="kpi will"><div class="label" data-i18n="kpi_will_come">Will come</div><div class="value" id="kpiWill">—</div></div>
+      <div class="kpi wa"><div class="label" data-i18n="kpi_whatsapp_sent">WhatsApp sent</div><div class="value" id="kpiWa">—</div></div>
+      <div class="kpi reg"><div class="label" data-i18n="kpi_reg_after">Registered after call</div><div class="value" id="kpiReg">—</div></div>
+    </div>
+
+    <div class="section">
+      <h3 data-i18n="per_agent">Per agent</h3>
+      <div class="table-scroll">
+        <table class="cc" id="perAgentTable">
+          <thead>
+            <tr>
+              <th data-i18n="th_agent">Agent</th>
+              <th class="num" data-i18n="th_calls">Calls</th>
+              <th class="num" data-i18n="th_will">Will come</th>
+              <th class="num" data-i18n="th_wa">WhatsApp</th>
+              <th class="num" data-i18n="th_callback">Callback</th>
+              <th class="num" data-i18n="th_no_answer">No answer</th>
+              <th class="num" data-i18n="th_wrong">Wrong #</th>
+              <th class="num" data-i18n="th_reg_after">Reg. after</th>
+              <th class="num" data-i18n="th_checked_in">Checked in</th>
+              <th data-i18n="th_last_call">Last call</th>
+            </tr>
+          </thead>
+          <tbody id="perAgentBody"><tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;" data-i18n="loading">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <h3 data-i18n="outcome_bars">Outcome breakdown</h3>
+      <div id="outcomeBars"></div>
+    </div>
+
+    <div class="section">
+      <h3 data-i18n="hourly_line">Calls per hour (last 24 h, Casablanca)</h3>
+      <div class="hourly" id="hourlyBars"></div>
+      <div class="hourly-labels" id="hourlyLabels"></div>
+    </div>
+
+    <div class="section">
+      <h3 data-i18n="last_20">Last 20 calls</h3>
+      <div class="last-20" id="last20"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ================================================================
+// i18n — mirrors supervisor.html plus admin-only strings
+// ================================================================
+const I18N = {
+  en: {
+    splash_title: 'Admin login required',
+    splash_intro: 'This page needs a Leena admin session.',
+    splash_go_login: 'Go to login',
+    admin_label: 'Admin · Live',
+    last_update: 'Last update',
+    auto_refresh_note: 'Auto-refresh every 30 s',
+    cached_note: 'Showing cached data (updated within the last 15 s).',
+    loading: 'Loading…',
+    kpi_calls_today: 'Calls today',
+    kpi_will_come: 'Will come',
+    kpi_whatsapp_sent: 'WhatsApp sent',
+    kpi_reg_after: 'Registered after call',
+    per_agent: 'Per agent',
+    outcome_bars: 'Outcome breakdown',
+    hourly_line: 'Calls per hour (last 24 h, Casablanca)',
+    last_20: 'Last 20 calls',
+    th_agent: 'Agent', th_calls: 'Calls', th_will: 'Will come', th_wa: 'WhatsApp',
+    th_callback: 'Callback', th_no_answer: 'No answer', th_wrong: 'Wrong #',
+    th_reg_after: 'Reg. after', th_checked_in: 'Checked in', th_last_call: 'Last call',
+    outcome_mail_will_come: 'Will come',
+    outcome_mail_wont_come: "Won't come",
+    outcome_no_mail_whatsapp_sent: 'WhatsApp sent',
+    outcome_callback: 'Callback',
+    outcome_no_answer: 'No answer',
+    outcome_wrong_number: 'Wrong number',
+    outcome_not_interested: 'Not interested',
+    outcome_registered_meanwhile: 'Already registered',
+    outcome__none: '(no outcome)',
+    export_xlsx: 'Export xlsx',
+    send_report_now: 'Send daily report now',
+    export_started: 'Downloading…',
+    report_sent: 'Report queued',
+    report_confirm: 'Send the daily report now to CALLCENTER_REPORT_TO?',
+    err_generic: 'Something went wrong.',
+    empty_calls: 'No calls yet today.'
+  },
+  fr: {
+    splash_title: 'Session admin requise',
+    splash_intro: 'Cette page requiert une session admin Leena.',
+    splash_go_login: 'Aller à la connexion',
+    admin_label: 'Admin · En direct',
+    last_update: 'Dernière mise à jour',
+    auto_refresh_note: 'Actualisation toutes les 30 s',
+    cached_note: 'Données en cache (mises à jour dans les 15 dernières s).',
+    loading: 'Chargement…',
+    kpi_calls_today: 'Appels aujourd’hui',
+    kpi_will_come: 'Viendra',
+    kpi_whatsapp_sent: 'WhatsApp envoyé',
+    kpi_reg_after: 'Inscrits après l’appel',
+    per_agent: 'Par agent',
+    outcome_bars: 'Répartition des résultats',
+    hourly_line: 'Appels par heure (24 dernières h, Casablanca)',
+    last_20: '20 derniers appels',
+    th_agent: 'Agent', th_calls: 'Appels', th_will: 'Viendra', th_wa: 'WhatsApp',
+    th_callback: 'Rappel', th_no_answer: 'Sans réponse', th_wrong: 'Mauvais #',
+    th_reg_after: 'Inscrits après', th_checked_in: 'Entrés', th_last_call: 'Dernier appel',
+    outcome_mail_will_come: 'Viendra',
+    outcome_mail_wont_come: 'Ne viendra pas',
+    outcome_no_mail_whatsapp_sent: 'WhatsApp envoyé',
+    outcome_callback: 'Rappel',
+    outcome_no_answer: 'Sans réponse',
+    outcome_wrong_number: 'Mauvais numéro',
+    outcome_not_interested: 'Pas intéressé',
+    outcome_registered_meanwhile: 'Déjà inscrit',
+    outcome__none: '(sans résultat)',
+    export_xlsx: 'Exporter xlsx',
+    send_report_now: 'Envoyer rapport quotidien',
+    export_started: 'Téléchargement…',
+    report_sent: 'Rapport en file',
+    report_confirm: 'Envoyer le rapport quotidien maintenant à CALLCENTER_REPORT_TO ?',
+    err_generic: 'Une erreur est survenue.',
+    empty_calls: 'Aucun appel aujourd’hui.'
+  }
+};
+let lang = (new URLSearchParams(location.search).get('lang') === 'fr' || sessionStorage.getItem('cc_adm_lang') === 'fr') ? 'fr' : 'en';
+function t(k, params) { let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; if (params) for (const p in params) s = s.replace(`{${p}}`, params[p]); return s; }
+function applyI18n() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const s = t(el.getAttribute('data-i18n'));
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.setAttribute('placeholder', s);
+    else el.textContent = s;
+  });
+  document.getElementById('langEn').classList.toggle('active', lang === 'en');
+  document.getElementById('langFr').classList.toggle('active', lang === 'fr');
+}
+function setLang(l) { lang = l; sessionStorage.setItem('cc_adm_lang', l); applyI18n(); if (lastData) renderAll(lastData); }
+document.getElementById('langEn').onclick = () => setLang('en');
+document.getElementById('langFr').onclick = () => setLang('fr');
+
+// ================================================================
+// Auth — JWT from localStorage (Leena admin login)
+// ================================================================
+function getToken() { return localStorage.getItem('token') || ''; }
+function authHeaders() { const t = getToken(); return t ? { 'Authorization': `Bearer ${t}` } : {}; }
+
+// ================================================================
+// Toast
+// ================================================================
+function toast(msg, ms = 1800) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.display = 'block';
+  clearTimeout(el._to); el._to = setTimeout(() => { el.style.display = 'none'; }, ms);
+}
+
+// ================================================================
+// State + refresh
+// ================================================================
+let lastData = null;
+let refreshHandle = null;
+
+async function refresh() {
+  // Admin uses supervisor's key too (env var). Fall back to JWT if the
+  // supervisor endpoint refuses — but the admin page is not a super-user
+  // of /stats/live; it uses the SAME endpoint with the SAME supervisor
+  // key. The key is fetched once from a small /api/callcenter/admin/config
+  // endpoint... except that doesn't exist. Simplest: use JWT to derive
+  // the supervisor key at page load. That REQUIRES a new admin endpoint.
+  //
+  // For Stage 4, we take the safe path: reuse the supervisor page's key
+  // from sessionStorage IF the admin has visited supervisor first, or
+  // prompt for it. For MVP: prompt once, store in sessionStorage.
+  const supKey = sessionStorage.getItem('cc_sup_key') || sessionStorage.getItem('cc_adm_sup_key');
+  if (!supKey) {
+    const entered = prompt(lang === 'fr'
+      ? 'Clé superviseur (nécessaire pour /stats/live) :'
+      : 'Supervisor key (needed for /stats/live):');
+    if (!entered) return;
+    sessionStorage.setItem('cc_adm_sup_key', entered);
+    return refresh();
+  }
+  try {
+    const r = await fetch('/api/callcenter/stats/live', { headers: { 'x-callcenter-supervisor-key': supKey } });
+    if (r.status === 401 || r.status === 503) {
+      sessionStorage.removeItem('cc_adm_sup_key');
+      toast(t('err_generic'));
+      return;
+    }
+    const j = await r.json();
+    if (!j.success) return;
+    lastData = j;
+    renderAll(j);
+  } catch (e) {
+    console.error('[admin] refresh error:', e.message);
+  }
+}
+
+function renderAll(data) {
+  if (!data) return;
+  document.getElementById('lastUpdate').textContent = fmtTime(data.generated_at);
+  document.getElementById('cachedBanner').classList.toggle('show', !!data.cached);
+
+  const totals = data.totals || {};
+  const totalWill = data.per_agent.reduce((s, r) => s + (r.mail_will || 0), 0);
+  const totalWa = data.per_agent.reduce((s, r) => s + (r.whatsapp || 0), 0);
+  document.getElementById('kpiCalls').textContent = totals.calls_today || 0;
+  document.getElementById('kpiWill').textContent = totalWill;
+  document.getElementById('kpiWa').textContent = totalWa;
+  document.getElementById('kpiReg').textContent = totals.registered_after_total || 0;
+
+  const body = document.getElementById('perAgentBody');
+  if (!data.per_agent.length) {
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;color:var(--muted);padding:24px;">${escapeHtml(t('empty_calls'))}</td></tr>`;
+  } else {
+    body.innerHTML = data.per_agent.map(r => `
+      <tr>
+        <td><strong>${escapeHtml(r.agent)}</strong></td>
+        <td class="num">${r.calls_today || 0}</td>
+        <td class="num">${r.mail_will || 0}</td>
+        <td class="num">${r.whatsapp || 0}</td>
+        <td class="num">${r.callback_cnt || 0}</td>
+        <td class="num">${r.no_answer || 0}</td>
+        <td class="num">${r.wrong_num || 0}</td>
+        <td class="num">${r.registered_after || 0}</td>
+        <td class="num">${r.checked_in || 0}</td>
+        <td>${r.last_call ? escapeHtml(fmtTime(r.last_call)) : '—'}</td>
+      </tr>
+    `).join('');
+  }
+
+  const outcomeSum = (data.outcome_bars || []).reduce((s, r) => s + r.n, 0) || 1;
+  const barMap = {
+    mail_will_come: 'o-will', mail_wont_come: 'o-wrong', no_mail_whatsapp_sent: 'o-wa',
+    callback: 'o-callback', no_answer: 'o-no-answer', wrong_number: 'o-wrong',
+    not_interested: 'o-not-int', registered_meanwhile: 'o-reg'
+  };
+  document.getElementById('outcomeBars').innerHTML = (data.outcome_bars || []).map(r => {
+    const key = r.outcome === '(none)' ? '__none' : r.outcome;
+    const label = t('outcome_' + key) !== 'outcome_' + key ? t('outcome_' + key) : r.outcome;
+    const pct = Math.round((r.n / outcomeSum) * 100);
+    const cls = barMap[r.outcome] || '';
+    return `<div class="bar-row">
+      <span>${escapeHtml(label)}</span>
+      <div class="bar-track"><div class="bar-fill ${cls}" style="width:${pct}%"></div></div>
+      <span class="bar-n">${r.n}</span>
+    </div>`;
+  }).join('') || `<div style="color:var(--muted);text-align:center;padding:20px;">—</div>`;
+
+  const hourlyMap = new Map((data.hourly || []).map(r => [r.hour, r.n]));
+  const maxN = Math.max(1, ...hourlyMap.values());
+  const bars = []; const labels = [];
+  for (let h = 0; h < 24; h++) {
+    const n = hourlyMap.get(h) || 0;
+    const pct = Math.round((n / maxN) * 100);
+    bars.push(`<div class="bar" style="height:${pct}%" data-tt="${h}:00 · ${n}"></div>`);
+    labels.push(`<span>${h}</span>`);
+  }
+  document.getElementById('hourlyBars').innerHTML = bars.join('');
+  document.getElementById('hourlyLabels').innerHTML = labels.join('');
+
+  const l20 = data.last_20 || [];
+  if (!l20.length) {
+    document.getElementById('last20').innerHTML = `<div style="color:var(--muted);text-align:center;padding:20px;">—</div>`;
+  } else {
+    document.getElementById('last20').innerHTML = l20.map(r => {
+      const oClass = barMap[r.outcome] || '';
+      const oLabel = t('outcome_' + r.outcome) !== 'outcome_' + r.outcome ? t('outcome_' + r.outcome) : (r.outcome || '—');
+      const nameParts = [r.first_name, r.last_name].filter(Boolean).join(' ');
+      return `<div class="row-l">
+        <span class="t">${escapeHtml(fmtTime(r.done_at))}</span>
+        <span class="s s-${r.segment}">${escapeHtml(r.segment)}</span>
+        <span class="agent-cell">${escapeHtml(r.claimed_by || '')}</span>
+        <span class="o ${oClass}">${escapeHtml(oLabel)}</span>
+        <span class="name-cell" style="color:var(--muted);">${escapeHtml(nameParts || r.email || '')}</span>
+      </div>`;
+    }).join('');
+  }
+}
+
+// ================================================================
+// Admin actions
+// ================================================================
+document.getElementById('btnExport').onclick = async () => {
+  const token = getToken();
+  if (!token) { toast(t('err_generic')); return; }
+  toast(t('export_started'));
+  // Fetch as blob so we can trigger download with auth header (a plain <a href> can't carry the JWT)
+  try {
+    const r = await fetch('/api/callcenter/admin/dump', { headers: authHeaders() });
+    if (!r.ok) { toast(t('err_generic')); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `callcenter_dump_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  } catch (e) { console.error(e); toast(t('err_generic')); }
+};
+
+document.getElementById('btnReport').onclick = async () => {
+  if (!confirm(t('report_confirm'))) return;
+  const btn = document.getElementById('btnReport');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/api/callcenter/report/send-now', { method: 'POST', headers: { ...authHeaders(), 'content-type': 'application/json' }, body: '{}' });
+    const j = await r.json();
+    if (j.success) {
+      const toList = Array.isArray(j.to) ? j.to.join(', ') : (j.to || '');
+      toast(`${t('report_sent')} → ${j.queued} · ${toList}`, 4500);
+    } else {
+      toast(j.error || t('err_generic'));
+    }
+  } catch (e) { toast(t('err_generic')); }
+  finally { btn.disabled = false; }
+};
+
+// ================================================================
+// Helpers
+// ================================================================
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return new Intl.DateTimeFormat(lang === 'fr' ? 'fr-MA' : 'en-GB', {
+    timeZone: 'Africa/Casablanca',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).format(d);
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// ================================================================
+// Init
+// ================================================================
+function init() {
+  applyI18n();
+  refresh();
+  if (refreshHandle) clearInterval(refreshHandle);
+  refreshHandle = setInterval(refresh, 30000);
+}
+
+// Boot — require JWT
+(function boot() {
+  applyI18n();
+  if (!getToken()) {
+    document.getElementById('splash').style.display = 'block';
+    return;
+  }
+  document.getElementById('main').style.display = 'block';
+  init();
+})();
+</script>
+</body>
+</html>
