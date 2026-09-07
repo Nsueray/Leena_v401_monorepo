@@ -356,8 +356,11 @@
                                 <input type="text" class="form-control" id="name" required>
                             </div>
                             <div class="form-group">
-                                <label class="form-label">Last Name</label>
-                                <input type="text" class="form-control" id="lastName">
+                                <label class="form-label">Last Name *</label>
+                                <input type="text" class="form-control" id="lastName" required
+                                       oninvalid="event.preventDefault(); document.getElementById('lastNameError').style.display='block';"
+                                       oninput="document.getElementById('lastNameError').style.display='none';">
+                                <div id="lastNameError" style="display:none;color:#ef4444;font-size:13px;margin-top:4px;">Last name required</div>
                             </div>
                         </div>
                         
@@ -508,7 +511,19 @@
 
         document.getElementById('activationForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
+            // Belt-and-braces: HTML `required` + oninvalid stops most cases,
+            // but scripted submissions can bypass native validation. Repeat
+            // the last_name check here so the server never sees an empty
+            // value and the user sees the inline error instead of a 400.
+            const lastNameVal = document.getElementById('lastName').value.trim();
+            if (!lastNameVal) {
+                document.getElementById('lastNameError').style.display = 'block';
+                document.getElementById('lastName').focus();
+                return;
+            }
+            document.getElementById('lastNameError').style.display = 'none';
+
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
             submitBtn.innerHTML = '<span class="spinner" style="width:20px;height:20px;border-width:2px;margin:0;"></span> Processing...';
@@ -521,7 +536,7 @@
                         token: currentToken,
                         _lc: campaignToken || undefined,
                         name: document.getElementById('name').value.trim(),
-                        last_name: document.getElementById('lastName').value.trim(),
+                        last_name: lastNameVal,
                         company: document.getElementById('company').value.trim(),
                         country: document.getElementById('country').value.trim(),
                         job_title: document.getElementById('jobTitle').value.trim(),

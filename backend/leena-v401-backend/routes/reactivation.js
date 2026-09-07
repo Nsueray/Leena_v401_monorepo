@@ -670,6 +670,21 @@ router.post('/activate', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Token is required' });
     }
 
+    // last_name required (7 Sep, Suer). Measured before this change:
+    // 61/685 activations today landed with empty last_name; 9,376/15,788
+    // pending tokens have no last_name. The client-side change adds
+    // `required` + inline error to reactivate.html and reactivate-fr.html;
+    // this server check is the belt-and-braces for scripted submissions
+    // or an unupdated cached page. Code LAST_NAME_REQUIRED so the client
+    // can render its own EN/FR message if it ever wants to.
+    if (!last_name || String(last_name).trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Last name is required',
+        code: 'LAST_NAME_REQUIRED'
+      });
+    }
+
     // Get and validate token
     const tokenResult = await pool.query(`
       SELECT * FROM reactivation_tokens WHERE token = $1
