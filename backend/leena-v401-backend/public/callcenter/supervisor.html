@@ -122,6 +122,7 @@
       <div>
         <button class="lang-btn" id="langEn">EN</button>
         <button class="lang-btn" id="langFr">FR</button>
+        <button class="lang-btn" id="langTr">TR</button>
       </div>
     </div>
     <div class="meta">
@@ -268,9 +269,56 @@ const I18N = {
     report_sent: 'Rapport en file',
     err_generic: 'Une erreur est survenue.',
     empty_calls: 'Aucun appel aujourd’hui.'
+  },
+  tr: {
+    splash_title: 'SIEMA Çağrı Merkezi — Süpervizör',
+    splash_intro: 'Süpervizör anahtarını girin.',
+    splash_key: 'Süpervizör anahtarı',
+    splash_enter: 'Giriş',
+    splash_wrong_key: 'Geçersiz anahtar',
+    supervisor_label: 'Süpervizör · Canlı',
+    last_update: 'Son güncelleme',
+    auto_refresh_note: '30 saniyede bir yenilenir',
+    cached_note: 'Önbellekten (son 15 saniye içinde güncellendi).',
+    loading: 'Yükleniyor…',
+    kpi_calls_today: 'Bugünkü aramalar',
+    kpi_will_come: 'Gelecek',
+    kpi_whatsapp_sent: 'WhatsApp gönderildi',
+    kpi_reg_after: 'Aramadan sonra kayıt',
+    per_agent: 'Ajan bazında',
+    outcome_bars: 'Sonuç dağılımı',
+    hourly_line: 'Saat başına aramalar (son 24 saat, Kazablanka)',
+    last_20: 'Son 20 arama',
+    th_agent: 'Ajan', th_calls: 'Aramalar', th_will: 'Gelecek', th_wa: 'WhatsApp',
+    th_callback: 'Tekrar ara', th_no_answer: 'Cevap yok', th_wrong: 'Yanlış #',
+    th_reg_after: 'Kayıt sonrası', th_checked_in: 'Giriş yaptı', th_last_call: 'Son arama',
+    outcome_mail_will_come: 'Gelecek',
+    outcome_mail_wont_come: 'Gelmeyecek',
+    outcome_no_mail_whatsapp_sent: 'WhatsApp gönderildi',
+    outcome_callback: 'Tekrar ara',
+    outcome_no_answer: 'Cevap yok',
+    outcome_wrong_number: 'Yanlış numara',
+    outcome_not_interested: 'İlgilenmiyor',
+    outcome_registered_meanwhile: 'Zaten kayıtlı',
+    outcome__none: '(sonuç yok)',
+    export_xlsx: 'Xlsx dışa aktar',
+    send_report_now: 'Günlük raporu şimdi gönder',
+    admin_actions: 'Yönetici işlemleri',
+    export_started: 'İndiriliyor…',
+    report_sent: 'Rapor sıraya alındı',
+    err_generic: 'Bir hata oluştu.',
+    empty_calls: 'Bugün henüz arama yok.'
   }
 };
-let lang = (new URLSearchParams(location.search).get('lang') === 'fr' || sessionStorage.getItem('cc_sup_lang') === 'fr') ? 'fr' : 'en';
+// Default = fr (Suer 7 Sep). ?lang wins, then sessionStorage, then fr.
+function _pickInitialLang() {
+  const q = (new URLSearchParams(location.search).get('lang') || '').toLowerCase();
+  if (q === 'en' || q === 'fr' || q === 'tr') return q;
+  const s = sessionStorage.getItem('cc_sup_lang');
+  if (s === 'en' || s === 'fr' || s === 'tr') return s;
+  return 'fr';
+}
+let lang = _pickInitialLang();
 function t(k, params) { let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; if (params) for (const p in params) s = s.replace(`{${p}}`, params[p]); return s; }
 function applyI18n() {
   document.documentElement.lang = lang;
@@ -281,10 +329,15 @@ function applyI18n() {
   });
   document.getElementById('langEn').classList.toggle('active', lang === 'en');
   document.getElementById('langFr').classList.toggle('active', lang === 'fr');
+  document.getElementById('langTr').classList.toggle('active', lang === 'tr');
 }
-function setLang(l) { lang = l; sessionStorage.setItem('cc_sup_lang', l); applyI18n(); renderAll(lastData); }
+function setLang(l) {
+  if (l !== 'en' && l !== 'fr' && l !== 'tr') l = 'fr';
+  lang = l; sessionStorage.setItem('cc_sup_lang', l); applyI18n(); renderAll(lastData);
+}
 document.getElementById('langEn').onclick = () => setLang('en');
 document.getElementById('langFr').onclick = () => setLang('fr');
+document.getElementById('langTr').onclick = () => setLang('tr');
 
 // ================================================================
 // Auth

@@ -133,6 +133,10 @@
     .btn-action.resend:disabled { background: #9ca3af; border-color: #9ca3af; cursor: not-allowed; }
     .btn-action.register { background: #fef3c7; border-color: #fcd34d; color: #78350f; }
 
+    /* Resend hint (segment A only) — sits below the action row */
+    .resend-hint { font-size: 12px; color: #78350f; background: #fef3c7; border: 1px solid #fde68a; border-radius: 6px; padding: 6px 10px; margin: -4px 0 10px; line-height: 1.4; }
+    .resend-hint i { margin-right: 4px; }
+
     /* Sticky bottom bar for skip/save (mobile — the thumbs-reach zone) */
     .sticky-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--border); padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); display: flex; gap: 8px; z-index: 40; }
     .sticky-bar button { flex: 1; min-height: 52px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; border: 1px solid var(--border); touch-action: manipulation; }
@@ -188,6 +192,7 @@
       <div>
         <button class="lang-btn" id="langEn">EN</button>
         <button class="lang-btn" id="langFr">FR</button>
+        <button class="lang-btn" id="langTr">TR</button>
       </div>
     </div>
     <div class="meta">
@@ -285,6 +290,7 @@ const I18N = {
     action_copy: 'Copy link',
     action_resend: 'Resend email',
     action_register: 'Register now',
+    resend_hint: 'Wrong email? Use Register now — the activation link is tied to the old address.',
 
     skip: 'Skip',
     save_next: 'Save → Next',
@@ -370,6 +376,7 @@ const I18N = {
     action_copy: 'Copier le lien',
     action_resend: 'Renvoyer l’e-mail',
     action_register: 'Inscrire maintenant',
+    resend_hint: 'Mauvais e-mail ? Utilisez Inscrire maintenant — le lien d’activation est associé à l’ancienne adresse.',
 
     skip: 'Passer',
     save_next: 'Enregistrer → Suivant',
@@ -396,10 +403,103 @@ const I18N = {
     resend_cooldown: 'Attente en cours — réessayez dans quelques instants',
     error_generic: 'Une erreur est survenue. Réessayez.',
     session_ended: 'Session expirée — rechargez la page'
+  },
+  tr: {
+    splash_title: 'SIEMA Çağrı Merkezi',
+    splash_intro: 'Başlamak için erişim anahtarını ve adınızı girin.',
+    splash_key: 'Erişim anahtarı',
+    splash_agent: 'Adınız',
+    splash_enter: 'Giriş',
+    splash_wrong_key: 'Geçersiz anahtar veya isim',
+    segment_label: 'Segment:',
+    segment_A: 'A — Aktivasyon (eski ziyaretçiler)',
+    segment_B: 'B — Kayıtlı (sıcak)',
+    segment_C: 'C — Kayıt (soğuk)',
+    segment_any: 'Hepsi',
+    loading: 'Yükleniyor…',
+    no_leads: 'Bu segmentte kalan fiş yok. Bravo!',
+
+    attended_2025: '2025’te geldi',
+    tel_link: 'Ara',
+    mail_sent: 'E-posta gönderildi',
+    mail_pending: 'E-posta beklemede',
+    mail_failed: 'E-posta başarısız',
+    mail_none: 'Henüz e-posta yok',
+    opened_yes: 'açıldı',
+    opened_no: 'açılmadı',
+    clicked_yes: 'tıklandı',
+    registered_on: 'Kayıt tarihi',
+    badge_mail_sent: 'badge maili gönderildi',
+    badge_mail_none: 'badge maili gönderilmedi',
+
+    script_toggle: 'Konuşma metni',
+    script_A: 'Merhaba, SIEMA FoodExpo 2026 için arıyorum — 22-24 Eylül, Kazablanka. 2025’te bizi ziyaret etmişsiniz — giriş kartınızı tekrar göndermemi ister misiniz?',
+    script_B: 'Merhaba, SIEMA FoodExpo 2026 kaydınızı teyit etmek için arıyorum — 22-24 Eylül, Kazablanka. Giriş kartınız elinize ulaştı mı?',
+    script_C: 'Merhaba, SIEMA FoodExpo 2026 için arıyorum — 22-24 Eylül, Kazablanka, Fas’ın en büyük gıda sanayi fuarı. Size ücretsiz bir giriş kartı gönderebilir miyim?',
+
+    outcome_will: 'Gelecek',
+    outcome_wont: 'Gelmeyecek',
+    outcome_whatsapp: 'E-posta yok → WhatsApp',
+    outcome_callback: 'Tekrar ara',
+    outcome_no_answer: 'Cevap yok',
+    outcome_wrong: 'Yanlış numara',
+    outcome_not_interested: 'İlgilenmiyor',
+    outcome_registered: 'Zaten kayıtlı',
+    note_placeholder: 'Not (isteğe bağlı)',
+    callback_in: 'Tekrar ara',
+    hours: 'saat sonra',
+
+    fix_data: 'Bilgileri düzelt',
+    field_phone: 'Telefon',
+    field_first_name: 'Ad',
+    field_last_name: 'Soyad',
+    field_company: 'Şirket',
+    field_email: 'E-posta',
+
+    action_whatsapp: 'WhatsApp',
+    action_copy: 'Bağlantıyı kopyala',
+    action_resend: 'E-postayı tekrar gönder',
+    action_register: 'Şimdi kaydet',
+    resend_hint: 'E-posta yanlış mı? Şimdi kaydet düğmesini kullanın — aktivasyon bağlantısı eski adrese bağlı.',
+
+    skip: 'Atla',
+    save_next: 'Kaydet → Sonraki',
+
+    your_session: 'Oturumunuz',
+    tally_calls: 'Aramalar',
+    tally_will: 'Gelecek',
+    tally_whatsapp: 'WhatsApp gönderildi',
+    tally_callback: 'Tekrar ara',
+    tally_no_answer: 'Cevap yok',
+    tally_wrong: 'Yanlış numara',
+    pool_remaining: 'Bekleyen:',
+
+    select_outcome: 'Önce bir sonuç seçin',
+
+    wa_A: 'Merhaba, Elan Expo — SIEMA FoodExpo 2026 (22-24 Eylül, Kazablanka). Giriş kartınız için tek tıklama: {url}',
+    wa_B: 'Merhaba, Elan Expo — SIEMA FoodExpo 2026 (22-24 Eylül, Kazablanka). Giriş bağlantınız: {url}',
+    wa_C: 'Merhaba, Elan Expo — SIEMA FoodExpo 2026 (22-24 Eylül, Kazablanka). Ücretsiz kayıt: {url}',
+
+    saved: 'Kaydedildi',
+    released: 'Havuza geri döndü',
+    copied: 'Bağlantı kopyalandı',
+    resend_ok: 'E-posta sıraya alındı',
+    resend_cooldown: 'Bekleme süresi — birazdan tekrar deneyin',
+    error_generic: 'Bir hata oluştu. Tekrar deneyin.',
+    session_ended: 'Oturum sona erdi — sayfayı yenileyin'
   }
 };
 
-let lang = (new URLSearchParams(location.search).get('lang') === 'fr' || sessionStorage.getItem('cc_lang') === 'fr') ? 'fr' : 'en';
+// Default = fr (Suer 7 Sep). URL ?lang= wins over sessionStorage; anything
+// else falls to fr. Accepted values: 'en', 'fr', 'tr'.
+function _pickInitialLang() {
+  const q = (new URLSearchParams(location.search).get('lang') || '').toLowerCase();
+  if (q === 'en' || q === 'fr' || q === 'tr') return q;
+  const s = sessionStorage.getItem('cc_lang');
+  if (s === 'en' || s === 'fr' || s === 'tr') return s;
+  return 'fr';
+}
+let lang = _pickInitialLang();
 function t(key, params) {
   let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
   if (params) for (const k in params) s = s.replace(`{${k}}`, params[k]);
@@ -415,8 +515,10 @@ function applyI18nAttributes() {
   });
   document.getElementById('langEn').classList.toggle('active', lang === 'en');
   document.getElementById('langFr').classList.toggle('active', lang === 'fr');
+  document.getElementById('langTr').classList.toggle('active', lang === 'tr');
 }
 function setLang(l) {
+  if (l !== 'en' && l !== 'fr' && l !== 'tr') l = 'fr';
   lang = l;
   sessionStorage.setItem('cc_lang', l);
   applyI18nAttributes();
@@ -424,6 +526,7 @@ function setLang(l) {
 }
 document.getElementById('langEn').onclick = () => setLang('en');
 document.getElementById('langFr').onclick = () => setLang('fr');
+document.getElementById('langTr').onclick = () => setLang('tr');
 
 // ================================================================
 // Splash + auth
@@ -597,6 +700,7 @@ function renderCard(lead) {
         ${seg === 'A' ? `<button class="btn-action resend" id="btnResend"><i class="bi bi-envelope-arrow-up"></i> ${escapeHtml(t('action_resend'))}</button>` : ''}
         <a class="btn-action register" href="/form-public.html?id=59" target="_blank" rel="noopener"><i class="bi bi-pencil-square"></i> ${escapeHtml(t('action_register'))}</a>
       </div>
+      ${seg === 'A' ? `<div class="resend-hint"><i class="bi bi-info-circle"></i> ${escapeHtml(t('resend_hint'))}</div>` : ''}
 
       <details class="fix">
         <summary>${escapeHtml(t('fix_data'))}</summary>
@@ -747,7 +851,7 @@ async function doResend() {
     const r = await ccFetch(`/resend/${currentLead.id}`, { method: 'POST', body: '{}' });
     const j = await r.json();
     if (j.success) {
-      toast(t('resend_ok'));
+      toast(j.sent_to ? `${t('resend_ok')} → ${j.sent_to}` : t('resend_ok'), 3000);
       resendCooldownUntil = Date.now() + 2 * 60 * 1000;
       setTimeout(() => { if (document.getElementById('btnResend')) document.getElementById('btnResend').disabled = false; }, 2 * 60 * 1000);
     } else if (j.code === 'RESEND_COOLDOWN') {

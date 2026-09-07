@@ -554,9 +554,16 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
     }
 
     // Verify the token is still pending on reactivation_tokens (may have
-    // been activated or expired since import). Read-only.
+    // been activated or expired since import). Read-only. Also fetch the
+    // token's own email — resend sends to THAT address, never the lead's
+    // (possibly agent-patched) email. Reason: the activation link is
+    // bound to the token, which is bound to the recipient's original
+    // address on reactivation_tokens.email; sending the same link to a
+    // different address just means the wrong person activates the wrong
+    // token. Suer's rule 7 Sep: for a mistyped-email case, agents click
+    // Register now (form 59) instead of Resend.
     const tokRes = await client.query(
-      `SELECT status, expires_at, organizer_id, target_expo_id
+      `SELECT status, expires_at, organizer_id, target_expo_id, email
        FROM reactivation_tokens WHERE token = $1 LIMIT 1`,
       [lead.reactivation_token]
     );
@@ -584,11 +591,13 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
     }
 
     // Cooldown: don't queue another mail for the same recipient within N min.
+    // Keyed on the TOKEN'S email (the address the resend actually goes to)
+    // so an agent can't bypass the cooldown by patching the lead email.
     const cdRes = await client.query(
       `SELECT 1 FROM email_queue
        WHERE lower(recipient_email) = lower($1)
          AND created_at > NOW() - INTERVAL '${RESEND_COOLDOWN_MINUTES} minutes' LIMIT 1`,
-      [lead.email]
+      [tok.email]
     );
     if (cdRes.rows.length > 0) {
       return res.status(429).json({
@@ -627,11 +636,14 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
     const activationPage = expoCountryCode === 'MA' ? 'reactivate-fr.html' : 'reactivate.html';
     const activationUrl = `${baseUrl}/${activationPage}?token=${lead.reactivation_token}`;
 
+    // Template placeholders use the TOKEN'S email (destination address) —
+    // consistent with how the campaign worker fills these keys against
+    // the actual recipient row, not a lead's patched value.
     const templateData = {
       name: lead.first_name || '',
       first_name: lead.first_name || '',
       last_name: lead.last_name || '',
-      email: lead.email,
+      email: tok.email,
       company: lead.company || '',
       country: lead.country || '',
       activation_url: activationUrl,
@@ -651,20 +663,31 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
          status, created_at
        ) VALUES ($1, $2, NULL, $3, $4, $5, $6, 'pending', NOW())`,
       [tok.organizer_id, tok.target_expo_id, SIEMA_ACTIVATE_TEMPLATE_ID,
-       lead.email, subject, htmlContent]
+       tok.email, subject, htmlContent]
     );
 
-    // Append audit note on the lead.
+    // Audit note on the lead — record BOTH addresses when they differ so
+    // supervisors can see the agent tried to patch and the resend still
+    // went to the token's address (matches the client-side hint).
+    const emailNote = (tok.email.toLowerCase() === (lead.email || '').toLowerCase())
+      ? tok.email
+      : `${tok.email} (lead email is ${lead.email} — resend uses token's address)`;
     await client.query(
       `UPDATE callcenter_leads
        SET note = COALESCE(NULLIF(note,'') || E'\\n', '') || $2,
            updated_at = NOW()
        WHERE id = $1`,
-      [id, `[${req.agent}] Resent activation email at ${new Date().toISOString()}.`]
+      [id, `[${req.agent}] Resent activation email to ${emailNote} at ${new Date().toISOString()}.`]
     );
 
     _cacheBust();
-    res.json({ success: true, id, queued: 1, template_id: SIEMA_ACTIVATE_TEMPLATE_ID });
+    res.json({
+      success: true,
+      id,
+      queued: 1,
+      template_id: SIEMA_ACTIVATE_TEMPLATE_ID,
+      sent_to: tok.email     // client shows this in a toast so the agent sees where the mail went
+    });
   } catch (err) {
     console.error('[callcenter /resend] Error:', err.message);
     res.status(500).json({ success: false, error: 'resend failed', code: 'RESEND_ERROR' });
