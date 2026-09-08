@@ -61,6 +61,10 @@ async function recordCampaignRegistration(lcToken, ctx) {
 async function processReactivationChunks(jobId, validRows, ctx) {
   const { target_expo_id, organizerId, template_id, form_id, emailTemplate, targetExpo, source_expo_id } = ctx;
   const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
+  // Language-correct activation page. MA → reactivate-fr.html (SIEMA / Casablanca);
+  // else EN. Same rule as routes/callcenter.js:647 and routes/campaignBuilder.js:1157.
+  // Both callers (create-from-excel + create-from-expo) pass targetExpo with country_code.
+  const activationPage = (targetExpo && targetExpo.country_code === 'MA') ? 'reactivate-fr.html' : 'reactivate.html';
   const CHUNK_SIZE = 1000;
   const isExpo = !!source_expo_id;
   let created = 0;
@@ -140,7 +144,7 @@ async function processReactivationChunks(jobId, validRows, ctx) {
         // Queue emails (per-row: unique rendered HTML)
         if (emailTemplate) {
           for (const r of chunk) {
-            const activationUrl = `${baseUrl}/reactivate.html?token=${r.token}`;
+            const activationUrl = `${baseUrl}/${activationPage}?token=${r.token}`;
             const templateData = {
               name: r.name || 'Valued Guest', last_name: r.last_name || '', email: r.email,
               company: r.company || '', country: r.country || '', job_title: r.job_title || '',
@@ -499,7 +503,7 @@ router.post('/create-from-expo', authMiddleware, async (req, res) => {
 
     // Verify expos belong to organizer
     const expoCheck = await pool.query(
-      'SELECT id, name FROM expos WHERE id IN ($1, $2) AND organizer_id = $3',
+      'SELECT id, name, country_code FROM expos WHERE id IN ($1, $2) AND organizer_id = $3',
       [source_expo_id, target_expo_id, organizerId]
     );
     if (expoCheck.rows.length !== 2) {
@@ -982,9 +986,13 @@ router.post('/resend-pending', authMiddleware, async (req, res) => {
     }
     const emailTemplate = templateResult.rows[0];
 
-    // Get target expo name
-    const expoResult = await pool.query('SELECT name FROM expos WHERE id = $1', [target_expo_id]);
+    // Get target expo name + country_code (for language-correct activation page)
+    const expoResult = await pool.query('SELECT name, country_code FROM expos WHERE id = $1', [target_expo_id]);
     const expoName = expoResult.rows.length > 0 ? expoResult.rows[0].name : '';
+    const expoCountryCode = expoResult.rows.length > 0 ? expoResult.rows[0].country_code : null;
+    // Language-correct activation page. MA → reactivate-fr.html; else EN.
+    // Mirrors processReactivationChunks / callcenter.js:647 / campaignBuilder.js:1157.
+    const activationPage = expoCountryCode === 'MA' ? 'reactivate-fr.html' : 'reactivate.html';
 
     // Get all pending tokens for this expo
     const pendingTokens = await pool.query(
@@ -1003,7 +1011,7 @@ router.post('/resend-pending', authMiddleware, async (req, res) => {
 
     for (const row of pendingTokens.rows) {
       try {
-        const activationUrl = baseUrl + '/reactivate.html?token=' + row.token;
+        const activationUrl = `${baseUrl}/${activationPage}?token=${row.token}`;
 
         const templateData = {
           name: row.name || 'Valued Guest',
