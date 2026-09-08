@@ -546,10 +546,17 @@ async function evaluateCondition(condition, recipient, stepsMap, campaign) {
     // ~50/day. Without check (a) they would receive a "last chance to register" email
     // days after they had registered.
     //
-    // (b) is currently redundant — measured 0 activated tokens lacking a campaign
-    // event, i.e. the bridge is at 100%. It is kept as insurance because
-    // recordCampaignRegistration is deliberately non-fatal: a swallowed tracking error
-    // would leave that recipient permanently not_registered. At 0.09ms it is free.
+    // (c) via_token is LOAD-BEARING, not redundant insurance. The Aug 19 measurement
+    // that showed 100% bridge health held only for campaigns whose activation URLs
+    // matched trackingPixel.js's substring gate. When reactivate-fr.html shipped
+    // Sep 3 (commit 52cc517), the then-narrower 'reactivate.html' substring missed
+    // every French-language activation URL. SIEMA (expo 9, campaign 78) sent all
+    // its activation mail through reactivate-fr.html, so 0 of 909 activated tokens
+    // between Sep 7 launch and Sep 8 matcher fix produced a campaign 'registered'
+    // event. Without check (c), the scheduler would have re-mailed every one of
+    // them at step 2. The matcher was widened to bare 'reactivate' on Sep 8, which
+    // restores 100% bridge coverage prospectively — but keep (c): it catches any
+    // future page-variant miss the same way, and at 0.09ms it is essentially free.
     //
     // Predicates are index-aligned on purpose:
     //   - rt.email = $3 uses idx_reactivation_tokens_email_target; wrapping it in

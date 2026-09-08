@@ -165,16 +165,28 @@ function wrapClickLinks(html, eventId) {
 
 /**
  * Append _lc campaign token to links pointing to Leena form pages.
- * Detects: URLs containing 'form-public.html', '/form/', or 'reactivate.html'.
- * reactivate.html carries its own ?token=X; the separator logic below appends
+ * Detects: URLs containing 'form-public.html', '/form/', or 'reactivate'
+ * (matches both reactivate.html and reactivate-fr.html).
+ * The reactivate pages carry their own ?token=X; the separator logic appends
  * _lc as an additional param, and wrapClickLinks (called after) base64-encodes
  * the whole URL, so both survive the click redirect.
+ *
+ * The bare 'reactivate' substring is deliberate — it also covers reactivate-fr.html
+ * and any future language variant (reactivate-XX.html). It cannot over-match:
+ * this function runs BEFORE wrapClickLinks (email_worker.js:665-669), so
+ * unsubscribe URLs (/api/email-track/unsubscribe/TOKEN) and click-tracking URLs
+ * (/api/email-track/click/ID?url=BASE64) are never present yet at match time.
+ *
+ * History: the narrower 'reactivate.html' shipped Aug 18 (fd0c503). It silently
+ * missed reactivate-fr.html when the French page was added Sep 3 (52cc517). All
+ * 909 SIEMA C78 activations between Sep 7 launch and this fix bypassed the
+ * campaign 'registered' event stream. Backfilled manually on Sep 8.
  */
 function appendCampaignTokenToFormLinks(html, campaignToken) {
   if (!html || !campaignToken) return html || '';
 
   return html.replace(/<a\s([^>]*?)href=["']([^"']+)["']/gi, (match, before, url) => {
-    if (url.includes('form-public.html') || url.includes('/form/') || url.includes('reactivate.html')) {
+    if (url.includes('form-public.html') || url.includes('/form/') || url.includes('reactivate')) {
       const separator = url.includes('?') ? '&' : '?';
       return `<a ${before}href="${url}${separator}_lc=${campaignToken}"`;
     }
