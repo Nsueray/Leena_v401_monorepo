@@ -108,6 +108,17 @@ ready).
 | Empty `visitors.last_name` on today's activations (motivator for the fix) | 63 / 702 (9%) |
 | `email_queue` still pending mid-day | 0 |
 
+> ⚠️ **8 Sep correction (2026-09-08):** the *704* and *63 / 702* figures above were
+> **not** end-of-day totals — they were cumulative reads taken at ~17:15-17:18 IST
+> (14:15-14:18 UTC), right after the `a9a44fd` deploy and mislabeled as "EOD" when
+> the doc was written that evening. Forensic recount 8 Sep morning: cumulative
+> activations crossed 702 at 14:17 UTC and 704 at 14:18 UTC. Actual day-1 close
+> (`activated_at <= 2026-09-07 23:59:59+00`) = **884**. By 06:00 UTC on 8 Sep the
+> running total was 896; by midday 909 and still ticking. The 9% empty-`last_name`
+> ratio itself remains representative (the fix took effect at the same moment the
+> snapshot was taken; post-fix rows carry the required last_name). Full forensic
+> chain in `SIEMA_ACTIVATION_MISMATCH_20260908.md` (this morning's investigation).
+
 ## 8. Related
 
 - `docs/sessions/SIEMA26_LAUNCH_RUNBOOK.md` — the operational plan (state = LAUNCHED today)
@@ -115,4 +126,23 @@ ready).
 - `docs/sessions/DEPLOY_STEP1_NOT_REGISTERED_20260904.md` — why step 1 = `not_registered`
 - `docs/sessions/DEPLOY_LAST_NAME_REQUIRED_20260907.md` — tonight's fix (this deploy doc)
 - `docs/sessions/DEPLOY_CALLCENTER_20260907.md` — the call-center module built today
+- `docs/sessions/SIEMA_ACTIVATION_MISMATCH_20260908.md` — 8 Sep forensic recount + matcher-miss root cause
 - CLAUDE.md G42 — deploy-freeze rule
+
+## 9. Postscript (2026-09-08)
+
+Two findings emerged the next morning:
+
+1. **`reactivate-fr.html` matcher miss.** `utils/trackingPixel.js:177` used
+   `.includes('reactivate.html')`, a substring that does **not** match
+   `reactivate-fr.html`. Every C78 activation URL pointed at the FR page, so `_lc`
+   was never appended, so `recordCampaignRegistration('/activate)` returned early,
+   so `email_events` recorded **0** `'registered'` events for campaign 78 against
+   **909** real token activations. Fixed by widening the substring to bare
+   `'reactivate'` in the same day's push. The scheduler's `not_registered` guard
+   at `email_worker.js:565-585` was never affected — check (c) via
+   `reactivation_tokens.status='activated'` catches every activation regardless.
+2. **Backfill.** 909 `email_events` rows inserted manually with
+   `metadata.via='backfill_reactivate_fr_matcher_miss'` and `created_at =
+   activated_at`. Idempotent (guarded by `NOT EXISTS`). Wednesday sweep pending
+   for any late-tail activations that missed the first sweep.

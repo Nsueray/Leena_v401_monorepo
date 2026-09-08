@@ -22,6 +22,15 @@ Full-day figures at EOD:
 - 63 empty-last_name / 702 reactivation activations today = 9% (matches Suer's 15:00 rate)
 - ~9,363 pending tokens still without last_name (fix protects tomorrow's activations)
 
+> ⚠️ **8 Sep correction:** *702* was **not** the day-1 end-of-day count — it was
+> the cumulative activation count at ~14:17 UTC (17:17 IST), taken right after
+> this deploy landed and mislabeled as EOD when the doc was written. Actual day-1
+> end (`activated_at <= 2026-09-07 23:59:59+00`) = **884** activations. By 06:00
+> UTC 8 Sep the total had drifted to 896; by midday 8 Sep it was 909. The 9%
+> empty-`last_name` ratio itself remains representative (the fix took effect at
+> the same moment the snapshot was taken, so the ratio is against pre-fix rows).
+> Forensic recount: `SIEMA_ACTIVATION_MISMATCH_20260908.md`.
+
 Root cause: `reactivate.html` and `reactivate-fr.html` had `required` on the first-name input
 (`id="name"` at line :356 both pages) but NOT on the last-name input (`id="lastName"` at line
 :360). `POST /api/reactivation/activate` at `routes/reactivation.js:665` only required `token`.
@@ -95,3 +104,18 @@ or bind the client to render its own message via `data.code`. Deferred.
   the new G42 rule
 - CLAUDE.md G42 — deploy freeze on campaign days
 - CLAUDE.md G43 — `/health` as Render's health check path cuts the 502 window
+- `docs/sessions/SIEMA_ACTIVATION_MISMATCH_20260908.md` — 8 Sep forensic recount
+
+## Postscript (2026-09-08) — matcher miss surfaced by the same activation window
+
+While validating this deploy the next morning, we discovered that the SIEMA
+campaign 78 `email_events` `'registered'` count was **0** against 909 real token
+activations. Root cause: `utils/trackingPixel.js:177` used
+`.includes('reactivate.html')`, which does not match `reactivate-fr.html` — every
+C78 activation URL pointed at the FR page, so `_lc` was never appended and the
+campaign 'registered' event never fired. Fixed same day by widening the substring
+to bare `'reactivate'`. 909 backfill events inserted manually with
+`metadata.via='backfill_reactivate_fr_matcher_miss'`. The scheduler's
+`not_registered` guard was unaffected (check (c) catches every activation via
+`reactivation_tokens.status='activated'`), so no visitor was ever re-mailed after
+activating.
