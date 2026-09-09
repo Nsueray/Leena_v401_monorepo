@@ -1,0 +1,80 @@
+/* ============================================================
+   ELIZA — Theme tokens (switchable)
+   Load AFTER signal.css. Set <html data-theme="…">.
+   Ships with: vermillion (default) · cobalt
+   Saved library (add anytime): daybreak, conifer, eclipse,
+   tidewater, inkwell, ember, risograph, blueprint, hivis,
+   conservatory — see /themes.
+   ============================================================ */
+
+/* ---------- VERMILLION · default · Japanese editorial ---------- */
+[data-theme="vermillion"] {
+  --bg:        #f5f1e8;
+  --bg-2:      #ebe5d6;
+  --surface:   #fffefa;
+  --surface-2: #f9f5ea;
+  --ink:       #1a1714;
+  --ink-2:     #403a34;
+  --muted:     #736b60;
+  --faint:     #a8a092;
+  --line:      #e8e0d0;
+  --line-2:    #f1ebdd;
+
+  --cmd:       #211a16;
+  --cmd-2:     #2e2620;
+  --cmd-line:  #403730;
+  --cmd-ink:   #e3d8c8;
+  --cmd-faint: #988c7a;
+
+  --primary:   #d8402c;   /* vermillion — structural */
+  --primary-d: #b22e1d;
+  --primary-l: #fbe5df;
+  --signal:    #e0612a;   /* warm ember — live / accent */
+  --signal-d:  #b8470f;
+  --signal-l:  #fce9dd;
+
+  --berry:     #1f7a5e;   /* jade — secondary */
+  --berry-d:   #155c46;
+  --berry-l:   #e0f0e9;
+
+  --pos:  #1f7a5e;  --pos-l:  #e0f0e9;
+  --warn: #c2860c;  --warn-l: #f8efd5;
+  --dang: #b32238;  --dang-l: #f8e3e6;
+  --info: #d8402c;  --info-l: #fbe5df;
+}
+
+/* ---------- COBALT · second selectable · vivid cool ---------- */
+[data-theme="cobalt"] {
+  --bg:        #eef1f7;
+  --bg-2:      #dfe6f0;
+  --surface:   #ffffff;
+  --surface-2: #f5f8fc;
+  --ink:       #0d1b2e;
+  --ink-2:     #33445c;
+  --muted:     #637186;
+  --faint:     #9aa7ba;
+  --line:      #dbe2ec;
+  --line-2:    #e9eef5;
+
+  --cmd:       #0b2552;
+  --cmd-2:     #123069;
+  --cmd-line:  #1d3f82;
+  --cmd-ink:   #bdd1f1;
+  --cmd-faint: #6783b3;
+
+  --primary:   #1f5fe0;   /* electric blue — structural */
+  --primary-d: #1549b8;
+  --primary-l: #e4edfd;
+  --signal:    #ff5a4d;   /* coral — live / accent */
+  --signal-d:  #d63a2f;
+  --signal-l:  #ffe7e4;
+
+  --berry:     #7b34d8;   /* violet — secondary */
+  --berry-d:   #5e23ad;
+  --berry-l:   #efe6fb;
+
+  --pos:  #119a5b;  --pos-l:  #e0f3ea;
+  --warn: #cf8a00;  --warn-l: #fbf0d6;
+  --dang: #e23b34;  --dang-l: #fde7e5;
+  --info: #1f5fe0;  --info-l: #e4edfd;
+}

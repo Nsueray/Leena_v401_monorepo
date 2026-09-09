@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — ui2</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+</head>
+<body>
+<!-- Nav TEK KAYNAK shell.js'te. Bu sayfa yalnız mount noktası taşır, nav HTML TAŞIMAZ. -->
+<div id="ui2-nav"></div>
+
+<main class="wrap" style="padding:48px 24px;max-width:720px;margin:0 auto">
+  <h1 style="margin:0 0 8px">ELIZA</h1>
+  <p style="margin:0 0 24px;color:var(--muted)">
+    Yeni arayüz iskeleti (ui2). Kabuk yerinde — ekran içeriği dilim dilim gelecek.
+  </p>
+  <p style="font-size:13px;color:var(--muted)">
+    Üstteki alanlardan birini seçin: <strong>Sales</strong>, <strong>Operations</strong>,
+    <strong>Finance</strong>.
+  </p>
+</main>
+
+<!-- Aktif domain'i sayfa bildirir; nav'ı shell.js kurar. -->
+<script>window.UI2_ACTIVE=null;</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+</body>
+</html>
