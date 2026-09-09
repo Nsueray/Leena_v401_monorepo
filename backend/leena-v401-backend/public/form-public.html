@@ -387,7 +387,7 @@
                 
                 if (response.ok) {
                     const data = await response.json().catch(() => ({}));
-                    showSuccess(data && data.qr_code);
+                    showSuccess(data && data.qr_code, data && data.badge_id);
                 } else {
                     const error = await response.json();
                     throw new Error(error.message || 'Failed to submit form');
@@ -488,7 +488,7 @@
             return map[key] != null ? map[key] : MISC_DEFAULTS_EN[key];
         }
 
-        function showSuccess(qrCode) {
+        function showSuccess(qrCode, badgeId) {
             const container = document.getElementById('formContent');
             const qrBlock = qrCode ? `
                         <div style="margin:18px auto 6px;">
@@ -500,6 +500,13 @@
                         <p style="font-weight:600;color:#0f172a;margin-bottom:4px;">${esc(pickSuccess('successQrInstruction'))}</p>
                         <p class="text-muted" style="font-size:13px;">${esc(pickSuccess('successMessage'))}</p>
             ` : '';
+            // Registration ID / N° d'enregistrement — bilingual label so form 59
+            // (FR) and form 51 (EN) both read correctly without a per-language
+            // string override. The value comes from POST /api/visitors/public
+            // (routes/visitors.js:487) and is defined for every row.
+            const idBlock = badgeId ? `
+                        <p style="font-size:13px;color:#334155;margin-top:8px;"><strong>Registration ID / N° d'enregistrement:</strong> <span style="font-family:monospace;letter-spacing:0.5px;">${esc(badgeId)}</span></p>
+            ` : '';
             container.innerHTML = `
                 <div class="form-header">
                     <h2>${esc(pickSuccess('successTitle'))}</h2>
@@ -509,6 +516,7 @@
                         <i class="bi bi-check-circle"></i>
                         <h4>${esc(pickSuccess('successHeading'))}</h4>
                         ${qrBlock}
+                        ${idBlock}
                         <p class="text-muted">${esc(pickMisc('receivedNote'))}</p>
                         <button class="btn btn-submit mt-3" onclick="location.reload()">
                             <i class="bi bi-arrow-clockwise me-2"></i> ${esc(pickSuccess('successButtonLabel'))}

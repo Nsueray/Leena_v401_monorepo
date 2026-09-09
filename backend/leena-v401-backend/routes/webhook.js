@@ -214,8 +214,11 @@ router.post('/zoho/:organizer_id/:expo_id/:form_id', async (req, res) => {
     } else {
       // ✅ New visitor - create record with new QR code
       isNewVisitor = true;
-      const badge_id = badgeNumber || `BADGE-${Date.now()}`;
+      // qr_code must be allocated first so badge_id derives from it, matching
+      // the hex-8 rule used by every other registration path. badgeNumber wins
+      // when Zoho supplies one (leaving room for pre-printed badge stock).
       const qr_code = uuidv4();
+      const badge_id = badgeNumber || qr_code.substring(0, 8).toUpperCase();
       const badge_url = generateBadgeUrl(qr_code);
 
       console.log('');

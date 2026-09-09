@@ -149,6 +149,9 @@ async function processReactivationChunks(jobId, validRows, ctx) {
               name: r.name || 'Valued Guest', last_name: r.last_name || '', email: r.email,
               company: r.company || '', country: r.country || '', job_title: r.job_title || '',
               activation_url: activationUrl, expo_name: targetExpo.name,
+              // badge_id deliberately blank on the invite — the token hasn't been
+              // activated yet, so no badge_id exists to render.
+              badge_id: '',
               date: new Date().toLocaleDateString()
             };
             const htmlContent = processEmailTemplate(emailTemplate.html_content || emailTemplate.body || '', templateData);
@@ -1022,6 +1025,9 @@ router.post('/resend-pending', authMiddleware, async (req, res) => {
           job_title: row.job_title || '',
           activation_url: activationUrl,
           expo_name: expoName,
+          // badge_id deliberately blank on the invite — the token hasn't been
+          // activated yet, so no badge_id exists to render.
+          badge_id: '',
           date: new Date().toLocaleDateString()
         };
 

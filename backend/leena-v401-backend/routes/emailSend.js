@@ -45,8 +45,14 @@ router.post('/single', authMiddleware, async (req, res) => {
         let visitorCustomFields = {};
 
         if (save_to_database) {
-            const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
             qrCode = generate_qr ? uuidv4() : null;
+            // Derive badge_id from qrCode when we minted one (hex-8, matches every
+            // other registration path). Fall back to BADGE-<epoch> only when
+            // generate_qr is false — the row is broken by design in that branch,
+            // but keep the old shape so we don't silently change other callers.
+            const badge_id = qrCode
+                ? qrCode.substring(0, 8).toUpperCase()
+                : `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
             if (qrCode) {
                 badgeUrl = `${process.env.BASE_BADGE_URL || 'https://leena.app'}/badge-print.html?qr=${qrCode}`;
@@ -171,8 +177,11 @@ router.post('/bulk', authMiddleware, async (req, res) => {
                 }
 
                 if (save_to_database) {
-                    const badge_id = `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
                     qrCode = generate_qr ? uuidv4() : null;
+                    // Same hex-8-when-possible rule as /single above.
+                    const badge_id = qrCode
+                        ? qrCode.substring(0, 8).toUpperCase()
+                        : `BADGE-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
 
                     if (qrCode) {
                         badgeUrl = `${process.env.BASE_BADGE_URL || 'https://leena.app'}/badge-print.html?qr=${qrCode}`;
