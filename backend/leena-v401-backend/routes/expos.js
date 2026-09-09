@@ -71,11 +71,21 @@ router.get('/', authenticateToken, async (req, res) => {
               e.city, e.venue, e.organizer_role, e.status, e.show_open_hours, e.cluster_id,
               e.catalogue_form_url, e.stand_design_form_url, e.visitor_preregistration_form_url,
               (SELECT COUNT(*)::int FROM visitors WHERE expo_id = e.id) as visitor_count,
-              (SELECT COUNT(*)::int FROM checkins WHERE expo_id = e.id) as checkin_count
+              (SELECT COUNT(*)::int FROM checkins WHERE expo_id = e.id) as checkin_count,
+              -- Registered = individual registrations only. BULK origins excluded per the
+              -- 9 Sep origin census (massimport + manual_email_send are batch INSERTs).
+              -- NULL origin counts as individual (6 legacy rows DB-wide, negligible).
+              (SELECT COUNT(*)::int FROM visitors WHERE expo_id = e.id
+                 AND (origin IS NULL OR origin NOT IN ('massimport','manual_email_send'))) as registered_count,
+              -- Unique persons that ever checked in (checkin_count above is raw scan events).
+              (SELECT COUNT(DISTINCT visitor_id)::int FROM checkins WHERE expo_id = e.id) as unique_checkin_count
        FROM expos e
        LEFT JOIN core_countries cc ON cc.code = e.country_code
        WHERE ${conditions.join(' AND ')}
-       ORDER BY e.start_date DESC, e.id DESC`,
+       ORDER BY (e.end_date < CURRENT_DATE) ASC NULLS FIRST,
+                CASE WHEN e.end_date >= CURRENT_DATE THEN e.start_date END ASC,
+                CASE WHEN e.end_date < CURRENT_DATE THEN e.start_date END DESC,
+                e.id DESC`,
       values
     );
 

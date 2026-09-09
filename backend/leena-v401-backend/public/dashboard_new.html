@@ -647,8 +647,8 @@
             
             document.getElementById('statsRow').style.display = 'grid';
             const now = new Date();
-            let activeCount = 0, totalVisitors = 0, totalCheckins = 0;
-            
+            let activeCount = 0, totalVisitors = 0, totalUniqueCheckins = 0;
+
             let html = '<div class="expo-grid">';
             expos.forEach(expo => {
                 const start = new Date(expo.start_date), end = new Date(expo.end_date);
@@ -656,8 +656,8 @@
                 if (now < start) { status = 'Upcoming'; statusClass = 'upcoming'; }
                 else if (now <= end) { status = 'Active'; statusClass = 'active'; activeCount++; }
                 totalVisitors += parseInt(expo.visitor_count) || 0;
-                totalCheckins += parseInt(expo.checkin_count) || 0;
-                
+                totalUniqueCheckins += parseInt(expo.unique_checkin_count) || 0;
+
                 html += `<div class="expo-card" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')">
                     <div class="expo-card-header">
                         <div><h3>${expo.name}</h3><div class="expo-id">ID: ${expo.id}</div></div>
@@ -668,8 +668,9 @@
                         <div class="expo-info-item"><i class="bi bi-calendar"></i> ${formatDate(expo.start_date)} - ${formatDate(expo.end_date)}</div>
                     </div>
                     <div class="expo-stats">
-                        <div class="expo-stat"><div class="expo-stat-value">${formatNumber(expo.visitor_count || 0)}</div><div class="expo-stat-label">Visitors</div></div>
-                        <div class="expo-stat"><div class="expo-stat-value">${formatNumber(expo.checkin_count || 0)}</div><div class="expo-stat-label">Check-ins</div></div>
+                        <div class="expo-stat"><div class="expo-stat-value">${formatNumber(expo.visitor_count || 0)}</div><div class="expo-stat-label">Total Data</div></div>
+                        <div class="expo-stat"><div class="expo-stat-value">${formatNumber(expo.registered_count || 0)}</div><div class="expo-stat-label">Registered</div></div>
+                        <div class="expo-stat"><div class="expo-stat-value">${formatNumber(expo.unique_checkin_count || 0)}</div><div class="expo-stat-label">Check-ins</div></div>
                     </div>
                     <div class="expo-actions" onclick="event.stopPropagation()">
                         <button class="btn btn-primary" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')"><i class="bi bi-arrow-right"></i> Enter</button>
@@ -683,7 +684,7 @@
             document.getElementById('statTotal').textContent = expos.length;
             document.getElementById('statActive').textContent = activeCount;
             document.getElementById('statVisitors').textContent = formatNumber(totalVisitors);
-            document.getElementById('statCheckins').textContent = formatNumber(totalCheckins);
+            document.getElementById('statCheckins').textContent = formatNumber(totalUniqueCheckins);
         }
         
         function enterExpo(id, name) {
