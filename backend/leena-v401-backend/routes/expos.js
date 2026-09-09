@@ -82,7 +82,17 @@ router.get('/', authenticateToken, async (req, res) => {
        FROM expos e
        LEFT JOIN core_countries cc ON cc.code = e.country_code
        WHERE ${conditions.join(' AND ')}
-       ORDER BY (e.end_date < CURRENT_DATE) ASC NULLS FIRST,
+       ORDER BY
+                -- Bucket: 0=active/upcoming, 1=ended, 2=NULL-dated. NULL rows land
+                -- LAST so the frontend's new Date(null)→epoch never shows "Jan 1,
+                -- 1970" at the top of the list. Previously the first sort key
+                -- (end_date < CURRENT_DATE) evaluated NULL and NULLS FIRST placed
+                -- them at the top.
+                CASE
+                  WHEN e.start_date IS NULL OR e.end_date IS NULL THEN 2
+                  WHEN e.end_date < CURRENT_DATE THEN 1
+                  ELSE 0
+                END ASC,
                 CASE WHEN e.end_date >= CURRENT_DATE THEN e.start_date END ASC,
                 CASE WHEN e.end_date < CURRENT_DATE THEN e.start_date END DESC,
                 e.id DESC`,
