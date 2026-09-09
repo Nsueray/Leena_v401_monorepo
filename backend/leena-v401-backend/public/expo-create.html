@@ -175,6 +175,19 @@
                 <div class="error" id="locationError">Location is required</div>
             </div>
 
+            <div class="form-group">
+                <label for="country_code">
+                    Country <span class="required">*</span>
+                </label>
+                <select id="country_code" name="country_code" required>
+                    <option value="">Select country</option>
+                </select>
+                <small style="color:#64748b;font-size:12px;display:block;margin-top:4px;">
+                    Used to normalise phone numbers on import. Without it, phones get silently dropped.
+                </small>
+                <div class="error" id="countryCodeError">Country is required</div>
+            </div>
+
             <div class="date-group">
                 <div class="form-group">
                     <label for="start_date">
@@ -236,6 +249,19 @@
             document.getElementById('start_date').setAttribute('min', today);
             document.getElementById('end_date').setAttribute('min', today);
 
+            // Populate country select
+            const token = localStorage.getItem('token');
+            if (token) {
+                fetch(`${API_URL}/reference/countries`, { headers: { 'Authorization': `Bearer ${token}` } })
+                    .then(r => r.ok ? r.json() : [])
+                    .then(rows => {
+                        const sel = document.getElementById('country_code');
+                        const list = Array.isArray(rows) ? rows : (rows.countries || []);
+                        for (const r of list) { const o = document.createElement('option'); o.value = r.code; o.textContent = r.name; sel.appendChild(o); }
+                    })
+                    .catch(() => {});
+            }
+
             // Update end date minimum when start date changes
             document.getElementById('start_date').addEventListener('change', (e) => {
                 document.getElementById('end_date').setAttribute('min', e.target.value);
@@ -264,6 +290,7 @@
             const formData = {
                 name: document.getElementById('name').value.trim(),
                 location: document.getElementById('location').value.trim(),
+                country_code: document.getElementById('country_code').value,
                 start_date: document.getElementById('start_date').value,
                 end_date: document.getElementById('end_date').value,
                 description: document.getElementById('description').value.trim(),

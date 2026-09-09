@@ -576,6 +576,15 @@
                     <label class="form-label">Location</label>
                     <input type="text" class="form-control" id="expoLocation" placeholder="e.g., Istanbul Convention Center">
                 </div>
+                <div class="form-group">
+                    <label class="form-label">Country *</label>
+                    <select class="form-control" id="expoCountryCode" required>
+                        <option value="">Select country</option>
+                    </select>
+                    <small style="color:#64748b;font-size:12px;">
+                        Used to normalise phone numbers on import. Without it, phones get silently dropped.
+                    </small>
+                </div>
                 <div class="grid-2">
                     <div class="form-group">
                         <label class="form-label">Start Date *</label>
@@ -683,21 +692,40 @@
             window.location.href = 'main-panel-v2.html';
         }
         
-        function showCreateModal() { document.getElementById('createModal').classList.add('show'); }
+        // Country list cache — fetched lazily on first modal open.
+        let _countriesLoaded = false;
+        async function loadCountriesIntoSelect() {
+            if (_countriesLoaded) return;
+            try {
+                const res = await leenaFetch(`${API_URL}/reference/countries`);
+                if (!res.ok) return;
+                const rows = await res.json();
+                const sel = document.getElementById('expoCountryCode');
+                const list = Array.isArray(rows) ? rows : (rows.countries || []);
+                for (const r of list) {
+                    const opt = document.createElement('option');
+                    opt.value = r.code; opt.textContent = r.name;
+                    sel.appendChild(opt);
+                }
+                _countriesLoaded = true;
+            } catch (err) { /* fetch wrapper handles 401/403; other errors leave select empty */ }
+        }
+        function showCreateModal() { document.getElementById('createModal').classList.add('show'); loadCountriesIntoSelect(); }
         function hideCreateModal() { document.getElementById('createModal').classList.remove('show'); }
-        
+
         async function createExpo() {
             const name = document.getElementById('expoName').value.trim();
             const location = document.getElementById('expoLocation').value.trim();
+            const country_code = document.getElementById('expoCountryCode').value;
             const startDate = document.getElementById('expoStartDate').value;
             const endDate = document.getElementById('expoEndDate').value;
-            if (!name || !startDate || !endDate) { showToast('Please fill required fields', 'error'); return; }
+            if (!name || !country_code || !startDate || !endDate) { showToast('Please fill required fields (including Country)', 'error'); return; }
             document.getElementById('createBtn').disabled = true;
             try {
                 const res = await leenaFetch(`${API_URL}/expos`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, location, start_date: startDate, end_date: endDate })
+                    body: JSON.stringify({ name, location, country_code, start_date: startDate, end_date: endDate })
                 });
                 if (res.ok) { hideCreateModal(); loadExpos(); }
                 else { const err = await res.json(); showToast(err.error || 'Failed to create expo', 'error'); }
