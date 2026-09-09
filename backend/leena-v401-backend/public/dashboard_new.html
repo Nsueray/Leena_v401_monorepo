@@ -345,6 +345,34 @@
             background: #15803d;
             border-color: #15803d;
         }
+
+        /* Archive fold: collapsed by default, chevron rotates on expand */
+        .archive-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 12px 20px;
+            margin-top: 20px;
+            background: var(--bg-card);
+            border: 1px dashed var(--border-color);
+            border-radius: var(--radius-md);
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .archive-toggle:hover { background: var(--bg-main); border-color: var(--primary); color: var(--primary); }
+        .archive-toggle i { transition: transform 0.2s; }
+        .archive-toggle.expanded i { transform: rotate(180deg); }
+        .archive-grid { display: none; margin-top: 20px; }
+        .archive-grid.expanded {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
         
         .expo-info { margin-bottom: 16px; }
         
@@ -661,8 +689,14 @@
             document.getElementById('statsRow').style.display = 'grid';
             const now = new Date();
             let activeCount = 0, totalVisitors = 0, totalUniqueCheckins = 0;
+            // Archive rule (Suer 9 Sep): name contains 'test' (case-insensitive,
+            // covers '[TEST]') OR end_date more than 2y old OR either date is NULL.
+            // Everything else renders in the main grid. Header KPIs count ALL expos
+            // — the loop below runs over the full array before partitioning.
+            const twoYearsAgo = new Date(now.getTime());
+            twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+            const mainExpos = [], archiveExpos = [];
 
-            let html = '<div class="expo-grid">';
             expos.forEach(expo => {
                 const start = new Date(expo.start_date), end = new Date(expo.end_date);
                 let status = 'Ended', statusClass = 'ended';
@@ -670,11 +704,21 @@
                 else if (now <= end) { status = 'Active'; statusClass = 'active'; activeCount++; }
                 totalVisitors += parseInt(expo.visitor_count) || 0;
                 totalUniqueCheckins += parseInt(expo.unique_checkin_count) || 0;
+                expo._status = status;
+                expo._statusClass = statusClass;
 
-                html += `<div class="expo-card ${statusClass}" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')">
+                const nameLower = (expo.name || '').toLowerCase();
+                const isNullDated = !expo.start_date || !expo.end_date;
+                const isTestNamed = nameLower.includes('test');
+                const isStale = expo.end_date && end < twoYearsAgo;
+                if (isNullDated || isTestNamed || isStale) archiveExpos.push(expo);
+                else mainExpos.push(expo);
+            });
+
+            const buildCard = (expo) => `<div class="expo-card ${expo._statusClass}" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')">
                     <div class="expo-card-header">
                         <div><h3>${expo.name}</h3><div class="expo-id">ID: ${expo.id}</div></div>
-                        <span class="expo-status ${statusClass}">${status}</span>
+                        <span class="expo-status ${expo._statusClass}">${expo._status}</span>
                     </div>
                     <div class="expo-info">
                         <div class="expo-info-item"><i class="bi bi-geo-alt"></i> ${expo.location || 'No location'}</div>
@@ -690,8 +734,17 @@
                         <button class="btn btn-secondary"><i class="bi bi-pencil"></i></button>
                     </div>
                 </div>`;
-            });
+
+            let html = '<div class="expo-grid">';
+            for (const e of mainExpos) html += buildCard(e);
             html += '<div class="create-expo-card" onclick="showCreateModal()"><i class="bi bi-plus-circle"></i><h3>Create New Expo</h3></div></div>';
+
+            if (archiveExpos.length > 0) {
+                html += `<button class="archive-toggle" onclick="toggleArchive(this)"><i class="bi bi-chevron-down"></i> More Expos (${archiveExpos.length})</button>`;
+                html += '<div class="archive-grid" id="archiveGrid">';
+                for (const e of archiveExpos) html += buildCard(e);
+                html += '</div>';
+            }
             container.innerHTML = html;
             
             document.getElementById('statTotal').textContent = expos.length;
@@ -699,7 +752,14 @@
             document.getElementById('statVisitors').textContent = formatNumber(totalVisitors);
             document.getElementById('statCheckins').textContent = formatNumber(totalUniqueCheckins);
         }
-        
+
+        function toggleArchive(btn) {
+            const grid = document.getElementById('archiveGrid');
+            if (!grid) return;
+            grid.classList.toggle('expanded');
+            btn.classList.toggle('expanded');
+        }
+
         function enterExpo(id, name) {
             localStorage.setItem('selectedExpoId', id);
             localStorage.setItem('selectedExpoName', name);
