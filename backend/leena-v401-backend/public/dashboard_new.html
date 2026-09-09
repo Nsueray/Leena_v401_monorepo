@@ -329,9 +329,22 @@
             font-weight: 600;
         }
         
-        .expo-status.active { background: #dcfce7; color: #166534; }
+        .expo-status.active,
+        .expo-status.upcoming { background: #dcfce7; color: #166534; }
         .expo-status.ended { background: #f3f4f6; color: #6b7280; }
-        .expo-status.upcoming { background: #dbeafe; color: #1e40af; }
+
+        /* Green Enter button on active/upcoming cards (ended keeps the primary
+         * blue). Palette #16a34a / #15803d matches the badge green tone above. */
+        .expo-card.active .btn-primary,
+        .expo-card.upcoming .btn-primary {
+            background: #16a34a;
+            border-color: #16a34a;
+        }
+        .expo-card.active .btn-primary:hover,
+        .expo-card.upcoming .btn-primary:hover {
+            background: #15803d;
+            border-color: #15803d;
+        }
         
         .expo-info { margin-bottom: 16px; }
         
@@ -658,7 +671,7 @@
                 totalVisitors += parseInt(expo.visitor_count) || 0;
                 totalUniqueCheckins += parseInt(expo.unique_checkin_count) || 0;
 
-                html += `<div class="expo-card" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')">
+                html += `<div class="expo-card ${statusClass}" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')">
                     <div class="expo-card-header">
                         <div><h3>${expo.name}</h3><div class="expo-id">ID: ${expo.id}</div></div>
                         <span class="expo-status ${statusClass}">${status}</span>
