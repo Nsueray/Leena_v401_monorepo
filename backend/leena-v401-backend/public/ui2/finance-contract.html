@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Finance · Contract</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<style>
+  /* Ekrana özgü küçük yardımcılar — görsel sistem signal.css'ten; bunlar yalnız
+     signal.css'te KARŞILIĞI OLMAYAN düzen parçaları (strip/ms/kpi mockup-içiydi). */
+  .fc-main { padding: 18px 24px 40px; max-width: 1180px; margin: 0 auto; }
+  .fc-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  .fc-head h1 { font-family:var(--font-display); font-weight:600; font-size:22px; margin:0; letter-spacing:-.01em; color:var(--ink); }
+  .fc-head .sub { margin:5px 0 0; color:var(--muted); font-size:13px; font-family:var(--font-mono); letter-spacing:.02em; }
+  .fc-strip { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:16px; }
+  .fc-ms { background:var(--surface); border:1px solid var(--line); border-radius:var(--r-md); padding:13px 15px; }
+  .fc-ms .l { font-family:var(--font-mono); font-size:10px; letter-spacing:.11em; text-transform:uppercase; color:var(--muted); }
+  .fc-ms .v { font-family:var(--font-display); font-weight:600; font-size:23px; margin-top:8px; letter-spacing:-.01em; color:var(--ink); }
+  .fc-ms .v small { font-size:12px; color:var(--muted); font-weight:500; }
+  .fc-stack { display:grid; gap:16px; }
+  .fc-empty { padding:22px; color:var(--muted); font-size:13px; text-align:center; }
+  .fc-note { color:var(--muted); font-size:12px; }
+  .rf-tag { font-family:var(--font-mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--warn); border:1px solid var(--warn-l); background:var(--warn-l); border-radius:4px; padding:1px 5px; margin-left:7px; }
+  .rev-tag { font-family:var(--font-mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--dang); border:1px solid var(--dang-l); background:var(--dang-l); border-radius:4px; padding:1px 5px; margin-left:7px; }
+</style>
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+
+<main class="fc-main" id="fc-root">
+  <div class="fc-empty">Loading…</div>
+</main>
+
+<script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='contract';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script>
+(function () {
+  'use strict';
+  var root = document.getElementById('fc-root');
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // Sunucu string'i (ör. "342.00") olduğu gibi gösterilir — client YENİDEN HESAPLAMAZ (RAP-02).
+  function money(v, cur){ if(v==null||v==='') return '—'; return (cur?esc(cur)+' ':'') + esc(v); }
+  function eur(v){ if(v==null||v==='') return '—'; return '€' + esc(v); }
+  function dash(v){ return (v==null||v==='') ? '—' : esc(v); }
+
+  function statusChip(st){
+    if(!st) return '';
+    var cls='chip'; // signal.css .chip; renk duruma göre inline (badge sınıfı yok)
+    var color='var(--ink-2)', bg='var(--line-2)';
+    if(st==='Active'){ color='var(--primary-d)'; bg='var(--primary-l)'; }
+    else if(st==='On Hold'){ color='var(--warn)'; bg='var(--warn-l)'; }
+    else if(st==='Cancelled'){ color='var(--dang)'; bg='var(--dang-l)'; }
+    return '<span class="'+cls+'" style="color:'+color+';background:'+bg+';border-color:'+bg+'">'+esc(st)+'</span>';
+  }
+
+  function card(title, eyebrow, inner){
+    return '<div class="card" style="overflow:hidden">'+
+      '<div class="card-head"><span class="card-title">'+esc(title)+'</span>'+
+      (eyebrow?'<span class="card-eyebrow">'+esc(eyebrow)+'</span>':'')+'</div>'+
+      inner+'</div>';
+  }
+
+  function lineItemsTable(items){
+    if(!items || !items.length) return '<div class="fc-empty">No line items on this contract.</div>';
+    var rows = items.map(function(it){
+      var rf = it.is_registration_fee ? '<span class="rf-tag">reg. fee</span>' : '';
+      return '<tr>'+
+        '<td>'+dash(it.description)+rf+(it.product_code?' <span class="fc-note">·'+esc(it.product_code)+'</span>':'')+'</td>'+
+        '<td class="num">'+dash(it.quantity)+'</td>'+
+        '<td class="num">'+money(it.unit_price, it.currency)+'</td>'+
+      '</tr>';
+    }).join('');
+    return '<table class="table"><thead><tr>'+
+      '<th>Description</th><th class="num">Qty</th><th class="num">Unit price</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
+  function commissionTable(comm){
+    if(!comm) return '<div class="fc-empty">Commission unavailable — '+dash(comm && comm.commission_reason)+'.</div>';
+    if(!comm.roles || !comm.roles.length) return '<div class="fc-empty">No commission roles assigned.</div>';
+    var rows = comm.roles.map(function(r){
+      var earned = (r.earned_eur==null) ? '<span class="fc-note">'+dash(r.reason)+'</span>' : eur(r.earned_eur);
+      var rate = (r.pct_used==null) ? '—' : esc(r.pct_used)+'%';
+      return '<tr>'+
+        '<td>'+esc((r.role||'').toUpperCase())+'</td>'+
+        '<td>'+dash(r.agent_name)+'</td>'+
+        '<td class="num">'+rate+'</td>'+
+        '<td class="num">'+earned+'</td>'+
+      '</tr>';
+    }).join('');
+    return '<table class="table"><thead><tr>'+
+      '<th>Role</th><th>Agent</th><th class="num">Rate</th><th class="num">Earned (EUR)</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
+  function paymentsTable(list){
+    if(!list || !list.length) return '<div class="fc-empty">No payments recorded.</div>';
+    var rows = list.map(function(p){
+      var rev = (p.reverses_payment_id!=null) ? '<span class="rev-tag">reversal</span>' : '';
+      return '<tr>'+
+        '<td>'+dash(p.payment_date)+rev+'</td>'+
+        '<td>'+dash(p.payment_method)+'</td>'+
+        '<td class="num">'+money(p.amount, p.currency)+'</td>'+
+        '<td class="num">'+dash(p.exchange_rate)+'</td>'+
+        '<td class="num">'+eur(p.amount_eur)+'</td>'+
+      '</tr>';
+    }).join('');
+    return '<table class="table"><thead><tr>'+
+      '<th>Date</th><th>Method</th><th class="num">Amount</th><th class="num">FX rate</th><th class="num">EUR booked</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+
+  function render(c, pay){
+    var comm = c.commission;
+    var commEyebrow = comm ? ('Base ' + eur(comm.base) + ' · ratio ' + dash(comm.ratio) + (comm.overpayment?' · overpaid':'')) : '';
+    var html =
+      '<div class="fc-head">'+
+        '<div><h1>'+dash(c.company_name)+'</h1>'+
+          '<div class="sub">'+dash(c.af_number)+(c.expo_name?' · '+esc(c.expo_name):'')+(c.contract_date?' · '+esc(c.contract_date):'')+'</div>'+
+        '</div>'+
+        '<div>'+statusChip(c.status)+'</div>'+
+      '</div>'+
+      '<div class="fc-strip">'+
+        '<div class="fc-ms"><div class="l">Revenue</div><div class="v">'+money(c.revenue, c.currency)+'</div><div class="fc-note">'+eur(c.revenue_eur)+' booked</div></div>'+
+        '<div class="fc-ms"><div class="l">Paid</div><div class="v">'+eur(c.paid_eur)+'</div></div>'+
+        '<div class="fc-ms"><div class="l">Balance</div><div class="v">'+eur(c.balance_eur)+'</div></div>'+
+      '</div>'+
+      '<div class="fc-stack">'+
+        card('Line items', 'Transaction currency', lineItemsTable(c.line_items))+
+        card('Commission', commEyebrow, commissionTable(comm))+
+        card('Payments', 'FX captured at settlement', paymentsTable(pay && pay.payments))+
+      '</div>';
+    root.innerHTML = html;
+  }
+
+  function showError(msg){
+    root.innerHTML = '<div class="fc-empty">'+esc(msg)+'</div>';
+  }
+
+  function jsonOrNull(res){ return res.ok ? res.json() : Promise.resolve({__http:res.status}); }
+
+  function load(){
+    // Yetki TEK NOKTADAN sorulur — ekran kendi kuralını yazmaz (kural #3).
+    if (typeof window.ui2CanSee === 'function' && !window.ui2CanSee('finance')) {
+      showError('You do not have access to Finance.'); return;
+    }
+    var cid = new URLSearchParams(location.search).get('contract') || '4';
+    Promise.all([
+      window.leenaFetch('/api/contracts/'+encodeURIComponent(cid)).then(jsonOrNull),
+      window.leenaFetch('/api/contracts/'+encodeURIComponent(cid)+'/payments').then(jsonOrNull)
+    ]).then(function(r){
+      var c = r[0], pay = r[1];
+      if (c && c.__http === 404) { showError('Contract #'+cid+' not found. Append ?contract=<id> to the URL.'); return; }
+      if (c && c.__http) { showError('Could not load contract (HTTP '+c.__http+').'); return; }
+      render(c, (pay && pay.__http) ? null : pay);
+    }).catch(function(err){
+      // 401: leena-fetch göreli login.html'e gider (/ui2'den yanlış çözülür) — mutlakla önceliyoruz.
+      if (err && err.status === 401) { window.location.href = '/login.html'; return; }
+      showError('Could not reach the server. Please retry.');
+    });
+  }
+
+  // shell.js DOMContentLoaded'da nav/subnav kurar; veri yüklemesini de aynı ana bağla.
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', load);
+  } else { load(); }
+})();
+</script>
+</body>
+</html>
