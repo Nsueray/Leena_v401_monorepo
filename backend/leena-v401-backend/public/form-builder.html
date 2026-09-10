@@ -600,10 +600,14 @@
         let currentExpoName = null;
         let emailTemplates = [];
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
             checkAuth();
             loadCurrentExpo();
-            loadEmailTemplates();
+            // Race fix (10 Sep 2026): loadForm sets emailTemplateSelect.value = <id>,
+            // which silently no-ops when the corresponding <option> doesn't exist yet.
+            // Await template load BEFORE checkEditMode (which fires loadForm) so the
+            // options are in the DOM when the value assignment happens.
+            await loadEmailTemplates();
             checkEditMode();
             setupAutoSave();
             setupExpoToggle();
@@ -733,7 +737,16 @@
                 document.getElementById('visitorTypeSelect').value = data.visitor_type || 'visitor';
                 
                 if (data.email_template_id) {
-                    document.getElementById('emailTemplateSelect').value = data.email_template_id;
+                    const sel = document.getElementById('emailTemplateSelect');
+                    sel.value = data.email_template_id;
+                    // Belt-and-braces: if the option doesn't exist (deleted template
+                    // OR race-fix regressed), the <select> silently sets to "" — warn
+                    // so we can spot it. Value stays "" and confirm-popup (c) catches
+                    // it if the user saves without noticing.
+                    if (String(sel.value) !== String(data.email_template_id)) {
+                        console.warn('[form-builder] email_template_id', data.email_template_id,
+                                     'has no matching <option>; select is now blank');
+                    }
                 }
                 
                 document.getElementById('formSource').value = data.source || '';
@@ -770,7 +783,19 @@
             const visitorType = document.getElementById('visitorTypeSelect').value;
             const source = document.getElementById('formSource').value.trim();
             const origin = document.getElementById('formOrigin').value;
-            
+
+            // UX guard (Yaprak's request 10 Sep): saving with no email template is
+            // usually the race-fix regression, not the operator's intent. Force a
+            // confirm so accidental wipes are caught before they hit the DB.
+            if (!emailTemplateId) {
+                const ok = confirm(
+                    "No email template selected — registrants will receive NO confirmation email.\n\n"
+                    + "Aucun modèle d'e-mail sélectionné — les inscrits ne recevront AUCUN e-mail de confirmation.\n\n"
+                    + "Save anyway? / Enregistrer quand même ?"
+                );
+                if (!ok) return;
+            }
+
             let expoId = null;
             if (!allExpos && currentExpoId) {
                 expoId = parseInt(currentExpoId);
