@@ -371,6 +371,8 @@ router.post('/public', async (req, res) => {
           // Generate QR code image tag for email (uses existing QR for returning visitors)
           const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
           const qrImageTag = `<img src="${baseUrl}/api/qr-image/${qrCode}" alt="QR Code" style="max-width:200px;">`;
+          // Durable fallback link — see email_worker.js:224 comment.
+          const badgeLink = `${baseUrl}/badge-print.html?qr=${qrCode}`;
 
           // Build email data with QR image
           // Spread custom_fields as top-level keys so {{conference_topic}} etc. work in templates
@@ -382,6 +384,7 @@ router.post('/public', async (req, res) => {
             ...visitorData,
             ...cfSpread,
             qr_code: qrImageTag,
+            badge_link: badgeLink,
             badge_id: badgeId,
             badge_url: badgeUrl,
             expo_name: expoName,
@@ -857,6 +860,8 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
             try {
               const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
               const qrImageTag = `<img src="${baseUrl}/api/qr-image/${currentQrCode}" alt="QR Code" style="max-width:200px;">`;
+              // Durable fallback link — see email_worker.js:224 comment.
+              const badgeLink = `${baseUrl}/badge-print.html?qr=${currentQrCode}`;
               const currentBadgeUrl = generateBadgeUrl(currentQrCode);
 
               const templateData = {
@@ -864,6 +869,7 @@ router.post('/import', dualAuth, upload.single('file'), async (req, res) => {
                 name: name || 'Guest',
                 last_name, email, company, country, job_title, phone,
                 qr_code: qrImageTag,
+                badge_link: badgeLink,
                 badge_id: currentBadgeId,
                 badge_url: currentBadgeUrl,
                 expo_name: expoName,

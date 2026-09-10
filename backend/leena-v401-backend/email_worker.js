@@ -223,6 +223,12 @@ async function processTask(task) {
       const qrImageTag = task.qr_code
         ? `<img src="${baseUrl}/api/qr-image/${task.qr_code}" alt="QR Code" style="max-width:200px;">`
         : '';
+      // Durable fallback link — /badge-print.html renders the QR client-side
+      // via jsdelivr (public/badge-print.html:196, :314), no /api/qr-image
+      // dependency. Templates put this in a "QR not showing? Open the badge
+      // page →" line as a fallback for corporate email gateways that strip
+      // external <img> fetch (Mailinblack et al). Issue A, 10 Sep report.
+      const badgeLink = task.qr_code ? `${baseUrl}/badge-print.html?qr=${task.qr_code}` : '';
 
       // Format conference_topic for multi-topic display
       if (custom_fields.conference_topic) {
@@ -241,6 +247,7 @@ async function processTask(task) {
         badge_url: task.badge_url || '',
         expo_name: task.expo_name || '',
         qr_code: qrImageTag,
+        badge_link: badgeLink,
         date: new Date().toLocaleDateString(),
         ...custom_fields
       };
