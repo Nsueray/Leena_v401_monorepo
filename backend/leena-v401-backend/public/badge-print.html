@@ -4,356 +4,256 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="icon" type="image/png" sizes="96x96" href="/assets/favicon-96x96.png">
-  <title>Print Your Event Badge</title>
+  <title>Your Event Badge / Votre badge événement</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f6f7fb;
       min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      padding: 20px;
+      color: #0f172a;
+      padding: 20px 12px;
+      line-height: 1.5;
     }
-    .container {
-      background: white;
-      border-radius: 20px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-      max-width: 600px;
-      width: 100%;
-      overflow: hidden;
-    }
+    .container { max-width: 600px; margin: 0 auto; }
     .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
       text-align: center;
-    }
-    .header h1 { font-size: 28px; margin-bottom: 10px; }
-    .badge-container { padding: 40px; text-align: center; }
-    .badge {
-      border: 3px solid #e0e0e0;
-      border-radius: 15px;
-      padding: 30px;
-      display: inline-block;
-      background: white;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-    .badge-header { margin-bottom: 20px; }
-    .badge-title {
-      font-size: 18px;
-      color: #333;
-      font-weight: 600;
-      margin-bottom: 5px;
-    }
-    .badge-subtitle { font-size: 14px; color: #666; }
-    .visitor-info { margin: 20px 0; text-align: left; }
-    .info-row {
-      padding: 10px;
-      border-bottom: 1px solid #f0f0f0;
-    }
-    .info-label {
-      font-weight: 600;
-      color: #666;
-      font-size: 12px;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-    /* RESPONSIVE TEXT FIX */
-    .info-value { 
-      color: #333; 
-      font-size: 16px;
-      word-wrap: break-word;
-      word-break: break-word;
-      overflow-wrap: break-word;
-      hyphens: auto;
-      max-width: 300px;
-      line-height: 1.4;
-    }
-    /* For longer text, make it smaller */
-    .info-value.long-text {
+      padding: 12px 0 20px;
+      color: #475569;
       font-size: 14px;
     }
-    .qr-section {
-      margin: 30px 0;
-      padding: 20px;
-      background: #f8f9fa;
-      border-radius: 10px;
+    .badge {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+      padding: 32px 24px;
+      text-align: center;
     }
-    /* QR CODE 30% SMALLER */
-    .qr-code {
-      width: 140px;
-      height: 140px;
-      margin: 0 auto;
-      padding: 10px;
-      background: white;
-      border-radius: 10px;
+    .expo-name {
+      font-size: 20px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
     }
-    .badge-footer {
-      margin-top: 20px;
-      padding-top: 20px;
-      border-top: 2px dashed #e0e0e0;
-      font-size: 12px;
-      color: #999;
+    .expo-meta {
+      font-size: 13px;
+      color: #64748b;
+      margin-bottom: 24px;
     }
-    .actions {
-      padding: 30px;
-      background: #f8f9fa;
+    .visitor-info {
+      text-align: left;
+      margin: 20px 0;
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 8px;
+    }
+    .info-row {
       display: flex;
-      justify-content: center;
-      gap: 15px;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 8px 0;
+      border-bottom: 1px solid #e2e8f0;
     }
-    .btn {
-      padding: 12px 30px;
-      border: none;
-      border-radius: 25px;
-      font-size: 16px;
+    .info-row:last-child { border-bottom: none; }
+    .info-label {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
       font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s;
-      text-decoration: none;
+    }
+    .info-value {
+      font-size: 15px;
+      color: #0f172a;
+      font-weight: 500;
+      text-align: right;
+      word-break: break-word;
+      max-width: 60%;
+    }
+    .info-value.mono {
+      font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+      letter-spacing: 0.05em;
+    }
+    .qr-section {
+      margin: 24px auto 12px;
+      padding: 20px;
+      background: #ffffff;
+      border: 2px dashed #cbd5e1;
+      border-radius: 8px;
       display: inline-block;
     }
-    .btn-primary {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
+    .qr-code { display: flex; justify-content: center; align-items: center; }
+    .qr-instruction { font-size: 12px; color: #64748b; margin-top: 12px; }
+    .actions { margin-top: 24px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      background: #0f172a; color: white; border: none;
+      padding: 12px 20px; border-radius: 6px;
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: background 0.15s;
     }
-    .btn-primary:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
-    .btn-secondary {
-      background: white;
-      color: #667eea;
-      border: 2px solid #667eea;
-    }
-    .btn-secondary:hover {
-      background: #667eea;
-      color: white;
-    }
-    .loading {
-      text-align: center;
-      padding: 60px;
-    }
+    .btn:hover { background: #1e293b; }
+    .footer { text-align: center; padding: 20px 0; color: #94a3b8; font-size: 12px; }
+    .loading, .error { text-align: center; padding: 60px 20px; color: #64748b; }
     .loading-spinner {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #667eea;
-      border-radius: 50%;
-      width: 50px;
-      height: 50px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 20px;
+      width: 40px; height: 40px;
+      border: 3px solid #e2e8f0; border-top-color: #0f172a;
+      border-radius: 50%; margin: 0 auto 16px;
+      animation: spin 0.8s linear infinite;
     }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-icon { font-size: 48px; margin-bottom: 12px; }
+
+    @media (max-width: 520px) {
+      body { padding: 10px 8px; }
+      .badge { padding: 20px 16px; }
+      .info-row { flex-direction: column; align-items: flex-start; }
+      .info-value { max-width: 100%; text-align: left; margin-top: 2px; }
+      .expo-name { font-size: 18px; }
     }
-    .error {
-      text-align: center;
-      padding: 60px;
-      color: #dc3545;
-    }
-    .error i {
-      font-size: 60px;
-      margin-bottom: 20px;
-    }
+
     @media print {
-      body { background: white; padding: 0; }
-      .container {
-        box-shadow: none;
-        max-width: 100%;
-      }
-      .header, .actions { display: none; }
-      .badge-container { padding: 0; }
-      .badge {
-        border: 2px solid #333;
-        box-shadow: none;
-      }
-      /* Keep smaller QR size for print */
-      .qr-code {
-        width: 140px;
-        height: 140px;
-      }
+      body { background: white; padding: 0; color: black; }
+      .header, .actions, .footer { display: none; }
+      .badge { border: 2px solid #0f172a; box-shadow: none; padding: 24px; }
+      .qr-section { border-style: solid; }
+      .visitor-info { background: white; }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <h1>🎫 Your Event Badge</h1>
-      <p>Print or save your badge for the event</p>
-    </div>
-
+    <div class="header">Your Event Badge · Votre badge événement</div>
     <div id="content">
       <div class="loading">
         <div class="loading-spinner"></div>
-        <p>Loading your badge...</p>
+        <div>Loading your badge… / Chargement du badge…</div>
       </div>
     </div>
+    <div class="footer">Powered by Leena EMS · © Elan Expo</div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
-  <script src="/leena-toast.js"></script>
   <script>
-    // ✅ FIX 1: Use relative path that works both locally and in production
     const API_URL = '/api';
 
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
     function getQRFromURL() {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('qr');
+      return new URLSearchParams(window.location.search).get('qr');
+    }
+
+    function formatDates(startDate, endDate) {
+      if (!startDate) return '';
+      const opts = { day: 'numeric', month: 'short', year: 'numeric' };
+      const s = new Date(startDate);
+      if (!endDate || startDate === endDate) return s.toLocaleDateString('en-GB', opts);
+      const e = new Date(endDate);
+      if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
+        return `${s.getDate()}–${e.toLocaleDateString('en-GB', opts)}`;
+      }
+      return `${s.toLocaleDateString('en-GB', opts)} – ${e.toLocaleDateString('en-GB', opts)}`;
+    }
+
+    function venueLine(v) {
+      const parts = [];
+      if (v.expo_venue) parts.push(v.expo_venue);
+      if (v.expo_city) parts.push(v.expo_city);
+      else if (v.expo_location && !v.expo_venue) parts.push(v.expo_location);
+      return parts.join(', ');
     }
 
     async function loadBadge() {
       const qrCode = getQRFromURL();
-
-      if (!qrCode) {
-        showError('Invalid badge link');
-        return;
-      }
-
-      // Try to fetch visitor data from API
+      if (!qrCode) { showError('Invalid badge link / Lien de badge invalide'); return; }
       try {
         const response = await fetch(`${API_URL}/visitors/badge/${qrCode}`);
-        
         if (response.ok) {
           const data = await response.json();
-          console.log('Visitor data received:', data); // Debug log
-          
-          if (data.visitor) {
-            displayBadge(data.visitor);
-          } else {
-            // If no visitor data, show badge with QR only
-            displayBadgeWithQROnly(qrCode);
-          }
-        } else {
-          console.error('Failed to fetch visitor data, status:', response.status);
-          // Show badge with QR code only
-          displayBadgeWithQROnly(qrCode);
+          if (data.visitor) { displayBadge(data.visitor); return; }
         }
-      } catch (error) {
-        console.error('Error fetching visitor data:', error);
-        // Show badge with QR code only
-        displayBadgeWithQROnly(qrCode);
-      }
-    }
-
-    function displayBadgeWithQROnly(qrCode) {
+      } catch (err) { console.error(err); }
+      // Fallback — QR alone if API fails or visitor not found
       displayBadge({
-        qr_code: qrCode,
-        name: 'Guest',
-        company: '',
+        qr_code: qrCode, name: 'Guest',
         badge_id: qrCode.substring(0, 8).toUpperCase()
       });
     }
 
-    function displayBadge(visitor) {
-      const content = document.getElementById('content');
-      const qrCodeValue = visitor.qr_code || getQRFromURL();
-      
-      // ✅ FIX 2: Better name handling
-      let visitorName = 'Guest';
-      if (visitor.name && visitor.name !== '' && visitor.name !== 'Loading...') {
-        visitorName = visitor.name;
-      }
-      
-      // ✅ FIX 3: Better badge ID handling
-      const badgeId = visitor.badge_id || qrCodeValue.substring(0, 8).toUpperCase();
-      
-      // Check if text is long and add class
-      const nameClass = visitorName.length > 30 ? 'long-text' : '';
-      const companyClass = visitor.company && visitor.company.length > 30 ? 'long-text' : '';
+    function displayBadge(v) {
+      const qrValue = v.qr_code || getQRFromURL();
+      const fullName = [v.name, v.last_name].filter(Boolean).join(' ').trim() || 'Guest';
+      const badgeId = v.badge_id || qrValue.substring(0, 8).toUpperCase();
+      const expoName = v.expo_name || 'Event Badge';
+      const datesLine = formatDates(v.expo_start_date, v.expo_end_date);
+      const venue = venueLine(v);
+      const meta = [datesLine, venue].filter(Boolean).join(' · ');
 
-      console.log('Displaying badge for:', { name: visitorName, badge_id: badgeId, company: visitor.company }); // Debug log
-
-      content.innerHTML = `
-        <div class="badge-container">
-          <div class="badge">
-            <div class="badge-header">
-              <div class="badge-title">EVENT BADGE</div>
-              <div class="badge-subtitle">Leena Events 2025</div>
+      document.getElementById('content').innerHTML = `
+        <div class="badge">
+          <div class="expo-name">${esc(expoName)}</div>
+          ${meta ? `<div class="expo-meta">${esc(meta)}</div>` : ''}
+          <div class="visitor-info">
+            <div class="info-row">
+              <span class="info-label">Name / Nom</span>
+              <span class="info-value">${esc(fullName)}</span>
             </div>
-            <div class="visitor-info">
-              <div class="info-row">
-                <div class="info-label">Name</div>
-                <div class="info-value ${nameClass}">${visitorName}</div>
-              </div>
-              ${visitor.company ? `
-              <div class="info-row">
-                <div class="info-label">Company</div>
-                <div class="info-value ${companyClass}">${visitor.company}</div>
-              </div>` : ''}
-              <div class="info-row">
-                <div class="info-label">Badge ID</div>
-                <div class="info-value">${badgeId}</div>
-              </div>
-            </div>
-            <div class="qr-section">
-              <div class="qr-code" id="qrcode"></div>
-              <p style="margin-top: 10px; color: #666; font-size: 12px;">
-                Scan for quick check-in
-              </p>
-            </div>
-            <div class="badge-footer">
-              <p>Please wear this badge at all times during the event</p>
-              <p style="margin-top: 5px;">© ${new Date().getFullYear()} Leena Events</p>
+            ${v.company ? `
+            <div class="info-row">
+              <span class="info-label">Company / Société</span>
+              <span class="info-value">${esc(v.company)}</span>
+            </div>` : ''}
+            ${v.booth_number ? `
+            <div class="info-row">
+              <span class="info-label">Booth / Stand</span>
+              <span class="info-value">${esc(v.booth_number)}</span>
+            </div>` : ''}
+            <div class="info-row">
+              <span class="info-label">Registration ID</span>
+              <span class="info-value mono">${esc(badgeId)}</span>
             </div>
           </div>
-        </div>
-        <div class="actions">
-          <button class="btn btn-primary" onclick="window.print()">
-            🖨️ Print Badge
-          </button>
-          <button class="btn btn-secondary" onclick="downloadBadge()">
-            💾 Save as Image
-          </button>
+          <div class="qr-section">
+            <div class="qr-code" id="qrcode"></div>
+            <div class="qr-instruction">Scan at the entrance / Scanner à l'entrée</div>
+          </div>
+          <div class="actions">
+            <button class="btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+          </div>
         </div>
       `;
 
-      // QR CODE GENERATION - 30% SMALLER (126px instead of 180px)
-      QRCode.toDataURL(qrCodeValue, {
-        width: 126,
-        margin: 1,
-        color: {
-          dark: '#000000',
-          light: '#FFFFFF'
-        }
-      }, function (error, url) {
-        if (error) {
-          console.error('QR Code generation error:', error);
-          document.getElementById('qrcode').innerHTML = '<p>QR Code generation failed</p>';
-        } else {
+      // Client-side QR render — no external image fetch, works when /api/qr-image is down
+      QRCode.toDataURL(qrValue,
+        { width: 180, margin: 1, color: { dark: '#0f172a', light: '#ffffff' } },
+        (err, url) => {
+          if (err) {
+            document.getElementById('qrcode').innerHTML = '<p style="color:#dc3545;">QR generation failed</p>';
+            return;
+          }
           const img = document.createElement('img');
-          img.src = url;
-          img.alt = 'QR Code';
-          img.width = 126;
-          img.height = 126;
+          img.src = url; img.alt = 'QR Code'; img.width = 180; img.height = 180;
           document.getElementById('qrcode').appendChild(img);
-        }
-      });
+        });
     }
 
     function showError(message) {
-      const content = document.getElementById('content');
-      content.innerHTML = `
-        <div class="error">
-          <p style="font-size: 60px;">⚠️</p>
-          <h3>Oops!</h3>
-          <p>${message}</p>
-          <p style="margin-top: 20px;">
-            <a href="/" class="btn btn-primary">Go to Homepage</a>
-          </p>
+      document.getElementById('content').innerHTML = `
+        <div class="badge">
+          <div class="error">
+            <div class="error-icon">⚠️</div>
+            <div>${esc(message)}</div>
+          </div>
         </div>
       `;
     }
 
-    function downloadBadge() {
-      showToast('Save feature coming soon! Please use Print > Save as PDF for now.', 'info');
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-      loadBadge();
-    });
+    loadBadge();
   </script>
 </body>
 </html>

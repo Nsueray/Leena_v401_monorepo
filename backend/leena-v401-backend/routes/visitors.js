@@ -126,9 +126,18 @@ router.get('/badge/:qr_code', async (req, res) => {
   try {
     const qrCode = req.params.qr_code;
     const result = await pool.query(
-      `SELECT id, name, last_name, company, country, job_title, visitor_type,
-              badge_id, qr_code, booth_number, badge_url, expo_id
-       FROM visitors WHERE qr_code = $1 LIMIT 1`,
+      `SELECT v.id, v.name, v.last_name, v.company, v.country, v.job_title, v.visitor_type,
+              v.badge_id, v.qr_code, v.booth_number, v.badge_url, v.expo_id,
+              e.name       AS expo_name,
+              e.location   AS expo_location,
+              e.city       AS expo_city,
+              e.venue      AS expo_venue,
+              e.start_date AS expo_start_date,
+              e.end_date   AS expo_end_date,
+              e.logo_url   AS expo_logo_url
+       FROM visitors v
+       LEFT JOIN expos e ON e.id = v.expo_id
+       WHERE v.qr_code = $1 LIMIT 1`,
       [qrCode]
     );
 
