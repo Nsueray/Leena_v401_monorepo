@@ -38,7 +38,7 @@
     #splash p { margin: 0 0 16px; color: var(--text-muted); font-size: 14px; }
     #splash label { display: block; font-size: 12px; color: var(--text-muted); margin-top: 12px; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
     #splash input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
-    #splash button { width: 100%; padding: 14px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    #splash button { width: 100%; min-height: 48px; padding: 14px; margin-top: 20px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     #splashError { margin-top: 8px; color: var(--chip-bad); font-size: 13px; display: none; }
 
     /* Header */
@@ -178,11 +178,13 @@
   <div class="box">
     <h2 data-i18n="splash_title">SIEMA Call Center</h2>
     <p data-i18n="splash_intro">Enter the access key and your name to start.</p>
-    <label data-i18n="splash_key">Access key</label>
-    <input type="password" id="splashKey" autocomplete="off" autocorrect="off" autocapitalize="off">
-    <label data-i18n="splash_agent">Your name</label>
-    <input type="text" id="splashAgent" autocomplete="off">
-    <button id="splashEnter" data-i18n="splash_enter">Enter</button>
+    <form id="splashForm">
+      <label data-i18n="splash_key">Access key</label>
+      <input type="password" id="splashKey" autocomplete="off" autocorrect="off" autocapitalize="off">
+      <label data-i18n="splash_agent">Your name</label>
+      <input type="text" id="splashAgent" autocomplete="off">
+      <button type="submit" id="splashEnter" data-i18n="splash_enter">Enter</button>
+    </form>
     <div id="splashError" data-i18n="splash_wrong_key">Invalid key</div>
   </div>
 </div>
@@ -584,9 +586,20 @@ function hideSplash() {
   // it (Stage 4d), so this is guaranteed to match what the DB sees.
   document.getElementById('agentDisplay').textContent = agent;
 }
-document.getElementById('splashEnter').onclick = () => splashSubmit();
-document.getElementById('splashKey').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('splashAgent').focus(); });
-document.getElementById('splashAgent').addEventListener('keydown', e => { if (e.key === 'Enter') splashSubmit(); });
+// Form-wrap fix (11 Sep 2026): wrapping the splash inputs+button in <form>
+// with type="submit" makes click AND Enter both fire the submit event
+// uniformly across desktop/mobile — the previous .onclick-only wiring
+// failed to fire the click on some devices. touch-action: manipulation
+// on the button eliminates the mobile 300ms tap-delay as belt-and-braces.
+document.getElementById('splashForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  splashSubmit();
+});
+// Keep input focus cascade: Enter on Access-key jumps to Name field
+// (form's default submit would fire from Access-key otherwise).
+document.getElementById('splashKey').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); document.getElementById('splashAgent').focus(); }
+});
 
 // Stage 4d — client-side normalisation must match the backend at
 // middleware/callCenterAgentAuth.js. Same three ops in the same order:
