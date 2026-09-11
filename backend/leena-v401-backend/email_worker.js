@@ -7,6 +7,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('./utils/email');
 const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken, wrapClickLinks, appendCampaignTokenToFormLinks, getListUnsubscribeHeaders } = require('./utils/trackingPixel');
+const { sendDailyReport, REPORT_SUBJECT_PREFIX, casaTodayStartUtc: casaTodayStartUtcCC } = require('./utils/callCenterReport');
 
 // --- Database pool (ENV-based SSL handling) ---
 const pool = new Pool({
@@ -23,6 +24,13 @@ const MAX_RETRIES = 5;
 const BATCH_SIZE = Math.max(1, parseInt(process.env.EMAIL_WORKER_BATCH_SIZE || '1', 10));
 const TRANSACTIONAL_BATCH_SIZE = 10;
 let isProcessing = false;
+
+// ── Call-center daily report auto-fire ────────────────────────────────────
+// Fires once per Casa-day at ≥19:00 Casablanca. Casablanca is UTC+1 fixed
+// (no DST since 2018) → check by comparing UTC hour ≥ 18.
+const CALLCENTER_REPORT_HOUR_UTC = 18;              // 18:00 UTC == 19:00 Casa
+const CALLCENTER_REPORT_CHECK_MS = 5 * 60 * 1000;   // poll every 5 min
+let _ccReportWarnedNoEnv = false;                   // one-time warn per process
 
 // ============================================================
 // FETCH: Two-tier priority queue
@@ -805,6 +813,43 @@ async function checkCampaignCompletion(campaignId) {
 }
 
 // ============================================================
+// CALL-CENTER DAILY REPORT SCHEDULER
+// ============================================================
+// Idempotent daily fire. Fires once per Casa-day at ≥19:00 Casablanca.
+// Idempotency: check email_queue for a row with the report subject prefix
+// created after Casa-today midnight — if present (manual /report/send-now
+// or a prior worker tick), skip.
+async function maybeFireCallCenterDailyReport() {
+  const utcHour = new Date().getUTCHours();
+  if (utcHour < CALLCENTER_REPORT_HOUR_UTC) return;  // pre-19:00 Casa — wait
+
+  try {
+    const casaStart = casaTodayStartUtcCC();
+    const already = await pool.query(
+      `SELECT 1 FROM email_queue
+       WHERE subject LIKE $1 AND created_at >= $2
+       LIMIT 1`,
+      [REPORT_SUBJECT_PREFIX + '%', casaStart]
+    );
+    if (already.rows.length > 0) return;   // already fired today (or manual send-now)
+
+    const { queued, subject } = await sendDailyReport(pool);
+    console.log(`[callcenter/report] auto-fired at ${new Date().toISOString()} — ${queued} recipient(s), subject="${subject}"`);
+  } catch (err) {
+    if (err.code === 'REPORT_TO_NOT_SET') {
+      // Env var is intentionally optional. Warn ONCE per process — G34: this
+      // var lives on the leena-email-worker service, separate from the web.
+      if (!_ccReportWarnedNoEnv) {
+        console.warn('[callcenter/report] CALLCENTER_REPORT_TO not set on worker — skipping auto-fire (G34: set it on the leena-email-worker Render service)');
+        _ccReportWarnedNoEnv = true;
+      }
+    } else {
+      console.error('[callcenter/report] auto-fire error (non-fatal):', err.message);
+    }
+  }
+}
+
+// ============================================================
 // MAIN LOOP
 // ============================================================
 
@@ -824,6 +869,17 @@ async function runWorker() {
   // Start campaign scheduler (independent from queue processor)
   setInterval(runCampaignScheduler, CAMPAIGN_SCHEDULER_INTERVAL_MS);
   runCampaignScheduler(); // Run once immediately on startup
+
+  // Call-center daily report scheduler — checks every 5 min after 18:00 UTC
+  // (= 19:00 Casablanca, UTC+1 fixed). Idempotent per Casa-day: won't re-fire
+  // if today's report is already in email_queue. Also means a manual
+  // /report/send-now earlier in the day suppresses the evening auto-fire —
+  // accepted (sending twice is worse than the manual call already covering it).
+  // Depends on env var CALLCENTER_REPORT_TO being set on the WORKER service
+  // (G34: worker env vars live separately from web-service env vars). Missing
+  // env → the scheduler logs a single warning per fire attempt and no-ops.
+  setInterval(maybeFireCallCenterDailyReport, CALLCENTER_REPORT_CHECK_MS);
+  maybeFireCallCenterDailyReport(); // best-effort on startup
 
   while (true) {
     if (!isProcessing) {

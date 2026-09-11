@@ -1185,11 +1185,29 @@ router.post('/admin/import', authMiddleware, uploadCallcenter.single('file'), as
   }
 });
 
+const { sendDailyReport } = require('../utils/callCenterReport');
+
 router.post('/report/send-now', authMiddleware, async (req, res) => {
-  // CALLCENTER_REPORT_TO may be a single email or a comma-separated list.
-  // Split, trim, drop empties + non-emails, dedupe (case-insensitive).
-  // One email_queue Mode 1 row per recipient. Response lists them so
-  // the admin sees exactly who was queued.
+  // Body build + email_queue INSERT extracted to utils/callCenterReport.js
+  // so the worker's 19:00-Casa auto-fire can call the same code path.
+  // A manual send-now here suppresses that day's auto-fire via the
+  // subject-prefix probe in email_worker.js (accepted behavior).
+  try {
+    const { queued, recipients, subject, totals } = await sendDailyReport(pool);
+    return res.json({ success: true, queued, to: recipients, subject, totals });
+  } catch (err) {
+    if (err.code === 'REPORT_TO_NOT_SET') {
+      return res.status(503).json({ success: false, error: err.message, code: err.code });
+    }
+    console.error('[callcenter /report/send-now] Error:', err.message);
+    return res.status(500).json({ success: false, error: 'report send failed', code: 'REPORT_ERROR' });
+  }
+});
+
+// ── OLD send-now body (kept commented for 30-second rollback if the
+//    extraction ever regresses). Was verbatim in this file until 11 Sep. ──
+/* eslint-disable */
+async function _report_send_now_old_unreachable_reference_only(req, res) {
   const raw = process.env.CALLCENTER_REPORT_TO || '';
   const seen = new Set();
   const recipients = raw
@@ -1324,6 +1342,7 @@ router.post('/report/send-now', authMiddleware, async (req, res) => {
     console.error('[callcenter /report/send-now] Error:', err.message);
     res.status(500).json({ success: false, error: 'report send failed', code: 'REPORT_ERROR' });
   }
-});
+}
+/* eslint-enable */
 
 module.exports = router;
