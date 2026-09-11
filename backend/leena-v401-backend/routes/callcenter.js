@@ -315,13 +315,27 @@ router.post('/next', agentAuth, async (req, res) => {
       attempts++;
       await client.query('BEGIN');
 
+      // Eager stuck-claim reaper (Suer 11 Sep). Prior version reaped ONE
+      // stuck row per /next call and only when ORDER BY random() picked
+      // it — at ~100k eligible rows the probability was ~0.17%. Result:
+      // 227 stuck claims accumulated across 7-11 Sep. Do a bulk reap
+      // FIRST, then the SKIP-LOCKED SELECT picks only 'new' + ready-
+      // 'callback'. Idempotent — a second call finds nothing to reap.
+      // Runs inside the same transaction as the SELECT below: if the
+      // /next flow rolls back, the reap rolls back too.
+      await client.query(
+        `UPDATE callcenter_leads
+         SET status = 'new', claimed_by = NULL, claimed_at = NULL, updated_at = NOW()
+         WHERE status = 'claimed'
+           AND claimed_at < NOW() - INTERVAL '${STUCK_CLAIM_TTL_MINUTES} minutes'`
+      );
+
       const claimRes = await client.query(
         `WITH candidate AS (
            SELECT id FROM callcenter_leads
            WHERE (
                    status = 'new'
                    OR (status = 'callback' AND callback_at <= NOW())
-                   OR (status = 'claimed' AND claimed_at < NOW() - INTERVAL '${STUCK_CLAIM_TTL_MINUTES} minutes')
                  )
              AND ($1 = 'any' OR segment = $1)
            ORDER BY random()
