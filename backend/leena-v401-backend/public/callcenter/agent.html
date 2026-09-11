@@ -285,6 +285,9 @@ const I18N = {
     outcome_not_interested: 'Not interested',
     outcome_registered: 'Already registered',
     note_placeholder: 'Note (optional)',
+    note_placeholder_required: 'Reason (required) — e.g. wrong sector, not available, out of town',
+    note_required_hint: 'A short reason is required for "Not interested".',
+    note_required_missing: 'Please add a short reason before saving.',
     callback_in: 'Call back in',
     hours: 'hours',
 
@@ -381,6 +384,9 @@ const I18N = {
     outcome_not_interested: 'Pas intéressé',
     outcome_registered: 'Déjà inscrit',
     note_placeholder: 'Note (facultatif)',
+    note_placeholder_required: 'Raison (obligatoire) — ex. hors secteur, pas dispo, hors ville',
+    note_required_hint: 'Une raison courte est obligatoire pour « Pas intéressé ».',
+    note_required_missing: "Veuillez ajouter une raison avant d'enregistrer.",
     callback_in: 'Rappeler dans',
     hours: 'heures',
 
@@ -474,6 +480,9 @@ const I18N = {
     outcome_not_interested: 'İlgilenmiyor',
     outcome_registered: 'Zaten kayıtlı',
     note_placeholder: 'Not (isteğe bağlı)',
+    note_placeholder_required: 'Sebep (zorunlu) — ör. yanlış sektör, müsait değil, şehir dışı',
+    note_required_hint: '"İlgilenmiyor" için kısa bir sebep zorunlu.',
+    note_required_missing: 'Lütfen kaydetmeden önce kısa bir sebep ekleyin.',
     callback_in: 'Tekrar ara',
     hours: 'saat sonra',
 
@@ -797,6 +806,7 @@ function renderCard(lead) {
       </div>
 
       <textarea class="note" id="noteInput" placeholder="${escapeAttr(t('note_placeholder'))}"></textarea>
+      <div id="noteRequiredHint" class="action-hint" style="display:none;color:#dc2626;font-size:12px;margin-top:4px;"></div>
 
       <div class="action-row">
         <div class="action-item">
@@ -916,6 +926,20 @@ function selectOutcome(code) {
   });
   document.getElementById('callbackHours').classList.toggle('show', code === 'callback');
   document.getElementById('btnSave').disabled = false;
+  // Note-required toggle for 'not_interested' (Suer 11 Sep). Client-side only.
+  const noteEl = document.getElementById('noteInput');
+  const hintEl = document.getElementById('noteRequiredHint');
+  if (noteEl) {
+    if (code === 'not_interested') {
+      noteEl.required = true;
+      noteEl.placeholder = t('note_placeholder_required');
+      if (hintEl) { hintEl.textContent = t('note_required_hint'); hintEl.style.display = 'block'; }
+    } else {
+      noteEl.required = false;
+      noteEl.placeholder = t('note_placeholder');
+      if (hintEl) hintEl.style.display = 'none';
+    }
+  }
 }
 
 // ================================================================
@@ -996,6 +1020,15 @@ async function doSkip() {
 async function doSave() {
   if (!currentLead) return;
   if (!selectedOutcome) { toast(t('select_outcome')); return; }
+  // Note-required guard for 'not_interested' (Suer 11 Sep). Client-side only.
+  if (selectedOutcome === 'not_interested') {
+    const _n = (document.getElementById('noteInput').value || '').trim();
+    if (!_n) {
+      toast(t('note_required_missing'));
+      document.getElementById('noteInput').focus();
+      return;
+    }
+  }
   const body = {
     outcome: selectedOutcome,
     note: document.getElementById('noteInput').value || undefined
