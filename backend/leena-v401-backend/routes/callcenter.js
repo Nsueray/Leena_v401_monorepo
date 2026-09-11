@@ -87,6 +87,41 @@ function _cachePut(key, body) {
 }
 function _cacheBust() { _statsCache.clear(); }
 
+// ── Window parsing for /stats/live (Suer 11 Sep) ──────────────────────────
+// Accepts ?date=YYYY-MM-DD or ?range=today|yesterday|7d|all. Default = today.
+// Every section of /stats/live honors the SAME window; frontend labels it.
+// Cache is keyed by the window so different windows don't collide.
+function parseWindow(query) {
+  const raw = String((query && (query.date || query.range)) || 'today').trim().toLowerCase();
+  const casaToday = casaTodayStartUtc();          // UTC ts of Casa midnight today
+  const dayMs = 24 * 60 * 60 * 1000;
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    // Specific Casablanca date. Casablanca is UTC+1 fixed → local midnight
+    // of a given YYYY-MM-DD == UTC (YYYY-MM-DD 23:00 of the previous day).
+    const [y, m, d] = raw.split('-').map(Number);
+    const utcMid = new Date(Date.UTC(y, m - 1, d, 0, 0, 0));
+    const start = new Date(utcMid.getTime() - 60 * 60 * 1000).toISOString();
+    const end   = new Date(new Date(start).getTime() + dayMs).toISOString();
+    return { start, end, label: raw, key: `date:${raw}` };
+  }
+  if (raw === 'today') {
+    return { start: casaToday, end: null, label: 'today', key: 'today' };
+  }
+  if (raw === 'yesterday') {
+    const start = new Date(new Date(casaToday).getTime() - dayMs).toISOString();
+    return { start, end: casaToday, label: 'yesterday', key: 'yesterday' };
+  }
+  if (raw === '7d' || raw === 'last7d') {
+    const start = new Date(new Date(casaToday).getTime() - 6 * dayMs).toISOString();
+    return { start, end: null, label: 'last 7 days', key: '7d' };
+  }
+  if (raw === 'all') {
+    return { start: null, end: null, label: 'all time', key: 'all' };
+  }
+  return { start: casaToday, end: null, label: 'today', key: 'today' };
+}
+
 // Casablanca-day boundary — "today" for stats. Returns an ISO UTC
 // timestamp of midnight-Casablanca that started the current day.
 function casaTodayStartUtc() {
@@ -762,53 +797,62 @@ router.get('/stats/me', agentAuth, async (req, res) => {
 // Per-agent table, hourly line (last 24 h Casablanca), last 20 calls,
 // registered-after-call, checked-in. Design R-6 caching.
 router.get('/stats/live', supervisorAuth, async (req, res) => {
-  const cacheKey = 'live';
+  const win = parseWindow(req.query);
+  const cacheKey = `live:${win.key}`;
   const cached = _cacheGet(cacheKey);
   if (cached) return res.json({ ...cached, cached: true });
 
-  try {
-    const todayStart = casaTodayStartUtc();
+  // Every query threads $1 (start) and $2 (end). NULL start = no lower bound;
+  // NULL end = no upper bound. The predicate is inline: pass NULL and the
+  // OR-branch short-circuits it. Same $-positions in every query below.
+  const wParams = [win.start, win.end];
+  const W = '($1::timestamptz IS NULL OR done_at >= $1) AND ($2::timestamptz IS NULL OR done_at < $2)';
 
+  try {
     const [perAgent, outcomeBars, hourly, last20, regAfter] = await Promise.all([
       pool.query(
         `SELECT COALESCE(claimed_by, '(unclaimed)') AS agent,
-                COUNT(*) FILTER (WHERE done_at >= $1)::int AS calls_today,
+                COUNT(*) FILTER (WHERE ${W})::int AS calls_today,
                 COUNT(*) FILTER (WHERE done_at IS NOT NULL)::int AS calls_all_time,
-                COUNT(*) FILTER (WHERE outcome = 'mail_will_come'    AND done_at >= $1)::int AS mail_will,
-                COUNT(*) FILTER (WHERE outcome = 'mail_wont_come'    AND done_at >= $1)::int AS mail_wont,
-                COUNT(*) FILTER (WHERE outcome = 'no_mail_whatsapp_sent' AND done_at >= $1)::int AS whatsapp,
-                COUNT(*) FILTER (WHERE outcome = 'callback'          AND done_at >= $1)::int AS callback_cnt,
-                COUNT(*) FILTER (WHERE outcome = 'no_answer'         AND done_at >= $1)::int AS no_answer,
-                COUNT(*) FILTER (WHERE outcome = 'wrong_number'      AND done_at >= $1)::int AS wrong_num,
-                COUNT(*) FILTER (WHERE outcome = 'not_interested'    AND done_at >= $1)::int AS not_interested,
-                COUNT(*) FILTER (WHERE outcome = 'registered_meanwhile' AND done_at >= $1)::int AS reg_meanwhile,
+                COUNT(*) FILTER (WHERE outcome = 'mail_will_come'    AND ${W})::int AS mail_will,
+                COUNT(*) FILTER (WHERE outcome = 'mail_wont_come'    AND ${W})::int AS mail_wont,
+                COUNT(*) FILTER (WHERE outcome = 'no_mail_whatsapp_sent' AND ${W})::int AS whatsapp,
+                COUNT(*) FILTER (WHERE outcome = 'callback'          AND ${W})::int AS callback_cnt,
+                COUNT(*) FILTER (WHERE outcome = 'no_answer'         AND ${W})::int AS no_answer,
+                COUNT(*) FILTER (WHERE outcome = 'wrong_number'      AND ${W})::int AS wrong_num,
+                COUNT(*) FILTER (WHERE outcome = 'not_interested'    AND ${W})::int AS not_interested,
+                COUNT(*) FILTER (WHERE outcome = 'registered_meanwhile' AND ${W})::int AS reg_meanwhile,
                 MAX(done_at)                                                                   AS last_call
          FROM callcenter_leads
          WHERE claimed_by IS NOT NULL
          GROUP BY agent
          ORDER BY calls_today DESC, agent ASC`,
-        [todayStart]
+        wParams
       ),
       pool.query(
         `SELECT COALESCE(outcome, '(none)') AS outcome, COUNT(*)::int AS n
          FROM callcenter_leads
-         WHERE done_at >= $1
+         WHERE ${W}
          GROUP BY outcome ORDER BY n DESC`,
-        [todayStart]
+        wParams
       ),
       pool.query(
         `SELECT EXTRACT(HOUR FROM (done_at AT TIME ZONE 'Africa/Casablanca'))::int AS hour,
                 COUNT(*)::int AS n
          FROM callcenter_leads
-         WHERE done_at >= $1
+         WHERE ${W}
          GROUP BY hour ORDER BY hour`,
-        [todayStart]
+        wParams
       ),
       pool.query(
+        // A1 (Suer 11 Sep): explicit `done_at IS NOT NULL` here — under
+        // range=all the window predicate is TRUE, and DESC ordering would
+        // surface still-open cards (claimed/new, done_at=NULL) at the top.
         `SELECT id, segment, claimed_by, outcome, done_at, email, phone, first_name, last_name
          FROM callcenter_leads
-         WHERE done_at IS NOT NULL
-         ORDER BY done_at DESC LIMIT 20`
+         WHERE ${W} AND done_at IS NOT NULL
+         ORDER BY done_at DESC LIMIT 20`,
+        wParams
       ),
       // registered-after-call — visitor row created after done_at, matched
       // on email + expo_id. Grouped by agent for the supervisor's table.
@@ -822,10 +866,13 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
          FROM callcenter_leads l
          JOIN visitors v
            ON v.expo_id = l.expo_id AND lower(v.email) = lower(l.email)
-         WHERE l.done_at IS NOT NULL
+         WHERE ($1::timestamptz IS NULL OR l.done_at >= $1)
+           AND ($2::timestamptz IS NULL OR l.done_at <  $2)
+           AND l.done_at IS NOT NULL
            AND v.created_at > l.done_at
          GROUP BY l.claimed_by
-         ORDER BY registered_after DESC`
+         ORDER BY registered_after DESC`,
+        wParams
       )
     ]);
 
@@ -843,7 +890,7 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
     const body = {
       success: true,
       generated_at: new Date().toISOString(),
-      today_casa_start: todayStart,
+      window: { start: win.start, end: win.end, label: win.label, key: win.key },
       per_agent: perAgentEnriched,
       outcome_bars: outcomeBars.rows,
       hourly: hourly.rows,           // [{hour: 0..23, n}]

@@ -36,6 +36,11 @@
     .container-cc { max-width: 1200px; margin: 0 auto; padding: 16px 12px 40px; }
 
     .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .window-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; }
+    .window-bar .chip { padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: white; cursor: pointer; font-size: 13px; }
+    .window-bar .chip.active { background: var(--info); color: white; border-color: var(--info); }
+    .window-bar input[type=date] { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+    .window-label { font-size: 12px; color: var(--muted); }
     .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
     .kpi .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
     .kpi .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
@@ -177,6 +182,17 @@
       </div>
     </div>
 
+    <!-- Window filter (Suer 11 Sep) — every section below honors this. -->
+    <div class="window-bar">
+      <span class="window-label" data-i18n="showing">Showing:</span>
+      <button class="chip active" data-window="today" data-i18n="w_today">Today</button>
+      <button class="chip" data-window="yesterday" data-i18n="w_yesterday">Yesterday</button>
+      <button class="chip" data-window="7d" data-i18n="w_7d">Last 7 days</button>
+      <button class="chip" data-window="all" data-i18n="w_all">All</button>
+      <input type="date" id="datePicker" />
+      <span id="activeWindowLabel" class="window-label" style="margin-left:auto;"></span>
+    </div>
+
     <div class="kpi-grid">
       <div class="kpi"><div class="label" data-i18n="kpi_calls_today">Calls today</div><div class="value" id="kpiCalls">—</div></div>
       <div class="kpi will"><div class="label" data-i18n="kpi_will_come">Will come</div><div class="value" id="kpiWill">—</div></div>
@@ -240,6 +256,7 @@ const I18N = {
     last_update: 'Last update',
     auto_refresh_note: 'Auto-refresh every 30 s',
     cached_note: 'Showing cached data (updated within the last 15 s).',
+    showing: 'Showing:', w_today: 'Today', w_yesterday: 'Yesterday', w_7d: 'Last 7 days', w_all: 'All',
     loading: 'Loading…',
     kpi_calls_today: 'Calls today',
     kpi_will_come: 'Will come',
@@ -295,6 +312,7 @@ const I18N = {
     last_update: 'Dernière mise à jour',
     auto_refresh_note: 'Actualisation toutes les 30 s',
     cached_note: 'Données en cache (mises à jour dans les 15 dernières s).',
+    showing: 'Affichage :', w_today: "Aujourd'hui", w_yesterday: 'Hier', w_7d: '7 derniers jours', w_all: 'Tout',
     loading: 'Chargement…',
     kpi_calls_today: 'Appels aujourd’hui',
     kpi_will_come: 'Viendra',
@@ -377,6 +395,23 @@ function toast(msg, ms = 1800) {
 // State + refresh
 // ================================================================
 let lastData = null;
+let currentWindow = 'today';
+function applyWindow(win) {
+  currentWindow = win;
+  document.querySelectorAll('.window-bar .chip').forEach(c => c.classList.toggle('active', c.dataset.window === win));
+  const dp = document.getElementById('datePicker'); if (dp) dp.value = '';
+  refresh();
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.window-bar .chip').forEach(c => { c.onclick = () => applyWindow(c.dataset.window); });
+  const dp = document.getElementById('datePicker');
+  if (dp) dp.onchange = (e) => {
+    const v = e.target.value; if (!v) return;
+    currentWindow = v;
+    document.querySelectorAll('.window-bar .chip').forEach(c => c.classList.remove('active'));
+    refresh();
+  };
+});
 let refreshHandle = null;
 
 async function refresh() {
@@ -399,8 +434,9 @@ async function refresh() {
     sessionStorage.setItem('cc_adm_sup_key', entered);
     return refresh();
   }
+  const q = /^\d{4}-\d{2}-\d{2}$/.test(currentWindow) ? `?date=${currentWindow}` : `?range=${currentWindow}`;
   try {
-    const r = await fetch('/api/callcenter/stats/live', { headers: { 'x-callcenter-supervisor-key': supKey } });
+    const r = await fetch(`/api/callcenter/stats/live${q}`, { headers: { 'x-callcenter-supervisor-key': supKey } });
     if (r.status === 401 || r.status === 503) {
       sessionStorage.removeItem('cc_adm_sup_key');
       toast(t('err_generic'));
@@ -419,6 +455,8 @@ function renderAll(data) {
   if (!data) return;
   document.getElementById('lastUpdate').textContent = fmtTime(data.generated_at);
   document.getElementById('cachedBanner').classList.toggle('show', !!data.cached);
+  const wLabel = document.getElementById('activeWindowLabel');
+  if (wLabel && data.window && data.window.label) wLabel.textContent = `(${data.window.label})`;
 
   const totals = data.totals || {};
   const totalWill = data.per_agent.reduce((s, r) => s + (r.mail_will || 0), 0);

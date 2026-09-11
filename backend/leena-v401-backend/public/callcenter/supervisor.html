@@ -25,6 +25,11 @@
     #splash input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 16px; }
     #splash button { width: 100%; padding: 14px; margin-top: 20px; background: var(--info); color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
     #splashError { margin-top: 8px; color: var(--bad); font-size: 13px; display: none; }
+    .window-bar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 10px 12px; background: white; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; }
+    .window-bar .chip { padding: 6px 12px; border: 1px solid var(--border); border-radius: 20px; background: white; cursor: pointer; font-size: 13px; }
+    .window-bar .chip.active { background: var(--info); color: white; border-color: var(--info); }
+    .window-bar input[type=date] { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; }
+    .window-label { font-size: 12px; color: var(--muted); }
 
     header { background: white; border-bottom: 1px solid var(--border); padding: 12px 16px; position: sticky; top: 0; z-index: 50; }
     header .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
@@ -134,6 +139,17 @@
   <div class="container-cc">
     <div class="cached-banner" id="cachedBanner" data-i18n="cached_note">Showing cached data (updated within the last 15 s).</div>
 
+    <!-- Window filter (Suer 11 Sep) — every section below honors this. -->
+    <div class="window-bar">
+      <span class="window-label" data-i18n="showing">Showing:</span>
+      <button class="chip active" data-window="today" data-i18n="w_today">Today</button>
+      <button class="chip" data-window="yesterday" data-i18n="w_yesterday">Yesterday</button>
+      <button class="chip" data-window="7d" data-i18n="w_7d">Last 7 days</button>
+      <button class="chip" data-window="all" data-i18n="w_all">All</button>
+      <input type="date" id="datePicker" />
+      <span id="activeWindowLabel" class="window-label" style="margin-left:auto;"></span>
+    </div>
+
     <!-- KPI cards -->
     <div class="kpi-grid">
       <div class="kpi"><div class="label" data-i18n="kpi_calls_today">Calls today</div><div class="value" id="kpiCalls">—</div></div>
@@ -202,6 +218,7 @@ const I18N = {
     last_update: 'Last update',
     auto_refresh_note: 'Auto-refresh every 30 s',
     cached_note: 'Showing cached data (updated within the last 15 s).',
+    showing: 'Showing:', w_today: 'Today', w_yesterday: 'Yesterday', w_7d: 'Last 7 days', w_all: 'All',
     loading: 'Loading…',
     kpi_calls_today: 'Calls today',
     kpi_will_come: 'Will come',
@@ -241,6 +258,7 @@ const I18N = {
     last_update: 'Dernière mise à jour',
     auto_refresh_note: 'Actualisation toutes les 30 s',
     cached_note: 'Données en cache (mises à jour dans les 15 dernières s).',
+    showing: 'Affichage :', w_today: "Aujourd'hui", w_yesterday: 'Hier', w_7d: '7 derniers jours', w_all: 'Tout',
     loading: 'Chargement…',
     kpi_calls_today: 'Appels aujourd’hui',
     kpi_will_come: 'Viendra',
@@ -280,6 +298,7 @@ const I18N = {
     last_update: 'Son güncelleme',
     auto_refresh_note: '30 saniyede bir yenilenir',
     cached_note: 'Önbellekten (son 15 saniye içinde güncellendi).',
+    showing: 'Gösteriliyor:', w_today: 'Bugün', w_yesterday: 'Dün', w_7d: 'Son 7 gün', w_all: 'Tümü',
     loading: 'Yükleniyor…',
     kpi_calls_today: 'Bugünkü aramalar',
     kpi_will_come: 'Gelecek',
@@ -375,11 +394,33 @@ let refreshHandle = null;
 // ================================================================
 // Load + render
 // ================================================================
+let currentWindow = 'today';
+function applyWindow(win) {
+  currentWindow = win;
+  document.querySelectorAll('.window-bar .chip').forEach(c => c.classList.toggle('active', c.dataset.window === win));
+  const dp = document.getElementById('datePicker'); if (dp) dp.value = '';
+  refresh();
+}
+document.querySelectorAll('.window-bar .chip').forEach(c => {
+  c.onclick = () => applyWindow(c.dataset.window);
+});
+const _dp = document.getElementById('datePicker');
+if (_dp) {
+  _dp.onchange = (e) => {
+    const v = e.target.value;
+    if (!v) return;
+    currentWindow = v; // YYYY-MM-DD → sent as ?date=…
+    document.querySelectorAll('.window-bar .chip').forEach(c => c.classList.remove('active'));
+    refresh();
+  };
+}
+
 async function refresh() {
   const key = getKey();
   if (!key) { showSplash(); return; }
+  const q = /^\d{4}-\d{2}-\d{2}$/.test(currentWindow) ? `?date=${currentWindow}` : `?range=${currentWindow}`;
   try {
-    const r = await fetch('/api/callcenter/stats/live', { headers: { [SUP_KEY_HEADER]: key } });
+    const r = await fetch(`/api/callcenter/stats/live${q}`, { headers: { [SUP_KEY_HEADER]: key } });
     if (r.status === 401 || r.status === 503) {
       sessionStorage.removeItem(SUP_KEY_STORAGE);
       showSplash();
@@ -399,6 +440,9 @@ function renderAll(data) {
   // Last update time
   document.getElementById('lastUpdate').textContent = fmtTime(data.generated_at);
   document.getElementById('cachedBanner').classList.toggle('show', !!data.cached);
+  // Active window label — comes from the API so it matches what SQL actually used
+  const wLabel = document.getElementById('activeWindowLabel');
+  if (wLabel && data.window && data.window.label) wLabel.textContent = `(${data.window.label})`;
 
   // KPIs
   const totals = data.totals || {};
