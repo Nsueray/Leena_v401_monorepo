@@ -38,7 +38,7 @@ ANLATILMAZ — kaynakları aşağıdadır.
 - Canlı LEENA DB'ye **YAZILMAZ**.
 - **TABAN: contract 4 sr earned = 342.00 EUR.** Her turda korunur.
 - UI/UX bilinçle iskelet — cila yok, tasarım fazı en sonda.
-- **ELIZA EMEKLİ.** (`ell-docs/eliza/CLAUDE.md` onu canlı sanıyor —
+- **eliza-legacy EMEKLİ (AD-01). ELIZA = ürünün adı.** (`ell-docs/eliza/CLAUDE.md` onu canlı sanıyor —
   o dosya bayat, referans alınmaz.)
 
 ### Test
