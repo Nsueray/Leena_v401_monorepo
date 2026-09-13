@@ -54,6 +54,16 @@ ANLATILMAZ — kaynakları aşağıdadır.
 - Zorunlu başlıklar: ne yapıldı · commit · ölçülenler ·
   `⚠️ ÖLÇÜLMEDİ / GÖZLENEMEDİ` · bilinçle yapılmayanlar.
 
+### Çalışma kuralları (Suer, 2026-09-13)
+- **K1 — TEK İŞ.** Suer'e aynı anda tek görev verilir. Bitirip onay
+  alınmadan sonraki görev verilmez.
+- **K2 — ÇOK AŞAMALI İŞ AYRI TURDA.** Üç iş varsa ve biri çok aşamalıysa,
+  tek aşamalılar önce, çok aşamalı ayrı turda. Adımlar karışmasın, hata
+  olursa kaynak belli olsun.
+- **K3 — SUER YAZMAZ, YAPIŞTIRIR.** Yazma/uygulama işi CC'ye veya ilgili
+  chat'e gider. Suer'e yalnız kopyala-yapıştır blok ve terminal komutu
+  gelir. "Şunu şöyle düzenle" denmez.
+
 ---
 
 ## ELL Cross-System Rules
