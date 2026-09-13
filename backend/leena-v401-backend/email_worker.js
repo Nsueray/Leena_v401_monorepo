@@ -7,7 +7,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('./utils/email');
 const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken, wrapClickLinks, appendCampaignTokenToFormLinks, getListUnsubscribeHeaders } = require('./utils/trackingPixel');
-const { sendDailyReport, REPORT_SUBJECT_PREFIX, casaTodayStartUtc: casaTodayStartUtcCC } = require('./utils/callCenterReport');
+const { sendDailyReport, REPORT_SUBJECT_PREFIX } = require('./utils/callCenterReport');
 
 // --- Database pool (ENV-based SSL handling) ---
 const pool = new Pool({
@@ -26,9 +26,17 @@ const TRANSACTIONAL_BATCH_SIZE = 10;
 let isProcessing = false;
 
 // ── Call-center daily report auto-fire ────────────────────────────────────
-// Fires once per Casa-day at ≥19:00 Casablanca. Casablanca is UTC+1 fixed
-// (no DST since 2018) → check by comparing UTC hour ≥ 18.
-const CALLCENTER_REPORT_HOUR_UTC = 18;              // 18:00 UTC == 19:00 Casa
+// Fires ONCE per Casa-day, between 19:00-23:59 Casablanca (= 18:00-22:59 UTC,
+// UTC+1 fixed since 2018).
+//
+// Idempotency (Sep 14 fix): rolling 20-hour probe on email_queue subject
+// prefix — no Casa/UTC boundary math. The previous casaTodayStart-based
+// probe produced 12 fires per night at 23:00-23:59 UTC because the
+// boundary jumped ahead of the just-inserted row's created_at (Casa clock
+// had already flipped to the next day). Ground truth: 11→12 and 12→13 Sep
+// both showed 12 spam fires ×3 recipients per night.
+const CALLCENTER_REPORT_HOUR_MIN_UTC = 18;          // 18:00 UTC == 19:00 Casa
+const CALLCENTER_REPORT_HOUR_MAX_UTC = 23;          // strict-<: 23:00 UTC blocks the observed loop
 const CALLCENTER_REPORT_CHECK_MS = 5 * 60 * 1000;   // poll every 5 min
 let _ccReportWarnedNoEnv = false;                   // one-time warn per process
 
@@ -821,17 +829,29 @@ async function checkCampaignCompletion(campaignId) {
 // or a prior worker tick), skip.
 async function maybeFireCallCenterDailyReport() {
   const utcHour = new Date().getUTCHours();
-  if (utcHour < CALLCENTER_REPORT_HOUR_UTC) return;  // pre-19:00 Casa — wait
+  // Hour cap (Sep 14 fix): only fire between 18:00-22:59 UTC = 19:00-23:59
+  // Casablanca. Rejecting >=23 blocks the observed 23:00-23:59 UTC fire loop
+  // that would repeat every 5 min because the Casa-midnight probe boundary
+  // had already advanced past the just-inserted row's created_at.
+  if (utcHour < CALLCENTER_REPORT_HOUR_MIN_UTC || utcHour >= CALLCENTER_REPORT_HOUR_MAX_UTC) return;
 
   try {
-    const casaStart = casaTodayStartUtcCC();
+    // Rolling-window probe (Sep 14 fix): any same-subject row in the last
+    // 20 h suppresses this fire. Date-math-free — no Casa/UTC boundary
+    // gymnastics. Consecutive daily fires are ~24 h apart, so a fire at
+    // T looks back to T-20h, where yesterday's fire at ~T-24h is safely
+    // outside → fires. Trade-off: a fire at ~22:5x UTC on day N would
+    // suppress day N+1's 18:0x UTC fire (19 h gap, inside 20 h window),
+    // but the hour cap makes late-night fires only possible after a
+    // restart into that narrow window — degenerate case, one day skipped.
     const already = await pool.query(
       `SELECT 1 FROM email_queue
-       WHERE subject LIKE $1 AND created_at >= $2
+       WHERE subject LIKE $1
+         AND created_at >= NOW() - INTERVAL '20 hours'
        LIMIT 1`,
-      [REPORT_SUBJECT_PREFIX + '%', casaStart]
+      [REPORT_SUBJECT_PREFIX + '%']
     );
-    if (already.rows.length > 0) return;   // already fired today (or manual send-now)
+    if (already.rows.length > 0) return;   // fired within last 20 h — skip
 
     const { queued, subject } = await sendDailyReport(pool);
     console.log(`[callcenter/report] auto-fired at ${new Date().toISOString()} — ${queued} recipient(s), subject="${subject}"`);
