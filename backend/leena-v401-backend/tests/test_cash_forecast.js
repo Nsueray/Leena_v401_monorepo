@@ -62,6 +62,16 @@ async function reset() {
   await pool.query("DELETE FROM offices WHERE name NOT IN ('Turkey','Morocco','Nigeria','Kenya','China')");
 }
 const WIDE = '?from=2026-01-01&to=2026-12-31';
+// ── Tarih helper'ları — A-sınıfı (is_overdue-duyarlı) tarihleri bugüne GÖRELİ yapar.
+// ⚠️ YEREL bileşen (getFullYear/…), toISOString DEĞİL: cashForecast.js:143 `due_date <
+//   CURRENT_DATE` DB'nin CURRENT_DATE'iyle karşılaştırır; DB TZ Europe/Istanbul = yerel
+//   makine TZ (ölçüldü). toISOString UTC'ye çevirip gece yarısı 00:00-03:00 gün kaydırır.
+// Emsal: T10/T13'ün 2020(overdue)/2030(upcoming) çifti — aynı "geçmiş vs gelecek" niyeti;
+//   burada YALNIZ yakın-tarih (bugün geçtikçe çürüyen) upcoming'ler göreliye çevrilir.
+//   Overdue senaryoları (T10/T13, 2020) uzak-geçmiş SABİT → bugünden bağımsız, dokunulmadı.
+const _ymd = (d) => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+const daysAhead = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return _ymd(d); };
+const daysAgo = (n) => daysAhead(-n);
 const bucket = (data, name) => (data.offices || []).find(o => o.office_name === name);
 const conOf = (data, cid) => (data.contracts || []).find(c => c.contract_id === cid);
 const allLines = (data) => (data.offices || []).flatMap(o => o.lines);
@@ -73,28 +83,33 @@ const server = app.listen(PORT, async () => {
     // ── T1 + T4 + T6 + T7 KABUL (+ PLN-11 overdue alanları) ──
     console.log('\n── T1/T4/T6/T7 KABUL (ofis×vade + overdue) ──');
     await reset();
+    // A-sınıfı upcoming tarihleri GÖRELİ (bugün geçtikçe çürümesin). 07-31 remaining=0 →
+    // is_overdue-duyarsız (PLN-11), SABİT bırakıldı. Pencere de göreli: WIDE'ın sabit
+    // 2026-12-31 üst sınırı daysAhead'i Aralık'ta taşırırdı → T1WIN bugüne göre ±400 gün.
+    const aOct = daysAhead(60), bSep = daysAhead(30);   // eski 2026-10-19 / 2026-09-10
+    const T1WIN = `?from=${daysAgo(400)}&to=${daysAhead(400)}`;
     const A = await mkContract({ revenue: 18600.00, currency: 'EUR', exchange_rate: 1, revenue_eur: 18600.00 });
     await call('POST', `/api/contracts/${A}/schedule`, { body: { items: [
       { due_date: '2026-07-31', amount: 7440, expected_office_id: turkey },
-      { due_date: '2026-10-19', amount: 11160, expected_office_id: turkey } ] } });
+      { due_date: aOct, amount: 11160, expected_office_id: turkey } ] } });
     await pay(A, 7440.00, { date: '2026-07-24' });
     const B = await mkContract({ revenue: 15000.00, currency: 'USD', exchange_rate: 0.92, revenue_eur: 13800.00 });
-    await call('POST', `/api/contracts/${B}/schedule`, { body: { items: [{ due_date: '2026-09-10', amount: 1000 }] } });
+    await call('POST', `/api/contracts/${B}/schedule`, { body: { items: [{ due_date: bSep, amount: 1000 }] } });
     await pay(B, 14.80, { currency: 'USD', exchange_rate: 0.92, date: '2026-07-15' });
 
-    const d1 = (await call('GET', `/api/cash-forecast${WIDE}`)).body;
+    const d1 = (await call('GET', `/api/cash-forecast${T1WIN}`)).body;
     const tr = bucket(d1, 'Turkey'), no = bucket(d1, '(No office)');
     ok('T1 Turkey total 11160.00 / overdue 0.00 / upcoming 11160.00',
       tr && String(tr.total_remaining_eur) === '11160.00' && String(tr.overdue_remaining_eur) === '0.00' && String(tr.upcoming_remaining_eur) === '11160.00',
       tr && JSON.stringify([tr.total_remaining_eur, tr.overdue_remaining_eur, tr.upcoming_remaining_eur]));
     const trJul = tr && tr.lines.find(l => l.due_date === '2026-07-31');
-    const trOct = tr && tr.lines.find(l => l.due_date === '2026-10-19');
+    const trOct = tr && tr.lines.find(l => l.due_date === aOct);
     ok('T1 Jul31 remaining 0.00 · is_overdue FALSE', trJul && String(trJul.remaining_eur) === '0.00' && trJul.is_overdue === false, trJul && `${trJul.remaining_eur}/${trJul.is_overdue}`);
-    ok('T1 Oct19 remaining 11160.00 · is_overdue FALSE', trOct && String(trOct.remaining_eur) === '11160.00' && trOct.is_overdue === false, trOct && `${trOct.remaining_eur}/${trOct.is_overdue}`);
+    ok('T1 upcoming(A) remaining 11160.00 · is_overdue FALSE', trOct && String(trOct.remaining_eur) === '11160.00' && trOct.is_overdue === false, trOct && `${trOct.remaining_eur}/${trOct.is_overdue}`);
     ok('T4 (No office) total 905.20 / overdue 0.00 / upcoming 905.20',
       no && String(no.total_remaining_eur) === '905.20' && String(no.overdue_remaining_eur) === '0.00' && String(no.upcoming_remaining_eur) === '905.20',
       no && JSON.stringify([no.total_remaining_eur, no.overdue_remaining_eur, no.upcoming_remaining_eur]));
-    const noSep = no && no.lines.find(l => l.due_date === '2026-09-10');
+    const noSep = no && no.lines.find(l => l.due_date === bSep);
     ok('T7 USD satır amount_eur 920.00 · remaining 905.20 · is_overdue FALSE', noSep && String(noSep.amount_eur) === '920.00' && String(noSep.remaining_eur) === '905.20' && noSep.is_overdue === false, noSep && `${noSep.amount_eur}/${noSep.remaining_eur}`);
     ok('T1 GRAND total 12065.20 / overdue 0.00 / upcoming 12065.20',
       String(d1.grand_total_remaining_eur) === '12065.20' && String(d1.grand_overdue_remaining_eur) === '0.00' && String(d1.grand_upcoming_remaining_eur) === '12065.20',
