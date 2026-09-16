@@ -676,7 +676,10 @@ async function splashSubmit() {
 let currentLead = null;
 let selectedOutcome = null;
 let callbackHours = 1;
-let resendCooldownUntil = 0;
+// Per-lead resend cooldown mirror of the server's per-recipient rule at
+// routes/callcenter.js:653-666. Never a global agent lockout — resending to
+// a DIFFERENT lead is unaffected by a prior send.
+const resendCooldownByLead = new Map(); // leadId → expireAt (ms epoch)
 
 // ================================================================
 // Toast
@@ -985,24 +988,26 @@ async function copyActionLink(lead) {
 async function doResend() {
   if (!currentLead) return;
   const btn = document.getElementById('btnResend');
-  if (Date.now() < resendCooldownUntil) { toast(t('resend_cooldown')); return; }
+  const leadId = currentLead.id;
+  const cd = resendCooldownByLead.get(leadId);
+  if (cd && Date.now() < cd) { toast(t('resend_cooldown')); return; }
   btn.disabled = true;
   try {
-    const r = await ccFetch(`/resend/${currentLead.id}`, { method: 'POST', body: '{}' });
+    const r = await ccFetch(`/resend/${leadId}`, { method: 'POST', body: '{}' });
     const j = await r.json();
     if (j.success) {
       toast(j.sent_to ? `${t('resend_ok')} → ${j.sent_to}` : t('resend_ok'), 3000);
-      resendCooldownUntil = Date.now() + 2 * 60 * 1000;
-      setTimeout(() => { if (document.getElementById('btnResend')) document.getElementById('btnResend').disabled = false; }, 2 * 60 * 1000);
+      resendCooldownByLead.set(leadId, Date.now() + 2 * 60 * 1000);
     } else if (j.code === 'RESEND_COOLDOWN') {
       toast(t('resend_cooldown'));
-      resendCooldownUntil = Date.now() + 2 * 60 * 1000;
+      resendCooldownByLead.set(leadId, Date.now() + 2 * 60 * 1000);
     } else {
       toast(j.error || t('error_generic'));
-      btn.disabled = false;
     }
   } catch (e) {
-    if (e.message !== 'auth') { toast(t('error_generic')); btn.disabled = false; }
+    if (e.message !== 'auth') { toast(t('error_generic')); }
+  } finally {
+    btn.disabled = false;
   }
 }
 
