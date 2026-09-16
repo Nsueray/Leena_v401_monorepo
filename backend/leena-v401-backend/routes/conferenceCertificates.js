@@ -143,6 +143,62 @@ const CERT_EMAIL_TEMPLATE_NG = `
 // Same STRUCTURE as CERT_EMAIL_TEMPLATE_NG (a tested email-client layout) — only
 // branding swapped: MP26 logo, #009846 accent, dates/venue line. Ghana (default)
 // and expo-7 NG are untouched.
+// --- Certificate email template — Food Factory Africa Forum by SIEMA (expo_id=9) ---
+// Same STRUCTURE as CERT_EMAIL_TEMPLATE_MP26 (a tested email-client layout).
+// Branding: SIEMA navy #00305D + gold #E2A32B accent, French copy, Casablanca dates.
+// Ghana (default), expo-7 NG, expo-13 MP26 all untouched.
+const CERT_EMAIL_TEMPLATE_SIEMA = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <!-- Header: SIEMA navy banner with logo -->
+    <div style="background:#00305D;padding:28px 30px;text-align:center;">
+      <img src="https://www.siemamaroc.com/foodfactory/images/food-factory-forum-logo.png" alt="Food Factory Africa Forum by SIEMA" style="max-height:48px;margin-bottom:14px;display:inline-block;" />
+      <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Certificat de Participation</h1>
+      <p style="margin:6px 0 0;font-size:13px;color:#ffffff;opacity:0.9;">22 &ndash; 24 septembre 2026 &bull; AMDIE (OFEC), Casablanca</p>
+    </div>
+
+    <!-- Content -->
+    <div style="padding:36px 30px;text-align:center;">
+      <p style="font-size:16px;color:#1a1a1a;margin:0 0 6px;">Bonjour</p>
+      <p style="font-size:22px;color:#1a1a1a;margin:0 0 20px;font-weight:700;">{{name}} {{last_name}}</p>
+
+      <p style="font-size:15px;color:#444;line-height:1.6;margin:0 0 24px;">
+        Merci d&rsquo;avoir participé au <strong>Food Factory Africa Forum by SIEMA</strong>, le programme scientifique de conférences du <strong>{{expo_name}}</strong>.
+        Votre certificat de participation est prêt.
+      </p>
+
+      <div style="background:#f2f6fa;border-left:4px solid #E2A32B;border-radius:6px;padding:16px 20px;margin:0 0 8px;text-align:left;">
+        <p style="margin:0 0 4px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">Session assistée</p>
+        <p style="margin:0;color:#00305D;font-size:17px;font-weight:700;">{{conference_topic}}</p>
+      </div>
+
+      <p style="font-size:14px;color:#888;margin:0 0 28px;text-align:left;">Cliquez sur le bouton ci-dessous pour consulter et télécharger votre certificat au format PDF.</p>
+
+      <a href="{{certificate_url}}" style="display:inline-block;padding:14px 36px;background:#00305D;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:600;">Voir mon certificat</a>
+
+      <p style="margin:20px 0 0;color:#aaa;font-size:12px;">Utilisez &laquo; Enregistrer en PDF &raquo; dans la boîte de dialogue d&rsquo;impression pour le télécharger.</p>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:20px 30px;text-align:center;border-top:1px solid #eee;background:#fafafa;">
+      <p style="margin:0 0 6px;color:#555;font-size:12px;">Organisé par <strong>Elan Expo Maroc</strong></p>
+      <p style="margin:0 0 4px;color:#999;font-size:12px;">
+        <a href="mailto:info@siemamaroc.com" style="color:#999;text-decoration:none;">info@siemamaroc.com</a>
+        &nbsp;&bull;&nbsp;
+        <a href="https://www.siemamaroc.com" style="color:#999;text-decoration:none;">www.siemamaroc.com</a>
+      </p>
+      <p style="margin:0;color:#ccc;font-size:11px;">Powered by Leena EMS</p>
+    </div>
+
+  </div>
+</body>
+</html>
+`;
+
 const CERT_EMAIL_TEMPLATE_MP26 = `
 <!DOCTYPE html>
 <html>
@@ -383,8 +439,11 @@ async function issueCertificate(client, visitor, expoId, organizerId, hall, term
     date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   };
 
-  const emailSubject = `Your Conference Certificate — ${conference_topic}`;
-  const emailTemplate = (Number(expoId) === 13) ? CERT_EMAIL_TEMPLATE_MP26
+  const emailSubject = (Number(expoId) === 9)
+    ? `Votre certificat de participation — ${conference_topic}`
+    : `Your Conference Certificate — ${conference_topic}`;
+  const emailTemplate = (Number(expoId) === 9)  ? CERT_EMAIL_TEMPLATE_SIEMA
+                      : (Number(expoId) === 13) ? CERT_EMAIL_TEMPLATE_MP26
                       : (Number(expoId) === 7)  ? CERT_EMAIL_TEMPLATE_NG
                       : CERT_EMAIL_TEMPLATE;
   const emailHtml = processEmailTemplate(emailTemplate, emailData);
@@ -672,8 +731,11 @@ router.post('/resend', terminalAuth, async (req, res) => {
       date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     };
 
-    const emailSubject = `Your Conference Certificate — ${cert.conference_topic} (Resent)`;
-    const emailTemplate = (Number(cert.expo_id) === 13) ? CERT_EMAIL_TEMPLATE_MP26
+    const emailSubject = (Number(cert.expo_id) === 9)
+      ? `Votre certificat de participation — ${cert.conference_topic} (Renvoyé)`
+      : `Your Conference Certificate — ${cert.conference_topic} (Resent)`;
+    const emailTemplate = (Number(cert.expo_id) === 9)  ? CERT_EMAIL_TEMPLATE_SIEMA
+                        : (Number(cert.expo_id) === 13) ? CERT_EMAIL_TEMPLATE_MP26
                         : (Number(cert.expo_id) === 7)  ? CERT_EMAIL_TEMPLATE_NG
                         : CERT_EMAIL_TEMPLATE;
     const emailHtml = processEmailTemplate(emailTemplate, emailData);
