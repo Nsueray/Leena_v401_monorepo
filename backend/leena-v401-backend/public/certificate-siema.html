@@ -650,11 +650,21 @@
       /* conference_certificates holds exactly ONE topic — the one selected at
          scan time; the " || " merge lives only in visitors.custom_fields.
          Split ONLY on the exact " || ", never on a bare "|" (topic names may
-         contain single pipes as punctuation). */
+         contain single pipes as punctuation).
+         SIEMA form 66 options carry a session-time suffix like " (mar. 22 ·
+         12h00)" so the dropdown disambiguates same-day sessions. The suffix
+         stays in the DB (visitors.custom_fields + this row) for filtering and
+         analytics, but is stripped from the certificate display surface. */
+      var SESSION_TIME_SUFFIX = /\s*\((?:lun|mar|mer|jeu|ven|sam|dim)\.\s?\d{1,2}\s?·\s?\d{1,2}h\d{2}\)\s*$/u;
+      function stripSessionTimeSuffix(s) {
+        return String(s || '').replace(SESSION_TIME_SUFFIX, '').trim();
+      }
       var topic = c.conference_topic || '';
       if (topic.indexOf(' || ') !== -1) {
-        topic = topic.split(' || ').map(function (t) { return t.trim(); })
+        topic = topic.split(' || ').map(function (t) { return stripSessionTimeSuffix(t); })
                      .filter(Boolean).join('  •  ');
+      } else {
+        topic = stripSessionTimeSuffix(topic);
       }
 
       var values = {

@@ -268,6 +268,22 @@ function splitTopics(raw) {
 }
 
 /**
+ * Strip form-66 session-time suffix like " (mar. 22 · 12h00)" from a topic string.
+ * SIEMA (expo 9) uses this suffix in the form-builder dropdown to disambiguate
+ * same-day sessions. The DATA STAYS AS-IS in the DB (visitors.custom_fields +
+ * conference_certificates rows keep the raw value for filter/analytic queries).
+ * This helper is applied only on the certificate email display surfaces for
+ * expo 9. Ghana / NG / MP26 topic strings do not carry this pattern, so callers
+ * gate the strip on Number(expoId) === 9.
+ */
+function stripSessionTimeSuffix(topic) {
+  if (!topic) return '';
+  return String(topic)
+    .replace(/\s*\((?:lun|mar|mer|jeu|ven|sam|dim)\.\s?\d{1,2}\s?·\s?\d{1,2}h\d{2}\)\s*$/u, '')
+    .trim();
+}
+
+/**
  * Helper: Check if visitor is registered for the given conference topic.
  * custom_fields.conference_topic may contain " || "-separated topics.
  * Comparison is case-insensitive with trim to handle data inconsistencies.
@@ -430,17 +446,26 @@ async function issueCertificate(client, visitor, expoId, organizerId, hall, term
   const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
   const certificateUrl = `${baseUrl}/certificate.html?token=${certificate.certificate_token}`;
 
+  // SIEMA (expo 9) only: strip the form-66 session-time suffix from the value
+  // rendered in the email body ({{conference_topic}}) and subject line. The DB
+  // row inserted above at :399-403 keeps the raw suffix; strip is display-only.
+  // Ghana/NG/MP26 topic strings never carry this pattern — gate on expo_id for
+  // clarity and byte-identical behaviour on the other three arms.
+  const displayTopic = (Number(expoId) === 9)
+    ? stripSessionTimeSuffix(conference_topic)
+    : conference_topic;
+
   const emailData = {
     name: visitor.name || '',
     last_name: visitor.last_name || '',
-    conference_topic: conference_topic,
+    conference_topic: displayTopic,
     expo_name: expoName,
     certificate_url: certificateUrl,
     date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
   };
 
   const emailSubject = (Number(expoId) === 9)
-    ? `Votre certificat de participation — ${conference_topic}`
+    ? `Votre certificat de participation — ${displayTopic}`
     : `Your Conference Certificate — ${conference_topic}`;
   const emailTemplate = (Number(expoId) === 9)  ? CERT_EMAIL_TEMPLATE_SIEMA
                       : (Number(expoId) === 13) ? CERT_EMAIL_TEMPLATE_MP26
@@ -722,17 +747,24 @@ router.post('/resend', terminalAuth, async (req, res) => {
     const baseUrl = process.env.BASE_BADGE_URL || 'https://leena.app';
     const certificateUrl = `${baseUrl}/certificate.html?token=${cert.certificate_token}`;
 
+    // SIEMA (expo 9) only: strip the form-66 session-time suffix from the
+    // display value on the resend email body + subject. Same rationale as the
+    // issue path — the cert row's DB value stays raw.
+    const displayTopic = (Number(cert.expo_id) === 9)
+      ? stripSessionTimeSuffix(cert.conference_topic)
+      : cert.conference_topic;
+
     const emailData = {
       name: cert.name || '',
       last_name: cert.last_name || '',
-      conference_topic: cert.conference_topic,
+      conference_topic: displayTopic,
       expo_name: cert.expo_name || '',
       certificate_url: certificateUrl,
       date: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
     };
 
     const emailSubject = (Number(cert.expo_id) === 9)
-      ? `Votre certificat de participation — ${cert.conference_topic} (Renvoyé)`
+      ? `Votre certificat de participation — ${displayTopic} (Renvoyé)`
       : `Your Conference Certificate — ${cert.conference_topic} (Resent)`;
     const emailTemplate = (Number(cert.expo_id) === 9)  ? CERT_EMAIL_TEMPLATE_SIEMA
                         : (Number(cert.expo_id) === 13) ? CERT_EMAIL_TEMPLATE_MP26
