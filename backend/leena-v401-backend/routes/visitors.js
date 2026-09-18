@@ -242,7 +242,7 @@ router.post('/public', async (req, res) => {
 
     if (form_id) {
       const formResult = await pool.query(
-        `SELECT email_template_id, organizer_id, visitor_type, config, name FROM forms WHERE id = $1`,
+        `SELECT email_template_id, organizer_id, visitor_type, config, name, source FROM forms WHERE id = $1`,
         [form_id]
       );
       if (formResult.rows.length) {
@@ -251,6 +251,20 @@ router.post('/public', async (req, res) => {
         formVisitorType = formResult.rows[0].visitor_type || 'visitor';
         formNotificationConfig = formResult.rows[0].config?.notification || null;
         formNameForNotif = formResult.rows[0].name || '';
+        // Channel attribution: if the form defines an explicit source (e.g.
+        // partner name, ad campaign tag, referral network), propagate it to
+        // visitors.source on the INSERT path. The form-builder page saves an
+        // empty string when the operator leaves the field blank; the same
+        // page also writes the string 'form-builder' as an intake default.
+        // Both are treated as "not set" — falls through to the 'public_form'
+        // default from :226 above, byte-identical to prior behavior for
+        // forms 51/59/66/67 (all currently source='form-builder' or empty).
+        // The existing-visitor UPDATE path at :298-308 does NOT touch source,
+        // so a returning visitor's original source is preserved as-is.
+        const formSource = (formResult.rows[0].source || '').trim();
+        if (formSource && formSource !== 'form-builder') {
+          visitorData.source = formSource;
+        }
       }
     }
 
