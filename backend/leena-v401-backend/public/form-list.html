@@ -270,8 +270,9 @@
                         </div>
                         <div class="form-actions" onclick="event.stopPropagation()">
                             <button class="btn btn-sm btn-outline-primary" onclick="editForm(${form.id})"><i class="bi bi-pencil"></i> Edit</button>
-                            <button class="btn btn-sm btn-outline-success" onclick="copyZohoUrl(${form.id})"><i class="bi bi-clipboard"></i> Zoho</button>
-                            <button class="btn btn-sm btn-outline-info" onclick="duplicateForm(${form.id})"><i class="bi bi-files"></i> Copy</button>
+                            <button class="btn btn-sm btn-outline-success" onclick="copyFormUrl(${form.id})"><i class="bi bi-link-45deg"></i> Copy Link</button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="copyZohoUrl(${form.id})"><i class="bi bi-clipboard"></i> Zoho</button>
+                            <button class="btn btn-sm btn-outline-info" onclick="duplicateForm(${form.id})"><i class="bi bi-files"></i> Duplicate</button>
                             <button class="btn btn-sm btn-outline-warning" onclick="toggleForm(${form.id})"><i class="bi bi-toggle-${form.is_active ? 'on' : 'off'}"></i></button>
                             <button class="btn btn-sm btn-outline-danger" onclick="deleteForm(${form.id})"><i class="bi bi-trash"></i></button>
                         </div>
@@ -369,11 +370,11 @@
             } catch (e) { showError('Failed to clone form'); }
         }
         async function duplicateForm(id) {
-            if (!confirm('Copy this form?')) return;
             const form = forms.find(f => f.id === id); if (!form) return;
+            if (!confirm(`Create a DUPLICATE of "${form.name}"?\n\nThe copy will be created INACTIVE.`)) return;
             try {
                 const res = await fetch(`${API_URL}/forms`, { method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ name: `${form.name} (Copy)`, description: form.description, expo_id: form.expo_id, fields: form.fields, is_active: false }) });
-                if (res.ok) { showSuccess('Form duplicated!'); loadForms(); } else throw new Error();
+                if (res.ok) { showSuccess('Duplicate created (INACTIVE)'); loadForms(); } else throw new Error();
             } catch (e) { showError('Failed to duplicate'); }
         }
         async function toggleForm(id) {
