@@ -419,7 +419,7 @@
             hidePreviewCard();
             initAudio();
 
-            const qrCode = parseQR(rawQR);
+            let qrCode = parseQR(rawQR);
             const topic = document.getElementById('topicSelect').value;
 
             if (!topic) {
@@ -432,6 +432,27 @@
             }
 
             try {
+                // Email fallback: if the input contains '@', resolve to a QR via
+                // the terminal's expo-scoped email lookup, then continue exactly
+                // like a QR scan. Mirrors qrscanner.html:591-618. The two-step
+                // (email → qr, then qr → full visitor) is intentional so the
+                // preview card still receives the visitor-by-qr shape that
+                // carries customFields.conference_topic for the "Registered
+                // sessions" panel.
+                if (qrCode.includes('@')) {
+                    const emailRes = await apiFetch(`/api/terminal/visitor-by-email?email=${encodeURIComponent(qrCode)}`);
+                    if (!emailRes.success || !emailRes.visitor || !emailRes.visitor.qrCode) {
+                        showOverlay('error', 'Not Found', 'No visitor found with this email');
+                        vibrate([200, 100, 200]);
+                        playBeep(300, 400);
+                        addToLog(qrCode, topic, 'error');
+                        isProcessing = false;
+                        document.getElementById('qrInput').focus();
+                        return;
+                    }
+                    qrCode = emailRes.visitor.qrCode;
+                }
+
                 // 1. Look up visitor
                 const lookupRes = await apiFetch(`/api/terminal/visitor-by-qr?qr=${encodeURIComponent(qrCode)}`);
 
