@@ -230,6 +230,16 @@
             `;
         }
 
+        // Prefill from URL (?<field.name>=value) — used by the call-center
+        // Register-now button. Returns '' when the param is absent, so the
+        // rendered markup is byte-identical to before. `id` and `_lc` are
+        // this page's own params and never prefill a field.
+        function prefillAttr(field) {
+            if (field.name === 'id' || field.name === '_lc') return '';
+            const v = new URLSearchParams(window.location.search).get(field.name);
+            return v ? ` value="${esc(v)}"` : '';
+        }
+
         // Render individual field
         function renderField(field) {
             let input = '';
@@ -304,7 +314,7 @@
                         <input type="${field.type}" 
                                class="form-control" 
                                id="${fieldId}" 
-                               name="${field.name}" 
+                               name="${field.name}"${prefillAttr(field)} 
                                placeholder="${field.placeholder || ''}" 
                                ${field.required ? 'required' : ''}>
                     `;

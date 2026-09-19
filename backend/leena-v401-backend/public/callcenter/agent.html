@@ -983,9 +983,23 @@ function buildActionLink(lead) {
   return `${location.origin}/form-public.html?id=${lead.register_form_id}`;
 }
 
-// Register-now button target — the lead's expo register form.
+// Register-now button target — the lead's expo register form. For B/C the
+// lead's contact fields ride along as form-public.html prefill params, keyed
+// by the form field names (forms 59 + 64 both: name, last_name, company,
+// email, mobile). Segment A stays unprefilled — Register now is the
+// wrong-email escape hatch there, so the stale address must not be carried.
 function registerHref(lead) {
-  return `/form-public.html?id=${lead.register_form_id}`;
+  const base = `/form-public.html?id=${lead.register_form_id}`;
+  if (lead.segment !== 'B' && lead.segment !== 'C') return base;
+  const p = new URLSearchParams();
+  const put = (k, v) => { if (v) p.set(k, String(v).trim()); };
+  put('name', lead.first_name);
+  put('last_name', lead.last_name);
+  put('company', lead.company);
+  put('email', lead.email);
+  put('mobile', lead.phone);
+  const qs = p.toString();
+  return qs ? `${base}&${qs}` : base;
 }
 
 function openWhatsApp(lead) {
