@@ -1719,7 +1719,9 @@
                 const classes = ['day-row'];
                 if (isFairDay) classes.push('fair-day'); else classes.push('non-fair-day');
                 if (isToday && isFairDay) classes.push('today');
-                return `<div class="${classes.join(' ')}"><span class="day-label">${label}</span><span class="day-count">${Number(r.count).toLocaleString()}</span></div>`;
+                // People, not scans: a visitor scanned at the badge desk and the gate is one.
+                const people = Number(r.unique_count ?? r.count);
+                return `<div class="${classes.join(' ')}"><span class="day-label">${label}</span><span class="day-count">${people.toLocaleString()}</span></div>`;
             }).join('');
 
             body.innerHTML = `<div class="day-list">${html}</div>`;

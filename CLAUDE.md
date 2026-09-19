@@ -2456,3 +2456,45 @@ adding `expo_id = 9` changed SQL text without changing any result.
   web service (G43 cost).
 - Madesign FR scripts are Suer's verbatim text; EN/TR mirrors, pills, WhatsApp
   one-liners and the segment-B safety drafts await Meriem's review.
+
+### v4.0.13 — Fair "today" counts count PEOPLE, not scan rows (19 September 2026)
+
+**Context:** SIEMA (expo 9, 22-24 Sep) runs a two-stage flow — badge desk, then
+gate. `qrscanner.html` writes a `checkins` row on EVERY scan at every `scanner`
+terminal (fail-closed, `e900b70`), and `/terminal/checkin` dedupes only per
+terminal within `duplicate_threshold_seconds`. A desk scan + a gate scan is
+therefore two rows, and every `COUNT(*)` "today" surface would show ~2× the
+day-1 visitors. Re-entry scans inflated later days the same way.
+
+**Change (read side only — nothing about how check-ins are WRITTEN changed):**
+- `routes/reports.js:88` (`/summary` `checkins_today`) and `:403` (organizer
+  summary `checkins_today`) → `COUNT(DISTINCT CASE WHEN … THEN visitor_id END)`
+- `routes/checkins.js:499` (`/stats/summary`) and `:591` (`/stats`)
+  `today_count` → `COUNT(DISTINCT visitor_id)` — feeds the Check-ins page "Today" tile
+- `routes/expos.js:647` (`/:id/stats` `checkins_today`) → `COUNT(DISTINCT visitor_id)`
+- `public/main-panel-v2.html` day-by-day list renders `unique_count` (already
+  returned by `reports.js:268-277`), falling back to `count`
+
+Field names and response shapes are unchanged — every consumer keeps working.
+
+**Deliberately NOT changed:** hourly charts (`reports.js:833-850`, `:963-973`)
+stay raw — they measure gate FLOW, where every scan is signal. `/live`
+`fair_total_checkins` and the reports-page overlay chart were already DISTINCT.
+`total_checkins` and the `entries/exits/reentries` split stay raw (row counts
+by definition). `checkinReports.js` untouched.
+
+⚠️ **Semantics:** "check-ins today" now means *people checked in today*. A
+visitor who attends day 1 and day 2 counts once on each day (correct per-day);
+the fair-wide total of people remains `fair_total_checkins` / `unique_visitors_checked_in`.
+
+⚠️ **Day boundary is UTC** (`leena_v401_db` has `TimeZone=utc` at DB level;
+`utils/db.js` sets no override) → 01:00 Casablanca. Outside fair hours.
+
+**Measured on expo 13 (Mega Project Nigeria, single-stage flow), raw vs people:**
+25 Aug 1,116 → 1,047 (6.2%) · 26 Aug 1,277 → 1,213 (5.0%) · 27 Aug 858 → 846 (1.4%).
+The gap is small there because expo 13 scanned once per visit; under SIEMA's
+two-stage flow it is expected to approach 2× on day 1.
+
+Tests: `npm run test:setup && npm test` → 120 ✅ / 0 ❌ (finance suites; they do
+not exercise these routes). New SQL expressions executed read-only against
+production before commit.

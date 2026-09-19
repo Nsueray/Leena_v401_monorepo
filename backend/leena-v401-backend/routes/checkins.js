@@ -496,8 +496,8 @@ router.get('/stats/summary', authenticateToken, async (req, res) => {
 
     // Get today's check-ins
     const todayResult = await pool.query(
-      `SELECT COUNT(*)::int as today_count 
-       FROM checkins 
+      `SELECT COUNT(DISTINCT visitor_id)::int as today_count
+       FROM checkins
        WHERE expo_id = $1 AND DATE(checkin_time) = CURRENT_DATE`,
       [expoId]
     );
@@ -588,8 +588,8 @@ router.get('/stats', authenticateToken, async (req, res) => {
 
     // Get today's check-ins
     const todayResult = await pool.query(
-      `SELECT COUNT(*)::int as today_count 
-       FROM checkins 
+      `SELECT COUNT(DISTINCT visitor_id)::int as today_count
+       FROM checkins
        WHERE expo_id = $1 AND DATE(checkin_time) = CURRENT_DATE`,
       [expoId]
     );

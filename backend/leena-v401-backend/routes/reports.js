@@ -85,7 +85,7 @@ async function generateExpoReport(expoId, startDate, endDate, includeDetails) {
       SELECT 
         COUNT(*)::int as total_checkins,
         COUNT(DISTINCT visitor_id)::int as unique_visitors_checked_in,
-        COUNT(CASE WHEN checkin_time >= CURRENT_DATE THEN 1 END)::int as checkins_today,
+        COUNT(DISTINCT CASE WHEN checkin_time >= CURRENT_DATE THEN visitor_id END)::int as checkins_today,
         COUNT(CASE WHEN checkin_type = 'entry' THEN 1 END)::int as entries,
         COUNT(CASE WHEN checkin_type = 'exit' THEN 1 END)::int as exits,
         COUNT(CASE WHEN checkin_type = 're-entry' THEN 1 END)::int as reentries
@@ -400,7 +400,7 @@ async function generateOrganizerReport(organizerId, startDate, endDate, includeD
       SELECT 
         COUNT(*)::int as total_checkins,
         COUNT(DISTINCT c.visitor_id)::int as unique_visitors_checked_in,
-        COUNT(CASE WHEN c.checkin_time >= CURRENT_DATE THEN 1 END)::int as checkins_today,
+        COUNT(DISTINCT CASE WHEN c.checkin_time >= CURRENT_DATE THEN c.visitor_id END)::int as checkins_today,
         COUNT(DISTINCT c.expo_id)::int as expos_with_checkins
       FROM checkins c
       JOIN visitors v ON c.visitor_id = v.id

@@ -644,7 +644,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
         (SELECT COUNT(*)::int FROM visitors WHERE expo_id = $1 AND created_at >= CURRENT_DATE) as visitors_today,
         (SELECT COUNT(*)::int FROM checkins WHERE expo_id = $1) as total_checkins,
         (SELECT COUNT(DISTINCT visitor_id)::int FROM checkins WHERE expo_id = $1) as unique_checkins,
-        (SELECT COUNT(*)::int FROM checkins WHERE expo_id = $1 AND checkin_time >= CURRENT_DATE) as checkins_today,
+        (SELECT COUNT(DISTINCT visitor_id)::int FROM checkins WHERE expo_id = $1 AND checkin_time >= CURRENT_DATE) as checkins_today,
         (SELECT COUNT(*)::int FROM visitors WHERE expo_id = $1 AND custom_fields->>'country' IS NOT NULL) as visitors_with_country,
         (SELECT json_agg(DISTINCT custom_fields->>'country') FROM visitors WHERE expo_id = $1 AND custom_fields->>'country' IS NOT NULL) as countries
     `, [id]);
