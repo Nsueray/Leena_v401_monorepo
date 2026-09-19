@@ -196,6 +196,10 @@
                 
                 const data = await response.json();
                 formData = data.form;
+                // Before renderForm(): the select placeholder is built during
+                // render, and applyFormStyle() below would set the language
+                // too late for it.
+                setFormLanguage(formData.config);
                 renderForm();
                 applyFormStyle(formData.config);
             } catch (error) {
@@ -252,7 +256,7 @@
                                 id="${fieldId}" 
                                 name="${field.name}" 
                                 ${field.required ? 'required' : ''}>
-                            <option value="">Choose...</option>
+                            <option value="">${esc(pickUi('selectPlaceholder'))}</option>
                             ${(field.options || []).map(opt => 
                                 `<option value="${opt}">${opt}</option>`
                             ).join('')}
@@ -345,7 +349,7 @@
             
             const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Submitting...';
+            submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> ${esc(pickUi('submittingLabel'))}`;
             
             try {
                 const formElement = document.getElementById('registrationForm');
@@ -411,7 +415,7 @@
                 }
 
                 submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="bi bi-send me-2"></i> Submit Registration';
+                submitBtn.innerHTML = `<i class="bi bi-send me-2"></i> ${esc(buttonLabel())}`;
                 submitting = false;
             }
         }
@@ -468,6 +472,23 @@
         const MISC_DEFAULTS_FR = {
             receivedNote: 'Votre inscription a bien été enregistrée.'
         };
+        // In-form chrome (Sep 19). Same language-default mechanism as the
+        // success/error cards above — EN values are byte-identical to the
+        // strings that were hardcoded at the render sites, so a non-'fr'
+        // form renders exactly as before. No per-form override keys: the
+        // submit button already has one (config.style.buttonText).
+        const UI_DEFAULTS_EN = {
+            selectPlaceholder: 'Choose...',
+            submittingLabel:   'Submitting...',
+            submitLabel:       'Submit Registration',
+            pageTitle:         'Registration Form'
+        };
+        const UI_DEFAULTS_FR = {
+            selectPlaceholder: 'Sélectionnez...',
+            submittingLabel:   'Envoi en cours...',
+            submitLabel:       'S\'inscrire',
+            pageTitle:         'Formulaire d\'inscription'
+        };
 
         function esc(s) {
             return String(s == null ? '' : s)
@@ -478,10 +499,23 @@
                 .replace(/'/g, '&#39;');
         }
 
-        // formLanguage is set by applyFormStyle from config.language; stays
+        // formLanguage is set by setFormLanguage() from config.language; stays
         // 'en' until then so showError firing pre-config is byte-identical
         // to today's hardcoded English.
         let formLanguage = 'en';
+
+        // Resolve the form's language and publish it to <html lang> + the tab
+        // title. Called from loadForm() BEFORE renderForm() — the in-form
+        // strings (select placeholder) are built during render, and
+        // applyFormStyle() runs after it. applyFormStyle() calls this too, so
+        // the two entry points can never disagree; it is idempotent.
+        function setFormLanguage(config) {
+            if (typeof config === 'string') { try { config = JSON.parse(config); } catch (e) { config = null; } }
+            formLanguage = (config && config.language === 'fr') ? 'fr' : 'en';
+            try { document.documentElement.lang = formLanguage; } catch (e) { /* ignore */ }
+            try { document.title = pickUi('pageTitle'); } catch (e) { /* ignore */ }
+            return formLanguage;
+        }
 
         function pickSuccess(key) {
             const override = formStyle && formStyle[key];
@@ -492,6 +526,19 @@
         function pickError(key) {
             const map = formLanguage === 'fr' ? ERROR_DEFAULTS_FR : ERROR_DEFAULTS_EN;
             return map[key] != null ? map[key] : ERROR_DEFAULTS_EN[key];
+        }
+        function pickUi(key) {
+            const map = formLanguage === 'fr' ? UI_DEFAULTS_FR : UI_DEFAULTS_EN;
+            return map[key] != null ? map[key] : UI_DEFAULTS_EN[key];
+        }
+        // Submit-button label: the form's own override wins, then the
+        // language default. Used to RESTORE the label after a failed submit,
+        // which previously reverted to hardcoded English and overwrote
+        // config.style.buttonText.
+        function buttonLabel() {
+            return (formStyle && formStyle.buttonText)
+                ? formStyle.buttonText
+                : pickUi('submitLabel');
         }
         function pickMisc(key) {
             const map = formLanguage === 'fr' ? MISC_DEFAULTS_FR : MISC_DEFAULTS_EN;
@@ -515,7 +562,7 @@
             // string override. The value comes from POST /api/visitors/public
             // (routes/visitors.js:487) and is defined for every row.
             const idBlock = badgeId ? `
-                        <p style="font-size:13px;color:#334155;margin-top:8px;"><strong>Registration ID / N° d'enregistrement:</strong> <span style="font-family:monospace;letter-spacing:0.5px;">${esc(badgeId)}</span></p>
+                        <p style="font-size:13px;color:#334155;margin-top:8px;"><strong>Registration ID / N° d'enregistrement :</strong> <span style="font-family:monospace;letter-spacing:0.5px;">${esc(badgeId)}</span></p>
             ` : '';
             container.innerHTML = `
                 <div class="form-header">
@@ -585,8 +632,7 @@
             // screen readers + Google translate pick up the right locale.
             // Runs even when config.style is null — a language-only form
             // (no style overrides) still gets its lang attribute set.
-            formLanguage = (config && config.language === 'fr') ? 'fr' : 'en';
-            try { document.documentElement.lang = formLanguage; } catch (e) { /* ignore */ }
+            setFormLanguage(config);
 
             if (!config || !config.style) return; // null config.style → keep hardcoded defaults
 

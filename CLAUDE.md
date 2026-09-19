@@ -2498,3 +2498,50 @@ two-stage flow it is expected to approach 2× on day 1.
 Tests: `npm run test:setup && npm test` → 120 ✅ / 0 ❌ (finance suites; they do
 not exercise these routes). New SQL expressions executed read-only against
 production before commit.
+
+### v4.0.14 — form-public.html French polish (19 September 2026)
+
+**Context:** audit of form 67 (SIEMA on-site registration, expo 9) found four
+visitor-facing English strings hardcoded in the shared `form-public.html`.
+No DB setting can reach them. Items V1 / F2 / V12 / V13 of that audit; the
+SQL-fixable defects (consent radio, "Website", Western Sahara, …) are NOT in
+this commit.
+
+- **V1 `:259`** — select placeholder `Choose...` → `pickUi('selectPlaceholder')`.
+  Form 67 has **4** selects (Pays, Q1, Q5, Q6) that showed English.
+- **F2 `:352`** — `Submitting...` → `pickUi('submittingLabel')`.
+- **F2 `:418`** — after a FAILED submit the button was restored to hardcoded
+  `Submit Registration`, overwriting `config.style.buttonText`. Now
+  `buttonLabel()` = the form's own `buttonText`, else the language default.
+- **V13 `:7` / `setFormLanguage`** — tab title `Registration Form` →
+  `Formulaire d'inscription` for `fr`.
+- **V12 `:524`** — `N° d'enregistrement:` → `N° d'enregistrement :` (FR spacing).
+
+**Language read — the ordering trap.** `renderForm()` runs at `:203`,
+`applyFormStyle()` at `:204`, and the select placeholder is built DURING
+render. `formLanguage` was set inside `applyFormStyle` — one line too late, so
+a render-time read would always have seen `'en'`. The assignment is now
+`setFormLanguage(config)` (`:512`), called from `loadForm()` **before**
+`renderForm()` and again from `applyFormStyle()` (`:635`). Idempotent, single
+source of truth, handles the double-stringified-config case.
+
+⚠️ **Not `formStyle`** — that is still null during render, by design. Only
+`buttonLabel()` reads it, and that runs post-submit, long after style is applied.
+
+**EN byte-identical — verified, not assumed.** A Node harness rendered all 8
+field types against `HEAD` and the new file with a stubbed DOM: **0 diffs** for
+`en` / null / `''` / non-'fr' config; exactly **1** diff under `fr` (the select).
+`UI_DEFAULTS_EN` values are the old hardcoded strings verbatim.
+
+**Side benefit (measured):** Madesign form **64** (expo 18, `language='fr'`,
+2 selects) picks up the French strings automatically — same mechanism, no
+per-form work. Forms 59 (2 selects) and 66 (3 selects) on expo 9 too.
+
+⚠️ **Residual, NOT fixed here (out of scope):** the button's FIRST render at
+`:226` is still the hardcoded `Submit Registration` until `applyFormStyle`
+replaces it. Invisible on forms that set `buttonText` (59/64/66/67 all do).
+Form **69** sets `buttonText='Register'` on a `language='fr'` form — an
+English button on a French form, a DB defect, fixable by SQL.
+
+Tests: `npm run test:setup && npm test` → 120 ✅ / 0 ❌ (finance suites; they do
+not exercise this page — the harness above is the real evidence).
