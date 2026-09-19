@@ -543,8 +543,28 @@ function _pickInitialLang() {
   return 'fr';
 }
 let lang = _pickInitialLang();
+
+// Per-expo mode (Madesign extension, 16 Sep 2026). ?expo= absent → no meta
+// fetch, no expo param on API calls (server defaults to 9) → the SIEMA page
+// path is unchanged. ?expo=18 → label + card texts come from
+// GET /api/callcenter/expo-meta (routes/callcenter.js EXPO_SETTINGS);
+// texts override I18N key-by-key, everything else falls back to I18N.
+const EXPO_PARAM = (new URLSearchParams(location.search).get('expo') || '').trim();
+const EXPO_QS = EXPO_PARAM ? `&expo=${encodeURIComponent(EXPO_PARAM)}` : '';
+let EXPO_META = null;
+function applyExpoLabel() {
+  if (!EXPO_META) return;
+  document.title = document.title.replace('SIEMA', EXPO_META.label);
+  const brand = document.querySelector('header .brand');
+  if (brand && brand.firstChild && brand.firstChild.nodeType === Node.TEXT_NODE) {
+    brand.firstChild.nodeValue = EXPO_META.label + ' ';
+  }
+}
+
 function t(key, params) {
-  let s = (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  const ex = EXPO_META && EXPO_META.texts;
+  let s = (ex && ex[lang] && ex[lang][key]) || (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  if (EXPO_META && key === 'splash_title') s = s.replace('SIEMA', EXPO_META.label);
   if (params) for (const k in params) s = s.replace(`{${k}}`, params[k]);
   return s;
 }
@@ -640,7 +660,7 @@ async function splashSubmit() {
   const err = document.getElementById('splashError');
   if (!key || !agent) { err.textContent = t('splash_wrong_key'); err.style.display = 'block'; return; }
   // Test the credentials with a lightweight ping — /stats/me hits both agent + key.
-  const r = await fetch(`/api/callcenter/stats/me?agent=${encodeURIComponent(agent)}`, {
+  const r = await fetch(`/api/callcenter/stats/me?agent=${encodeURIComponent(agent)}${EXPO_QS}`, {
     headers: { 'x-callcenter-key': key }
   }).catch(() => null);
   if (!r) { err.textContent = t('splash_wrong_key'); err.style.display = 'block'; return; }
@@ -698,7 +718,7 @@ function toast(msg, ms = 1800) {
 async function ccFetch(path, opts = {}) {
   const { key, agent } = getAuth();
   const sep = path.includes('?') ? '&' : '?';
-  const url = `/api/callcenter${path}${sep}agent=${encodeURIComponent(agent)}`;
+  const url = `/api/callcenter${path}${sep}agent=${encodeURIComponent(agent)}${EXPO_QS}`;
   const headers = { 'x-callcenter-key': key, 'content-type': 'application/json', ...(opts.headers || {}) };
   const r = await fetch(url, { ...opts, headers });
   // Auth-only statuses drop to splash: 401 (wrong/missing key or agent) +
@@ -820,12 +840,12 @@ function renderCard(lead) {
           <button class="btn-action copy" id="btnCopy"><i class="bi bi-clipboard"></i> ${escapeHtml(t('action_copy'))}</button>
           <div class="action-hint">${escapeHtml(t('action_copy_hint'))}</div>
         </div>
-        ${seg === 'A' ? `<div class="action-item">
+        ${(seg === 'A' || (seg === 'C' && lead.c_resend_enabled)) ? `<div class="action-item">
           <button class="btn-action resend" id="btnResend"><i class="bi bi-envelope-arrow-up"></i> ${escapeHtml(t('action_resend'))}</button>
           <div class="action-hint">${escapeHtml(t('action_resend_hint'))}</div>
         </div>` : ''}
         <div class="action-item">
-          <a class="btn-action register" href="/form-public.html?id=59" target="_blank" rel="noopener"><i class="bi bi-pencil-square"></i> ${escapeHtml(t('action_register'))}</a>
+          <a class="btn-action register" href="${escapeAttr(registerHref(lead))}" target="_blank" rel="noopener"><i class="bi bi-pencil-square"></i> ${escapeHtml(t('action_register'))}</a>
           <div class="action-hint">${escapeHtml(t('action_register_hint'))}</div>
         </div>
       </div>
@@ -956,11 +976,16 @@ function buildActionLink(lead) {
   if (lead.segment === 'A' && lead.reactivation_token) {
     // reactivate-fr.html for MA, reactivate.html otherwise — matches worker/wizard shape
     // callcenter_leads.expo_id + expo.country_code isn't available client-side, so use MA-default
-    // for SIEMA (all leads on expo 9). Broaden later.
+    // (both call-center expos — 9 SIEMA, 18 Madesign — are MA). Broaden later.
     return `${location.origin}/reactivate-fr.html?token=${encodeURIComponent(lead.reactivation_token)}`;
   }
-  // B or C — form 59 (SIEMA visitor form)
-  return `${location.origin}/form-public.html?id=59`;
+  // B or C — the lead's expo register form (server EXPO_SETTINGS: 59 SIEMA, 64 Madesign)
+  return `${location.origin}/form-public.html?id=${lead.register_form_id}`;
+}
+
+// Register-now button target — the lead's expo register form.
+function registerHref(lead) {
+  return `/form-public.html?id=${lead.register_form_id}`;
 }
 
 function openWhatsApp(lead) {
@@ -1123,7 +1148,19 @@ function fmtCasa(iso) {
 // ================================================================
 // Boot
 // ================================================================
-(function boot() {
+(async function boot() {
+  if (EXPO_PARAM) {
+    // Fail closed: never show another fair's scripts/links if the meta for
+    // the requested expo can't be loaded (unknown expo → 400 INVALID_EXPO).
+    const m = await fetch(`/api/callcenter/expo-meta?expo=${encodeURIComponent(EXPO_PARAM)}`)
+      .then(r => (r.ok ? r.json() : null)).catch(() => null);
+    if (!m || !m.success) {
+      document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;">Unknown or unreachable expo — check the link.</div>';
+      return;
+    }
+    EXPO_META = m;
+    applyExpoLabel();
+  }
   applyI18nAttributes();
   const { key, agent } = getAuth();
   // URL params ?agent= and ?key= (query) — one-time convenience for the initial handshake

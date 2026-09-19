@@ -40,24 +40,93 @@ const uploadCallcenter = multer({
 // Constants + small helpers
 // ============================================================
 
-// Segment A "attended in 2025" — sourced from checkins on expo 1 (Morocco
-// Siema Expo 2025). Confirmed 7 Sep: expos.id=1, start_date=2025-09-09..11.
-const ATTENDED_2025_EXPO_ID = 1;
-
-// SIEMA re-activation template (Yaprak's template 74 = 01_invitation).
-// Hardcoded for Stage 3 — parameterise once we have a second expo needing
-// call-center resend. Kept in one place for future search.
-const SIEMA_ACTIVATE_TEMPLATE_ID = 74;
-
-// Segment → campaign_id mapping for mail-status enrichment (Stage 3b).
-// SIEMA campaigns: 78 = activate wave (segment A), 79 = register wave
-// (segment C). Segment B is transactional (badge/QR mail on expo_id, no
-// campaign). Keyed by `${expo_id}|${segment}` so future expos add without
-// touching the lookup.
-const CAMPAIGN_BY_EXPO_SEGMENT = {
-  '9|A': 78,
-  '9|C': 79
+// Per-expo call-center settings (Madesign extension, 16 Sep 2026).
+// Everything that used to be a SIEMA constant now lives here, keyed by
+// expos.id. Expo 9 values are exactly the old constants:
+//   activate_template_id   ← SIEMA_ACTIVATE_TEMPLATE_ID = 74 (01_invitation)
+//   attendance             ← ATTENDED_2025_EXPO_ID = 1 (checkins, Morocco Siema Expo 2025)
+//   campaigns              ← CAMPAIGN_BY_EXPO_SEGMENT '9|A': 78, '9|C': 79
+//   c_resend_template_id   null → segment-C resend stays 400 RESEND_WRONG_SEGMENT
+//   texts                  null → agent.html keeps its built-in SIEMA I18N
+// Expo 18 (Morocco Madesign Expo 2026): template 90 (A1) / 93 (R1), form 64,
+// campaigns 80/81. Madesign 2025 (expo 19) has ZERO checkins rows — attendance
+// exists only as visitors.source='madesign2025_checkin' (1,427 rows, 16 Sep).
+// Segment B is transactional (badge/QR mail on expo_id, no campaign).
+const EXPO_SETTINGS = {
+  9: {
+    label: 'SIEMA',
+    activate_template_id: 74,
+    c_resend_template_id: null,
+    register_form_id: 59,
+    attendance: { kind: 'checkins', expo_id: 1 },
+    campaigns: { A: 78, C: 79 },
+    texts: null
+  },
+  18: {
+    label: 'MADESIGN',
+    activate_template_id: 90,
+    c_resend_template_id: 93,
+    register_form_id: 64,
+    attendance: { kind: 'visitor_source', expo_id: 19, source: 'madesign2025_checkin' },
+    campaigns: { A: 80, C: 81 },
+    // Agent-card texts served via GET /expo-meta. FR drafted by Suer 16 Sep,
+    // EN/TR are mirrors — pending Meriem's review. Keys override agent.html
+    // I18N one-for-one; anything not listed falls back to the page's I18N.
+    texts: {
+      en: {
+        pill_A: 'Visited Madesign 2025 — activate',
+        pill_B: 'Registered for Madesign 2026',
+        pill_C: 'Not registered yet',
+        script_A: "Hello, I'm calling from MADESIGN EXPO 2026, 1-3 October in Casablanca (OFEC). You visited the 2025 edition — would you like me to resend your access badge?",
+        script_B: "Hello, I'm calling to confirm your registration for MADESIGN EXPO 2026, 1-3 October in Casablanca (OFEC). Have you received your access badge?",
+        script_C: "Hello, I'm calling from MADESIGN EXPO — interior design, ceramics, furniture, lighting and decoration — 1-3 October in Casablanca. Entry is free for professionals: may I send you your badge?",
+        wa_A: 'Hello, this is Elan Expo for MADESIGN EXPO 2026 (1-3 Oct, Casablanca, OFEC). Your access badge — one click: {url}',
+        wa_B: 'Hello, this is Elan Expo for MADESIGN EXPO 2026 (1-3 Oct, Casablanca, OFEC). Here is your entry link: {url}',
+        wa_C: 'Hello, this is Elan Expo for MADESIGN EXPO 2026 — interior design, ceramics, furniture, lighting & decoration (1-3 Oct, Casablanca). Free entry for professionals: {url}'
+      },
+      fr: {
+        pill_A: 'Visiteur Madesign 2025 — à activer',
+        pill_B: 'Inscrit pour Madesign 2026',
+        pill_C: 'Pas encore inscrit',
+        script_A: "Bonjour, je vous appelle du salon MADESIGN EXPO 2026, du 1er au 3 octobre à Casablanca (OFEC). Vous avez visité l'édition 2025 — souhaitez-vous que je vous renvoie votre badge d'accès ?",
+        script_B: "Bonjour, j'appelle pour confirmer votre inscription au salon MADESIGN EXPO 2026, du 1er au 3 octobre à Casablanca (OFEC). Avez-vous bien reçu votre badge d'accès ?",
+        script_C: "Bonjour, je vous appelle du salon MADESIGN EXPO — design d'intérieur, céramique, mobilier, éclairage et décoration — du 1er au 3 octobre à Casablanca. L'entrée est gratuite pour les professionnels : puis-je vous envoyer votre badge ?",
+        wa_A: "Bonjour, Elan Expo pour MADESIGN EXPO 2026 (1-3 oct., Casablanca, OFEC). Votre badge d'accès en un clic : {url}",
+        wa_B: "Bonjour, Elan Expo pour MADESIGN EXPO 2026 (1-3 oct., Casablanca, OFEC). Voici votre lien d'entrée : {url}",
+        wa_C: "Bonjour, Elan Expo pour MADESIGN EXPO 2026 — design d'intérieur, céramique, mobilier, éclairage et décoration (1-3 oct., Casablanca). Entrée gratuite pour les professionnels : {url}"
+      },
+      tr: {
+        pill_A: 'Madesign 2025 ziyaretçisi — aktive edilecek',
+        pill_B: 'Madesign 2026’ya kayıtlı',
+        pill_C: 'Henüz kayıtsız',
+        script_A: 'Merhaba, MADESIGN EXPO 2026 için arıyorum — 1-3 Ekim, Kazablanka (OFEC). 2025 fuarını ziyaret etmişsiniz — giriş kartınızı tekrar göndermemi ister misiniz?',
+        script_B: 'Merhaba, MADESIGN EXPO 2026 kaydınızı teyit etmek için arıyorum — 1-3 Ekim, Kazablanka (OFEC). Giriş kartınız elinize ulaştı mı?',
+        script_C: 'Merhaba, MADESIGN EXPO için arıyorum — iç mimari, seramik, mobilya, aydınlatma ve dekorasyon — 1-3 Ekim, Kazablanka. Profesyoneller için giriş ücretsiz: giriş kartınızı gönderebilir miyim?',
+        wa_A: 'Merhaba, Elan Expo — MADESIGN EXPO 2026 (1-3 Ekim, Kazablanka, OFEC). Giriş kartınız için tek tıklama: {url}',
+        wa_B: 'Merhaba, Elan Expo — MADESIGN EXPO 2026 (1-3 Ekim, Kazablanka, OFEC). Giriş bağlantınız: {url}',
+        wa_C: 'Merhaba, Elan Expo — MADESIGN EXPO 2026 — iç mimari, seramik, mobilya, aydınlatma ve dekorasyon (1-3 Ekim, Kazablanka). Profesyoneller için ücretsiz kayıt: {url}'
+      }
+    }
+  }
 };
+
+// ?expo= resolution. Absent/empty → 9, so every SIEMA page and cached agent
+// session that predates this param keeps hitting expo 9. Anything else must
+// be an EXPO_SETTINGS key; returns null for the caller to 400 INVALID_EXPO.
+const DEFAULT_EXPO_ID = 9;
+function resolveExpoId(req) {
+  const raw = req.query ? req.query.expo : undefined;
+  if (raw === undefined || raw === '') return DEFAULT_EXPO_ID;
+  const n = Number(raw);
+  return (Number.isInteger(n) && EXPO_SETTINGS[n]) ? n : null;
+}
+function invalidExpo(res) {
+  return res.status(400).json({
+    success: false,
+    error: 'expo must be one of: ' + Object.keys(EXPO_SETTINGS).join(', '),
+    code: 'INVALID_EXPO'
+  });
+}
 
 // Stuck-claim reaper — if an agent's browser closed on an open card, the
 // lead sits in status='claimed' forever unless we recover it. /next
@@ -147,17 +216,34 @@ function esc(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// Fetch attended_2025 for one email (checkins on expo 1). Fast — indexed
-// via visitors(email) + checkins(visitor_id).
-async function attendedIn2025(client, email) {
-  if (!email) return false;
-  const r = await client.query(
-    `SELECT 1 FROM checkins c
-     JOIN visitors v ON v.id = c.visitor_id
-     WHERE c.expo_id = $1 AND lower(v.email) = lower($2) LIMIT 1`,
-    [ATTENDED_2025_EXPO_ID, email]
-  );
-  return r.rows.length > 0;
+// Fetch attended_2025 for one email, per the lead's expo settings.
+//   'checkins'       (SIEMA)    — checkins on expo 1. Indexed via
+//                                  visitors(email) + checkins(visitor_id).
+//   'visitor_source' (Madesign) — visitors row on expo 19 with the 2025
+//                                  check-in source tag. 4.8 ms measured
+//                                  (idx_visitors_expo_id, 4,158 rows).
+// Unknown expo / no settings → false (same as no match).
+async function attendedIn2025(client, email, settings) {
+  if (!email || !settings || !settings.attendance) return false;
+  const a = settings.attendance;
+  if (a.kind === 'checkins') {
+    const r = await client.query(
+      `SELECT 1 FROM checkins c
+       JOIN visitors v ON v.id = c.visitor_id
+       WHERE c.expo_id = $1 AND lower(v.email) = lower($2) LIMIT 1`,
+      [a.expo_id, email]
+    );
+    return r.rows.length > 0;
+  }
+  if (a.kind === 'visitor_source') {
+    const r = await client.query(
+      `SELECT 1 FROM visitors
+       WHERE expo_id = $1 AND source = $2 AND lower(email) = lower($3) LIMIT 1`,
+      [a.expo_id, a.source, email]
+    );
+    return r.rows.length > 0;
+  }
+  return false;
 }
 
 // Per-lead mail status for the agent card (Stage 3b). One query per lead,
@@ -218,10 +304,11 @@ async function enrichMailStatus(client, lead) {
   }
 
   // Segment A or C — campaign-based.
-  const campaignId = CAMPAIGN_BY_EXPO_SEGMENT[`${lead.expo_id}|${lead.segment}`];
+  const expoSettings = EXPO_SETTINGS[lead.expo_id];
+  const campaignId = expoSettings && expoSettings.campaigns[lead.segment];
   if (!campaignId) {
-    // Unknown mapping (e.g. future expo without a CAMPAIGN_BY_EXPO_SEGMENT
-    // entry). Fall through with empty response — safer than guessing.
+    // Unknown mapping (e.g. future expo without an EXPO_SETTINGS entry).
+    // Fall through with empty response — safer than guessing.
     return emptyRes;
   }
 
@@ -278,8 +365,30 @@ router.get('/health', (req, res) => {
       'GET  /stats/agent/:name  (supervisor)',
       'GET  /admin/dump  (JWT)',
       'POST /admin/import  (JWT, multipart xlsx) — dry_run=true|false, expo_id',
-      'POST /report/send-now  (JWT)'
+      'POST /report/send-now  (JWT)',
+      'GET  /expo-meta?expo=  (unauth) — label + register form + agent-card texts'
     ]
+  });
+});
+
+// ============================================================
+// GET /api/callcenter/expo-meta?expo=18 — unauth per-expo page metadata
+// ============================================================
+// The agent/supervisor splash is rendered BEFORE any key is entered, so the
+// page needs the fair label without credentials. Returns only non-sensitive
+// display data (label, public register form id, call scripts). Same
+// allowlist + default-9 rule as every other ?expo= consumer.
+router.get('/expo-meta', (req, res) => {
+  const expoId = resolveExpoId(req);
+  if (!expoId) return invalidExpo(res);
+  const s = EXPO_SETTINGS[expoId];
+  res.json({
+    success: true,
+    expo_id: expoId,
+    label: s.label,
+    register_form_id: s.register_form_id,
+    c_resend_enabled: !!s.c_resend_template_id,
+    texts: s.texts
   });
 });
 
@@ -305,6 +414,8 @@ router.post('/next', agentAuth, async (req, res) => {
   if (!['A', 'B', 'C', 'any'].includes(segment)) {
     return res.status(400).json({ success: false, error: 'segment must be A, B, C, or any' });
   }
+  const expoId = resolveExpoId(req);
+  if (!expoId) return invalidExpo(res);
 
   const client = await pool.connect();
   try {
@@ -327,7 +438,9 @@ router.post('/next', agentAuth, async (req, res) => {
         `UPDATE callcenter_leads
          SET status = 'new', claimed_by = NULL, claimed_at = NULL, updated_at = NOW()
          WHERE status = 'claimed'
-           AND claimed_at < NOW() - INTERVAL '${STUCK_CLAIM_TTL_MINUTES} minutes'`
+           AND claimed_at < NOW() - INTERVAL '${STUCK_CLAIM_TTL_MINUTES} minutes'
+           AND expo_id = $1`,
+        [expoId]
       );
 
       const claimRes = await client.query(
@@ -338,6 +451,7 @@ router.post('/next', agentAuth, async (req, res) => {
                    OR (status = 'callback' AND callback_at <= NOW())
                  )
              AND ($1 = 'any' OR segment = $1)
+             AND expo_id = $3
            ORDER BY random()
            LIMIT 1
            FOR UPDATE SKIP LOCKED
@@ -350,7 +464,7 @@ router.post('/next', agentAuth, async (req, res) => {
          FROM candidate
          WHERE l.id = candidate.id
          RETURNING l.*`,
-        [segment, req.agent]
+        [segment, req.agent, expoId]
       );
 
       if (claimRes.rows.length === 0) {
@@ -385,7 +499,7 @@ router.post('/next', agentAuth, async (req, res) => {
       // Segment A: also compute attended_2025 for the agent card.
       let attended = false;
       if (cand.segment === 'A') {
-        attended = await attendedIn2025(client, cand.email);
+        attended = await attendedIn2025(client, cand.email, EXPO_SETTINGS[cand.expo_id]);
       }
 
       // Stage 3b — enrich with per-lead mail status for the agent card's
@@ -405,7 +519,16 @@ router.post('/next', agentAuth, async (req, res) => {
       }
 
       await client.query('COMMIT');
-      lead = { ...cand, attended_2025: attended ? 'yes' : 'no', ...mailStatus };
+      // Per-expo card data (additive fields): the page builds Register-now /
+      // copy links from register_form_id and shows segment-C Resend only when
+      // c_resend_enabled — no fair-specific hardcodes client-side.
+      const leadSettings = EXPO_SETTINGS[cand.expo_id];
+      lead = {
+        ...cand, attended_2025: attended ? 'yes' : 'no', ...mailStatus,
+        register_form_id: leadSettings ? leadSettings.register_form_id : null,
+        expo_label: leadSettings ? leadSettings.label : null,
+        c_resend_enabled: !!(leadSettings && leadSettings.c_resend_template_id)
+      };
       break;
     }
 
@@ -413,8 +536,9 @@ router.post('/next', agentAuth, async (req, res) => {
     const poolRes = await pool.query(
       `SELECT COUNT(*)::int AS n FROM callcenter_leads
        WHERE (status = 'new' OR (status = 'callback' AND callback_at <= NOW()))
-         AND ($1 = 'any' OR segment = $1)`,
-      [segment]
+         AND ($1 = 'any' OR segment = $1)
+         AND expo_id = $2`,
+      [segment, expoId]
     );
 
     _cacheBust();
@@ -571,9 +695,98 @@ router.post('/outcome/:id', agentAuth, async (req, res) => {
 // POST /api/callcenter/resend/:id — segment A only, per-lead email_queue Mode 1
 // ============================================================
 // Builds one email_queue Mode 1 INSERT for the lead's reactivation_token,
-// reusing template 74 (SIEMA activate). Mirrors the shape of the resend-
-// pending path (routes/reactivation.js:1005-1021) but per-token instead
-// of per-expo. Rate-limited to one resend per lead per 2 minutes.
+// using the lead's expo activate template (EXPO_SETTINGS: 74 SIEMA, 90
+// Madesign). Mirrors the shape of the resend-pending path
+// (routes/reactivation.js:1005-1021) but per-token instead of per-expo.
+// Rate-limited to one resend per lead per 2 minutes.
+// Segment C is accepted only where the expo sets c_resend_template_id
+// (Madesign → 93) — see resendRegisterInvite(). SIEMA C stays 400.
+
+// Segment-C register invite (Mode 1). No token: goes to the lead's own
+// email, template carries the static register-form link. Same cooldown rule
+// as the activate path. Also honours email_unsubscribes (same predicate as
+// the campaign scheduler, email_worker.js:635) — cold leads, and Mode 1 rows
+// skip the worker's send-time check.
+async function resendRegisterInvite(client, req, res, id, lead, settings) {
+  const templateId = settings.c_resend_template_id;
+  const recipient = String(lead.email || '').trim().toLowerCase();
+  if (!recipient) {
+    return res.status(400).json({ success: false, error: 'lead has no email', code: 'RESEND_NO_EMAIL' });
+  }
+
+  const expoRes = await client.query(
+    `SELECT name, organizer_id FROM expos WHERE id = $1 LIMIT 1`,
+    [lead.expo_id]
+  );
+  if (expoRes.rows.length === 0) {
+    return res.status(500).json({ success: false, error: `expo ${lead.expo_id} not found`, code: 'RESEND_EXPO_MISSING' });
+  }
+  const expo = expoRes.rows[0];
+
+  const unsubRes = await client.query(
+    `SELECT 1 FROM email_unsubscribes WHERE email = $1 AND organizer_id = $2 LIMIT 1`,
+    [recipient, expo.organizer_id]
+  );
+  if (unsubRes.rows.length > 0) {
+    return res.status(400).json({ success: false, error: 'recipient has unsubscribed', code: 'RESEND_UNSUBSCRIBED' });
+  }
+
+  const cdRes = await client.query(
+    `SELECT 1 FROM email_queue
+     WHERE lower(recipient_email) = lower($1)
+       AND created_at > NOW() - INTERVAL '${RESEND_COOLDOWN_MINUTES} minutes' LIMIT 1`,
+    [recipient]
+  );
+  if (cdRes.rows.length > 0) {
+    return res.status(429).json({
+      success: false,
+      error: `resend cooldown (${RESEND_COOLDOWN_MINUTES} min per lead) — try again shortly`,
+      code: 'RESEND_COOLDOWN'
+    });
+  }
+
+  const tplRes = await client.query(
+    `SELECT id, subject, html_content FROM email_templates WHERE id = $1 LIMIT 1`,
+    [templateId]
+  );
+  if (tplRes.rows.length === 0) {
+    return res.status(500).json({ success: false, error: `template ${templateId} not found`, code: 'RESEND_TEMPLATE_MISSING' });
+  }
+  const template = tplRes.rows[0];
+
+  const templateData = {
+    name: lead.first_name || '',
+    first_name: lead.first_name || '',
+    last_name: lead.last_name || '',
+    email: recipient,
+    company: lead.company || '',
+    country: lead.country || '',
+    expo_name: expo.name || '',
+    date: new Date().toLocaleDateString()
+  };
+  const htmlContent = processEmailTemplate(template.html_content || '', templateData);
+  const subject = processEmailTemplate(template.subject || '', templateData);
+
+  await client.query(
+    `INSERT INTO email_queue (
+       organizer_id, expo_id, visitor_id, template_id,
+       recipient_email, subject, html_content,
+       status, created_at
+     ) VALUES ($1, $2, NULL, $3, $4, $5, $6, 'pending', NOW())`,
+    [expo.organizer_id, lead.expo_id, templateId, recipient, subject, htmlContent]
+  );
+  await client.query(
+    `UPDATE callcenter_leads
+     SET note = COALESCE(NULLIF(note,'') || E'\\n', '') || $2,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [id, `[${req.agent}] Resent registration invite (template ${templateId}) to ${recipient} at ${new Date().toISOString()}.`]
+  );
+
+  _cacheBust();
+  return res.json({ success: true, id, queued: 1, template_id: templateId, sent_to: recipient });
+}
+
 router.post('/resend/:id', agentAuth, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!id || isNaN(id)) {
@@ -598,6 +811,14 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
       });
     }
     const lead = leadRes.rows[0];
+    const leadSettings = EXPO_SETTINGS[lead.expo_id];
+
+    // Segment C resend — per-expo opt-in (expo 18 → template 93). Expo 9 has
+    // c_resend_template_id null and falls through to the unchanged 400 below.
+    if (lead.segment === 'C' && leadSettings && leadSettings.c_resend_template_id) {
+      return await resendRegisterInvite(client, req, res, id, lead, leadSettings);
+    }
+
     if (lead.segment !== 'A') {
       return res.status(400).json({
         success: false,
@@ -612,6 +833,16 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
         code: 'RESEND_NO_TOKEN'
       });
     }
+    if (!leadSettings) {
+      // Lead imported for an expo with no EXPO_SETTINGS entry — refuse rather
+      // than mail another fair's template. (0 such leads at build time.)
+      return res.status(400).json({
+        success: false,
+        error: `expo ${lead.expo_id} has no call-center resend template configured`,
+        code: 'RESEND_EXPO_NOT_CONFIGURED'
+      });
+    }
+    const activateTemplateId = leadSettings.activate_template_id;
 
     // Verify the token is still pending on reactivation_tokens (may have
     // been activated or expired since import). Read-only. Also fetch the
@@ -635,6 +866,16 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
       });
     }
     const tok = tokRes.rows[0];
+    if (tok.target_expo_id !== lead.expo_id) {
+      // Template is chosen by the lead's expo; a token for another fair would
+      // pair fair X's email with fair Y's link. Import binds tokens by
+      // target_expo_id = expo_id, so this is 0 rows today (measured 16 Sep).
+      return res.status(400).json({
+        success: false,
+        error: `token targets expo ${tok.target_expo_id}, lead is on expo ${lead.expo_id}`,
+        code: 'RESEND_TOKEN_EXPO_MISMATCH'
+      });
+    }
     if (tok.status !== 'pending') {
       return res.status(400).json({
         success: false,
@@ -667,16 +908,16 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
       });
     }
 
-    // Load template 74. Fail if template is missing or inactive.
+    // Load the expo's activate template (74 SIEMA / 90 Madesign). Fail if missing.
     const tplRes = await client.query(
       `SELECT id, subject, html_content, organizer_id
        FROM email_templates WHERE id = $1 LIMIT 1`,
-      [SIEMA_ACTIVATE_TEMPLATE_ID]
+      [activateTemplateId]
     );
     if (tplRes.rows.length === 0) {
       return res.status(500).json({
         success: false,
-        error: `template ${SIEMA_ACTIVATE_TEMPLATE_ID} not found`,
+        error: `template ${activateTemplateId} not found`,
         code: 'RESEND_TEMPLATE_MISSING'
       });
     }
@@ -722,7 +963,7 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
          recipient_email, subject, html_content,
          status, created_at
        ) VALUES ($1, $2, NULL, $3, $4, $5, $6, 'pending', NOW())`,
-      [tok.organizer_id, tok.target_expo_id, SIEMA_ACTIVATE_TEMPLATE_ID,
+      [tok.organizer_id, tok.target_expo_id, activateTemplateId,
        tok.email, subject, htmlContent]
     );
 
@@ -745,7 +986,7 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
       success: true,
       id,
       queued: 1,
-      template_id: SIEMA_ACTIVATE_TEMPLATE_ID,
+      template_id: activateTemplateId,
       sent_to: tok.email     // client shows this in a toast so the agent sees where the mail went
     });
   } catch (err) {
@@ -760,6 +1001,8 @@ router.post('/resend/:id', agentAuth, async (req, res) => {
 // GET /api/callcenter/stats/me — personal per-agent stats today
 // ============================================================
 router.get('/stats/me', agentAuth, async (req, res) => {
+  const expoId = resolveExpoId(req);
+  if (!expoId) return invalidExpo(res);
   try {
     const todayStart = casaTodayStartUtc();
 
@@ -767,21 +1010,23 @@ router.get('/stats/me', agentAuth, async (req, res) => {
       pool.query(
         `SELECT COUNT(*)::int AS calls
          FROM callcenter_leads
-         WHERE claimed_by = $1 AND done_at >= $2`,
-        [req.agent, todayStart]
+         WHERE claimed_by = $1 AND done_at >= $2 AND expo_id = $3`,
+        [req.agent, todayStart, expoId]
       ),
       pool.query(
         `SELECT outcome, COUNT(*)::int AS n
          FROM callcenter_leads
-         WHERE claimed_by = $1 AND done_at >= $2
+         WHERE claimed_by = $1 AND done_at >= $2 AND expo_id = $3
          GROUP BY outcome ORDER BY n DESC`,
-        [req.agent, todayStart]
+        [req.agent, todayStart, expoId]
       ),
       pool.query(
         `SELECT segment, COUNT(*)::int AS n
          FROM callcenter_leads
-         WHERE status = 'new' OR (status = 'callback' AND callback_at <= NOW())
-         GROUP BY segment ORDER BY segment`
+         WHERE (status = 'new' OR (status = 'callback' AND callback_at <= NOW()))
+           AND expo_id = $1
+         GROUP BY segment ORDER BY segment`,
+        [expoId]
       )
     ]);
 
@@ -811,15 +1056,18 @@ router.get('/stats/me', agentAuth, async (req, res) => {
 // Per-agent table, hourly line (last 24 h Casablanca), last 20 calls,
 // registered-after-call, checked-in. Design R-6 caching.
 router.get('/stats/live', supervisorAuth, async (req, res) => {
+  const expoId = resolveExpoId(req);
+  if (!expoId) return invalidExpo(res);
   const win = parseWindow(req.query);
-  const cacheKey = `live:${win.key}`;
+  const cacheKey = `live:${expoId}:${win.key}`;
   const cached = _cacheGet(cacheKey);
   if (cached) return res.json({ ...cached, cached: true });
 
   // Every query threads $1 (start) and $2 (end). NULL start = no lower bound;
   // NULL end = no upper bound. The predicate is inline: pass NULL and the
   // OR-branch short-circuits it. Same $-positions in every query below.
-  const wParams = [win.start, win.end];
+  // $3 = expo_id (?expo=, default 9) — every query is scoped to one fair.
+  const wParams = [win.start, win.end, expoId];
   const W = '($1::timestamptz IS NULL OR done_at >= $1) AND ($2::timestamptz IS NULL OR done_at < $2)';
 
   try {
@@ -839,6 +1087,7 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
                 MAX(done_at)                                                                   AS last_call
          FROM callcenter_leads
          WHERE claimed_by IS NOT NULL
+           AND expo_id = $3
          GROUP BY agent
          ORDER BY calls_today DESC, agent ASC`,
         wParams
@@ -846,7 +1095,7 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
       pool.query(
         `SELECT COALESCE(outcome, '(none)') AS outcome, COUNT(*)::int AS n
          FROM callcenter_leads
-         WHERE ${W}
+         WHERE ${W} AND expo_id = $3
          GROUP BY outcome ORDER BY n DESC`,
         wParams
       ),
@@ -854,7 +1103,7 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
         `SELECT EXTRACT(HOUR FROM (done_at AT TIME ZONE 'Africa/Casablanca'))::int AS hour,
                 COUNT(*)::int AS n
          FROM callcenter_leads
-         WHERE ${W}
+         WHERE ${W} AND expo_id = $3
          GROUP BY hour ORDER BY hour`,
         wParams
       ),
@@ -864,7 +1113,7 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
         // surface still-open cards (claimed/new, done_at=NULL) at the top.
         `SELECT id, segment, claimed_by, outcome, done_at, email, phone, first_name, last_name
          FROM callcenter_leads
-         WHERE ${W} AND done_at IS NOT NULL
+         WHERE ${W} AND done_at IS NOT NULL AND expo_id = $3
          ORDER BY done_at DESC LIMIT 20`,
         wParams
       ),
@@ -884,6 +1133,7 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
            AND ($2::timestamptz IS NULL OR l.done_at <  $2)
            AND l.done_at IS NOT NULL
            AND v.created_at > l.done_at
+           AND l.expo_id = $3
          GROUP BY l.claimed_by
          ORDER BY registered_after DESC`,
         wParams
@@ -904,6 +1154,7 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
     const body = {
       success: true,
       generated_at: new Date().toISOString(),
+      expo: { id: expoId, label: EXPO_SETTINGS[expoId].label },
       window: { start: win.start, end: win.end, label: win.label, key: win.key },
       per_agent: perAgentEnriched,
       outcome_bars: outcomeBars.rows,
@@ -930,6 +1181,8 @@ router.get('/stats/live', supervisorAuth, async (req, res) => {
 router.get('/stats/agent/:name', supervisorAuth, async (req, res) => {
   const name = String(req.params.name || '').trim();
   if (!name) return res.status(400).json({ success: false, error: 'name required' });
+  const expoId = resolveExpoId(req);
+  if (!expoId) return invalidExpo(res);
   try {
     const todayStart = casaTodayStartUtc();
 
@@ -939,23 +1192,23 @@ router.get('/stats/agent/:name', supervisorAuth, async (req, res) => {
            COUNT(*) FILTER (WHERE done_at >= $2)::int AS calls_today,
            COUNT(*) FILTER (WHERE done_at IS NOT NULL)::int AS calls_all_time,
            MAX(done_at) AS last_call
-         FROM callcenter_leads WHERE claimed_by = $1`,
-        [name, todayStart]
+         FROM callcenter_leads WHERE claimed_by = $1 AND expo_id = $3`,
+        [name, todayStart, expoId]
       ),
       pool.query(
         `SELECT id, segment, outcome, done_at, callback_at, email, phone,
                 first_name, last_name, LEFT(note, 400) AS note_head
          FROM callcenter_leads
-         WHERE claimed_by = $1 AND done_at IS NOT NULL
+         WHERE claimed_by = $1 AND done_at IS NOT NULL AND expo_id = $2
          ORDER BY done_at DESC LIMIT 100`,
-        [name]
+        [name, expoId]
       ),
       pool.query(
         `SELECT outcome, COUNT(*)::int AS n
          FROM callcenter_leads
-         WHERE claimed_by = $1 AND done_at >= $2
+         WHERE claimed_by = $1 AND done_at >= $2 AND expo_id = $3
          GROUP BY outcome ORDER BY n DESC`,
-        [name, todayStart]
+        [name, todayStart, expoId]
       )
     ]);
 
@@ -979,6 +1232,8 @@ router.get('/stats/agent/:name', supervisorAuth, async (req, res) => {
 // Sensitive columns excluded: reactivation_token (per-recipient secret).
 // Returns application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 router.get('/admin/dump', authMiddleware, async (req, res) => {
+  const expoId = resolveExpoId(req);
+  if (!expoId) return invalidExpo(res);
   try {
     const r = await pool.query(
       `SELECT id, segment, source, list_id, expo_id,
@@ -986,7 +1241,9 @@ router.get('/admin/dump', authMiddleware, async (req, res) => {
               status, claimed_by, claimed_at, done_at, outcome, note, callback_at,
               created_at, updated_at
        FROM callcenter_leads
-       ORDER BY id`
+       WHERE expo_id = $1
+       ORDER BY id`,
+      [expoId]
     );
 
     const wb = XLSX.utils.book_new();
@@ -994,7 +1251,8 @@ router.get('/admin/dump', authMiddleware, async (req, res) => {
     XLSX.utils.book_append_sheet(wb, ws, 'callcenter_leads');
 
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-    const fname = `callcenter_dump_${new Date().toISOString().slice(0,10)}.xlsx`;
+    const expoTag = expoId === DEFAULT_EXPO_ID ? '' : `expo${expoId}_`;
+    const fname = `callcenter_dump_${expoTag}${new Date().toISOString().slice(0,10)}.xlsx`;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
     res.send(buf);

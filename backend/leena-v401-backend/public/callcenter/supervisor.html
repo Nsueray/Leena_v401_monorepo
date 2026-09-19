@@ -340,7 +340,34 @@ function _pickInitialLang() {
   return 'fr';
 }
 let lang = _pickInitialLang();
-function t(k, params) { let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; if (params) for (const p in params) s = s.replace(`{${p}}`, params[p]); return s; }
+
+// Per-expo mode (Madesign extension, 16 Sep 2026). ?expo= absent → no expo
+// param on API calls (server defaults to 9) and no relabel → SIEMA path
+// unchanged. ?expo=18 → label from GET /api/callcenter/expo-meta.
+const EXPO_PARAM = (new URLSearchParams(location.search).get('expo') || '').trim();
+const EXPO_QS = EXPO_PARAM ? `&expo=${encodeURIComponent(EXPO_PARAM)}` : '';
+let EXPO_META = null;
+function applyExpoLabel() {
+  if (!EXPO_META) return;
+  document.title = document.title.replace('SIEMA', EXPO_META.label);
+  const brand = document.querySelector('header .brand');
+  if (brand && brand.firstChild && brand.firstChild.nodeType === Node.TEXT_NODE) {
+    brand.firstChild.nodeValue = EXPO_META.label + ' ';
+  }
+}
+async function loadExpoMeta() {
+  if (!EXPO_PARAM) return true;
+  const m = await fetch(`/api/callcenter/expo-meta?expo=${encodeURIComponent(EXPO_PARAM)}`)
+    .then(r => (r.ok ? r.json() : null)).catch(() => null);
+  if (!m || !m.success) {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;font-family:sans-serif;">Unknown or unreachable expo — check the link.</div>';
+    return false;
+  }
+  EXPO_META = m;
+  applyExpoLabel();
+  return true;
+}
+function t(k, params) { let s = (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k; if (EXPO_META && k === 'splash_title') s = s.replace('SIEMA', EXPO_META.label); if (params) for (const p in params) s = s.replace(`{${p}}`, params[p]); return s; }
 function applyI18n() {
   document.documentElement.lang = lang;
   document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -383,7 +410,7 @@ document.getElementById('splashForm').addEventListener('submit', (e) => {
 async function splashSubmit() {
   const key = document.getElementById('splashKey').value.trim();
   if (!key) { document.getElementById('splashError').style.display = 'block'; return; }
-  const r = await fetch('/api/callcenter/stats/live', { headers: { [SUP_KEY_HEADER]: key } }).catch(() => null);
+  const r = await fetch(`/api/callcenter/stats/live${EXPO_PARAM ? '?' + EXPO_QS.slice(1) : ''}`, { headers: { [SUP_KEY_HEADER]: key } }).catch(() => null);
   if (!r || r.status !== 200) { document.getElementById('splashError').style.display = 'block'; return; }
   sessionStorage.setItem(SUP_KEY_STORAGE, key);
   hideSplash();
@@ -425,7 +452,7 @@ async function refresh() {
   if (!key) { showSplash(); return; }
   const q = /^\d{4}-\d{2}-\d{2}$/.test(currentWindow) ? `?date=${currentWindow}` : `?range=${currentWindow}`;
   try {
-    const r = await fetch(`/api/callcenter/stats/live${q}`, { headers: { [SUP_KEY_HEADER]: key } });
+    const r = await fetch(`/api/callcenter/stats/live${q}${EXPO_QS}`, { headers: { [SUP_KEY_HEADER]: key } });
     if (r.status === 401 || r.status === 503) {
       sessionStorage.removeItem(SUP_KEY_STORAGE);
       showSplash();
@@ -558,7 +585,8 @@ function init() {
 }
 
 // Boot
-(function boot() {
+(async function boot() {
+  if (!(await loadExpoMeta())) return;
   applyI18n();
   if (!getKey()) { showSplash(); return; }
   hideSplash();

@@ -16,6 +16,12 @@
 
 const REPORT_SUBJECT_PREFIX = 'SIEMA Call-Center — ';
 
+// Phase 1 of the Madesign extension (16 Sep 2026): callcenter_leads now holds
+// more than one fair, so this SIEMA report is pinned to expo 9. Subject and
+// body are unchanged. A Madesign report (own prefix + per-expo worker probe)
+// is phase 2 — until then expo 18 activity appears in no daily report.
+const REPORT_EXPO_ID = 9;
+
 function casaTodayStartUtc() {
   const now = new Date();
   const casa = new Intl.DateTimeFormat('en-CA', {
@@ -62,29 +68,31 @@ async function buildDailyReport(pool) {
               COUNT(*) FILTER (WHERE outcome = 'not_interested'    AND done_at >= $1)::int AS not_interested,
               COUNT(*) FILTER (WHERE outcome = 'registered_meanwhile' AND done_at >= $1)::int AS reg_meanwhile
        FROM callcenter_leads
-       WHERE claimed_by IS NOT NULL AND done_at >= $1
+       WHERE claimed_by IS NOT NULL AND done_at >= $1 AND expo_id = $2
        GROUP BY agent ORDER BY calls_today DESC`,
-      [todayStart]
+      [todayStart, REPORT_EXPO_ID]
     ),
     pool.query(
       `SELECT COALESCE(outcome,'(none)') AS outcome, COUNT(*)::int AS n
-       FROM callcenter_leads WHERE done_at >= $1
+       FROM callcenter_leads WHERE done_at >= $1 AND expo_id = $2
        GROUP BY outcome ORDER BY n DESC`,
-      [todayStart]
+      [todayStart, REPORT_EXPO_ID]
     ),
     pool.query(
       `SELECT COUNT(*)::int AS reg_after,
               COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM checkins c WHERE c.visitor_id = v.id))::int AS checked_in
        FROM callcenter_leads l
        JOIN visitors v ON v.expo_id = l.expo_id AND lower(v.email) = lower(l.email)
-       WHERE l.done_at >= $1 AND v.created_at > l.done_at`,
-      [todayStart]
+       WHERE l.done_at >= $1 AND v.created_at > l.done_at AND l.expo_id = $2`,
+      [todayStart, REPORT_EXPO_ID]
     ),
     pool.query(
       `SELECT segment, COUNT(*)::int AS n
        FROM callcenter_leads
-       WHERE status = 'new' OR (status = 'callback' AND callback_at <= NOW())
-       GROUP BY segment ORDER BY segment`
+       WHERE (status = 'new' OR (status = 'callback' AND callback_at <= NOW()))
+         AND expo_id = $1
+       GROUP BY segment ORDER BY segment`,
+      [REPORT_EXPO_ID]
     )
   ]);
 
