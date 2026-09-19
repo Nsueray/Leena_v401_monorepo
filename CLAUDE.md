@@ -2380,3 +2380,79 @@ Reactivation monitor open backlog (post-fair):
 
 ### v4.0.1
 - Temel EMS sistemi (expo, visitor, checkin, form, email, badge, terminal)
+
+### v4.0.12 — Call-Center extended to Madesign (expo 18) alongside LIVE SIEMA (19 September 2026)
+
+**Context:** `callcenter_leads` had to hold two fairs at once — SIEMA (expo 9,
+22-24 Sep, live cohort calling daily) and Madesign (expo 18, 1-3 Oct). Every
+agent/supervisor query was whole-table, so importing Madesign leads on the old
+code would have mixed both pools for every agent, offered SIEMA scripts on
+Madesign cards, pointed Register-now at form 59 (wrong fair) and resent
+template 74 (SIEMA) with an expo-18 token. Two commits, one daytime push
+(Saturday — no send day, no fair day, G42 satisfied).
+
+Full record: `docs/sessions/DEPLOY_CALLCENTER_MADESIGN_20260919.md`.
+Discovery + verification narrative: same doc §2.
+
+#### `5496c3a` — per-expo settings + `?expo=` scoping + report phase 1
+- **`EXPO_SETTINGS` in `routes/callcenter.js`** replaces the three SIEMA
+  constants (`SIEMA_ACTIVATE_TEMPLATE_ID` 74, `ATTENDED_2025_EXPO_ID` 1,
+  `CAMPAIGN_BY_EXPO_SEGMENT` 78/79). Expo 9 keeps exactly those values.
+  Expo 18: activate template **90**, C-resend template **93**, register form
+  **64**, campaigns **80/81**, label MADESIGN.
+- **Attendance is per-expo by KIND, not just by id.** Expo 19 (Madesign 2025)
+  has **zero `checkins` rows** — attendance lives only as
+  `visitors.source='madesign2025_checkin'` (1,427 rows). Reusing the SIEMA
+  checkins query would have flagged every Madesign lead as "did not attend".
+  Measured 4.8 ms via `idx_visitors_expo_id`.
+- **`?expo=`** (allowlist {9,18}, absent → 9, else 400 `INVALID_EXPO`) scopes
+  `/next` (pool + remaining + stuck-claim reaper), `/stats/me`, `/stats/live`
+  (cache key gains the expo), `/stats/agent/:name`, `/admin/dump`.
+  `/outcome`, `/skip`, `/resend` stay id-addressed and read the lead's own
+  `expo_id`. `/next` gains additive `register_form_id`, `expo_label`,
+  `c_resend_enabled` — the agent page no longer hardcodes a form id.
+- **New unauth `GET /api/callcenter/expo-meta?expo=`** — label + register form
+  + agent-card texts (pills, scripts, WhatsApp). Unauthenticated because the
+  splash renders before any key is entered. Display-only payload; pages **fail
+  closed** ("Unknown or unreachable expo") rather than falling back to SIEMA.
+- **Segment-C resend** (Madesign only, template 93, Mode 1, same 2-min
+  cooldown, honours `email_unsubscribes`). SIEMA segment C keeps returning
+  400 `RESEND_WRONG_SEGMENT` — `c_resend_template_id: null` is what gates it.
+- New guards `RESEND_EXPO_NOT_CONFIGURED` + `RESEND_TOKEN_EXPO_MISMATCH`
+  (both 0 rows at build time).
+- **Report phase 1:** `utils/callCenterReport.js` pins all 4 queries to
+  `REPORT_EXPO_ID = 9`; subject + HTML byte-identical, so the worker's
+  `SIEMA Call-Center — %` 20 h probe is untouched. **`email_worker.js` is NOT
+  modified in this push** — it requires the util, so the worker picks the
+  filter up on its own deploy. ⚠️ Madesign call activity appears in **no**
+  daily report until phase 2 (own subject prefix + per-expo probe).
+
+#### `708a531` — form prefill (deferred Stage-6)
+- `form-public.html` `renderField` default branch reads `?<field.name>=` and
+  emits an `esc()`'d `value=`. Absent param → `''` → **byte-identical markup**
+  (verified HEAD vs new across 10 field types × 4 URL shapes). `id` and `_lc`
+  never prefill. Select/radio/checkbox/textarea not prefilled.
+- `agent.html` Register-now passes `name, last_name, company, email, mobile`
+  for segments **B/C only** — segment A is the wrong-email escape hatch, so a
+  stale address must not ride along. ⚠️ **SIEMA agents gain prefill too** —
+  benign (fields editable, nothing auto-submits) but a visible live change.
+
+#### SIEMA equivalence — measured before commit (read-only production)
+29 old-vs-new read comparisons identical (stats/live ×5 × 3 windows, stats/me
+pool, /next remaining ×4 segments, 8 agents' outcomes, whole-table vs expo-9
+md5); `buildDailyReport()` subject + HTML byte-identical; `agent.html` `t()`
+identical across 252 key×lang pairs with segment-A cards byte-identical;
+`npm test` exit 0, 0 failures. All 33,635 leads were expo 9 at build time, so
+adding `expo_id = 9` changed SQL text without changing any result.
+
+#### Decisions (Suer, 19 Sep)
+- **No segment B for Madesign** — import is `A_activate` + `C_register` only;
+  any other sheet name is ignored by `SHEET_TO_SEGMENT`.
+- **Hold-outs excluded from the call pool** — by omission from the xlsx, not
+  by code.
+- **`CALLCENTER_AGENTS` not yet updated** — waits for Meriem's list covering
+  both fairs. Both fairs share `CALLCENTER_KEY` and one allowlist; a missing
+  name returns 400 `AGENT_NOT_ALLOWED`, and editing the env var restarts the
+  web service (G43 cost).
+- Madesign FR scripts are Suer's verbatim text; EN/TR mirrors, pills, WhatsApp
+  one-liners and the segment-B safety drafts await Meriem's review.
