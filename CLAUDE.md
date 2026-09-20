@@ -2591,3 +2591,25 @@ field decision on the actual phone.
 
 Tests: `npm run test:setup && npm test` → 120 ✅ / 0 ❌ (finance suites; they do
 not exercise this page).
+
+**Devil's-advocate hardening (same day, second pass on the same branch):**
+
+- **Reentrancy, double lock.** Camera callback still guards `isProcessing`
+  (`:513`) and `pause()`s (`:514`); `handleQRScan()` now ALSO returns early on
+  `isProcessing` at its first statement (`:672`). No-op for the keyboard path:
+  the keypress handler (`:647`) already tested `!isProcessing` before calling.
+  `isProcessing` is set true at `:685` (scan) / `:785` (manual) and cleared at
+  `:757`, `:834`, `:841`, `:852`. Measured: with `isProcessing=true`,
+  `handleQRScan()` issues **0** fetches; with false, **1**.
+- **Camera mode skips the badge popup and the refocus** (`:932-941`). A gate
+  phone has no printer, the popup would be eaten by the pop-up blocker, and
+  focus raises the soft keyboard over the viewfinder. Without `camera=1` the
+  function is byte-identical (popup 1, focus 1). NOTE: this choke point is
+  shared with the manual-registration path (`finishManual` → `:947`), so on a
+  camera phone manual registration also prints no badge — intended.
+- **`inputmode="none"` set at runtime in camera mode only** (`:465-466`); the
+  markup at `:159` is untouched.
+- **`parseQR` copied verbatim from `conference-scanner.html:396-408`**
+  (`:476-489`), applied ONLY to camera input (`:516`). Measured:
+  `…badge.html?qr=ABC-123` → `ABC-123`, bare `ABC-123` → unchanged,
+  `…/badge/XYZ-9` → `XYZ-9`.

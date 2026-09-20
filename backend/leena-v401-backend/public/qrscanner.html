@@ -460,6 +460,12 @@
             const container = document.getElementById('scannerContainer');
             if (!container) return;
             container.style.display = 'block';
+            // Suppress the Android soft keyboard: the box stays focusable and
+            // still accepts a paste or a Bluetooth HID reader, but tapping it
+            // no longer raises the on-screen keyboard over the viewfinder.
+            // Applied only in camera mode — the markup at :159 is untouched.
+            const si = document.getElementById('scanInput');
+            if (si) si.setAttribute('inputmode', 'none');
             // Load the library on demand so a non-camera load issues no extra
             // network request. Same CDN + version as conference-scanner.html:9.
             const s = document.createElement('script');
@@ -467,6 +473,26 @@
             s.onload = () => startCameraScanner();
             s.onerror = () => showCameraFallback('Scanner library could not be loaded. Enter QR code manually below.');
             document.head.appendChild(s);
+        }
+
+        // Copied verbatim from conference-scanner.html:396-408. A phone camera
+        // may decode a badge that encodes a URL (…badge.html?qr=UUID) rather
+        // than the bare UUID; the lookup endpoints want the UUID. Applied ONLY
+        // to camera input — the keyboard/HID path keeps passing the raw string
+        // it always has, and handleQRScan's own email branch is unaffected.
+        function parseQR(rawQR) {
+            let qrCode = rawQR.trim();
+            if (qrCode.includes('qr=')) {
+                try { qrCode = new URL(qrCode).searchParams.get('qr') || qrCode; } catch(e) {
+                    const match = qrCode.match(/qr=([^&]+)/);
+                    if (match) qrCode = decodeURIComponent(match[1]);
+                }
+            }
+            if (qrCode.includes('/')) {
+                const parts = qrCode.split('/');
+                qrCode = parts[parts.length - 1];
+            }
+            return qrCode;
         }
 
         function showCameraFallback(msg) {
@@ -495,7 +521,7 @@
                         if (isProcessing) return;
                         cameraScanner.pause();
                         const si = document.getElementById('scanInput');
-                        si.value = decodedText;
+                        si.value = parseQR(decodedText);
                         handleQRScan();
                         setTimeout(() => { try { cameraScanner.resume(); } catch(e) {} }, 3000);
                     },
@@ -656,6 +682,12 @@
         // 2. Auto check-in (if enabled)
         // 3. Redirect to badge print page
         async function handleQRScan() {
+            // Belt-and-braces reentrancy guard. The keypress handler (:629)
+            // already tests !isProcessing before calling, so the keyboard/HID
+            // path reaches here only when isProcessing is false — this guard
+            // is a no-op for it. It exists for the camera callback, which is
+            // driven by html5-qrcode's decode loop rather than by a keystroke.
+            if (isProcessing) return;
             const scanInput = document.getElementById('scanInput');
             let qrCode = scanInput.value.trim();
             
@@ -912,6 +944,17 @@
             el.style.display = show ? 'block' : 'none';
         }
         function openBadgeAndReset(qrCode) {
+            // Camera mode (?camera=1) is a gate phone: no printer attached, so
+            // the badge popup has nothing to print and would be eaten by the
+            // pop-up blocker anyway; and focusing the input raises the Android
+            // soft keyboard over the viewfinder. The on-screen success state
+            // (alert + duplicate note) is the operator's feedback there.
+            // Without camera=1 this function is byte-identical to before.
+            if (cameraMode) {
+                const si = document.getElementById('scanInput');
+                si.value = '';
+                return;
+            }
             window.open(buildBadgeUrl(qrCode), '_blank', 'width=600,height=400');
             const si = document.getElementById('scanInput');
             si.value = ''; si.focus();
