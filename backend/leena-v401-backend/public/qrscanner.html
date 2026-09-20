@@ -67,6 +67,11 @@
         }
         
         .scanner-body { padding: 30px; }
+        /* Scanner — let html5-qrcode control video sizing.
+           Same rule as conference-scanner.html:47. The container is
+           display:none in the markup and is only ever shown when the URL
+           carries camera=1, so laptop terminals never render it. */
+        #scannerContainer { width: 100%; border-radius: 15px; overflow: hidden; margin-bottom: 12px; background: #000; }
         .scan-section { margin-bottom: 30px; }
         .scan-input-wrapper { position: relative; }
         .scan-input-wrapper i { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; color: var(--primary-color); }
@@ -143,6 +148,11 @@
             <!-- Duplicate scan: informational only, the badge still prints. -->
             <div id="dupNote" style="display:none;background:#f9e79f;color:#7d6608;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-weight:600;text-align:center;"></div>
             
+            <!-- Phone camera viewfinder. Hidden unless the URL carries
+                 camera=1 (see initCameraScanner). Laptop/HID terminals never
+                 show it and never load the scanner library. -->
+            <div id="scannerContainer" style="display:none;"></div>
+
             <div class="scan-section">
                 <div class="scan-input-wrapper">
                     <i class="bi bi-qr-code"></i>
@@ -427,7 +437,75 @@
             setupEventListeners();
             applyTerminalDefaultType();
             applyTerminalManualRegToggle();
+            initCameraScanner();
         });
+
+        // ==================== PHONE CAMERA (opt-in: ?camera=1) ====================
+        // Gate phones (Samsung A07 / Android Chrome) have no HID reader. This
+        // reuses the proven flow from conference-scanner.html:359-385 verbatim
+        // — html5-qrcode@2.3.8, Html5Qrcode, facingMode:'environment', fps:10,
+        // dynamic qrbox, and the same fallback when the camera cannot open.
+        //
+        // OPT-IN BY CONSTRUCTION: every line below is behind `cameraMode`,
+        // which is only true when the URL carries camera=1. Without it
+        // initCameraScanner() returns on its first statement — the library is
+        // never fetched, no <video> is created, no camera permission is asked,
+        // and the container stays display:none. Laptop + HID desks are
+        // byte-identical to before.
+        let cameraMode = false;   // set in processUrlParameters()
+        let cameraScanner = null;
+
+        function initCameraScanner() {
+            if (!cameraMode) return;   // ← laptop terminals stop here
+            const container = document.getElementById('scannerContainer');
+            if (!container) return;
+            container.style.display = 'block';
+            // Load the library on demand so a non-camera load issues no extra
+            // network request. Same CDN + version as conference-scanner.html:9.
+            const s = document.createElement('script');
+            s.src = 'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+            s.onload = () => startCameraScanner();
+            s.onerror = () => showCameraFallback('Scanner library could not be loaded. Enter QR code manually below.');
+            document.head.appendChild(s);
+        }
+
+        function showCameraFallback(msg) {
+            const c = document.getElementById('scannerContainer');
+            if (!c) return;
+            c.style.maxHeight = '60px';
+            c.innerHTML = `<p style="color:#6c757d;font-size:13px;padding:16px;text-align:center;margin:0;">${msg}</p>`;
+        }
+
+        function startCameraScanner() {
+            try {
+                cameraScanner = new Html5Qrcode('scannerContainer');
+                // Dynamic qrbox: 60% of the smaller viewfinder dimension
+                const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+                    const minDim = Math.min(viewfinderWidth, viewfinderHeight);
+                    const size = Math.floor(minDim * 0.6);
+                    return { width: Math.max(size, 120), height: Math.max(size, 120) };
+                };
+                cameraScanner.start(
+                    { facingMode: 'environment' },
+                    { fps: 10, qrbox: qrboxFunction },
+                    (decodedText) => {
+                        // Same guard the keypress handler uses, then the SAME
+                        // path as a typed scan: fill scanInput and call
+                        // handleQRScan(). No separate submit route exists.
+                        if (isProcessing) return;
+                        cameraScanner.pause();
+                        const si = document.getElementById('scanInput');
+                        si.value = decodedText;
+                        handleQRScan();
+                        setTimeout(() => { try { cameraScanner.resume(); } catch(e) {} }, 3000);
+                    },
+                    () => {}
+                ).catch(err => {
+                    console.log('Camera not available:', err);
+                    showCameraFallback('Camera not available. Enter QR code manually below.');
+                });
+            } catch(e) { console.log('Scanner init error:', e); }
+        }
 
         // #2 — Default the manual-registration visitor_type dropdown to the
         // visitor_type of the terminal's assigned badge template. Reuses the
@@ -492,6 +570,11 @@
             if (urlHall) { localStorage.setItem('hall', urlHall); hall = urlHall; }
             if (urlTerminal) { localStorage.setItem('terminal', urlTerminal); terminal = urlTerminal; }
             if (urlTerminalKey) { localStorage.setItem('terminalKey', urlTerminalKey); terminalKey = urlTerminalKey; console.log('Terminal key set from URL'); }
+            // Camera is opt-in per URL and deliberately NOT persisted to
+            // localStorage — terminalKey/hall/terminal keep their existing
+            // behavior. A desk that loads the page without camera=1 is never
+            // in camera mode, even if a phone used camera=1 on that key.
+            cameraMode = urlParams.get('camera') === '1';
         }
         
         function loadTerminalSettings() {

@@ -2545,3 +2545,49 @@ English button on a French form, a DB defect, fixable by SQL.
 
 Tests: `npm run test:setup && npm test` → 120 ✅ / 0 ❌ (finance suites; they do
 not exercise this page — the harness above is the real evidence).
+
+### v4.0.15 — qrscanner.html phone camera, opt-in via ?camera=1 (20 September 2026)
+
+**Context:** the gate phones (Samsung A07 / Android Chrome) have no HID reader,
+and `qrscanner.html` had **no camera path at all** — its only input was the
+`scanInput` text box + Enter (`:159`, `:629`). Measured 20 Sep: no
+`getUserMedia` / `BarcodeDetector` / `jsQR` / `<video>` anywhere in the file.
+
+**The proven pattern was copied verbatim, not reinvented.** Source:
+`conference-scanner.html:359-385` (same as `lead-scan.html`):
+html5-qrcode@2.3.8 · `new Html5Qrcode(...)` · `facingMode:'environment'` ·
+`fps:10` · the 60%-of-min-dimension `qrbox` function · `pause()` → handle →
+`resume()` after 3 s · and the same "Camera not available. Enter QR code
+manually below." fallback when `start()` rejects.
+
+**Opt-in by construction — `?camera=1` only.** `cameraMode` is read in
+`processUrlParameters` (`:577`) and is deliberately **NOT** persisted to
+localStorage, unlike `terminalKey`/`hall`/`terminal`, so a desk can never
+inherit camera mode from a phone that used the same key.
+`initCameraScanner()` (`:458`) returns on its FIRST statement (`:459`) when
+`cameraMode` is false: the library is never fetched, no `<video>` is created,
+no camera permission is requested, and `#scannerContainer` stays
+`display:none` (`:154`).
+
+**ONE decode path.** The camera callback (`:493-501`) applies the same
+`isProcessing` guard the keypress handler uses, writes the decoded text into
+`scanInput`, then calls `handleQRScan()` — the identical function the Enter
+key calls. There is no second submit route, so fail-closed check-in (`e900b70`)
+and the duplicate note apply to camera scans unchanged.
+
+**Regression proof: `git diff --numstat` = 83 insertions, 0 deletions.** Not a
+single existing line was modified. The HID flow (`:159` autofocus, `:629`
+Enter handler, `:642`/`:736`/`:917` clear-and-refocus) is untouched.
+
+Verified with a stubbed-DOM harness over the real script: for `''`,
+`?terminal_key=abc`, `?camera=0` → `cameraMode=false` and **0** scripts
+appended; for `?camera=1` and `?terminal_key=abc&camera=1` → the html5-qrcode
+URL is appended once and the container becomes visible.
+
+⚠️ **Open risk, NOT solved here:** `scanInput` keeps `autofocus`, so Android
+Chrome may raise the soft keyboard over the viewfinder. Left as-is
+deliberately — removing focus would change the HID desks' behavior. Needs a
+field decision on the actual phone.
+
+Tests: `npm run test:setup && npm test` → 120 ✅ / 0 ❌ (finance suites; they do
+not exercise this page).
