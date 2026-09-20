@@ -84,8 +84,25 @@
         body.camera-mode .scanner-header h1 { font-size: 1.05rem; margin: 0; }
         body.camera-mode .scanner-header .subtitle { display: none; }
         body.camera-mode .terminal-info { margin-top: 6px; padding: 4px 10px; font-size: 0.75rem; }
-        body.camera-mode .scanner-body { padding: 12px; }
+        body.camera-mode .scanner-body { padding: 12px 12px 6px; }
         body.camera-mode #scannerContainer { margin-bottom: 8px; }
+        /* ZERO JUMP: the three transient status blocks are taken OUT OF FLOW in
+           camera mode and overlaid on a reserved band at the top of the body,
+           so showing/hiding them cannot move the viewfinder. Measured before
+           this rule (360x780): the viewfinder top moved 182 → 158 → 214 → 497
+           → 84 px as messages appeared. `padding-top` reserves the band so the
+           first line of the viewfinder is never covered by a one-line message. */
+        body.camera-mode .scanner-body { position: relative; padding-top: 56px; }
+        body.camera-mode #alertMessage,
+        body.camera-mode #dupNote,
+        body.camera-mode #checkinError {
+            position: absolute; top: 8px; left: 12px; right: 12px; margin: 0; z-index: 6;
+            max-height: 46vh; overflow-y: auto;
+        }
+        /* Fixed viewfinder box so the page fits one portrait screen and the
+           qrbox maths below stays well clear of its 120px floor. */
+        body.camera-mode #scannerContainer { height: min(42vh, 300px); }
+        body.camera-mode #scannerContainer video { width: 100% !important; height: 100% !important; object-fit: cover; }
         body.camera-mode .scan-section { margin-bottom: 12px; }
         body.camera-mode .scan-input { padding: 12px 12px 12px 48px; font-size: 1rem; border-radius: 10px; }
         body.camera-mode .scan-input-wrapper i { left: 14px; font-size: 1.1rem; }

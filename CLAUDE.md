@@ -2651,3 +2651,51 @@ v4.0.15; the parameter-less page is unchanged.
 `camFlash(false)` line after it. The call itself is unchanged.
 
 Tests: `npm test` → 120 ✅ / 0 ❌.
+
+### v4.0.17 — camera-mode: zero layout jump + one-screen fit (20 September 2026)
+
+Camera mode (`?camera=1`) only; same gate as v4.0.15/16.
+
+**The bug, measured before the fix** (headless Chrome, 360×780, real layout):
+the viewfinder's top moved **182 → 158 → 214 → 497 → 84 px** as the alert,
+duplicate note and check-in-error panel appeared and went. All three sit ABOVE
+`#scannerContainer` in the DOM, so every one of them pushed the camera down.
+
+**Fix:** in camera mode those three blocks are taken **out of flow**
+(`position:absolute`, `z-index:6`) and overlaid on a band reserved by
+`.scanner-body { padding-top: 56px }`. Out-of-flow elements cannot move their
+siblings, so show/hide is geometrically inert. `max-height:46vh; overflow-y:auto`
+keeps a long message from covering the whole viewfinder.
+
+**Viewfinder is now a fixed box:** `height: min(42vh, 300px)` plus
+`video { height:100%; object-fit:cover }`, so the page fits one portrait screen
+and the qrbox maths has a stable input.
+
+**Measured after the fix** — viewfinder top identical across all five states
+(empty → alert → duplicate → error → cleared) at every size, and the page fits
+without scrolling:
+
+| viewport | viewfinder | qrbox (60%, floor 120) | fits one screen |
+|---|---|---|---|
+| 360×780 (A07-like) | 336×300 | **180** | yes |
+| 412×915 | 388×300 | **180** | yes |
+| 375×667 | 351×280 | **168** | yes |
+| 360×640 | 336×269 | **161** | yes |
+| 320×568 (smallest) | 296×239 | **143** | yes |
+
+The 120 px floor is never reached — the smallest case still computes 143.
+`.scanner-body` bottom padding went 12 → 6 px because 320×568 overflowed by
+exactly 1 px before that.
+
+**Parameter-less page unchanged — measured, not asserted.** The same headless
+run against `HEAD` and the new file with no `camera=1`: the rects of
+`.scanner-header`, `.scanner-body`, `#scanInput`, `.divider`, `.toggle-manual`
+and `document.body.scrollHeight` are **identical** at 360×780 and 1280×800,
+across the message show/hide cycle.
+
+⚠️ Headless measures the full viewport; a real phone loses height to browser
+chrome. The `vh` units scale with it, but the one-screen claim should still be
+eyeballed on the A07.
+⚠️ The error panel now overlays the running viewfinder, and the camera still
+resumes 3 s after a scan (v4.0.15 behaviour), so a badge left in frame can
+re-trigger while the panel is up. Pre-existing; not changed here.
