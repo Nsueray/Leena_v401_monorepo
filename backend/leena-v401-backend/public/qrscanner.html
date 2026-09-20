@@ -72,6 +72,32 @@
            display:none in the markup and is only ever shown when the URL
            carries camera=1, so laptop terminals never render it. */
         #scannerContainer { width: 100%; border-radius: 15px; overflow: hidden; margin-bottom: 12px; background: #000; }
+
+        /* ===== Camera mode only (?camera=1) =====================================
+           Every rule below is scoped to body.camera-mode, a class added at
+           runtime by initCameraScanner(). Without camera=1 the class is never
+           set, so none of these rules can match and the page layout is
+           untouched. Goal: viewfinder + status + input on one phone screen. */
+        body.camera-mode { padding: 0; align-items: flex-start; }
+        body.camera-mode .scanner-container { max-width: 100%; width: 100%; }
+        body.camera-mode .scanner-header { padding: 10px 14px; }
+        body.camera-mode .scanner-header h1 { font-size: 1.05rem; margin: 0; }
+        body.camera-mode .scanner-header .subtitle { display: none; }
+        body.camera-mode .terminal-info { margin-top: 6px; padding: 4px 10px; font-size: 0.75rem; }
+        body.camera-mode .scanner-body { padding: 12px; }
+        body.camera-mode #scannerContainer { margin-bottom: 8px; }
+        body.camera-mode .scan-section { margin-bottom: 12px; }
+        body.camera-mode .scan-input { padding: 12px 12px 12px 48px; font-size: 1rem; border-radius: 10px; }
+        body.camera-mode .scan-input-wrapper i { left: 14px; font-size: 1.1rem; }
+        body.camera-mode .divider { margin: 10px 0; }
+        body.camera-mode .toggle-manual { margin-bottom: 10px; }
+        /* Full-screen flash — visible from a few metres away. Mirrors the
+           conference-scanner overlay idea (:56-67) but carries no text, so it
+           cannot hide the viewfinder for longer than the flash itself. */
+        #camFlash { position: fixed; inset: 0; z-index: 9998; pointer-events: none; opacity: 0; transition: opacity 120ms ease; }
+        #camFlash.show { opacity: 0.85; }
+        #camFlash.ok { background: rgba(16, 185, 129, 0.95); }
+        #camFlash.err { background: rgba(239, 68, 68, 0.95); }
         .scan-section { margin-bottom: 30px; }
         .scan-input-wrapper { position: relative; }
         .scan-input-wrapper i { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); font-size: 1.5rem; color: var(--primary-color); }
@@ -460,6 +486,24 @@
             const container = document.getElementById('scannerContainer');
             if (!container) return;
             container.style.display = 'block';
+            document.body.classList.add('camera-mode');
+            // Flash layer, created here so the markup carries nothing extra.
+            if (!document.getElementById('camFlash')) {
+                const fl = document.createElement('div');
+                fl.id = 'camFlash';
+                document.body.appendChild(fl);
+            }
+            // Browser autoplay policy: an AudioContext created outside a user
+            // gesture starts 'suspended' and stays silent. Same fix as
+            // conference-scanner.html:283-289 — build/resume it on the first
+            // interaction. 'once' so it costs nothing afterwards; the camera
+            // decode callback is NOT a gesture, so this is what makes the
+            // first beep audible. initCamAudio() also calls resume() every
+            // time in case Android suspended the context in the background.
+            document.addEventListener('touchstart', initCamAudio, { once: true, passive: true });
+            document.addEventListener('click', initCamAudio, { once: true });
+            const siAudio = document.getElementById('scanInput');
+            if (siAudio) siAudio.addEventListener('focus', initCamAudio, { once: true });
             // Suppress the Android soft keyboard: the box stays focusable and
             // still accepts a paste or a Bluetooth HID reader, but tapping it
             // no longer raises the on-screen keyboard over the viewfinder.
@@ -473,6 +517,59 @@
             s.onload = () => startCameraScanner();
             s.onerror = () => showCameraFallback('Scanner library could not be loaded. Enter QR code manually below.');
             document.head.appendChild(s);
+        }
+
+        // ---- Camera-mode feedback: beep + flash + vibrate -------------------
+        // Everything here is inert without camera=1: camSignal() returns on
+        // cameraMode, the flash element only exists in camera mode, and
+        // initCamAudio is only ever wired up by initCameraScanner().
+        let camAudioCtx = null;
+
+        function initCamAudio() {
+            try {
+                if (!camAudioCtx) camAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (camAudioCtx.state === 'suspended') camAudioCtx.resume();
+            } catch (e) { console.log('AudioContext init failed:', e); }
+        }
+
+        // One short high tone for success; two low tones for failure.
+        function camTone(freq, ms, delay) {
+            setTimeout(() => {
+                try {
+                    if (!camAudioCtx) return;
+                    if (camAudioCtx.state === 'suspended') camAudioCtx.resume();
+                    const o = camAudioCtx.createOscillator(), g = camAudioCtx.createGain();
+                    o.connect(g); g.connect(camAudioCtx.destination);
+                    o.frequency.value = freq;
+                    o.type = 'sine';
+                    g.gain.value = 0.3;
+                    o.start();
+                    o.stop(camAudioCtx.currentTime + ms / 1000);
+                } catch (e) { /* audio unavailable — flash is the primary signal */ }
+            }, delay);
+        }
+
+        function camBeep(ok) {
+            initCamAudio();
+            if (ok) { camTone(880, 140, 0); }
+            else { camTone(220, 160, 0); camTone(220, 160, 220); }
+        }
+
+        function camFlash(ok) {
+            const fl = document.getElementById('camFlash');
+            if (!fl) return;
+            fl.className = ok ? 'ok show' : 'err show';
+            setTimeout(() => { fl.className = ok ? 'ok' : 'err'; }, 300);
+        }
+
+        // Single entry point. "Already checked in" is a VALID entry at the
+        // gate, so it takes the success signal — the duplicate note on screen
+        // carries the nuance.
+        function camSignal(ok) {
+            if (!cameraMode) return;
+            camFlash(ok);
+            camBeep(ok);
+            if (ok) { try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) {} }
         }
 
         // Copied verbatim from conference-scanner.html:396-408. A phone camera
@@ -765,6 +862,7 @@
             } catch (error) {
                 console.error('Scan error:', error);
                 showAlert('Badge not found. Please try manual registration.', 'danger');
+                camSignal(false);   // no-op without camera=1
                 scanInput.value = '';
                 scanInput.focus();
             } finally {
@@ -918,6 +1016,12 @@
         let pendingCheckin = null;   // { visitorId, qrCode, afterSuccess }
 
         function beep(ok) {
+            // In camera mode the shared, gesture-unlocked context is the only
+            // one that can actually sound on Android, so delegate to it —
+            // otherwise showCheckinError would beep twice (once silently).
+            // Without camera=1 this line is never taken and the original
+            // per-call AudioContext below runs exactly as before.
+            if (cameraMode) return camBeep(ok);
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const o = ctx.createOscillator(), g = ctx.createGain();
@@ -932,7 +1036,8 @@
             pendingCheckin = ctx || null;
             document.getElementById('checkinErrorMsg').textContent = msg || 'Unknown error';
             document.getElementById('checkinError').style.display = 'block';
-            beep(false);
+            beep(false);          // camera mode: delegates to camBeep(false)
+            if (cameraMode) camFlash(false);   // beep already played above
         }
         function hideCheckinError() {
             document.getElementById('checkinError').style.display = 'none';
@@ -951,6 +1056,9 @@
             // (alert + duplicate note) is the operator's feedback there.
             // Without camera=1 this function is byte-identical to before.
             if (cameraMode) {
+                // Reached only after a CONFIRMED check-in (fail-closed, e900b70),
+                // so this is the success signal — duplicates included.
+                camSignal(true);
                 const si = document.getElementById('scanInput');
                 si.value = '';
                 return;

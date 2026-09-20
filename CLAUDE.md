@@ -2613,3 +2613,41 @@ not exercise this page).
   (`:476-489`), applied ONLY to camera input (`:516`). Measured:
   `…badge.html?qr=ABC-123` → `ABC-123`, bare `ABC-123` → unchanged,
   `…/badge/XYZ-9` → `XYZ-9`.
+
+### v4.0.16 — camera-mode feedback + compact phone layout (20 September 2026)
+
+Camera mode (`?camera=1`) only. Every addition sits behind the same gate as
+v4.0.15; the parameter-less page is unchanged.
+
+- **Beep.** Web Audio oscillator, no audio file → works offline. Success: one
+  880 Hz / 140 ms tone. Failure: **two** 220 Hz / 160 ms tones, 220 ms apart.
+  Measured: success `[880]`, failure `[220,220]`.
+- **Autoplay policy solved the conference-scanner way** (`:283-289` there): a
+  context built inside the decode callback starts `suspended` and stays silent,
+  because a camera decode is not a user gesture. `initCamAudio` is wired to the
+  first `touchstart` / `click` / input `focus` (`once`), and `camTone` calls
+  `resume()` again on every tone in case Android suspended it in the
+  background. Measured with `camera=1`: 1 context, 5 `resume()` calls, listeners
+  `doc:touchstart, doc:click, scanInput:focus`. Without the parameter: **0**
+  contexts, none of those listeners.
+- **Flash.** `#camFlash`, a fixed full-screen layer created at runtime (no
+  markup change), green on success / red on failure, ~300 ms. Measured:
+  `["ok show","ok"]` / `["err show","err"]`.
+- **Vibrate.** `navigator.vibrate(200)` on success only, in try/catch — Android
+  buzzes, iPhone ignores it silently. Measured `[200]`.
+- **"Already checked in" gets the SUCCESS signal** — at the gate it is a valid
+  entry. The yellow duplicate note carries the nuance.
+- **Compact layout:** `body.camera-mode` class + CSS scoped to it (`:75-101`),
+  shrinking the header, hiding the subtitle and tightening paddings so
+  viewfinder + status + input fit one portrait screen. Without the class not
+  one of those selectors can match.
+- **`beep()` delegates to `camBeep` in camera mode** (`:1006`) so
+  `showCheckinError` cannot sound twice — the legacy per-call AudioContext
+  would be `suspended` on Android anyway. Without `camera=1` the original path
+  runs untouched (measured: 2 contexts for 2 beeps).
+
+⚠️ The ONE pre-existing line touched across v4.0.15+v4.0.16 is
+`beep(false);` in `showCheckinError` — a trailing comment plus a new
+`camFlash(false)` line after it. The call itself is unchanged.
+
+Tests: `npm test` → 120 ✅ / 0 ❌.
