@@ -2699,3 +2699,42 @@ eyeballed on the A07.
 ⚠️ The error panel now overlays the running viewfinder, and the camera still
 resumes 3 s after a scan (v4.0.15 behaviour), so a badge left in frame can
 re-trigger while the panel is up. Pre-existing; not changed here.
+
+### v4.0.18 — certificate-siema.html readable on a phone (26 September 2026)
+
+**Symptom (visitor complaint, Houria Goumih):** on iPhone Safari portrait only the
+top band rendered — logo + "Certificat de Participation" — and nothing else.
+Landscape and desktop were fine, and "Enregistrer en PDF" always produced a
+correct 1-page A4-landscape file, so the print path was never the problem.
+
+**Cause, measured (headless Chromium, 390×844, pre-fix):** the certificate is a
+fixed A4-landscape box whose inner type is absolute (`font-size:54px`,
+`width:min(235mm,96%)`, …), so it cannot reflow. Two rules shrank the BOX while
+the CONTENT kept its size:
+- `.certificate{ max-width:98vw }` (base rule)
+- `@media (max-width:1100px){ .certificate{ width:100%; height:auto; aspect-ratio:297/210 } }`
+
+At 390 px the box became ~276 px tall against ~794 px of content, and
+`.certificate{ overflow:hidden }` clipped the rest. Measured element positions
+before the fix: session text at y=1255-1307, signature at y=1394 — both far
+below the 844 px viewport, and `right:460` past the 390 px width.
+
+**Fix:** keep the box at its natural 297mm × 210mm and scale it proportionally
+with a CSS transform computed from the viewport (`fitCertificate()`), origin
+top-left, with a new `.cert-fit` wrapper carrying the scaled layout size so the
+document gets no phantom overflow. `.page` gains top padding under 1100 px so
+the fixed toolbar never covers the certificate.
+
+**@media print untouched.** A print-scoped override neutralises the transform
+and the wrapper size, so the PDF still renders the unscaled page.
+
+**Measured after the fix:**
+| viewport | transform | name | session | signature | toolbar | doc scrollWidth |
+|---|---|---|---|---|---|---|
+| 390×844 | scale(0.333) | visible | visible | visible | visible | 390 (no h-scroll) |
+| 1280×800 | none | visible | visible | visible | visible | 1280 |
+
+PDF from the same page: **1 page, MediaBox 842.9 × 595.9 pt (landscape)**.
+
+⚠️ At 1280×800 the certificate still ends 12 px below the fold (794 px + 18 px
+padding = 812) — pre-existing, unchanged by this fix.
