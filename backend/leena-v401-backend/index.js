@@ -182,14 +182,34 @@ app.get('/api/templates', authMiddleware, async (req, res) => {
 // ✅ --- QR Code dynamic image endpoint ---
 app.get('/api/qr-image/:qrcode', async (req, res) => {
     try {
+        const code = String(req.params.qrcode || '');
+
+        // A QR image is only ever requested for a real visitor code (badge mail,
+        // badge page, certificate). An unknown code used to render a perfectly
+        // valid QR of nonsense and answer 200 — impossible to tell from a working
+        // badge. 404 instead, so a broken link is visible (todo #29, K6).
+        // UUID v4 shape, as minted by uuidv4() in routes/visitors.js:342 etc.
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(code)) {
+            return res.status(404).send('Not found');
+        }
+        const known = await pool.query('SELECT 1 FROM visitors WHERE qr_code = $1 LIMIT 1', [code]);
+        if (known.rows.length === 0) {
+            return res.status(404).send('Not found');
+        }
+
         const QRCode = require('qrcode');
-        const buffer = await QRCode.toBuffer(req.params.qrcode, {
+        const buffer = await QRCode.toBuffer(code, {
             width: 300,
             margin: 2
         });
         res.setHeader('Content-Type', 'image/png');
+        // The image for a given code never changes, and email clients / gateways
+        // refetch it on every open. Cache it hard; visitors keep the badge mail
+        // for the whole fair.
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
         res.send(buffer);
     } catch (error) {
+        console.error('QR image error:', error.message);
         res.status(500).send('QR Error');
     }
 });

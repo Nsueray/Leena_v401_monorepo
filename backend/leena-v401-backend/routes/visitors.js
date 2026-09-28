@@ -10,6 +10,10 @@ const { normalizePhone } = require('../utils/phoneNormalize');
 const { getCoreCountriesMap, resolveCountry } = require('../utils/countryResolve');
 const authMiddleware = require('../middleware/authMiddleware');
 const dualAuth = require('../middleware/dualAuth');
+const { loadUnsubscribeSet } = require('../utils/unsubscribe');
+
+// Same predicate the segment sender uses (routes/emailSegments.js:22).
+const BULK_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // Manual registration is a scanner-desk operation, so it accepts a scanner terminal
 // key as well as a JWT. Bulk-print keys are deliberately NOT accepted here.
 const scannerDualAuth = dualAuth.forKinds(['scanner'], 'Terminal not authorized for manual registration');
@@ -1221,8 +1225,32 @@ router.post('/bulk-email', authMiddleware, async (req, res) => {
     if (totalCount === 0) return res.status(400).json({ success: false, message: 'No visitors match the current filters' });
     if (totalCount > 10000) return res.status(400).json({ success: false, message: `Too many visitors (${totalCount}). Please narrow your filters to under 10,000.` });
 
-    const visitorRes = await pool.query(`SELECT id FROM visitors ${whereClause} AND email IS NOT NULL AND email != ''`, values);
-    const visitorIds = visitorRes.rows.map(r => r.id);
+    const visitorRes = await pool.query(`SELECT id, email FROM visitors ${whereClause} AND email IS NOT NULL AND email != ''`, values);
+
+    // Unsubscribe + invalid-email exclusion. This endpoint had NONE: it queued
+    // Mode-2 rows straight from the filter, and the worker's own unsubscribe
+    // re-check (email_worker.js:635) only guards the CAMPAIGN path, so an
+    // unsubscribed visitor really did receive bulk mail. Same shape as the
+    // segment sender (routes/emailSegments.js:122-131) so the two paths cannot
+    // drift apart.
+    const unsubSet = await loadUnsubscribeSet(organizerId);
+    const visitorIds = [];
+    let skipped_unsubscribed = 0;
+    let skipped_invalid = 0;
+    for (const v of visitorRes.rows) {
+      const email = (v.email || '').toLowerCase().trim();
+      if (!BULK_EMAIL_RE.test(email)) { skipped_invalid++; continue; }
+      if (unsubSet.has(email)) { skipped_unsubscribed++; continue; }
+      visitorIds.push(v.id);
+    }
+
+    if (visitorIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: `No mailable visitors left after exclusions (${skipped_unsubscribed} unsubscribed, ${skipped_invalid} invalid address).`,
+        skipped_unsubscribed, skipped_invalid
+      });
+    }
 
     // Batch INSERT into email_queue (Mode 2: visitor_id + template_id) — transaction wrapped
     const client = await pool.connect();
@@ -1253,8 +1281,19 @@ router.post('/bulk-email', authMiddleware, async (req, res) => {
       client.release();
     }
 
-    console.log(`📧 [BULK EMAIL] Queued ${queued} emails for expo ${expo_id}, template ${template_id}`);
-    res.json({ success: true, queued_count: queued, message: `${queued} emails queued for delivery` });
+    console.log(`📧 [BULK EMAIL] Queued ${queued} emails for expo ${expo_id}, template ${template_id}`
+      + ` (skipped ${skipped_unsubscribed} unsub, ${skipped_invalid} invalid)`);
+    res.json({
+      success: true,
+      queued_count: queued,
+      skipped_unsubscribed,
+      skipped_invalid,
+      skipped_total: skipped_unsubscribed + skipped_invalid,
+      message: `${queued} emails queued for delivery`
+        + ((skipped_unsubscribed + skipped_invalid) > 0
+            ? ` (${skipped_unsubscribed} unsubscribed, ${skipped_invalid} invalid skipped)`
+            : '')
+    });
   } catch (err) {
     console.error('❌ Bulk email error:', err);
     res.status(500).json({ success: false, message: 'Failed to queue emails' });

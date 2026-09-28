@@ -294,6 +294,27 @@ function validateTemplateBody(html, subject, wave) {
         });
     }
 
+    // ---- BADGE_TOKEN_IN_CAMPAIGN error ----
+    // qr_code / badge_link / badge_url / badge_id exist ONLY in the badge
+    // (Mode-2) data build, email_worker.js:255-270. The campaign data build
+    // (email_worker.js:666-674) carries name/first_name/last_name/email/company/
+    // date + extra_fields — nothing else — and utils/email.js:21 turns an
+    // unmatched token into an empty string. Measured 21 Sep on template 99:
+    // {{qr_code}} rendered as nothing and {{badge_link}} as href="".
+    // A badge template picked in the wizard therefore ships a QR-less mail with
+    // a dead button, which is exactly the failure the 22 Sep incident produced.
+    const badgeTokens = ['qr_code', 'badge_link', 'badge_url', 'badge_id']
+        .filter(tok => new RegExp('\\{\\{\\s*' + tok + '(\\s*\\|[^}]*)?\\s*\\}\\}').test(bodyStr));
+    if (badgeTokens.length > 0) {
+        issues.push({
+            code: 'BADGE_TOKEN_IN_CAMPAIGN',
+            severity: 'error',
+            message: `body: badge-only placeholder(s) {{${badgeTokens.join('}}, {{')}}} cannot be filled on the campaign path `
+                + '(they live in the badge/confirmation Mode-2 build, email_worker.js:255-270) — the mail would ship without a QR '
+                + 'and with an empty href. Send badge mails through Email Segments (Mode 2) instead.'
+        });
+    }
+
     return issues;
 }
 
