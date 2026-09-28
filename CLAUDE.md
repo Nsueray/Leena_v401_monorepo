@@ -2738,3 +2738,47 @@ PDF from the same page: **1 page, MediaBox 842.9 × 595.9 pt (landscape)**.
 
 ⚠️ At 1280×800 the certificate still ends 12 px below the fold (794 px + 18 px
 padding = 812) — pre-existing, unchanged by this fix.
+
+### v4.0.19 — Expo editing is self-service (28 September 2026)
+
+**Two gaps, one PR.**
+
+**1. The dashboard pencil did nothing.** `public/dashboard_new.html:734` rendered
+`<button class="btn btn-secondary"><i class="bi bi-pencil"></i></button>` with
+**no `onclick` at all**, inside a wrapper that calls `event.stopPropagation()`
+(`:732`) — so the card's own "Enter" handler never fired either. Clicking it was
+a silent no-op. Now `onclick="editExpo(${expo.id})"` → `editExpo()` (`:769-771`)
+navigates to `expo-form.html?id=<id>`, the same target `expo-list.html:276`
+already used. (`expo-list.html` was already wired; no other page had a dead edit
+control — `main-panel-v2.html:1441` is a FORM edit button, unrelated.)
+
+**2. `expos.settings` was database-only.** Edit Expo existed
+(`expo-form.html:240`) but never showed the two check-in keys, and
+`routes/expos.js` PUT could not write them: `WRITABLE_FIELDS` (`:186-196`) has no
+`settings`, so `auto_checkin_on_badge_print` could only be changed from Render
+Shell (this is how expo 9 got `false` on 18 Sep, and why expo 18 still sits at
+`true`). Readers: `routes/terminalCheckins.js:294-295`.
+
+Now: a "Check-in settings" block in edit mode (`expo-form.html`, checkbox +
+10-3600 s number), loaded from `GET /api/expos/:id` (which **already** returned
+`settings` — `routes/expos.js:120` `SELECT e.*`, so no API change was needed),
+sent by `save()` only when editing.
+
+**The PUT merges, never replaces** (`routes/expos.js:337-371`):
+```sql
+settings = COALESCE(settings, '{}'::jsonb) || $n::jsonb
+```
+`settings` is deliberately kept OUT of `WRITABLE_FIELDS`: a plain assignment
+would silently drop keys this endpoint does not know about. Only the two keys are
+accepted; booleans and 10-3600 integers are enforced; any other key is a 400.
+
+**Measured (local stub DB, real route + real SQL):** unknown key
+`korunmali_anahtar` survived the merge; `5` and `4000` rejected; `"yes"`
+rejected; `default_badge_template_id` rejected; `[1,2]` rejected; date + settings
+in one PUT → 200, then restored → 200.
+
+⚠️ **Browser→PUT could not be exercised locally:** the CORS whitelist is
+hardcoded to leena.app (`index.js:21`), so a localhost page's PUT is refused
+(500) — a local-only obstacle. The UI half was verified separately: the form
+loads real expo-17 values from production (read-only) and `save()` builds the
+right payload. Production rows were never written.

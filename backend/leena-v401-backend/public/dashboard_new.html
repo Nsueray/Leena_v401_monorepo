@@ -731,7 +731,7 @@
                     </div>
                     <div class="expo-actions" onclick="event.stopPropagation()">
                         <button class="btn btn-primary" onclick="enterExpo(${expo.id}, '${expo.name.replace(/'/g, "\\'")}')"><i class="bi bi-arrow-right"></i> Enter</button>
-                        <button class="btn btn-secondary"><i class="bi bi-pencil"></i></button>
+                        <button class="btn btn-secondary" title="Edit expo" onclick="editExpo(${expo.id})"><i class="bi bi-pencil"></i></button>
                     </div>
                 </div>`;
 
@@ -764,6 +764,13 @@
             localStorage.setItem('selectedExpoId', id);
             localStorage.setItem('selectedExpoName', name);
             window.location.href = 'main-panel-v2.html';
+        }
+
+        // The card's pencil had no handler at all, so it silently did nothing
+        // (its wrapper stops propagation, so the card's own Enter click never
+        // fired either). Same target as expo-list.html:276.
+        function editExpo(id) {
+            window.location.href = `expo-form.html?id=${id}`;
         }
         
         // Country list cache — fetched lazily on first modal open.
