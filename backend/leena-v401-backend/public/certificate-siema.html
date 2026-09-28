@@ -59,7 +59,6 @@
     .certificate{
       width:297mm;
       height:210mm;
-      max-width:98vw;
       background:#fff;
       position:relative;
       padding:14mm 16mm;
@@ -469,13 +468,35 @@
       .toolbar{ display:none; }
     }
 
-    /* ====== REPLI RESPONSIVE ====== */
+    /* ====== REPLI RESPONSIVE ======
+       The certificate is a fixed A4-landscape box (297mm × 210mm) whose inner
+       type is sized in px/mm, so it cannot reflow. The previous rule shrank the
+       BOX on narrow screens (width:100%; height:auto; aspect-ratio) while the
+       CONTENT kept its absolute size — and `.certificate{overflow:hidden}`
+       clipped everything below the top band. On a 390px-wide iPhone the box was
+       ~276px tall against ~794px of content: only the logo and the title showed.
+
+       Fix: keep the box at its natural size and scale it PROPORTIONALLY with a
+       transform (see fitCertificate() at the end of the page). `.cert-fit` is
+       the layout box that carries the scaled dimensions, so the document has no
+       phantom overflow and no horizontal scrollbar. @media print is untouched —
+       the PDF still renders the unscaled 297mm × 210mm page. */
+    .cert-fit{ position:relative; }
+
     @media (max-width: 1100px){
-      .certificate{
-        width:100%;
-        height:auto;
-        aspect-ratio: 297/210;
+      /* Room for the fixed toolbar, and top-aligned so tall certificates are
+         not vertically centred out of view. */
+      .page{
+        padding:58px 8px 16px;
+        align-items:flex-start;
+        min-height:auto;
       }
+    }
+
+    @media print{
+      /* Never print a scaled copy: the transform is a screen-only concern. */
+      .cert-fit{ width:auto !important; height:auto !important; }
+      .cert-fit > .certificate{ transform:none !important; }
     }
   </style>
 </head>
@@ -486,6 +507,7 @@
   </div>
 
   <div class="page">
+   <div class="cert-fit">
     <section class="certificate" role="document" aria-label="Certificat de Participation">
 
       <div class="topband" aria-hidden="true"></div>
@@ -616,6 +638,7 @@
 
       </div>
     </section>
+   </div>
   </div>
 
 <script>
@@ -700,8 +723,47 @@
 
       document.title = 'Certificat de Participation — ' + (values.name + ' ' + values.last_name).trim();
       root.style.visibility = 'visible';
+      fitCertificate();
     })
     .catch(function () { fail('Impossible de charger ce certificat. Veuillez réessayer.'); });
+
+  /* Scale the whole certificate to the viewport width on narrow screens.
+     The box itself keeps its natural 297mm × 210mm size (so the print path and
+     the PDF are untouched); only a CSS transform shrinks it on screen, and
+     .cert-fit carries the resulting layout size so nothing overflows the
+     document. transform-origin is top-left, so the certificate starts right
+     under the toolbar instead of drifting off-screen as it shrinks. */
+  function fitCertificate() {
+    var fit  = document.querySelector('.cert-fit');
+    var cert = document.querySelector('.certificate');
+    var page = document.querySelector('.page');
+    if (!fit || !cert || !page) return;
+
+    // Measure at natural size — a previous transform would skew offsetWidth.
+    cert.style.transform = 'none';
+    fit.style.width = '';
+    fit.style.height = '';
+
+    var natW = cert.offsetWidth, natH = cert.offsetHeight;
+    if (!natW || !natH) return;
+
+    var cs   = window.getComputedStyle(page);
+    var padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    var avail = document.documentElement.clientWidth - padX;
+    var scale = Math.min(1, avail / natW);
+
+    if (scale < 1) {
+      cert.style.transformOrigin = 'top left';
+      cert.style.transform = 'scale(' + scale + ')';
+      fit.style.width  = (natW * scale) + 'px';
+      fit.style.height = (natH * scale) + 'px';
+    }
+  }
+
+  window.addEventListener('resize', fitCertificate);
+  window.addEventListener('orientationchange', fitCertificate);
+  /* Safari recalculates layout after web fonts land; re-fit once they do. */
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(fitCertificate); }
 })();
 </script>
 </body>
