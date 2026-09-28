@@ -158,6 +158,23 @@
                     </div>
                 </div>
 
+                <!-- Check-in settings (edit mode only — expos.settings JSONB) -->
+                <div class="section" id="checkinSettingsSection" style="display:none;">
+                    <h2>Check-in settings</h2>
+                    <div class="grid">
+                        <div class="field full">
+                            <label class="chk" style="font-weight:400;">
+                                <input type="checkbox" id="auto_checkin_on_badge_print">
+                                Badge print creates a check-in automatically
+                            </label>
+                        </div>
+                        <div class="field">
+                            <label>Duplicate scan window (seconds)</label>
+                            <input type="number" id="duplicate_threshold_seconds" min="10" max="3600" step="10" placeholder="120">
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Cluster (edit mode only) -->
                 <div class="section" id="clusterSection" style="display:none;">
                     <h2>Cluster (co-located expos)</h2>
@@ -284,6 +301,17 @@
                 (e.sectors || []).forEach(s => {
                     const cb = document.querySelector(`.sector-chk[value="${s.id}"]`); if (cb) cb.checked = true;
                 });
+                // Check-in settings live in expos.settings (JSONB). GET /api/expos/:id
+                // already returns it (routes/expos.js:120 `SELECT e.*`). Defaults match
+                // the server-side reads in routes/terminalCheckins.js:294-295:
+                // auto_checkin true unless explicitly false, threshold 120.
+                const st = (e.settings && typeof e.settings === 'object') ? e.settings : {};
+                document.getElementById('auto_checkin_on_badge_print').checked =
+                    st.auto_checkin_on_badge_print !== false;
+                document.getElementById('duplicate_threshold_seconds').value =
+                    (st.duplicate_threshold_seconds == null ? 120 : st.duplicate_threshold_seconds);
+                document.getElementById('checkinSettingsSection').style.display = '';
+
                 const av = document.getElementById('actualVisitorsWrap');
                 av.style.display = '';
                 document.getElementById('actual_visitors').value = (e.visitor_count ?? 0).toLocaleString();
@@ -382,6 +410,16 @@
              'start_date','end_date','catalogue_form_url','stand_design_form_url','visitor_preregistration_form_url'].forEach(f => body[f] = get(f));
             DEADLINES.forEach(([dl, off]) => { body[off] = get(off); body[dl] = get(dl); });
             body.sectors = Array.from(document.querySelectorAll('.sector-chk:checked')).map(c => parseInt(c.value, 10));
+
+            // Only in edit mode: the two check-in keys. The server MERGES these into
+            // expos.settings, so keys it does not know stay untouched.
+            if (expoId) {
+                const thr = parseInt(document.getElementById('duplicate_threshold_seconds').value, 10);
+                body.settings = {
+                    auto_checkin_on_badge_print: document.getElementById('auto_checkin_on_badge_print').checked,
+                    duplicate_threshold_seconds: Number.isInteger(thr) ? thr : 120
+                };
+            }
 
             document.getElementById('saveBtn').disabled = true;
             try {

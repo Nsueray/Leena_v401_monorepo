@@ -334,6 +334,40 @@ router.put('/:id', authenticateToken, async (req, res) => {
     }
   }
 
+  // settings (JSONB) — deliberately NOT in WRITABLE_FIELDS, because a plain
+  // assignment would replace the whole object and silently drop keys this
+  // endpoint knows nothing about. Only the two check-in keys are accepted, and
+  // they are MERGED with `||` so everything else in settings survives.
+  // Server-side readers: routes/terminalCheckins.js:294-295.
+  if (Object.prototype.hasOwnProperty.call(b, 'settings')) {
+    const s = b.settings;
+    if (s === null || typeof s !== 'object' || Array.isArray(s)) {
+      return res.status(400).json({ error: 'settings must be an object' });
+    }
+    const patch = {};
+    if (Object.prototype.hasOwnProperty.call(s, 'auto_checkin_on_badge_print')) {
+      if (typeof s.auto_checkin_on_badge_print !== 'boolean') {
+        return res.status(400).json({ error: 'settings.auto_checkin_on_badge_print must be a boolean' });
+      }
+      patch.auto_checkin_on_badge_print = s.auto_checkin_on_badge_print;
+    }
+    if (Object.prototype.hasOwnProperty.call(s, 'duplicate_threshold_seconds')) {
+      const n = Number(s.duplicate_threshold_seconds);
+      if (!Number.isInteger(n) || n < 10 || n > 3600) {
+        return res.status(400).json({ error: 'settings.duplicate_threshold_seconds must be an integer between 10 and 3600' });
+      }
+      patch.duplicate_threshold_seconds = n;
+    }
+    const unknown = Object.keys(s).filter(k => !['auto_checkin_on_badge_print', 'duplicate_threshold_seconds'].includes(k));
+    if (unknown.length > 0) {
+      return res.status(400).json({ error: `settings: unsupported key(s): ${unknown.join(', ')}` });
+    }
+    if (Object.keys(patch).length > 0) {
+      updates.push(`settings = COALESCE(settings, '{}'::jsonb) || $${p++}::jsonb`);
+      values.push(JSON.stringify(patch));
+    }
+  }
+
   if (updates.length === 0 && sectorIds === null) {
     return res.status(400).json({ error: 'No fields to update' });
   }
