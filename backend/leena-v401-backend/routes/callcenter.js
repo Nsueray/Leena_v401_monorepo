@@ -1463,12 +1463,22 @@ router.post('/report/send-now', authMiddleware, async (req, res) => {
   // Body build + email_queue INSERT extracted to utils/callCenterReport.js
   // so the worker's 19:00-Casa auto-fire can call the same code path.
   // A manual send-now here suppresses that day's auto-fire via the
-  // subject-prefix probe in email_worker.js (accepted behavior).
+  // subject-prefix probe in email_worker.js (accepted behavior) — and since
+  // phase 2 (28 Sep) that probe is per-prefix, so sending Madesign now does
+  // NOT suppress tonight's SIEMA report.
+  // ?expo= follows the same rule as every other endpoint here: absent → 9.
+  const expoId = resolveExpoId(req);
+  if (expoId === null) return invalidExpo(res);
   try {
-    const { queued, recipients, subject, totals } = await sendDailyReport(pool);
+    const { queued, recipients, subject, totals } = await sendDailyReport(pool, expoId);
     return res.json({ success: true, queued, to: recipients, subject, totals });
   } catch (err) {
     if (err.code === 'REPORT_TO_NOT_SET') {
+      return res.status(503).json({ success: false, error: err.message, code: err.code });
+    }
+    if (err.code === 'REPORT_EXPO_NOT_CONFIGURED') {
+      // EXPO_SETTINGS allows this expo but callCenterReport has no label/prefix
+      // for it — a config mismatch, not an operator error.
       return res.status(503).json({ success: false, error: err.message, code: err.code });
     }
     console.error('[callcenter /report/send-now] Error:', err.message);

@@ -2831,3 +2831,69 @@ there is no session list either. Writing that text would mean inventing brand
 copy on a document that gets emailed to visitors. Needed from Yaprak/Suer:
 forum name, theme line, partner logo set, signature image, and the certificate
 number prefix (SIEMA uses `FFAF-2026-`; proposed Madesign form `MDSN-2026-`).
+
+### v4.0.21 — Madesign nightly call-center report (28 September 2026)
+
+**Context:** since v4.0.12 phase 1, `utils/callCenterReport.js` was pinned to
+`REPORT_EXPO_ID = 9`, so Madesign (expo 18) call activity appeared in **no**
+daily report — measured tonight: **1,019 calls done today on expo 18**, none of
+them visible to anyone. Phase 2 adds a SECOND, independent report.
+
+**One entry per fair, each with its OWN subject prefix:**
+```js
+const REPORT_EXPOS = {
+  9:  { label: 'SIEMA',    prefix: REPORT_SUBJECT_PREFIX },   // byte-identical to phase 1
+  18: { label: 'MADESIGN', prefix: 'MADESIGN Call-Center — ' }
+};
+```
+`buildDailyReport(pool, expoId = 9)` and `sendDailyReport(pool, expoId = 9)` —
+the four queries bind `expoId` where they bound the constant, the `<h2>` uses
+`cfg.label`, the subject uses `cfg.prefix`, and the `email_queue` INSERT writes
+`expo_id` as `$4` instead of a literal `9`.
+
+**The 20-hour probe is now PER REPORT** (`email_worker.js`, inside
+`maybeFireCallCenterDailyReport` only). The loop probes `prefix || '%'` per fair,
+so SIEMA's fire can no longer suppress Madesign's or vice versa, and the
+try/catch sits INSIDE the loop — one fair's failure cannot skip the other's
+report for the whole night. `REPORT_TO_NOT_SET` still returns immediately
+(no recipients at all → every fair would fail identically, and the warning
+stays once-per-process).
+
+**`?expo=` on send-now** — `POST /api/callcenter/report/send-now` uses the same
+`resolveExpoId` every other endpoint in the file uses (absent → 9, unknown →
+400 `INVALID_EXPO`), and `admin.html` gained `EXPO_QS1` (the `?`-leading form of
+`EXPO_QS`, which leads with `&`). `admin.html?expo=18` → MADESIGN; the
+parameter-less page → SIEMA, unchanged.
+
+**SIEMA byte-identical — measured, not asserted.** HEAD vs new
+`buildDailyReport` against the same stubbed rows: subject string identical,
+html **md5 `5840e4bd…`, 2,455 bytes, equal**, all 4 SQL texts identical, all 4
+param arrays identical (`[todayStart, 9]` ×3 + `[9]`). Expo 18's html equals
+expo 9's after a single `MADESIGN→SIEMA` swap. The only SIEMA-side SQL text
+change is the INSERT's `9` → `$4`; the row written is identical (measured:
+`expo_id=9`, same subject, ×3 recipients).
+
+**Campaign path zero touch — measured.** `email_worker.js` diff hunks are line
+**10** (the require) and **838-877** (`maybeFireCallCenterDailyReport`) only.
+md5 of every campaign/queue function is unchanged HEAD vs new:
+`enqueueStepEmail` `7c2ba39d`, `evaluateCondition` `ea3341c9`,
+`processRecipient` `fcf95b44`, `computeNextDue` `05da9325`,
+`checkCampaignCompletion` `704509fd`, `runCampaignScheduler` `0685701d`,
+`processTask` `68cb2b71`, `logToEmailLogs` `2acf8b21`. Campaigns 80/81's next
+step is due **30 Sep 08:17 / 08:56 UTC** — 1 day 15 h away, untouched.
+
+**Deploy gate at 16:46 UTC:** `email_queue` pending/processing **0**; recipients
+due within 30 min **0**. Worker hour cap (18:00-22:59 UTC) means a restart now
+cannot fire a report early.
+
+⚠️ **A manual send-now suppresses that fair's auto-fire for 20 h — per fair.**
+Sending Madesign by hand this evening is expected to make tonight's 18:01 UTC
+tick send **SIEMA only**; Madesign resumes automatically tomorrow.
+
+⚠️ **The Casa-day boundary is `Africa/Casablanca` on the WORKER host** — with
+current tzdata that is UTC+1, so "today" starts 23:00 UTC. Morocco has been on
+GMT since 20 Sep 2026, so the window is shifted one hour. Pre-existing since
+phase 1, identical for both reports, deliberately NOT changed here.
+
+Tests: `npm run test:setup && npm test` → **120 ✅ / 0 ❌**, exit 0.
+

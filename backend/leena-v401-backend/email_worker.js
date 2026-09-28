@@ -7,7 +7,7 @@ const { Pool } = require('pg');
 require('dotenv').config();
 const { sendEmail, sendEmailWithReplyTo, processEmailTemplate, formatConferenceTopic } = require('./utils/email');
 const { injectTrackingPixel, injectUnsubscribeLink, generateUnsubscribeToken, wrapClickLinks, appendCampaignTokenToFormLinks, getListUnsubscribeHeaders } = require('./utils/trackingPixel');
-const { sendDailyReport, REPORT_SUBJECT_PREFIX } = require('./utils/callCenterReport');
+const { sendDailyReport, REPORT_SUBJECT_PREFIX, REPORT_EXPOS } = require('./utils/callCenterReport');
 
 // --- Database pool (ENV-based SSL handling) ---
 const pool = new Pool({
@@ -835,36 +835,46 @@ async function maybeFireCallCenterDailyReport() {
   // had already advanced past the just-inserted row's created_at.
   if (utcHour < CALLCENTER_REPORT_HOUR_MIN_UTC || utcHour >= CALLCENTER_REPORT_HOUR_MAX_UTC) return;
 
-  try {
-    // Rolling-window probe (Sep 14 fix): any same-subject row in the last
-    // 20 h suppresses this fire. Date-math-free — no Casa/UTC boundary
-    // gymnastics. Consecutive daily fires are ~24 h apart, so a fire at
-    // T looks back to T-20h, where yesterday's fire at ~T-24h is safely
-    // outside → fires. Trade-off: a fire at ~22:5x UTC on day N would
-    // suppress day N+1's 18:0x UTC fire (19 h gap, inside 20 h window),
-    // but the hour cap makes late-night fires only possible after a
-    // restart into that narrow window — degenerate case, one day skipped.
-    const already = await pool.query(
-      `SELECT 1 FROM email_queue
-       WHERE subject LIKE $1
-         AND created_at >= NOW() - INTERVAL '20 hours'
-       LIMIT 1`,
-      [REPORT_SUBJECT_PREFIX + '%']
-    );
-    if (already.rows.length > 0) return;   // fired within last 20 h — skip
+  // Phase 2 (28 Sep 2026): one independent report per configured fair. Each
+  // has its OWN subject prefix, so the 20-hour probe below is PER REPORT —
+  // SIEMA's fire can no longer suppress Madesign's, or vice versa. Expo 9's
+  // probe string is byte-identical to phase 1 (REPORT_SUBJECT_PREFIX).
+  // The try/catch is INSIDE the loop: one fair's failure must not skip the
+  // other fair's report for the whole night.
+  for (const expoId of Object.keys(REPORT_EXPOS)) {
+    const prefix = REPORT_EXPOS[expoId].prefix;
+    try {
+      // Rolling-window probe (Sep 14 fix): any same-subject row in the last
+      // 20 h suppresses this fire. Date-math-free — no Casa/UTC boundary
+      // gymnastics. Consecutive daily fires are ~24 h apart, so a fire at
+      // T looks back to T-20h, where yesterday's fire at ~T-24h is safely
+      // outside → fires. Trade-off: a fire at ~22:5x UTC on day N would
+      // suppress day N+1's 18:0x UTC fire (19 h gap, inside 20 h window),
+      // but the hour cap makes late-night fires only possible after a
+      // restart into that narrow window — degenerate case, one day skipped.
+      const already = await pool.query(
+        `SELECT 1 FROM email_queue
+         WHERE subject LIKE $1
+           AND created_at >= NOW() - INTERVAL '20 hours'
+         LIMIT 1`,
+        [prefix + '%']
+      );
+      if (already.rows.length > 0) continue;   // this report fired within last 20 h — skip
 
-    const { queued, subject } = await sendDailyReport(pool);
-    console.log(`[callcenter/report] auto-fired at ${new Date().toISOString()} — ${queued} recipient(s), subject="${subject}"`);
-  } catch (err) {
-    if (err.code === 'REPORT_TO_NOT_SET') {
-      // Env var is intentionally optional. Warn ONCE per process — G34: this
-      // var lives on the leena-email-worker service, separate from the web.
-      if (!_ccReportWarnedNoEnv) {
-        console.warn('[callcenter/report] CALLCENTER_REPORT_TO not set on worker — skipping auto-fire (G34: set it on the leena-email-worker Render service)');
-        _ccReportWarnedNoEnv = true;
+      const { queued, subject } = await sendDailyReport(pool, expoId);
+      console.log(`[callcenter/report] auto-fired at ${new Date().toISOString()} — expo ${expoId}, ${queued} recipient(s), subject="${subject}"`);
+    } catch (err) {
+      if (err.code === 'REPORT_TO_NOT_SET') {
+        // Env var is intentionally optional. Warn ONCE per process — G34: this
+        // var lives on the leena-email-worker service, separate from the web.
+        if (!_ccReportWarnedNoEnv) {
+          console.warn('[callcenter/report] CALLCENTER_REPORT_TO not set on worker — skipping auto-fire (G34: set it on the leena-email-worker Render service)');
+          _ccReportWarnedNoEnv = true;
+        }
+        return;   // no recipients at all — the other fairs would fail identically
+      } else {
+        console.error(`[callcenter/report] auto-fire error for expo ${expoId} (non-fatal):`, err.message);
       }
-    } else {
-      console.error('[callcenter/report] auto-fire error (non-fatal):', err.message);
     }
   }
 }

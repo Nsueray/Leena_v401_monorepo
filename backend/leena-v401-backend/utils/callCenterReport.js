@@ -18,9 +18,23 @@ const REPORT_SUBJECT_PREFIX = 'SIEMA Call-Center — ';
 
 // Phase 1 of the Madesign extension (16 Sep 2026): callcenter_leads now holds
 // more than one fair, so this SIEMA report is pinned to expo 9. Subject and
-// body are unchanged. A Madesign report (own prefix + per-expo worker probe)
-// is phase 2 — until then expo 18 activity appears in no daily report.
+// body are unchanged.
 const REPORT_EXPO_ID = 9;
+
+// Phase 2 (28 Sep 2026): one report per fair, each with its OWN subject prefix
+// so the worker's 20-hour probe (email_worker.js) can suppress a re-fire per
+// report instead of one report starving the other. Expo 9's label and prefix
+// are byte-identical to phase 1 — 'SIEMA' + 'SIEMA Call-Center — ' — so the
+// SIEMA subject line and the <h2> heading do not move.
+// Adding a fair = one entry here; the worker iterates this map.
+const REPORT_EXPOS = {
+  9:  { label: 'SIEMA',    prefix: REPORT_SUBJECT_PREFIX },
+  18: { label: 'MADESIGN', prefix: 'MADESIGN Call-Center — ' }
+};
+
+function reportConfig(expoId) {
+  return REPORT_EXPOS[Number(expoId)] || null;
+}
 
 function casaTodayStartUtc() {
   const now = new Date();
@@ -49,7 +63,13 @@ function parseRecipients() {
     .filter(s => { const k = s.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
 }
 
-async function buildDailyReport(pool) {
+async function buildDailyReport(pool, expoId = REPORT_EXPO_ID) {
+  const cfg = reportConfig(expoId);
+  if (!cfg) {
+    const err = new Error(`No daily-report config for expo ${expoId}`);
+    err.code = 'REPORT_EXPO_NOT_CONFIGURED';
+    throw err;
+  }
   const todayStart = casaTodayStartUtc();
   const casaDate = new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Africa/Casablanca', year: 'numeric', month: 'long', day: 'numeric'
@@ -70,13 +90,13 @@ async function buildDailyReport(pool) {
        FROM callcenter_leads
        WHERE claimed_by IS NOT NULL AND done_at >= $1 AND expo_id = $2
        GROUP BY agent ORDER BY calls_today DESC`,
-      [todayStart, REPORT_EXPO_ID]
+      [todayStart, expoId]
     ),
     pool.query(
       `SELECT COALESCE(outcome,'(none)') AS outcome, COUNT(*)::int AS n
        FROM callcenter_leads WHERE done_at >= $1 AND expo_id = $2
        GROUP BY outcome ORDER BY n DESC`,
-      [todayStart, REPORT_EXPO_ID]
+      [todayStart, expoId]
     ),
     pool.query(
       `SELECT COUNT(*)::int AS reg_after,
@@ -84,7 +104,7 @@ async function buildDailyReport(pool) {
        FROM callcenter_leads l
        JOIN visitors v ON v.expo_id = l.expo_id AND lower(v.email) = lower(l.email)
        WHERE l.done_at >= $1 AND v.created_at > l.done_at AND l.expo_id = $2`,
-      [todayStart, REPORT_EXPO_ID]
+      [todayStart, expoId]
     ),
     pool.query(
       `SELECT segment, COUNT(*)::int AS n
@@ -92,7 +112,7 @@ async function buildDailyReport(pool) {
        WHERE (status = 'new' OR (status = 'callback' AND callback_at <= NOW()))
          AND expo_id = $1
        GROUP BY segment ORDER BY segment`,
-      [REPORT_EXPO_ID]
+      [expoId]
     )
   ]);
 
@@ -118,7 +138,7 @@ async function buildDailyReport(pool) {
   const totalCalls = perAgent.rows.reduce((s, r) => s + r.calls_today, 0);
 
   const html = `<!doctype html><html><body style="font-family:Arial,sans-serif;color:#111;">
-<h2>SIEMA Call-Center — Daily Report</h2>
+<h2>${cfg.label} Call-Center — Daily Report</h2>
 <p><strong>${esc(casaDate)}</strong> (Africa/Casablanca)</p>
 <p>Total calls today: <strong>${totalCalls}</strong> · Agents active: <strong>${perAgent.rows.length}</strong> · Registered after call: <strong>${reg.reg_after}</strong> · Checked in at fair: <strong>${reg.checked_in}</strong></p>
 <h3>Per agent</h3>
@@ -140,28 +160,28 @@ async function buildDailyReport(pool) {
 <p style="color:#888;font-size:12px;margin-top:24px;">Automated report from Leena call-center module.</p>
 </body></html>`;
 
-  const subject = `${REPORT_SUBJECT_PREFIX}${casaDate} — ${totalCalls} calls`;
+  const subject = `${cfg.prefix}${casaDate} — ${totalCalls} calls`;
   return { subject, html, casaDate, totalCalls, agents: perAgent.rows.length, reg };
 }
 
 // Enqueue the daily report as Mode 1 email_queue rows. Throws with
 // err.code='REPORT_TO_NOT_SET' when CALLCENTER_REPORT_TO is unset.
-async function sendDailyReport(pool) {
+async function sendDailyReport(pool, expoId = REPORT_EXPO_ID) {
   const recipients = parseRecipients();
   if (recipients.length === 0) {
     const err = new Error('CALLCENTER_REPORT_TO env var not set or has no valid addresses');
     err.code = 'REPORT_TO_NOT_SET';
     throw err;
   }
-  const { subject, html, totalCalls, agents, reg } = await buildDailyReport(pool);
+  const { subject, html, totalCalls, agents, reg } = await buildDailyReport(pool, expoId);
   for (const rcpt of recipients) {
     await pool.query(
       `INSERT INTO email_queue (
          organizer_id, expo_id, visitor_id, template_id,
          recipient_email, subject, html_content,
          status, created_at
-       ) VALUES (1, 9, NULL, NULL, $1, $2, $3, 'pending', NOW())`,
-      [rcpt, subject, html]
+       ) VALUES (1, $4, NULL, NULL, $1, $2, $3, 'pending', NOW())`,
+      [rcpt, subject, html, expoId]
     );
   }
   return {
@@ -172,4 +192,4 @@ async function sendDailyReport(pool) {
   };
 }
 
-module.exports = { sendDailyReport, buildDailyReport, REPORT_SUBJECT_PREFIX, casaTodayStartUtc };
+module.exports = { sendDailyReport, buildDailyReport, REPORT_SUBJECT_PREFIX, casaTodayStartUtc, REPORT_EXPOS, reportConfig };

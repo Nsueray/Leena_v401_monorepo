@@ -367,6 +367,9 @@ let lang = (new URLSearchParams(location.search).get('lang') === 'fr' || session
 // unchanged. ?expo=18 → label from GET /api/callcenter/expo-meta.
 const EXPO_PARAM = (new URLSearchParams(location.search).get('expo') || '').trim();
 const EXPO_QS = EXPO_PARAM ? `&expo=${encodeURIComponent(EXPO_PARAM)}` : '';
+// Same value as a FIRST query param (EXPO_QS leads with '&'). Used by the
+// daily-report send-now call, whose URL carries no other param.
+const EXPO_QS1 = EXPO_PARAM ? `?expo=${encodeURIComponent(EXPO_PARAM)}` : '';
 let EXPO_META = null;
 function applyExpoLabel() {
   if (!EXPO_META) return;
@@ -588,7 +591,9 @@ document.getElementById('btnReport').onclick = async () => {
   const btn = document.getElementById('btnReport');
   btn.disabled = true;
   try {
-    const r = await fetch('/api/callcenter/report/send-now', { method: 'POST', headers: { ...authHeaders(), 'content-type': 'application/json' }, body: '{}' });
+    // Phase 2 (28 Sep 2026): ?expo=18 sends the MADESIGN report, the
+    // parameter-less page still sends SIEMA (server default 9).
+    const r = await fetch('/api/callcenter/report/send-now' + EXPO_QS1, { method: 'POST', headers: { ...authHeaders(), 'content-type': 'application/json' }, body: '{}' });
     const j = await r.json();
     if (j.success) {
       const toList = Array.isArray(j.to) ? j.to.join(', ') : (j.to || '');
