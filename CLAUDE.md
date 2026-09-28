@@ -2782,3 +2782,52 @@ hardcoded to leena.app (`index.js:21`), so a localhost page's PUT is refused
 (500) — a local-only obstacle. The UI half was verified separately: the form
 loads real expo-17 values from production (read-only) and `save()` builds the
 right payload. Production rows were never written.
+
+### v4.0.20 — Night pack: bulk-email unsubscribe filter, wizard badge-token guard, qr-image 404 (28 September 2026)
+
+Three items from the C-list. **The 4th (Madesign certificate page) was NOT built — see the stop note below.**
+
+**C1.16 — `POST /api/visitors/bulk-email` now honours the unsubscribe list.**
+It had none: the handler queued Mode-2 rows straight from the visitor filter
+(`routes/visitors.js:1224`), and the worker's own unsubscribe re-check
+(`email_worker.js:635`) only guards the CAMPAIGN path — so an unsubscribed
+visitor really did receive bulk mail from the Visitors page. The same loop the
+segment sender uses (`routes/emailSegments.js:122-131`) is now applied, and the
+response carries `skipped_unsubscribed` / `skipped_invalid`. Measured on expo 9,
+unfiltered: **21,669 → 21,514 queued** (76 unsubscribed + 79 invalid skipped).
+
+**C2.4 — the campaign wizard now REFUSES badge-only placeholders.**
+`qr_code` / `badge_link` / `badge_url` / `badge_id` exist only in the Mode-2
+badge build (`email_worker.js:255-270`); the campaign build (`:666-674`) has
+name/first_name/last_name/email/company/date + extra_fields, and
+`utils/email.js:21` turns an unmatched token into `''`. Measured 21 Sep on
+template 99: `{{qr_code}}` rendered as nothing, `{{badge_link}}` as `href=""`.
+New `BADGE_TOKEN_IN_CAMPAIGN` (severity **error**) in `validateTemplateBody`.
+Verified against the real templates: **90, 91, 92, 93, 94, 95 all clean** — so
+the live campaigns 80/81 and tomorrow's step-3 send are untouched — while
+86/87/88/99/101/103 are now blocked in the wizard, which is exactly the trap.
+
+**C2.3 — `/api/qr-image/:qrcode` answers 404 for unknown codes and caches.**
+It used to render a valid QR of any string with 200, indistinguishable from a
+real badge. Now: UUID-v4 shape check + `SELECT 1 FROM visitors WHERE qr_code`,
+then `Cache-Control: public, max-age=604800, immutable`. Measured against
+production data (read-only): real code → 200 + header + image/png; unknown
+UUID → 404; `not-a-uuid` → 404; `--` → 404.
+
+⚠️ **Unchanged, proven byte-identical:** `certificate.html`,
+`certificate-ng.html`, `certificate-mp26.html`, `certificate-siema.html`,
+`routes/conferenceCertificates.js`, `email_worker.js`,
+`routes/terminalCheckins.js`, `routes/emailSegments.js`, `utils/email.js`.
+`npm test` → 120 ✅ / 0 ❌.
+
+**STOP — Madesign certificate page not built.** The logo exists
+(`https://madesignmaroc.com/landing/images/madesign-logo.png`, live in templates
+91/92/94/95), but the SIEMA certificate's substance does not transfer: it names a
+conference programme ("Food Factory Africa Forum by SIEMA"), a theme ("CAP AGRO
+2030 — …"), and scientific-programme partner logos (Harvard Consulting, Atlas
+Speaker Bureau, AMDIE). For expo 18 none of these exist in repo or DB, and no
+expo-18 form carries `conference_topic` (measured: 0 of forms 62/63/64/71), so
+there is no session list either. Writing that text would mean inventing brand
+copy on a document that gets emailed to visitors. Needed from Yaprak/Suer:
+forum name, theme line, partner logo set, signature image, and the certificate
+number prefix (SIEMA uses `FFAF-2026-`; proposed Madesign form `MDSN-2026-`).
