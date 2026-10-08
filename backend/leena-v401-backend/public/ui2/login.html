@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Sign in</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<style>
+  /* Ekrana özgü düzen — görsel sistem signal.css'ten. */
+  .ul-main { padding: 64px 24px; max-width: 400px; margin: 0 auto; }
+  .ul-main h1 { font-family:var(--font-display); font-weight:600; font-size:22px; margin:0 0 6px; color:var(--ink); }
+  .ul-sub { margin:0 0 20px; color:var(--muted); font-size:13px; }
+  .ul-form { display:grid; gap:14px; }
+  .ul-msg { min-height:18px; font-size:13px; color:var(--dang); }
+  .ul-note { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<!-- shell.js BİLEREK yüklenmez: requireAuth token yokken /login.html'e yönlendirir. -->
+<main class="ul-main">
+  <div class="card card-pad">
+    <div id="step-login">
+      <h1>Sign in</h1>
+      <p class="ul-sub">User account (ui2). The classic sign-in at /login.html keeps working.</p>
+      <form class="ul-form" id="loginForm" autocomplete="on">
+        <div class="field"><label class="label" for="email">Email</label>
+          <input class="input" id="email" type="email" autocomplete="username" required></div>
+        <div class="field"><label class="label" for="password">Password</label>
+          <input class="input" id="password" type="password" autocomplete="current-password" required></div>
+        <div class="ul-msg" id="loginMsg"></div>
+        <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+      </form>
+    </div>
+
+    <div id="step-change" hidden>
+      <h1>Set a new password</h1>
+      <p class="ul-sub">Your account requires a password change before continuing.</p>
+      <form class="ul-form" id="changeForm" autocomplete="off">
+        <div class="field"><label class="label" for="cur">Current password</label>
+          <input class="input" id="cur" type="password" autocomplete="current-password" required></div>
+        <div class="field"><label class="label" for="new1">New password</label>
+          <input class="input" id="new1" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="field"><label class="label" for="new2">Repeat new password</label>
+          <input class="input" id="new2" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="ul-msg" id="changeMsg"></div>
+        <button class="btn btn-primary btn-block" type="submit">Change password</button>
+        <div class="ul-note">At least 6 characters.</div>
+      </form>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var PANEL = 'whoami.html';
+  var token = null;
+
+  function post(url, body, auth) {
+    var headers = { 'Content-Type': 'application/json' };
+    if (auth) headers.Authorization = 'Bearer ' + auth;
+    return fetch(url, { method: 'POST', headers: headers, body: JSON.stringify(body) })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; })
+          .then(function (j) { return { status: res.status, body: j }; });
+      });
+  }
+
+  document.getElementById('loginForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('loginMsg'); msg.textContent = '';
+    post('/api/user-auth/login', {
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value
+    }).then(function (r) {
+      if (r.status !== 200 || !r.body.token) { msg.textContent = r.body.error || 'Sign in failed.'; return; }
+      token = r.body.token;
+      // Anahtar = mevcut desen (login.html:612, shell.js:58, leena-fetch.js:36).
+      localStorage.setItem('token', token);
+      if (r.body.password_must_change) {
+        document.getElementById('step-login').hidden = true;
+        document.getElementById('step-change').hidden = false;
+        document.getElementById('cur').value = document.getElementById('password').value;
+        document.getElementById('new1').focus();
+      } else {
+        window.location.href = PANEL;
+      }
+    }).catch(function () { msg.textContent = 'Could not reach the server. Please retry.'; });
+  });
+
+  document.getElementById('changeForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('changeMsg'); msg.textContent = '';
+    var n1 = document.getElementById('new1').value, n2 = document.getElementById('new2').value;
+    if (n1 !== n2) { msg.textContent = 'New passwords do not match.'; return; }
+    post('/api/user-auth/change-password', {
+      current_password: document.getElementById('cur').value,
+      new_password: n1
+    }, token).then(function (r) {
+      if (r.status !== 200) { msg.textContent = r.body.error || ('Change failed (HTTP ' + r.status + ').'); return; }
+      window.location.href = PANEL;
+    }).catch(function () { msg.textContent = 'Could not reach the server. Please retry.'; });
+  });
+})();
+</script>
+</body>
+</html>

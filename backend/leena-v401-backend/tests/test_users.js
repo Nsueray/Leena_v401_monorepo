@@ -12,6 +12,25 @@ const path = require('path');
 const BE = path.join(__dirname, '..');
 const { Pool } = require(path.join(BE, 'node_modules/pg'));
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL || 'postgresql://postgres@localhost:5432/ell_comm_test' });
+// Faz 4 dilim 2: route'lar test pool'unu kullanır (diğer suite'lerin require.cache deseni).
+const dbPath = require.resolve(path.join(BE, 'utils/db.js'));
+require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: pool };
+const express = require(path.join(BE, 'node_modules/express'));
+const jwt = require(path.join(BE, 'node_modules/jsonwebtoken'));
+const bcrypt = require(path.join(BE, 'node_modules/bcrypt'));
+const { setFirstOwnerPassword } = require(path.join(BE, 'scripts/set-first-owner-password.js'));
+const app = express(); app.use(express.json());
+app.use('/api/user-auth', require(path.join(BE, 'routes/userAuth.js')));
+app.use('/api/contracts', require(path.join(BE, 'routes/contracts.js')));
+const PORT = 45906;
+async function call(method, url, { token, body } = {}) {
+  const opts = { method, headers: {} };
+  if (token) opts.headers.Authorization = `Bearer ${token}`;
+  if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(`http://127.0.0.1:${PORT}${url}`, opts);
+  let json = null; try { json = await res.json(); } catch (_) {}
+  return { status: res.status, body: json };
+}
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log('  ✅ ' + n)) : (fail++, console.log('  ❌ ' + n + (d !== undefined ? ' → ' + d : ''))); };
@@ -105,6 +124,107 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
     const sid2 = await suerId();
     await expectPass('U11 (021) internal + geçerli user_id → GEÇER', async () =>
       pool.query("INSERT INTO sales_agents (organizer_id, name, agent_type, user_id) VALUES (1, 'C', 'internal', $1)", [sid2]));
+
+    // ════ FAZ 4 DİLİM 2 — users ile giriş + ilk şifre + TRUNCATE guard (033) ════
+    console.log('\n── FAZ 4 DİLİM 2: user-login · me · change-password · ilk şifre · 033 ──');
+    const server = app.listen(PORT);
+    // Reset: Suer'in şifresi NULL + must_change=true'ya döner (U2b'nin seed varsayımı
+    // korunur → suite tekrar koşulabilir, idempotent).
+    const resetAuth = async () => {
+      await resetUsers();
+      await pool.query('UPDATE users SET password_hash = NULL, password_must_change = true WHERE email = $1', [SUER]);
+    };
+    const PW = 'suer-test-pw-1';
+    const hashOf = async () => (await pool.query('SELECT password_hash FROM users WHERE email=$1', [SUER])).rows[0].password_hash;
+    try {
+      // S1 (K-B) — script mantığı: hash NULL → yazar, must_change=false
+      await resetAuth();
+      const s1c = await pool.connect();
+      const s1 = await setFirstOwnerPassword(s1c, PW, { bcrypt }); s1c.release();
+      const s1row = (await pool.query('SELECT password_hash, password_must_change FROM users WHERE email=$1', [SUER])).rows[0];
+      ok('S1 (K-B) script: hash NULL → yazar, must_change=false',
+        s1.status === 'written' && s1row.password_hash !== null && s1row.password_must_change === false, JSON.stringify(s1));
+
+      // S2 (K-B) — hash doluyken yazmaz, hash değişmez
+      const before = await hashOf();
+      const s2c = await pool.connect();
+      const s2 = await setFirstOwnerPassword(s2c, 'another-pw-22', { bcrypt }); s2c.release();
+      ok('S2 (K-B) script: hash dolu → "hash_present", değişiklik yok', s2.status === 'hash_present' && (await hashOf()) === before, s2.status);
+
+      // L1 — user-login başarı (S1'in şifresiyle)
+      const l1 = await call('POST', '/api/user-auth/login', { body: { email: SUER, password: PW } });
+      const dec = l1.body && l1.body.token ? jwt.decode(l1.body.token) : {};
+      ok('L1 user-login başarı → token (organizer_id + email + uid) + bayraklar',
+        l1.status === 200 && dec.organizer_id === 1 && dec.email === SUER && !!dec.uid &&
+        l1.body.is_owner === true && l1.body.password_must_change === false, l1.status);
+      const userToken = l1.body && l1.body.token;
+
+      // L2..L5 — tüm hatalar AYNI 401 + AYNI mesaj
+      const h = await bcrypt.hash(PW, 4);
+      await pool.query("INSERT INTO users (organizer_id, email, password_hash, is_active) VALUES (1, 'pasif@x.com', $1, false)", [h]);
+      await pool.query("INSERT INTO users (organizer_id, email, password_hash) VALUES (1, 'nohash@x.com', NULL)");
+      const lPasif = await call('POST', '/api/user-auth/login', { body: { email: 'pasif@x.com', password: PW } });
+      const lNull  = await call('POST', '/api/user-auth/login', { body: { email: 'nohash@x.com', password: PW } });
+      const lWrong = await call('POST', '/api/user-auth/login', { body: { email: SUER, password: 'wrong-password' } });
+      const lNone  = await call('POST', '/api/user-auth/login', { body: { email: 'yok@x.com', password: PW } });
+      const msg = lWrong.body && lWrong.body.error;
+      ok('L2 pasif kullanıcı → 401', lPasif.status === 401, lPasif.status);
+      ok('L3 password_hash NULL → 401', lNull.status === 401, lNull.status);
+      ok('L4 yanlış şifre → 401', lWrong.status === 401, lWrong.status);
+      ok('L5 olmayan e-posta → 401', lNone.status === 401, lNone.status);
+      ok('L6 dört hata da AYNI mesaj', [lPasif, lNull, lNone].every(r => r.body && r.body.error === msg) && !!msg, msg);
+
+      // L7 — yeni token mevcut korumalı uçta (authMiddleware) çalışır
+      const c7 = await call('GET', '/api/contracts', { token: userToken });
+      ok('L7 user token → GET /api/contracts 200 (organizer_id aynı)', c7.status === 200 && Array.isArray(c7.body), c7.status);
+
+      // M1 — me doğru kullanıcıyı döner
+      const m1 = await call('GET', '/api/user-auth/me', { token: userToken });
+      ok('M1 me → oturumdaki kullanıcı', m1.status === 200 && m1.body.email === SUER && m1.body.uid === dec.uid && m1.body.session === 'user', m1.status);
+
+      // M2 — eski-login token'ı (uid yok) → 409 NOT_USER_SESSION (401/403 değil)
+      const legacy = jwt.sign({ organizer_id: 1, email: SUER }, process.env.JWT_SECRET, { expiresIn: '30d' });
+      const m2 = await call('GET', '/api/user-auth/me', { token: legacy });
+      ok('M2 eski-login token → me 409 NOT_USER_SESSION', m2.status === 409 && m2.body && m2.body.code === 'NOT_USER_SESSION', m2.status);
+
+      // P1..P5 — must_change akışı
+      const hm = await bcrypt.hash('first-pw-1', 4);
+      await pool.query("INSERT INTO users (organizer_id, email, password_hash, password_must_change) VALUES (1, 'must@x.com', $1, true)", [hm]);
+      const p1 = await call('POST', '/api/user-auth/login', { body: { email: 'must@x.com', password: 'first-pw-1' } });
+      ok('P1 must_change kullanıcı login → password_must_change=true', p1.status === 200 && p1.body.password_must_change === true, p1.status);
+      const mt = p1.body && p1.body.token;
+      const p2 = await call('POST', '/api/user-auth/change-password', { token: mt, body: { current_password: 'nope', new_password: 'second-pw-2' } });
+      ok('P2 yanlış mevcut şifre → 400 INVALID_CURRENT_PASSWORD', p2.status === 400 && p2.body.code === 'INVALID_CURRENT_PASSWORD', p2.status);
+      const p3 = await call('POST', '/api/user-auth/change-password', { token: mt, body: { current_password: 'first-pw-1', new_password: 'short' } });
+      ok('P3 kısa yeni şifre (<6) → 400', p3.status === 400, p3.status);
+      const p4 = await call('POST', '/api/user-auth/change-password', { token: mt, body: { current_password: 'first-pw-1', new_password: 'second-pw-2' } });
+      const p4me = await call('GET', '/api/user-auth/me', { token: mt });
+      ok('P4 doğru değişim → 200, me must_change=false', p4.status === 200 && p4me.body.password_must_change === false, p4.status);
+      const p5new = await call('POST', '/api/user-auth/login', { body: { email: 'must@x.com', password: 'second-pw-2' } });
+      const p5old = await call('POST', '/api/user-auth/login', { body: { email: 'must@x.com', password: 'first-pw-1' } });
+      ok('P5 yeni şifre girer, eski şifre 401', p5new.status === 200 && p5old.status === 401, `${p5new.status}/${p5old.status}`);
+
+      // T1 (033) — TRUNCATE users REDDEDİLİR (CASCADE dahil; tx içinde, geri alınır)
+      await resetAuth();
+      const nBefore = (await pool.query('SELECT count(*)::int AS n FROM users')).rows[0].n;
+      const tc = await pool.connect();
+      let truncRejected = false, truncMsg = '';
+      try {
+        await tc.query('BEGIN');
+        await tc.query('TRUNCATE users CASCADE');
+      } catch (e) { truncRejected = /B10/.test(e.message); truncMsg = e.message.slice(0, 60); }
+      finally { await tc.query('ROLLBACK').catch(() => {}); tc.release(); }
+      const nAfter = (await pool.query('SELECT count(*)::int AS n FROM users')).rows[0].n;
+      ok('T1 (033) TRUNCATE users CASCADE → B10 ile REDDEDİLİR, satırlar yerinde', truncRejected && nAfter === nBefore, truncMsg);
+
+      // R1 (033) — geriye dönük kayıt yalnız şema izi kanıtlıysa: test DB'de 032 VAR, 029-031 YOK
+      const sm = (await pool.query("SELECT version FROM schema_migrations WHERE version ~ '^(029|03[0-3])_' ORDER BY 1")).rows.map(r => r.version);
+      ok('R1 (033) schema_migrations: 032 + 033 var, izi olmayan 029/030/031 YOK',
+        JSON.stringify(sm) === JSON.stringify(['032_users_and_first_owner', '033_users_truncate_guard']), JSON.stringify(sm));
+    } finally {
+      server.close();
+      await resetAuth();
+    }
 
     await resetUsers();
     console.log(`\n═══ USERS SONUÇ: ${pass} geçti, ${fail} başarısız ═══`);

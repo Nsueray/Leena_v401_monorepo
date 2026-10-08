@@ -120,6 +120,7 @@ try { callcenterRoutes = require('./routes/callcenter'); console.log('✓ Call-C
 
 // --- Mount Routes ---
 if (authRoutes) app.use('/api/auth', authRoutes);
+try { app.use('/api/user-auth', require('./routes/userAuth')); console.log('✓ User auth routes loaded'); } catch (err) { console.error('✗ Failed to load user auth routes:', err.message); } // Faz 4 dilim 2
 if (organizerRoutes) app.use('/api/organizers', organizerRoutes);
 if (expoRoutes) app.use('/api/expos', expoRoutes);
 if (referenceRoutes) app.use('/api/reference', referenceRoutes);
