@@ -4,8 +4,9 @@
  *
  * - injectTrackingPixel(html, eventId) — adds 1x1 transparent pixel before </body>
  * - injectUnsubscribeLink(html, token, organizerName, expoCountryCode) — adds footer
- *   with unsubscribe link + Morocco postal address; sentence in French when
- *   expoCountryCode === 'MA', English otherwise (including NULL / undefined)
+ *   with unsubscribe link + postal address; when expoCountryCode === 'MA' the
+ *   sentence is French and the address is Casablanca, otherwise (including
+ *   NULL / undefined) English + Istanbul HQ
  * - generateUnsubscribeToken(campaignId, recipientId, email) — HMAC-based token
  * - verifyUnsubscribeToken(token) — validates and returns { campaignId, recipientId, email }
  */
@@ -50,8 +51,8 @@ function injectUnsubscribeLink(html, token, organizerName, expoCountryCode) {
   //
   // Sentence language branches on the target expo's country_code
   // (Suer 3 Sep audit §8): 'MA' → French; anything else → English.
-  // Address block stays hardcoded Morocco per P2 (fine for SIEMA; the
-  // per-organiser-office lookup remains post-fair work).
+  // Address block also branches on country_code (Suer 8 Oct): 'MA' keeps
+  // the Casablanca office; anything else (incl. NULL) → Istanbul HQ.
   // UTF-8 preserved: "2ème" (è = U+00E8, C3 A8) / "N°" (° = U+00B0, C2 B0).
   const isFrench = expoCountryCode === 'MA';
   const sentence = isFrench
@@ -60,11 +61,17 @@ function injectUnsubscribeLink(html, token, organizerName, expoCountryCode) {
     : `If you no longer wish to receive these emails from ${organizerName || 'this organizer'}, `
       + `<a href="${unsubUrl}" style="color:#888;text-decoration:underline;">unsubscribe here</a>.`;
 
+  const address = expoCountryCode === 'MA'
+    ? `<br>ELAN EXPO MAROC SARL`
+      + `<br>30, Bd Rahal El Meskini, 2ème Etage, Appart N° 5, Casablanca, Morocco`
+      + `<br>+212 650 219 756`
+    : `<br>ELAN EXPO`
+      + `<br>Besiktas - Istanbul / TURKEY`
+      + `<br>+90 850 255 53 77`;
+
   const footer = `<div style="text-align:center;margin-top:20px;padding:16px;font-size:11px;color:#888;border-top:1px solid #eee;">`
     + sentence
-    + `<br>ELAN EXPO MAROC SARL`
-    + `<br>30, Bd Rahal El Meskini, 2ème Etage, Appart N° 5, Casablanca, Morocco`
-    + `<br>+212 650 219 756`
+    + address
     + `</div>`;
 
   if (html.includes('</body>')) {
