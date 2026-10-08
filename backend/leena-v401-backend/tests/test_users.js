@@ -211,6 +211,9 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
       let truncRejected = false, truncMsg = '';
       try {
         await tc.query('BEGIN');
+        // CASCADE contract_line_items'a da iner; 034 (K-D) onu B10'dan ÖNCE reddederdi.
+        // Bu test B10'u ölçer → K-D anahtarı yalnız bu (geri alınan) transaction'da açık.
+        await tc.query("SET LOCAL ell.allow_line_item_reset = 'on'");
         await tc.query('TRUNCATE users CASCADE');
       } catch (e) { truncRejected = /B10/.test(e.message); truncMsg = e.message.slice(0, 60); }
       finally { await tc.query('ROLLBACK').catch(() => {}); tc.release(); }

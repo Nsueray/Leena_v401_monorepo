@@ -5,6 +5,7 @@ const path = require('path');
 const BE = path.join(__dirname, '..');
 const { Pool } = require(path.join(BE, 'node_modules/pg'));
 const pool = new Pool({ connectionString: process.env.TEST_DATABASE_URL || 'postgresql://postgres@localhost:5432/ell_comm_test' });
+const resetLineItems = require(path.join(__dirname, 'helpers/resetLineItems.js')); // 034 (K-D) anahtarlı temizlik
 const dbPath = require.resolve(path.join(BE, 'utils/db.js'));
 require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: pool };
 const express = require(path.join(BE, 'node_modules/express'));
@@ -28,7 +29,7 @@ async function reset() {
   await pool.query('DELETE FROM payments');
   await pool.query('DELETE FROM payment_schedule_items');
   await pool.query('DELETE FROM commission_payouts');
-  await pool.query('DELETE FROM contract_line_items');
+  await resetLineItems(pool);  // 034: anahtar yalnız bu temizlikte açık
   await pool.query('DELETE FROM contracts');
   await pool.query('DELETE FROM sales_agents');
   await pool.query("DELETE FROM offices WHERE name NOT IN ('Turkey','Morocco','Nigeria','Kenya','China')");
