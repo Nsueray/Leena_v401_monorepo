@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Finance · Contracts</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<style>
+  /* Ekrana özgü küçük yardımcılar — görsel sistem signal.css'ten (finance-contract.html emsali). */
+  .fl-main { padding: 18px 24px 40px; max-width: 1180px; margin: 0 auto; }
+  .fl-head { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; margin-bottom:16px; flex-wrap:wrap; }
+  .fl-head h1 { font-family:var(--font-display); font-weight:600; font-size:22px; margin:0; letter-spacing:-.01em; color:var(--ink); }
+  .fl-head .sub { margin:5px 0 0; color:var(--muted); font-size:13px; font-family:var(--font-mono); letter-spacing:.02em; }
+  .fl-empty { padding:22px; color:var(--muted); font-size:13px; text-align:center; }
+  .fl-row { cursor:pointer; }
+  .fl-row:hover td { background:var(--line-2); }
+</style>
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+
+<main class="fl-main" id="fl-root">
+  <div class="fl-empty">Loading…</div>
+</main>
+
+<script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='contract';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script>
+(function () {
+  'use strict';
+  // READ-ONLY liste. Tek GET: /api/contracts. paid_eur / balance_eur sunucuda
+  // hesaplanır (routes/contracts.js D2) — client YENİDEN HESAPLAMAZ (RAP-02).
+  var root = document.getElementById('fl-root');
+
+  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  // Sunucu string'i olduğu gibi gösterilir — yalnız biçim, aritmetik yok.
+  function money(v, cur){ if(v==null||v==='') return '—'; return (cur?esc(cur)+' ':'') + esc(v); }
+  function eur(v){ if(v==null||v==='') return '—'; return '€' + esc(v); }
+  function dash(v){ return (v==null||v==='') ? '—' : esc(v); }
+
+  function statusChip(st){
+    if(!st) return '—';
+    var color='var(--ink-2)', bg='var(--line-2)';
+    if(st==='Active'){ color='var(--primary-d)'; bg='var(--primary-l)'; }
+    else if(st==='On Hold'){ color='var(--warn)'; bg='var(--warn-l)'; }
+    else if(st==='Cancelled'){ color='var(--dang)'; bg='var(--dang-l)'; }
+    return '<span class="chip" style="color:'+color+';background:'+bg+';border-color:'+bg+'">'+esc(st)+'</span>';
+  }
+
+  function detailHref(id){ return 'finance-contract.html?contract=' + encodeURIComponent(id); }
+
+  function render(list){
+    var head =
+      '<div class="fl-head"><div><h1>Contracts</h1>'+
+        '<div class="sub">'+list.length+' contract'+(list.length===1?'':'s')+' · read-only</div>'+
+      '</div></div>';
+    if (!list.length) {
+      root.innerHTML = head + '<div class="card"><div class="fl-empty">No contracts yet.</div></div>';
+      return;
+    }
+    var rows = list.map(function(c){
+      return '<tr class="fl-row" data-id="'+esc(c.id)+'">'+
+        '<td><a href="'+detailHref(c.id)+'">'+dash(c.af_number)+'</a></td>'+
+        '<td>'+dash(c.company_name)+'</td>'+
+        '<td>'+dash(c.expo_name)+'</td>'+
+        '<td>'+statusChip(c.status)+'</td>'+
+        '<td class="num">'+money(c.revenue, c.currency)+'</td>'+
+        '<td class="num">'+eur(c.paid_eur)+'</td>'+
+        '<td class="num">'+eur(c.balance_eur)+'</td>'+
+      '</tr>';
+    }).join('');
+    root.innerHTML = head +
+      '<div class="card" style="overflow:hidden"><table class="table"><thead><tr>'+
+        '<th>AF no</th><th>Company</th><th>Expo</th><th>Status</th>'+
+        '<th class="num">Revenue</th><th class="num">Paid (EUR)</th><th class="num">Balance (EUR)</th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }
+
+  // Satır tıklaması → mevcut ui2 detay ekranı (param: ?contract=<id>).
+  root.addEventListener('click', function(e){
+    if (e.target.closest('a')) return;
+    var tr = e.target.closest('tr.fl-row');
+    if (tr) window.location.href = detailHref(tr.getAttribute('data-id'));
+  });
+
+  function showError(msg){ root.innerHTML = '<div class="fl-empty">'+esc(msg)+'</div>'; }
+
+  function load(){
+    // Yetki TEK NOKTADAN sorulur — ekran kendi kuralını yazmaz.
+    if (typeof window.ui2CanSee === 'function' && !window.ui2CanSee('finance')) {
+      showError('You do not have access to Finance.'); return;
+    }
+    window.leenaFetch('/api/contracts').then(function(res){
+      if (!res.ok) { showError('Could not load contracts (HTTP '+res.status+').'); return; }
+      return res.json().then(function(list){ render(Array.isArray(list) ? list : []); });
+    }).catch(function(err){
+      // 401: leena-fetch göreli login.html'e gider (/ui2'den yanlış çözülür) — mutlakla önceliyoruz.
+      if (err && err.status === 401) { window.location.href = '/login.html'; return; }
+      showError('Could not reach the server. Please retry.');
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', load);
+  } else { load(); }
+})();
+</script>
+</body>
+</html>
