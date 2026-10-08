@@ -3,14 +3,14 @@
 // ikisi yan yana çalışır.
 //
 // ── HÜKÜMLER (Sentez K-A, 2026-10-08) ──
-// - Token = mevcut JWT + uid: AYNI secret (JWT_SECRET), AYNI süre (30d,
+// - Token = mevcut JWT + user_id (SEM-05): AYNI secret (JWT_SECRET), AYNI süre (30d,
 //   routes/auth.js:54), AYNI middleware (authMiddleware req.organizer_id okur).
-//   Payload: organizer_id (users.organizer_id) + email + uid (users.id).
+//   Payload: organizer_id (users.organizer_id) + email + user_id (users.id). `name` YOK — kanıtlı kaynak yok (users'ta name kolonu yok), Sentez kararı bekliyor.
 //   → Mevcut korumalı route'lar yeni token'la değişmeden çalışır.
 // - Giriş hataları TEK TİP: kullanıcı yok / pasif / password_hash NULL / yanlış
 //   şifre → hepsi aynı 401 + aynı mesaj (hangi e-postanın var olduğu sızmaz).
 //   Kullanıcı yokken de bcrypt.compare koşulur (zamanlama farkı kapanır).
-// - /me ve /change-password yalnız USER oturumu kabul eder (token'da uid).
+// - /me ve /change-password yalnız USER oturumu kabul eder (token'da user_id).
 //   Eski organizer token'ı → 409 NOT_USER_SESSION. 401/403 DEĞİL: leena-fetch
 //   401/403'te oturumu siler (leena-fetch.js:63-71); eski oturum korunur.
 // - Şifre uzunluk kuralı: register ile AYNI (routes/auth.js:88, en az 6).
@@ -38,7 +38,7 @@ function requireUserSession(req, res, next) {
   if (token == null) return res.sendStatus(401);
   jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
     if (err) return res.sendStatus(403);
-    if (!decoded || !decoded.uid) {
+    if (!decoded || !decoded.user_id) {
       return res.status(409).json({ error: 'Not a user session', code: 'NOT_USER_SESSION' });
     }
     req.userSession = decoded;
@@ -73,7 +73,7 @@ router.post('/login', async (req, res) => {
     if (!usable || !match) return res.status(401).json(LOGIN_FAILED);
 
     const token = jwt.sign(
-      { organizer_id: u.organizer_id, email: u.email, uid: u.id },
+      { organizer_id: u.organizer_id, email: u.email, user_id: u.id },
       process.env.JWT_SECRET,
       { expiresIn: TOKEN_EXPIRES_IN }
     );
@@ -95,12 +95,12 @@ router.get('/me', requireUserSession, async (req, res) => {
     const result = await pool.query(
       `SELECT id, email, display_role, is_owner, password_must_change, is_active
          FROM users WHERE id = $1`,
-      [req.userSession.uid]
+      [req.userSession.user_id]
     );
     const u = result.rows[0];
     if (!u || !u.is_active) return res.sendStatus(401);
     return res.json({
-      uid: u.id,
+      user_id: u.id,
       email: u.email,
       display_role: u.display_role,
       is_owner: u.is_owner,
@@ -127,7 +127,7 @@ router.post('/change-password', requireUserSession, async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT id, password_hash, is_active FROM users WHERE id = $1',
-      [req.userSession.uid]
+      [req.userSession.user_id]
     );
     const u = result.rows[0];
     if (!u || !u.is_active) return res.sendStatus(401);

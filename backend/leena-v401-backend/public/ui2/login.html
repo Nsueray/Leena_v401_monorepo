@@ -79,6 +79,17 @@
       token = r.body.token;
       // Anahtar = mevcut desen (login.html:612, shell.js:58, leena-fetch.js:36).
       localStorage.setItem('token', token);
+      // ui2CurrentUser() SENKRON kalır (SEM-05): kimlik yanıttan YENİ bir anahtara yazılır.
+      // Eski login'in 'organizer' / 'organizerId' anahtarlarına DOKUNULMAZ. Kayıt yazıldığı
+      // token'a bağlıdır (son 16 karakter); klasik login token'ı değiştirirse shell yok sayar.
+      try {
+        var claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        localStorage.setItem('ui2User', JSON.stringify({
+          user_id: claims.user_id, email: claims.email,
+          display_role: r.body.display_role, is_owner: r.body.is_owner,
+          token_tail: token.slice(-16)
+        }));
+      } catch (e) { /* fail-soft: shell eski davranışa düşer */ }
       if (r.body.password_must_change) {
         document.getElementById('step-login').hidden = true;
         document.getElementById('step-change').hidden = false;

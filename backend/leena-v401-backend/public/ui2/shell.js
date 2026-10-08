@@ -35,9 +35,19 @@
   };
 
   // ── KİMLİK — TEK NOKTA. "Kullanıcı kim?" ──
-  // Bugün: tek kişi (kullanıcı sistemi YOK). Faz 4: users tablosunu okur.
+  // Faz 4 dilim 2 (SEM-05): SENKRON kalır. ui2 login (users) ile girildiyse 'ui2User'
+  // kaydını okur — yalnız kayıt ŞU ANKİ token'a aitse (token_tail eşleşmesi). Aksi hâlde
+  // eski davranış (klasik login: 'organizer' / 'organizerId'). Fetch YOK.
   // Ekran kodu bunu çağırır, kullanıcıyı kendi çözmez.
   window.ui2CurrentUser = function () {
+    try {
+      var u = JSON.parse(localStorage.getItem('ui2User') || 'null');
+      var tok = localStorage.getItem('token') || '';
+      if (u && u.user_id && tok && u.token_tail === tok.slice(-16)) {
+        // name: users'ta ad kolonu yok (Sentez kararı bekliyor) → gösterim için e-posta.
+        return { name: u.email || 'User', id: u.user_id, email: u.email, session: 'user' };
+      }
+    } catch (e) { /* fail-soft → eski davranış */ }
     var name = 'User';
     try {
       var org = JSON.parse(localStorage.getItem('organizer') || 'null');

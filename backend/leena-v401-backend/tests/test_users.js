@@ -154,8 +154,8 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
       // L1 — user-login başarı (S1'in şifresiyle)
       const l1 = await call('POST', '/api/user-auth/login', { body: { email: SUER, password: PW } });
       const dec = l1.body && l1.body.token ? jwt.decode(l1.body.token) : {};
-      ok('L1 user-login başarı → token (organizer_id + email + uid) + bayraklar',
-        l1.status === 200 && dec.organizer_id === 1 && dec.email === SUER && !!dec.uid &&
+      ok('L1 user-login başarı → token (organizer_id + email + user_id, SEM-05) + bayraklar',
+        l1.status === 200 && dec.organizer_id === 1 && dec.email === SUER && !!dec.user_id &&
         l1.body.is_owner === true && l1.body.password_must_change === false, l1.status);
       const userToken = l1.body && l1.body.token;
 
@@ -180,9 +180,9 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
 
       // M1 — me doğru kullanıcıyı döner
       const m1 = await call('GET', '/api/user-auth/me', { token: userToken });
-      ok('M1 me → oturumdaki kullanıcı', m1.status === 200 && m1.body.email === SUER && m1.body.uid === dec.uid && m1.body.session === 'user', m1.status);
+      ok('M1 me → oturumdaki kullanıcı', m1.status === 200 && m1.body.email === SUER && m1.body.user_id === dec.user_id && m1.body.session === 'user', m1.status);
 
-      // M2 — eski-login token'ı (uid yok) → 409 NOT_USER_SESSION (401/403 değil)
+      // M2 — eski-login token'ı (user_id yok) → 409 NOT_USER_SESSION (401/403 değil)
       const legacy = jwt.sign({ organizer_id: 1, email: SUER }, process.env.JWT_SECRET, { expiresIn: '30d' });
       const m2 = await call('GET', '/api/user-auth/me', { token: legacy });
       ok('M2 eski-login token → me 409 NOT_USER_SESSION', m2.status === 409 && m2.body && m2.body.code === 'NOT_USER_SESSION', m2.status);

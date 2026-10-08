@@ -42,7 +42,7 @@
   function load(){
     window.leenaFetch('/api/user-auth/me').then(function(res){
       if (res.status === 409) {
-        // Eski /login.html oturumu — token'da uid yok. Oturum korunur.
+        // Eski /login.html oturumu — token'da user_id yok. Oturum korunur.
         root.innerHTML = table([
           ['Session type', 'Organizer (classic sign-in)'],
           ['User account', '— <span style="color:var(--muted)">sign in via ui2/login.html to see the user</span>']
