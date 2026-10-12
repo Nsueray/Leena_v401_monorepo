@@ -253,6 +253,58 @@ const CERT_EMAIL_TEMPLATE_MP26 = `
 </html>
 `;
 
+// --- Certificate email template — Mega Clima Kenya 2026 (expo_id=10) ---
+// Same structure as CERT_EMAIL_TEMPLATE (tested email-client layout) —
+// only branding swapped (logo, dates, venue, footer). No ASHRAE partner logo.
+const CERT_EMAIL_TEMPLATE_KE = `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f2f2f2;font-family:Arial,Helvetica,sans-serif;">
+  <div style="max-width:600px;margin:0 auto;background:#ffffff;">
+
+    <!-- Header: Red banner with logo -->
+    <div style="background:#d6232a;padding:28px 30px;text-align:center;">
+      <img src="https://megaclimaexpo.com/landing/images/mega-clima-kenya-logo.png" alt="Mega Clima Kenya 2026" style="max-height:48px;margin-bottom:14px;display:inline-block;" />
+      <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;font-family:Georgia,'Times New Roman',serif;">Certificate of Participation</h1>
+      <p style="margin:6px 0 0;font-size:13px;color:#ffffff;opacity:0.9;">13&ndash;15 October 2026 &bull; Sarit Expo Centre, Nairobi, Kenya</p>
+    </div>
+
+    <!-- Content -->
+    <div style="padding:36px 30px;text-align:center;">
+      <p style="font-size:16px;color:#1a1a1a;margin:0 0 6px;">Dear</p>
+      <p style="font-size:22px;color:#1a1a1a;margin:0 0 20px;font-weight:700;">{{name}} {{last_name}}</p>
+
+      <p style="font-size:15px;color:#444;line-height:1.6;margin:0 0 24px;">
+        Thank you for attending the <strong>{{expo_name}}</strong> &mdash; HVAC+R Technical Conference &amp; Exhibition.
+        Your certificate of participation is ready.
+      </p>
+
+      <div style="background:#fef2f2;border-left:4px solid #d6232a;border-radius:6px;padding:16px 20px;margin:0 0 8px;text-align:left;">
+        <p style="margin:0 0 4px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:1px;">Session attended</p>
+        <p style="margin:0;color:#d6232a;font-size:17px;font-weight:700;">{{conference_topic}}</p>
+      </div>
+
+      <p style="font-size:14px;color:#888;margin:0 0 28px;text-align:left;">Click the button below to view and download your certificate as PDF.</p>
+
+      <a href="{{certificate_url}}" style="display:inline-block;padding:14px 36px;background:#d6232a;color:#ffffff;text-decoration:none;border-radius:8px;font-size:16px;font-weight:600;">View Certificate</a>
+
+      <p style="margin:20px 0 0;color:#aaa;font-size:12px;">Use &ldquo;Save as PDF&rdquo; in the print dialog to download.</p>
+    </div>
+
+    <!-- Footer: Organizer logo + contact -->
+    <div style="padding:20px 30px;text-align:center;border-top:1px solid #eee;background:#fafafa;">
+      <p style="margin:0 0 6px;color:#999;font-size:11px;text-transform:uppercase;letter-spacing:1px;">Organized by Elan Expo</p>
+      <img src="https://megaclimaexpo.com/landing/images/elan-logo.png" alt="Elan Expo" style="height:28px;display:inline-block;margin:0 0 10px;" />
+      <p style="margin:0 0 4px;color:#999;font-size:12px;">kenya@megaclimaexpo.com &bull; www.megaclimaexpo.com/kenya</p>
+      <p style="margin:0;color:#ccc;font-size:11px;">Powered by Leena EMS</p>
+    </div>
+
+  </div>
+</body>
+</html>
+`;
+
 /**
  * Helper: Split conference_topic string into individual topics.
  * ONLY splits by " || " (double pipe with spaces).
@@ -470,6 +522,7 @@ async function issueCertificate(client, visitor, expoId, organizerId, hall, term
   const emailTemplate = (Number(expoId) === 9)  ? CERT_EMAIL_TEMPLATE_SIEMA
                       : (Number(expoId) === 13) ? CERT_EMAIL_TEMPLATE_MP26
                       : (Number(expoId) === 7)  ? CERT_EMAIL_TEMPLATE_NG
+                      : (Number(expoId) === 10) ? CERT_EMAIL_TEMPLATE_KE
                       : CERT_EMAIL_TEMPLATE;
   const emailHtml = processEmailTemplate(emailTemplate, emailData);
 
@@ -769,6 +822,7 @@ router.post('/resend', terminalAuth, async (req, res) => {
     const emailTemplate = (Number(cert.expo_id) === 9)  ? CERT_EMAIL_TEMPLATE_SIEMA
                         : (Number(cert.expo_id) === 13) ? CERT_EMAIL_TEMPLATE_MP26
                         : (Number(cert.expo_id) === 7)  ? CERT_EMAIL_TEMPLATE_NG
+                        : (Number(cert.expo_id) === 10) ? CERT_EMAIL_TEMPLATE_KE
                         : CERT_EMAIL_TEMPLATE;
     const emailHtml = processEmailTemplate(emailTemplate, emailData);
 
