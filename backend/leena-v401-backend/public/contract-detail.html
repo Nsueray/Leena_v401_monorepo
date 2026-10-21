@@ -190,12 +190,13 @@
                                 <th class="num">EUR</th>
                                 <th>Method</th>
                                 <th>Office</th>
+                                <th>Account</th>
                                 <th>Notes</th>
                                 <th></th>
                             </tr>
                         </thead>
                         <tbody id="paymentBody">
-                            <tr><td colspan="8" class="empty-state">Loading…</td></tr>
+                            <tr><td colspan="9" class="empty-state">Loading…</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -204,10 +205,13 @@
                     <div class="card-title">Add payment</div>
                     <form class="pay-form" id="payForm" onsubmit="submitPayment(event)">
                         <label>Amount<input name="amount" type="text" autocomplete="off"></label>
-                        <label>Currency<select name="currency" onchange="lockRateIfEur()"></select></label>
+                        <label>Currency<select name="currency" onchange="lockRateIfEur(); fillAccountOptions()"></select></label>
                         <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
                         <label>Method<select name="payment_method"></select></label>
                         <label>Office *<select name="received_office_id"></select></label>
+                        <!-- Paket 1 L-4: hesap + ödeyen OPSİYONEL. Boş hesap = ofisin varsayılan hesabı (yoksa hesapsız + uyarı). -->
+                        <label class="ledger-field" style="display:none">Account<select name="account_id"></select></label>
+                        <label class="ledger-field" style="display:none">Payer<input name="payer" type="text" autocomplete="off" placeholder="if not the company"></label>
                         <label>Date<input name="payment_date" type="date"></label>
                         <label>Installment<select name="schedule_item_id"></select></label>
                         <label>Notes<input name="notes" type="text" autocomplete="off"></label>
@@ -224,8 +228,9 @@
         const API_URL = '/api';
         const CONTRACT_STATUSES = ['Active', 'On Hold', 'Transferred', 'Cancelled'];
         const PAYMENT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
-        // contract-list.html:167-170 ile aynı liste (UI konfigürasyonu; server whitelist yok).
-        const CURRENCIES = ['EUR', 'USD', 'TRY', 'MAD', 'NGN', 'KES'];
+        // SEM-02 / LED-02: para birimi listesi TABLODAN (GET /api/ledger/currencies) — koda gömülmez.
+        let currencies = [];
+        let ledgerAccounts = null;   // GET /api/ledger/accounts — null = ledger yok (migration öncesi) → alanlar gizli
 
         // expo-form.html:222 deseni — id querystring'den
         const contractId = new URLSearchParams(location.search).get('id');
@@ -239,6 +244,8 @@
             const token = localStorage.getItem('token');
             if (!token) { window.location.href = 'login.html'; return; }
             if (!contractId) { window.location.href = 'contract-list.html'; return; }
+            await loadCurrencies();    // para birimi dropdown'u tablodan
+            await loadLedgerAccounts(); // hesap dropdown'u (fail-soft)
             fillFormOptions();
             await loadSalesAgents();   // dropdown verisi contract render'ından önce
             await loadOffices();       // ofis dropdown'ı (fail-soft)
@@ -246,6 +253,40 @@
             loadPayments();
             loadSchedule();            // PS3-A: vade planı kartı
         });
+
+        async function loadCurrencies() {
+            try {
+                const res = await leenaFetch(`${API_URL}/ledger/currencies`);
+                if (res.ok) currencies = (await res.json()).map(c => c.code);
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+            }
+        }
+
+        // Hesaplar FAIL-SOFT: 503 (ledger migration'ı yok) / hata → alanlar gizli kalır, form eski haliyle çalışır.
+        async function loadLedgerAccounts() {
+            try {
+                const res = await leenaFetch(`${API_URL}/ledger/accounts`);
+                if (res.ok) ledgerAccounts = await res.json();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+            }
+            document.querySelectorAll('.ledger-field').forEach(el => { el.style.display = ledgerAccounts ? '' : 'none'; });
+        }
+        // Yalnız seçili para birimindeki aktif hesaplar (hesap ↔ para birimi eşleşmeli — server da 400 döner).
+        function fillAccountOptions() {
+            const f = document.getElementById('payForm');
+            if (!f || !f.account_id || !ledgerAccounts) return;
+            const cur = f.currency.value;
+            f.account_id.innerHTML = ['<option value="">— office default —</option>']
+                .concat(ledgerAccounts.filter(a => a.currency === cur)
+                    .map(a => `<option value="${a.id}">${escapeHtml(a.name)}${a.is_office_default ? ' (default)' : ''}</option>`)).join('');
+        }
+        function accountName(id) {
+            if (id == null) return dash();
+            const a = (ledgerAccounts || []).find(x => String(x.id) === String(id));
+            return a ? escapeHtml(a.name) : '#' + escapeHtml(String(id));
+        }
 
         async function loadSalesAgents() {
             try {
@@ -283,7 +324,8 @@
 
         function fillFormOptions() {
             const f = document.getElementById('payForm');
-            f.currency.innerHTML = CURRENCIES.map(c => `<option value="${c}">${c}</option>`).join('');
+            f.currency.innerHTML = currencies.map(c => `<option value="${c}">${c}</option>`).join('');
+            fillAccountOptions();
             f.payment_method.innerHTML = PAYMENT_METHODS.map(m => `<option value="${m}">${m}</option>`).join('');
             f.payment_date.value = new Date().toISOString().slice(0, 10);   // default bugün (W-9)
         }
@@ -324,7 +366,7 @@
             } catch (err) {
                 if (err.status === 401 || err.status === 403) return;
                 document.getElementById('paymentBody').innerHTML =
-                    '<tr><td colspan="7" class="empty-state">Error loading payments. <button class="btn btn-ghost btn-sm" onclick="loadPayments()">Retry</button></td></tr>';
+                    '<tr><td colspan="9" class="empty-state">Error loading payments. <button class="btn btn-ghost btn-sm" onclick="loadPayments()">Retry</button></td></tr>';
             }
         }
 
@@ -836,7 +878,7 @@
             const rows = (data && data.payments) || [];
             const body = document.getElementById('paymentBody');
             if (!rows.length) {
-                body.innerHTML = '<tr><td colspan="8" class="empty-state">No payments yet.</td></tr>';
+                body.innerHTML = '<tr><td colspan="9" class="empty-state">No payments yet.</td></tr>';
                 return;
             }
             // Reverse edilmişlik client'ta hesaplanır: bu listede herhangi bir
@@ -863,6 +905,7 @@
                 <td class="num">${money(p.amount_eur, 'EUR')}</td>
                 <td>${escapeHtml(p.payment_method || '')}</td>
                 <td>${officeName(p.received_office_id)}</td>
+                <td>${accountName(p.account_id)}${p.payer ? '<br><span class="tag">payer: ' + escapeHtml(p.payer) + '</span>' : ''}</td>
                 <td>${p.notes ? escapeHtml(p.notes) : dash()}</td>
                 <td>${action}</td>
             </tr>`;
@@ -994,6 +1037,9 @@
                 // TAH-04: taksit eşleştirmesi (boş → null; C5 boş eşleştirme geçerli, zorlanmaz)
                 schedule_item_id: (f.schedule_item_id && f.schedule_item_id.value) || null
             };
+            // L-4: yalnız doluysa gönderilir — boşken gövde eski formla BİREBİR.
+            if (f.account_id && f.account_id.value) body.account_id = f.account_id.value;
+            if (f.payer && f.payer.value.trim()) body.payer = f.payer.value.trim();
             const submitBtn = f.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
             try {
@@ -1003,9 +1049,14 @@
                     body: JSON.stringify(body)
                 });
                 if (res.ok) {
+                    let saved = null;
+                    try { saved = await res.json(); } catch (_) {}
                     f.reset();              // currency → default EUR
                     lockRateIfEur();        // ...dolayısıyla rate yeniden 1 ve kilitli
+                    fillAccountOptions();
                     showToast('Payment added', 'success');
+                    // Hesap bulunamadıysa ödeme yine KAYDEDİLDİ; ledger dışında kaldığı söylenir (RAP-02).
+                    if (saved && saved.warning) showToast(saved.warning, 'warning');
                     loadPayments();         // ödeme listesi
                     loadContract();         // paid/balance özeti
                 } else {

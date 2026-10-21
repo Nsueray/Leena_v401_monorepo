@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Finance · Accounts</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<link rel="stylesheet" href="styles/ledger.css">
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+
+<script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='accounts';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="ledger-ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  // L-1: hesap listesi (bakiye SUNUCUDA türetilir — D2) + hesap aç + referans veri.
+  var L = window.ui2L, root = document.getElementById('lg-root');
+  var state = { accounts: [], currencies: [], offices: [], ref: null };
+
+  function accountsTable() {
+    if (!state.accounts.length) return '<div class="lg-empty">No accounts yet — open the first one below.</div>';
+    var rows = state.accounts.map(function (a) {
+      var who = a.person_id ? (a.person_name || 'person') + (a.person_is_owner ? ' (owner)' : '') : L.dash(a.office_name);
+      var neg = Number(a.balance) < 0 ? ' lg-neg' : '';
+      return '<tr class="lg-row" data-id="' + a.id + '">' +
+        '<td><a href="finance-account.html?account=' + a.id + '">' + L.esc(a.name) + '</a>' +
+          (a.is_office_default ? '<span class="lg-tag">office default</span>' : '') +
+          (a.is_active ? '' : '<span class="lg-tag">inactive</span>') + '</td>' +
+        '<td>' + L.chip(a.account_type) + '</td>' +
+        '<td>' + L.esc(a.currency) + '</td>' +
+        '<td>' + who + '</td>' +
+        '<td class="num' + neg + '">' + L.money(a.balance, a.currency) + '</td>' +
+        '<td class="num' + neg + '">' + L.eur(a.balance_eur) + '</td>' +
+        '<td class="num">' + L.esc(a.entry_count) + '</td>' +
+        '<td><button class="btn btn-ghost" data-act="toggle" data-id="' + a.id + '" data-active="' + a.is_active + '">' +
+          (a.is_active ? 'Deactivate' : 'Activate') + '</button></td>' +
+      '</tr>';
+    }).join('');
+    return '<div class="table-wrap"><table class="table"><thead><tr>' +
+      '<th>Account</th><th>Type</th><th>Cur.</th><th>Office / person</th><th class="num">Balance</th>' +
+      '<th class="num">EUR (frozen rates)</th><th class="num">Entries</th><th></th>' +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function newAccountForm() {
+    var me = window.ui2CurrentUser();
+    var ownerOpt = me && me.session === 'user'
+      ? '<label class="field"><span class="label">Owner current account</span>' +
+        '<span><input type="checkbox" name="owner_account"> belongs to me (virtual)</span></label>' : '';
+    return '<form class="lg-form" id="acc-form">' +
+      '<label class="field"><span class="label">Name</span><input class="input" name="name" required></label>' +
+      '<label class="field"><span class="label">Type</span><select class="input" name="account_type">' +
+        '<option value="bank">bank</option><option value="cash">cash</option><option value="virtual">virtual</option></select></label>' +
+      '<label class="field"><span class="label">Currency</span><select class="input" name="currency">' +
+        L.options(state.currencies, function (c) { return c.code; }, function (c) { return c.code; }) + '</select></label>' +
+      '<label class="field"><span class="label">Office</span><select class="input" name="office_id">' +
+        L.options(state.offices, function (o) { return o.id; }, function (o) { return o.name; }, '', '— none —') + '</select></label>' +
+      '<label class="field"><span class="label">Office default</span><span><input type="checkbox" name="is_office_default"> for this currency</span></label>' +
+      ownerOpt +
+      '<label class="field"><span class="label">Notes</span><input class="input" name="notes"></label>' +
+      '<button class="btn btn-primary" type="submit">Open account</button>' +
+    '</form><div class="lg-msg" id="acc-msg"></div>';
+  }
+
+  function referenceCard() {
+    var ref = state.ref || { expense_categories: [], income_categories: [] };
+    var cats = ref.expense_categories.map(function (c) {
+      var types = c.types.map(function (t) { return L.esc(t.name) + (t.is_active ? '' : ' (inactive)'); }).join(' · ');
+      return '<tr><td>' + L.esc(c.name) + '</td><td>' + (types || '<span class="lg-note">no types yet</span>') + '</td></tr>';
+    }).join('');
+    var inc = ref.income_categories.map(function (c) { return L.esc(c.name); }).join(' · ');
+    return '<div class="table-wrap"><table class="table"><thead><tr><th>Expense category</th><th>Types</th></tr></thead><tbody>' + cats + '</tbody></table></div>' +
+      '<form class="lg-form" id="type-form">' +
+        '<label class="field"><span class="label">Category</span><select class="input" name="category_id">' +
+          L.options(ref.expense_categories, function (c) { return c.id; }, function (c) { return c.name; }) + '</select></label>' +
+        '<label class="field"><span class="label">New expense type</span><input class="input" name="name" required></label>' +
+        '<button class="btn btn-secondary" type="submit">Add type</button></form>' +
+      '<div class="lg-msg" id="type-msg"></div>' +
+      '<div class="card-pad lg-note">Income categories: ' + (inc || '—') + '</div>' +
+      '<form class="lg-form" id="cur-form">' +
+        '<label class="field"><span class="label">Currencies</span><span class="mono">' +
+          state.currencies.map(function (c) { return L.esc(c.code); }).join(' · ') + '</span></label>' +
+        '<label class="field"><span class="label">Add currency (ISO)</span><input class="input" name="code" maxlength="3" required></label>' +
+        '<button class="btn btn-secondary" type="submit">Add</button></form>' +
+      '<div class="lg-msg" id="cur-msg"></div>';
+  }
+
+  function card(title, eyebrow, inner) {
+    return '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">' + L.esc(title) + '</span>' +
+      (eyebrow ? '<span class="card-eyebrow">' + L.esc(eyebrow) + '</span>' : '') + '</div>' + inner + '</div>';
+  }
+
+  function render() {
+    root.innerHTML =
+      '<div class="lg-head"><div><h1>Accounts</h1><div class="sub">' + state.accounts.length +
+        ' accounts · balances derived from ledger entries</div></div></div>' +
+      '<div class="lg-stack">' +
+        card('Accounts', 'Click a name for its statement', accountsTable()) +
+        card('Open account', 'Accounts are never deleted — deactivate instead', newAccountForm()) +
+        card('Reference data', 'Seeded from documented Zoho values; add the rest here', referenceCard()) +
+      '</div>';
+  }
+
+  function load() {
+    if (!L.guard(root)) return;
+    Promise.all([
+      L.api('GET', '/api/ledger/accounts?include_inactive=1'),
+      L.api('GET', '/api/ledger/currencies'),
+      L.api('GET', '/api/offices'),
+      L.api('GET', '/api/ledger/reference'),
+    ]).then(function (r) {
+      if (r[0].status !== 200) { L.httpError(root, r[0], 'accounts'); return; }
+      state.accounts = r[0].body; state.currencies = r[1].body || []; state.offices = r[2].body || []; state.ref = r[3].body;
+      render();
+    }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+  }
+
+  root.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, b = L.formJson(f);
+    if (f.id === 'acc-form') {
+      if (b.owner_account) { b.person_id = window.ui2CurrentUser().id; b.account_type = 'virtual'; }
+      delete b.owner_account;
+      L.api('POST', '/api/ledger/accounts', b).then(function (r) {
+        if (r.status === 201) load(); else L.say(document.getElementById('acc-msg'), r.body && r.body.error, 'error');
+      });
+    } else if (f.id === 'type-form') {
+      L.api('POST', '/api/ledger/expense-types', b).then(function (r) {
+        if (r.status === 201) load(); else L.say(document.getElementById('type-msg'), r.body && r.body.error, 'error');
+      });
+    } else if (f.id === 'cur-form') {
+      L.api('POST', '/api/ledger/currencies', b).then(function (r) {
+        if (r.status === 201) load(); else L.say(document.getElementById('cur-msg'), r.body && r.body.error, 'error');
+      });
+    }
+  });
+  root.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-act="toggle"]');
+    if (btn) {
+      e.stopPropagation();
+      L.api('PUT', '/api/ledger/accounts/' + btn.getAttribute('data-id'), { is_active: btn.getAttribute('data-active') !== 'true' })
+        .then(function (r) { if (r.status === 200) load(); else alert(r.body && r.body.error); });
+      return;
+    }
+    if (e.target.closest('a')) return;
+    var tr = e.target.closest('tr.lg-row');
+    if (tr) window.location.href = 'finance-account.html?account=' + encodeURIComponent(tr.getAttribute('data-id'));
+  });
+
+  L.ready(load);
+})();
+</script>
+</body>
+</html>

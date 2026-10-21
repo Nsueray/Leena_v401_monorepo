@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Finance · Account statement</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<link rel="stylesheet" href="styles/ledger.css">
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+
+<script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='accounts';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="ledger-ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  // L-1 ekstre: tek sıralı akış + yürüyen bakiye (R12). Açılış/kapanış/yürüyen SUNUCUDA türetilir.
+  var L = window.ui2L, root = document.getElementById('lg-root');
+  var id = L.qs('account'), from = L.qs('from') || '', to = L.qs('to') || '';
+
+  function describe(l) {
+    if (l.entry_type === 'income' || l.entry_type === 'refund') {
+      return 'Payment · ' + L.dash(l.af_number) + ' · ' + L.dash(l.company_name) + (l.payer ? ' · payer ' + L.esc(l.payer) : '');
+    }
+    if (l.entry_type === 'payout') return 'Commission payout · ' + L.dash(l.agent_name);
+    if (l.entry_type === 'expense') return L.dash(l.expense_category) + ' / ' + L.dash(l.expense_type) + (l.counterparty ? ' · ' + L.esc(l.counterparty) : '');
+    return 'Transfer ' + (l.direction === 'out' ? 'to ' : 'from ') + L.dash(l.counter_account_name);
+  }
+
+  function render(s) {
+    var a = s.account, cur = a.currency;
+    var rows = s.lines.map(function (l) {
+      var tags = (l.reverses_entry_id ? '<span class="lg-tag">reversal</span>' : '') +
+                 (l.reversed_by_entry_id ? '<span class="lg-tag">reversed</span>' : '');
+      return '<tr>' +
+        '<td>' + L.esc(l.entry_date) + '</td>' +
+        '<td>' + L.chip(l.entry_type) + '</td>' +
+        '<td>' + describe(l) + tags + (l.expo_name ? '<div class="lg-note">' + L.esc(l.expo_name) + '</div>' : '') +
+          (l.notes ? '<div class="lg-note">' + L.esc(l.notes) + '</div>' : '') + '</td>' +
+        '<td class="num">' + (l.direction === 'in' ? L.esc(l.amount) : '') + '</td>' +
+        '<td class="num">' + (l.direction === 'out' ? L.esc(l.amount) : '') + '</td>' +
+        '<td class="num' + (Number(l.running_balance) < 0 ? ' lg-neg' : '') + '">' + L.esc(l.running_balance) + '</td>' +
+        '<td class="num">' + L.esc(l.exchange_rate) + '</td>' +
+        '<td class="num">' + L.eur(l.signed_amount_eur) + '</td>' +
+      '</tr>';
+    }).join('');
+    var n = s.not_in_ledger;
+    var counter = 'Not in the ledger (recorded before the ledger or without an account — not attributable to any account): ' +
+      n.payments_count + ' payments (€' + L.esc(n.payments_eur) + ') · ' + n.payouts_count + ' payouts (€' + L.esc(n.payouts_eur) + ')' +
+      (a.office_id ? ' · of which received by ' + L.esc(a.office_name) + ': ' + n.office_payments_count + ' payments (€' + L.esc(n.office_payments_eur) + ')' : '');
+
+    root.innerHTML =
+      '<div class="lg-head"><div><h1>' + L.esc(a.name) + '</h1><div class="sub">' + L.esc(a.account_type) + ' · ' + L.esc(cur) +
+        (a.office_name ? ' · ' + L.esc(a.office_name) : '') + (a.person_name ? ' · ' + L.esc(a.person_name) : '') +
+        (a.is_active ? '' : ' · inactive') + '</div></div>' +
+        '<form class="lg-form" id="flt" style="padding:0">' +
+          '<label class="field"><span class="label">From</span><input class="input" type="date" name="from" value="' + L.esc(from) + '"></label>' +
+          '<label class="field"><span class="label">To</span><input class="input" type="date" name="to" value="' + L.esc(to) + '"></label>' +
+          '<button class="btn btn-secondary" type="submit">Apply</button>' +
+          '<a class="btn btn-ghost" href="finance-accounts.html">All accounts</a></form></div>' +
+      '<div class="lg-strip">' +
+        '<div class="lg-ms"><div class="l">Opening</div><div class="v">' + L.money(s.opening, cur) + '</div><div class="n">' + L.eur(s.opening_eur) + '</div></div>' +
+        '<div class="lg-ms"><div class="l">In</div><div class="v">' + L.money(s.total_in, cur) + '</div></div>' +
+        '<div class="lg-ms"><div class="l">Out</div><div class="v">' + L.money(s.total_out, cur) + '</div></div>' +
+        '<div class="lg-ms"><div class="l">Closing</div><div class="v">' + L.money(s.closing, cur) + '</div><div class="n">' + L.eur(s.closing_eur) + ' at frozen rates</div></div>' +
+      '</div>' +
+      '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Statement</span>' +
+        '<span class="card-eyebrow">' + (from || 'start') + ' → ' + (to || 'today') + '</span></div>' +
+        (rows ? '<div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Type</th><th>Description</th>' +
+          '<th class="num">In</th><th class="num">Out</th><th class="num">Balance</th><th class="num">FX</th><th class="num">EUR</th>' +
+          '</tr></thead><tbody>' + rows + '</tbody></table></div>' : '<div class="lg-empty">No entries in this period.</div>') +
+        '<div class="card-pad lg-note">' + counter + '</div></div>';
+  }
+
+  function load() {
+    if (!L.guard(root)) return;
+    if (!id) { root.innerHTML = '<div class="lg-empty">No account selected — open one from <a href="finance-accounts.html">Accounts</a>.</div>'; return; }
+    var q = '?' + (from ? 'from=' + encodeURIComponent(from) + '&' : '') + (to ? 'to=' + encodeURIComponent(to) : '');
+    L.api('GET', '/api/ledger/accounts/' + encodeURIComponent(id) + '/statement' + q).then(function (r) {
+      if (r.status !== 200) { L.httpError(root, r, 'statement'); return; }
+      render(r.body);
+    }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+  }
+
+  root.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target;
+    var p = new URLSearchParams({ account: id });
+    if (f.from.value) p.set('from', f.from.value);
+    if (f.to.value) p.set('to', f.to.value);
+    window.location.search = p.toString();
+  });
+
+  L.ready(load);
+})();
+</script>
+</body>
+</html>

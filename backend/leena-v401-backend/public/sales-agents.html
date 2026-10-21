@@ -152,16 +152,26 @@
     <script>
         const API_URL = '/api';
         const AGENT_TYPES = ['internal', 'external_freelance', 'external_agency'];
-        // contract-list.html:167-170 ile aynı para birimi listesi.
-        const CURRENCIES = ['EUR', 'USD', 'TRY', 'MAD', 'NGN', 'KES'];
+        // SEM-02 / LED-02: para birimi listesi TABLODAN (GET /api/ledger/currencies) — koda gömülmez.
+        let currencies = [];
         let allAgents = [];
         let allOffices = [];   // M5: GET /api/offices'ten (OFS-01: koda gömülmez)
 
         document.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('token');
             if (!token) { window.location.href = 'login.html'; return; }
+            loadCurrencies();
             loadAgents();
         });
+
+        async function loadCurrencies() {
+            try {
+                const res = await leenaFetch(`${API_URL}/ledger/currencies`);
+                if (res.ok) currencies = (await res.json()).map(c => c.code);
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+            }
+        }
 
         async function loadAgents() {
             try {
@@ -228,7 +238,9 @@
             const a = agent || {};
             const types = AGENT_TYPES.map(t => `<option value="${t}"${a.agent_type === t ? ' selected' : ''}>${t}</option>`).join('');
             const curs = ['<option value="">—</option>'].concat(
-                CURRENCIES.map(c => `<option value="${c}"${a.commission_currency === c ? ' selected' : ''}>${c}</option>`)).join('');
+                // Mevcut değer listede yoksa da seçili kalsın (edit'te kaybolmasın).
+                currencies.concat(a.commission_currency && !currencies.includes(a.commission_currency) ? [a.commission_currency] : [])
+                    .map(c => `<option value="${c}"${a.commission_currency === c ? ' selected' : ''}>${c}</option>`)).join('');
             // M5: ofis seçenekleri API'den (OFS-01). Boş = "— No office —" (OFS-04: zorunlu değil).
             // M2: dropdown YALNIZ aktif ofisler; mevcut değer kapalıysa da seçili kalsın (edit'te kaybolmasın).
             const offs = ['<option value="">— No office —</option>'].concat(

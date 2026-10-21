@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Finance · Summary</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<link rel="stylesheet" href="styles/ledger.css">
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+
+<script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='summary';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="ledger-ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  // L-6 (R12/R15): okuma anında türetilen özet, EUR (RAP-01). Dışarıda kalan her şey sayaçta (RAP-02).
+  var L = window.ui2L, root = document.getElementById('lg-root');
+
+  function render(s) {
+    var rc = s.receivables, cm = s.commissions, n = s.not_in_ledger;
+    var accRows = s.accounts.map(function (a) {
+      return '<tr><td><a href="finance-account.html?account=' + a.id + '">' + L.esc(a.name) + '</a>' + (a.is_active ? '' : '<span class="lg-tag">inactive</span>') + '</td>' +
+        '<td>' + L.chip(a.account_type) + '</td><td class="num' + (Number(a.balance) < 0 ? ' lg-neg' : '') + '">' + L.money(a.balance, a.currency) + '</td>' +
+        '<td class="num' + (Number(a.balance_eur) < 0 ? ' lg-neg' : '') + '">' + L.eur(a.balance_eur) + '</td></tr>';
+    }).join('');
+    root.innerHTML =
+      '<div class="lg-head"><div><h1>Finance summary</h1><div class="sub">derived at read time · EUR at each entry\'s frozen rate · ' +
+        L.esc(String(s.as_of).slice(0, 16).replace('T', ' ')) + ' UTC</div></div></div>' +
+      '<div class="lg-strip">' +
+        '<div class="lg-ms"><div class="l">Total cash (bank + cash)</div><div class="v">' + L.eur(s.total_cash_eur) + '</div></div>' +
+        '<div class="lg-ms"><div class="l">Open receivables</div><div class="v">' + L.eur(rc.open_eur) + '</div><div class="n">' + rc.open_contracts + ' contracts</div></div>' +
+        '<div class="lg-ms"><div class="l">Commission payable</div><div class="v">' + L.eur(cm.payable_eur) + '</div><div class="n">' + cm.payable_agents + ' agents</div></div>' +
+        '<div class="lg-ms"><div class="l">Owner current account</div><div class="v' + (Number(s.person_accounts_eur) < 0 ? ' lg-neg' : '') + '">' + L.eur(s.person_accounts_eur) +
+          '</div><div class="n">negative = company owes the owner</div></div>' +
+      '</div>' +
+      '<div class="lg-stack">' +
+        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Account balances</span></div>' +
+          (accRows ? '<div class="table-wrap"><table class="table"><thead><tr><th>Account</th><th>Type</th><th class="num">Balance</th><th class="num">EUR</th></tr></thead><tbody>' + accRows + '</tbody></table></div>'
+                   : '<div class="lg-empty">No accounts yet.</div>') + '</div>' +
+        '<div class="card"><div class="card-head"><span class="card-title">Kept apart — never netted, never hidden</span></div><div class="card-pad">' +
+          '<div>Overpaid contracts: ' + rc.overpaid_contracts + ' (' + L.eur(rc.overpaid_eur) + ') — not subtracted from receivables.</div>' +
+          '<div>On Hold contracts\' open balance (included above): ' + L.eur(rc.on_hold_open_eur) + '.</div>' +
+          '<div>Excluded from receivables: ' + rc.excluded_transferred + ' Transferred · ' + rc.excluded_cancelled + ' Cancelled · ' +
+            rc.missing_revenue_eur + ' without EUR revenue.</div>' +
+          '<div>Agents owing us (negative commission balance): ' + cm.owing_agents + ' (' + L.eur(cm.agents_owe_eur) + ') — not subtracted from payable.</div>' +
+          '<div>Not in the ledger: ' + n.payments_count + ' payments (' + L.eur(n.payments_eur) + ') · ' + n.payouts_count + ' payouts (' +
+            L.eur(n.payouts_eur) + ') — recorded before the ledger or without an account; cash balances do not include them.</div>' +
+        '</div></div>' +
+      '</div>';
+  }
+
+  function load() {
+    if (!L.guard(root)) return;
+    L.api('GET', '/api/ledger/summary').then(function (r) {
+      if (r.status !== 200) { L.httpError(root, r, 'summary'); return; }
+      render(r.body);
+    }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+  }
+
+  L.ready(load);
+})();
+</script>
+</body>
+</html>

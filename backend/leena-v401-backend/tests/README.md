@@ -17,10 +17,15 @@ Başka bir DB/host için bu değişkeni ver. Dosyalarda literal host/şifre yokt
 
 ## Koşum
 ```
-npm run test:setup     # ell_comm_test'i SIFIRDAN kurar (idempotent — her koşuda düşür+yarat)
-npm test               # test_cash_forecast.js (67 test) koşar
+npm run test:setup     # ell_comm_test + ell_comm_test_premig'i SIFIRDAN kurar (idempotent)
+npm test               # package.json zinciri — 14 suite, 269 test (2026-10-21, PG14.18 ve PG17.10)
 ```
 `test:setup` idempotenttir: `DROP DATABASE IF EXISTS` + `CREATE` → art arda koşulabilir.
+
+**İki DB (Paket 1, 2026-10-21):** `ell_comm_test` (012 → son migration; 036+ runner'ın
+`applyMigrationFile` yoluyla) ve `ell_comm_test_premig` (≤ 035 = canlının Paket 1 öncesi şeması —
+"deploy migration'dan önce" testleri ve runner'ın gerçek dosyalarla dry-run'ı).
+Ledger suite'leri: `test_ledger.js` · `test_ledger_premig.js` · `test_migrate.js` · `test_ui2_ledger_pages.js`.
 
 ## Ne kuruluyor
 - **Stub tablolar** (migration'larda yok, FK hedefi): `expos` (1-5, organizer_id=1),

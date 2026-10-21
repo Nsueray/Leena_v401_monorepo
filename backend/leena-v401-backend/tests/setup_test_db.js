@@ -28,6 +28,14 @@ const EXCLUDE = new Set([
   '031_callcenter_email_queue_indexes.sql', // email_queue yok + CREATE INDEX CONCURRENTLY tx-içinde çalışmaz
 ]);
 
+// 036+ dosyaları yalnız runner yoluyla uygulanır (kendini korur + kaydı runner yazar) —
+// kurulum da AYNI fonksiyonu kullanır (scripts/migrate.js applyMigrationFile).
+const { applyMigrationFile } = require(path.join(__dirname, '..', 'scripts', 'migrate.js'));
+const RUNNER_ONLY_FROM = 36;
+// İkinci DB: canlının Paket 1 ÖNCESİ şeması (≤ 035) — "deploy migration'dan önce" testleri
+// (tests/test_ledger.js) ve runner'ın gerçek dosyalarla dry-run'ı (tests/test_migrate.js).
+const PREMIG_MAX = 35;
+
 const CONN = process.env.TEST_DATABASE_URL || 'postgresql://postgres@localhost:5432/ell_comm_test';
 
 // ── GUARD (whitelist) — hedef DB adı TAM 'ell_comm_test' değilse hiçbir şey yapma. ──
@@ -51,15 +59,20 @@ const adminU = new URL(CONN);
 adminU.pathname = '/postgres';
 const adminUrl = adminU.toString();
 
-(async () => {
+// premig DB adı ana adın türevidir ('ell_comm_test_premig') — guard ana adı zaten sabitledi.
+const premigName = `${dbName}_premig`;
+const premigU = new URL(CONN);
+premigU.pathname = '/' + premigName;
+
+async function buildDb(name, conn, maxNum) {
   // (1) Admin: DB düşür + yeniden yarat → idempotent (her koşuda sıfırdan).
   const admin = new Client({ connectionString: adminUrl });
   await admin.connect();
-  await admin.query(`DROP DATABASE IF EXISTS ${dbName}`);
-  await admin.query(`CREATE DATABASE ${dbName}`);
+  await admin.query(`DROP DATABASE IF EXISTS ${name}`);
+  await admin.query(`CREATE DATABASE ${name}`);
   await admin.end();
 
-  const c = new Client({ connectionString: CONN });
+  const c = new Client({ connectionString: conn });
   await c.connect();
 
   // (2) STUB'lar (migration'larda YOK, FK hedefi — ÖLÇÜLEN şema).
@@ -86,7 +99,7 @@ const adminUrl = adminU.toString();
     .filter(f => f.endsWith('.sql'))
     .filter(f => {
       const n = parseInt(f.slice(0, 3), 10);
-      return Number.isInteger(n) && n >= 12;   // 000-011: ELL-dışı çekirdek (stub'larla temsil)
+      return Number.isInteger(n) && n >= 12 && n <= maxNum;   // 000-011: ELL-dışı çekirdek (stub'larla temsil)
     })
     .filter(f => !EXCLUDE.has(f))
     .sort((a, b) => parseInt(a.slice(0, 3), 10) - parseInt(b.slice(0, 3), 10));  // SAYISAL (alfabetik değil)
@@ -95,7 +108,8 @@ const adminUrl = adminU.toString();
     const sql = fs.readFileSync(path.join(MIG, file), 'utf8');
     try {
       await c.query('BEGIN');
-      await c.query(sql);
+      if (parseInt(file.slice(0, 3), 10) >= RUNNER_ONLY_FROM) await applyMigrationFile(c, file.slice(0, -4), sql);
+      else await c.query(sql);
       await c.query('COMMIT');
       console.log('  ✓ ' + file);
     } catch (e) {
@@ -106,5 +120,10 @@ const adminUrl = adminU.toString();
     }
   }
   await c.end();
-  console.log(`Test DB hazır: ${dbName}  (${files.length} migration + expos/core_countries/organizers stub)`);
+  console.log(`Test DB hazır: ${name}  (${files.length} migration + expos/core_countries/organizers stub)`);
+}
+
+(async () => {
+  await buildDb(dbName, CONN, Infinity);
+  await buildDb(premigName, premigU.toString(), PREMIG_MAX);
 })().catch(e => { console.error('KURULUM HATASI:', e.message); process.exit(1); });

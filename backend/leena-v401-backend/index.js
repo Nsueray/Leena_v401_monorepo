@@ -17,8 +17,13 @@ pool.query('SELECT NOW()', (err, res) => {
     }
 });
 
+// --- Boot guards (utils/bootGuards.js) — fark yalnız env; canlıda iki değişken de YOK ---
+const { checkDatabaseName, parseExtraOrigins } = require('./utils/bootGuards');
+const EXPECTED_DB_NAME = process.env.EXPECTED_DB_NAME;
+
 // --- Global Middleware (ORDER MATTERS!) ---
-const allowedOrigins = ['https://leena.app', 'https://www.leena.app'];
+const allowedOrigins = ['https://leena.app', 'https://www.leena.app',
+    ...parseExtraOrigins(process.env.CORS_EXTRA_ORIGINS)];
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin || allowedOrigins.includes(origin)) {
@@ -81,6 +86,8 @@ let officeRoutes;
 try { officeRoutes = require('./routes/offices'); console.log('✓ Office routes loaded'); } catch (err) { console.error('✗ Failed to load office routes:', err.message); }
 let cashForecastRoutes;
 try { cashForecastRoutes = require('./routes/cashForecast'); console.log('✓ Cash forecast routes loaded'); } catch (err) { console.error('✗ Failed to load cash forecast routes:', err.message); }
+let ledgerRoutes;
+try { ledgerRoutes = require('./routes/ledger'); console.log('✓ Ledger routes loaded'); } catch (err) { console.error('✗ Failed to load ledger routes:', err.message); }
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -156,6 +163,7 @@ if (commissionRoutes) app.use('/api/commissions', commissionRoutes); // ✅ M2 c
 if (payoutRoutes) app.use('/api/agents', payoutRoutes); // ✅ PAYOUT P1 agent payout + statement
 if (officeRoutes) app.use('/api/offices', officeRoutes); // ✅ PS1 offices reference (read-only)
 if (cashForecastRoutes) app.use('/api/cash-forecast', cashForecastRoutes); // ✅ PS3-B cash forecast (office x due, EUR, derived)
+if (ledgerRoutes) app.use('/api/ledger', ledgerRoutes); // ✅ Paket 1 ledger: accounts, transfers, expenses, budgets, summary
 if (callcenterRoutes) app.use('/api/callcenter', callcenterRoutes); // ✅ Call-center dialer (isolated module — Stage 2, skeleton only)
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---
@@ -270,17 +278,41 @@ app.use((err, req, res, next) => {
 });
 
 // --- Server Start ---
-const server = app.listen(PORT, () => {
-    console.log('═══════════════════════════════════════');
-    console.log(`✅ Leena.app v402 backend is running`);
-    console.log(`📍 URL: http://localhost:${PORT}`);
-    console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log('═══════════════════════════════════════');
-});
+let server = null;
+function startServer() {
+    server = app.listen(PORT, () => {
+        console.log('═══════════════════════════════════════');
+        console.log(`✅ Leena.app v402 backend is running`);
+        console.log(`📍 URL: http://localhost:${PORT}`);
+        console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log('═══════════════════════════════════════');
+    });
+}
+function logDatabaseName(r) {
+    if (r.actual) console.log(`✓ current_database=${r.actual}`);
+    else console.error('❌ current_database could not be read:', r.error);
+}
+
+if (EXPECTED_DB_NAME) {
+    // Beklenen ad tanımlı: doğrulanmadan hiçbir istek karşılanmaz.
+    checkDatabaseName(pool, EXPECTED_DB_NAME).then((r) => {
+        logDatabaseName(r);
+        if (!r.ok) {
+            console.error(`FATAL: EXPECTED_DB_NAME=${r.expected} but connected database is ${r.actual || 'unknown'} — exiting`);
+            process.exit(1);
+        }
+        startServer();
+    });
+} else {
+    // Canlı: değişken yok → eski davranış (hemen dinle); ad yalnız loglanır.
+    startServer();
+    checkDatabaseName(pool, null).then(logDatabaseName);
+}
 
 // --- Graceful Shutdown ---
 process.on('SIGTERM', () => {
     console.log('SIGTERM signal received: closing HTTP server');
+    if (!server) process.exit(0);
     server.close(() => {
         console.log('HTTP server closed');
         process.exit(0);
