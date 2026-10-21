@@ -5,8 +5,11 @@
 // ── HÜKÜMLER (Sentez K-A, 2026-10-08) ──
 // - Token = mevcut JWT + user_id (SEM-05): AYNI secret (JWT_SECRET), AYNI süre (30d,
 //   routes/auth.js:54), AYNI middleware (authMiddleware req.organizer_id okur).
-//   Payload: organizer_id (users.organizer_id) + email + user_id (users.id). `name` YOK — kanıtlı kaynak yok (users'ta name kolonu yok), Sentez kararı bekliyor.
+//   Payload: organizer_id (users.organizer_id) + email + user_id (users.id) + name.
 //   → Mevcut korumalı route'lar yeni token'la değişmeden çalışır.
+// - `name` (Sentez K-F, 19 Eki): users.display_name doluysa o, boşsa e-posta.
+//   Kolon 035 ile gelir; okuma `to_jsonb(u)->>'display_name'` → 035 UYGULANMADAN da
+//   sorgu çalışır (NULL döner, e-postaya düşülür). Deploy migration'dan önce yapılabilir.
 // - Giriş hataları TEK TİP: kullanıcı yok / pasif / password_hash NULL / yanlış
 //   şifre → hepsi aynı 401 + aynı mesaj (hangi e-postanın var olduğu sızmaz).
 //   Kullanıcı yokken de bcrypt.compare koşulur (zamanlama farkı kapanır).
@@ -26,6 +29,11 @@ const BCRYPT_COST = 10;          // routes/auth.js:98
 const TOKEN_EXPIRES_IN = '30d';  // routes/auth.js:54
 const MIN_PASSWORD_LENGTH = 6;   // routes/auth.js:88
 const LOGIN_FAILED = { error: 'Invalid email or password' };
+
+// Görünen ad (K-F): ad doluysa ad, değilse e-posta. Tek nokta — token ve /me aynı kuralı kullanır.
+function displayNameOf(u) {
+  return (u.display_name && u.display_name.trim()) ? u.display_name.trim() : u.email;
+}
 
 // Kullanıcı yokken karşılaştırılacak sabit hash — zamanlama eşitliği için.
 const DUMMY_HASH = bcrypt.hashSync('no-such-user-' + Date.now(), BCRYPT_COST);
@@ -62,8 +70,8 @@ router.post('/login', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT id, organizer_id, email, password_hash, is_owner, display_role,
-              password_must_change, is_active
-         FROM users WHERE email = $1`,
+              password_must_change, is_active, to_jsonb(u) ->> 'display_name' AS display_name
+         FROM users u WHERE email = $1`,
       [email]
     );
     const u = result.rows[0];
@@ -73,12 +81,13 @@ router.post('/login', async (req, res) => {
     if (!usable || !match) return res.status(401).json(LOGIN_FAILED);
 
     const token = jwt.sign(
-      { organizer_id: u.organizer_id, email: u.email, user_id: u.id },
+      { organizer_id: u.organizer_id, email: u.email, user_id: u.id, name: displayNameOf(u) },
       process.env.JWT_SECRET,
       { expiresIn: TOKEN_EXPIRES_IN }
     );
     return res.json({
       token,
+      name: displayNameOf(u),
       display_role: u.display_role,
       is_owner: u.is_owner,
       password_must_change: u.password_must_change,
@@ -93,14 +102,17 @@ router.post('/login', async (req, res) => {
 router.get('/me', requireUserSession, async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, email, display_role, is_owner, password_must_change, is_active
-         FROM users WHERE id = $1`,
+      `SELECT id, email, display_role, is_owner, password_must_change, is_active,
+              to_jsonb(u) ->> 'display_name' AS display_name
+         FROM users u WHERE id = $1`,
       [req.userSession.user_id]
     );
     const u = result.rows[0];
     if (!u || !u.is_active) return res.sendStatus(401);
     return res.json({
       user_id: u.id,
+      name: displayNameOf(u),
+      display_name: u.display_name,
       email: u.email,
       display_role: u.display_role,
       is_owner: u.is_owner,

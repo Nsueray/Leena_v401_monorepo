@@ -18,7 +18,8 @@ require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: p
 const express = require(path.join(BE, 'node_modules/express'));
 const jwt = require(path.join(BE, 'node_modules/jsonwebtoken'));
 const bcrypt = require(path.join(BE, 'node_modules/bcrypt'));
-const { setFirstOwnerPassword } = require(path.join(BE, 'scripts/set-first-owner-password.js'));
+const { setFirstOwnerPassword, ownerPasswordState, normalizeDisplayName } = require(path.join(BE, 'scripts/set-first-owner-password.js'));
+const fs = require('fs');
 const app = express(); app.use(express.json());
 app.use('/api/user-auth', require(path.join(BE, 'routes/userAuth.js')));
 app.use('/api/contracts', require(path.join(BE, 'routes/contracts.js')));
@@ -132,13 +133,19 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
     // korunur → suite tekrar koşulabilir, idempotent).
     const resetAuth = async () => {
       await resetUsers();
-      await pool.query('UPDATE users SET password_hash = NULL, password_must_change = true WHERE email = $1', [SUER]);
+      await pool.query('UPDATE users SET password_hash = NULL, password_must_change = true, display_name = NULL WHERE email = $1', [SUER]);
     };
     const PW = 'suer-test-pw-1';
     const hashOf = async () => (await pool.query('SELECT password_hash FROM users WHERE email=$1', [SUER])).rows[0].password_hash;
     try {
-      // S1 (K-B) — script mantığı: hash NULL → yazar, must_change=false
+      // S0 (19 Eki notu) — ön kontrol onaydan ÖNCE: hash NULL → ready, 035 kolonu görünür
       await resetAuth();
+      const s0c = await pool.connect();
+      const s0 = await ownerPasswordState(s0c); s0c.release();
+      ok('S0 ön kontrol: hash NULL → ready + display_name kolonu var',
+        s0.status === 'ready' && s0.has_name_column === true, JSON.stringify(s0));
+
+      // S1 (K-B) — script mantığı: hash NULL → yazar, must_change=false
       const s1c = await pool.connect();
       const s1 = await setFirstOwnerPassword(s1c, PW, { bcrypt }); s1c.release();
       const s1row = (await pool.query('SELECT password_hash, password_must_change FROM users WHERE email=$1', [SUER])).rows[0];
@@ -150,6 +157,9 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
       const s2c = await pool.connect();
       const s2 = await setFirstOwnerPassword(s2c, 'another-pw-22', { bcrypt }); s2c.release();
       ok('S2 (K-B) script: hash dolu → "hash_present", değişiklik yok', s2.status === 'hash_present' && (await hashOf()) === before, s2.status);
+      const s2pc = await pool.connect();
+      const s2p = await ownerPasswordState(s2pc); s2pc.release();
+      ok('S2b ön kontrol: hash dolu → hash_present (CLI hiçbir şey sormadan çıkar)', s2p.status === 'hash_present', s2p.status);
 
       // L1 — user-login başarı (S1'in şifresiyle)
       const l1 = await call('POST', '/api/user-auth/login', { body: { email: SUER, password: PW } });
@@ -157,6 +167,8 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
       ok('L1 user-login başarı → token (organizer_id + email + user_id, SEM-05) + bayraklar',
         l1.status === 200 && dec.organizer_id === 1 && dec.email === SUER && !!dec.user_id &&
         l1.body.is_owner === true && l1.body.password_must_change === false, l1.status);
+      ok('N1 (K-F) ad yokken token name = e-posta, yanıt name = e-posta',
+        dec.name === SUER && l1.body.name === SUER, `${dec.name}/${l1.body && l1.body.name}`);
       const userToken = l1.body && l1.body.token;
 
       // L2..L5 — tüm hatalar AYNI 401 + AYNI mesaj
@@ -203,6 +215,50 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
       const p5new = await call('POST', '/api/user-auth/login', { body: { email: 'must@x.com', password: 'second-pw-2' } });
       const p5old = await call('POST', '/api/user-auth/login', { body: { email: 'must@x.com', password: 'first-pw-1' } });
       ok('P5 yeni şifre girer, eski şifre 401', p5new.status === 200 && p5old.status === 401, `${p5new.status}/${p5old.status}`);
+
+      // N2 (K-F) — script adı yazar (kırpılmış), token ve /me adı taşır
+      await resetAuth();
+      const n2c = await pool.connect();
+      const n2 = await setFirstOwnerPassword(n2c, PW, { bcrypt, displayName: '  Suer Test  ' }); n2c.release();
+      const n2row = (await pool.query('SELECT display_name FROM users WHERE email=$1', [SUER])).rows[0];
+      const n2l = await call('POST', '/api/user-auth/login', { body: { email: SUER, password: PW } });
+      const n2dec = n2l.body && n2l.body.token ? jwt.decode(n2l.body.token) : {};
+      const n2me = await call('GET', '/api/user-auth/me', { token: n2l.body && n2l.body.token });
+      ok('N2 (K-F) script adı kırpıp yazar → token name + /me name/display_name = ad',
+        n2.status === 'written' && n2row.display_name === 'Suer Test' && n2dec.name === 'Suer Test' &&
+        n2me.body.name === 'Suer Test' && n2me.body.display_name === 'Suer Test',
+        `${n2.status}/${n2row.display_name}/${n2dec.name}/${n2me.body && n2me.body.name}`);
+
+      // N3 (K-F) — "ad yok" yalnız NULL: boş ad script'te NULL'a döner, DB boş metni reddeder
+      ok('N3a script: yalnız-boşluk ad → NULL', normalizeDisplayName('   ') === null && normalizeDisplayName(null) === null);
+      await expectReject('N3b (035 CHECK) display_name boş metin → REDDEDİLİR',
+        () => pool.query("UPDATE users SET display_name = '  ' WHERE email = $1", [SUER]));
+
+      // N4 (tek değişken) — 035 UYGULANMADAN deploy: kolon yokken login + /me çalışır, ad = e-posta
+      const MIG035 = fs.readFileSync(path.join(BE, 'migrations/035_users_display_name.sql'), 'utf8');
+      await pool.query('ALTER TABLE users DROP COLUMN display_name');
+      try {
+        const n4l = await call('POST', '/api/user-auth/login', { body: { email: SUER, password: PW } });
+        const n4dec = n4l.body && n4l.body.token ? jwt.decode(n4l.body.token) : {};
+        const n4me = await call('GET', '/api/user-auth/me', { token: n4l.body && n4l.body.token });
+        const n4pc = await pool.connect();
+        const n4p = await ownerPasswordState(n4pc); n4pc.release();
+        ok('N4 kolon yokken: login 200 + token name = e-posta + /me 200 (display_name null)',
+          n4l.status === 200 && n4dec.name === SUER && n4me.status === 200 && n4me.body.display_name === null,
+          `${n4l.status}/${n4dec.name}/${n4me.status}`);
+        ok('N4b kolon yokken ön kontrol has_name_column=false (CLI "035 first" der)', n4p.has_name_column === false, JSON.stringify(n4p));
+      } finally {
+        // N5 — 035 iki kez koşulur: kolonu geri kurar, ikinci koşu hatasız (idempotent)
+        await pool.query(MIG035);
+      }
+      let n5err = '';
+      try { await pool.query(MIG035); } catch (e) { n5err = e.message.slice(0, 70); }
+      const n5 = (await pool.query(`SELECT
+          (SELECT count(*)::int FROM information_schema.columns WHERE table_name='users' AND column_name='display_name') AS col,
+          (SELECT count(*)::int FROM pg_constraint WHERE conname='users_display_name_not_blank') AS chk,
+          (SELECT count(*)::int FROM schema_migrations WHERE version='035_users_display_name') AS rec`)).rows[0];
+      ok('N5 (035) idempotent: ikinci koşu hatasız, kolon 1 · CHECK 1 · kayıt 1',
+        !n5err && n5.col === 1 && n5.chk === 1 && n5.rec === 1, n5err || JSON.stringify(n5));
 
       // T1 (033) — TRUNCATE users REDDEDİLİR (CASCADE dahil; tx içinde, geri alınır)
       await resetAuth();

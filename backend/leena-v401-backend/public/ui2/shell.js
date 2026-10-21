@@ -44,8 +44,9 @@
       var u = JSON.parse(localStorage.getItem('ui2User') || 'null');
       var tok = localStorage.getItem('token') || '';
       if (u && u.user_id && tok && u.token_tail === tok.slice(-16)) {
-        // name: users'ta ad kolonu yok (Sentez kararı bekliyor) → gösterim için e-posta.
-        return { name: u.email || 'User', id: u.user_id, email: u.email, session: 'user' };
+        // name (K-F): token'daki ad (ad yoksa sunucu zaten e-posta koyar); ad alanı olmayan
+        // eski kayıt → e-posta (K-G: eski davranış değişmez).
+        return { name: u.name || u.email || 'User', id: u.user_id, email: u.email, session: 'user' };
       }
     } catch (e) { /* fail-soft → eski davranış */ }
     var name = 'User';

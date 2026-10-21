@@ -73,5 +73,17 @@ const LOGIN = fs.readFileSync(path.join(__dirname, '..', 'public/ui2/login.html'
 ok("C8 ui2/login.html 'ui2User' yazar, 'organizer'/'organizerId' YAZMAZ",
   /setItem\('ui2User'/.test(LOGIN) && !/setItem\('organizer/.test(LOGIN));
 
+// C9..C11 — K-F görünen ad (K-G: ekleme geriye uyumlu, eski davranış değişmez)
+const tokN = fakeToken({ organizer_id: 1, email: 'owner@x.com', user_id: UID, name: 'Suer Ay' });
+const storeN = ui2LoginStore(tokN);
+const recN = JSON.parse(storeN.ui2User); recN.name = 'Suer Ay'; storeN.ui2User = JSON.stringify(recN);
+const r9 = loadShell(storeN).ui2CurrentUser();
+ok('C9 (K-F) kayıtta ad var → name = ad, id/email/session aynı',
+  r9.name === 'Suer Ay' && r9.id === UID && r9.email === 'owner@x.com' && r9.session === 'user', JSON.stringify(r9));
+ok('C10 (K-G) ad alanı olmayan eski kayıt → name = e-posta (önceki davranış)',
+  r1.name === 'owner@x.com', JSON.stringify(r1));
+ok("C11 ui2/login.html token'daki adı kayda yazar (name: claims.name)",
+  /name:\s*claims\.name/.test(LOGIN));
+
 console.log(`\n═══ UI2 CURRENT USER SONUÇ: ${pass} geçti, ${fail} başarısız ═══`);
 if (fail > 0) process.exitCode = 1;

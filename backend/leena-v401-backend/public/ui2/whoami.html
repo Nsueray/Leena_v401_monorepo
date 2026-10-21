@@ -52,6 +52,7 @@
       if (!res.ok) { root.innerHTML = '<div class="wh-empty">Could not load (HTTP '+res.status+').</div>'; return; }
       return res.json().then(function(u){
         root.innerHTML = table([
+          ['Name', dash(u.display_name)],
           ['Email', dash(u.email)],
           ['Role', dash(u.display_role)],
           ['Owner', yesno(u.is_owner)],

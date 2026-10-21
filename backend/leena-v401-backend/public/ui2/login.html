@@ -85,7 +85,7 @@
       try {
         var claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
         localStorage.setItem('ui2User', JSON.stringify({
-          user_id: claims.user_id, email: claims.email,
+          user_id: claims.user_id, email: claims.email, name: claims.name,
           display_role: r.body.display_role, is_owner: r.body.is_owner,
           token_tail: token.slice(-16)
         }));
