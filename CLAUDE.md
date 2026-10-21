@@ -46,7 +46,7 @@ ANLATILMAZ — kaynakları aşağıdadır.
 
 ### Test
 - `npm run test:setup && npm test` (backend/leena-v401-backend) —
-  beklenen **67/67**.
+  beklenen **269/269** (2026-10-21 Paket 1 ölçümü; eski "67/67" bayattı — o tek suite'in sayısıydı).
 - Testler `tests/` altında yaşar. Test mantığı/assertion değiştirilmez;
   kapsam genişletme AYRI dilim işidir.
 

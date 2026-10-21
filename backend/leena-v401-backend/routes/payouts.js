@@ -15,6 +15,7 @@ const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { SLICE_CTES } = require('../utils/commissionSlices');
+const ledger = require('../utils/ledger');
 
 // round2 / isValidDate — contracts.js:546-555 emsali birebir.
 function round2(n) {
@@ -47,7 +48,11 @@ function mapWriteError(err) {
 // ----------------------------------------------------------------------------
 // POST /api/agents/:id/payouts
 // Body: amount, currency (default 'EUR'), exchange_rate (EUR ise 1),
-//       payout_date, notes?, reverses_payout_id?
+//       payout_date, notes?, reverses_payout_id?, account_id? (Paket 1 L-4)
+// Ledger (036-040 uygulandıysa): normal payout → hesap = açık hesap → ödeyen ofisin
+// varsayılan hesabı → yok (hesapsız + `warning`, 400 DEĞİL). Reversal → orijinalin
+// hareketi varsa aynı hesapta ters hareket; istemcinin account_id'si yok sayılır (TAH-01).
+// Hesap commission_payouts'ta SAKLANMAZ — hareket satırında yaşar (tablo değişmedi).
 // ----------------------------------------------------------------------------
 router.post('/:id/payouts', authMiddleware, async (req, res) => {
   const { id } = req.params;
@@ -141,7 +146,7 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
     let tgtRow = null;
     if (isReversal) {
       const tgt = await client.query(
-        'SELECT id, sales_agent_id, amount, payout_method, paid_office_id FROM commission_payouts WHERE id = $1 AND organizer_id = $2',
+        'SELECT id, sales_agent_id, amount, currency, payout_method, paid_office_id FROM commission_payouts WHERE id = $1 AND organizer_id = $2',
         [b.reverses_payout_id, req.organizer_id]
       );
       if (tgt.rows.length === 0) {
@@ -162,6 +167,33 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
     // W-3: reversal → orijinalden devral; normal → doğrulanmış istemci değeri.
     const finalOffice = isReversal ? tgtRow.paid_office_id : paidOfficeIn;
     const finalMethod = isReversal ? tgtRow.payout_method : payoutMethodIn;
+
+    // L-4: hesap çözümü (utils/ledger.js tek kural) — yalnız normal payout'ta.
+    const ledgerReady = await ledger.ledgerSchemaReady(client);
+    let account = null;
+    let warning = null;
+    let origEntry = null;
+    if (ledgerReady && !isReversal) {
+      const ra = await ledger.resolveAccount(client, {
+        organizerId: req.organizer_id, accountId: b.account_id, officeId: finalOffice,
+        currency, what: 'payout',
+      });
+      if (ra.error) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: ra.error });
+      }
+      account = ra.account;
+      warning = ra.warning;
+    } else if (ledgerReady && isReversal) {
+      origEntry = await ledger.findSourceEntry(client, 'payout', tgtRow.id);
+      // Ters hareket orijinalin hesabına yazılır → para birimi orijinalle aynı olmalı (LED-11).
+      if (origEntry && currency !== String(tgtRow.currency).toUpperCase()) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: `reversal currency must match the original payout (${tgtRow.currency}).` });
+      }
+    } else if (b.account_id != null && b.account_id !== '') {
+      warning = 'Ledger is not available yet — account was not saved.';
+    }
 
     const result = await client.query(
       `INSERT INTO commission_payouts (
@@ -186,8 +218,23 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
       ]
     );
 
+    let ledger_entry_id = null;
+    if (account) {
+      ledger_entry_id = await ledger.insertSourceEntry(client, {
+        organizerId: req.organizer_id, accountId: account.id, kind: 'payout',
+        sourceId: result.rows[0].id, direction: 'out', entryDate: b.payout_date,
+        createdBy: ledger.requestUserId(req),
+      });
+    } else if (origEntry) {
+      ledger_entry_id = await ledger.insertSourceEntry(client, {
+        organizerId: req.organizer_id, accountId: origEntry.account_id, kind: 'payout',
+        sourceId: result.rows[0].id, direction: 'in', entryDate: b.payout_date,
+        reversesEntryId: origEntry.id, createdBy: ledger.requestUserId(req),
+      });
+    }
+
     await client.query('COMMIT');
-    return res.status(201).json({ payout: result.rows[0] });
+    return res.status(201).json({ payout: result.rows[0], ledger_entry_id, warning });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     const mapped = mapWriteError(err);

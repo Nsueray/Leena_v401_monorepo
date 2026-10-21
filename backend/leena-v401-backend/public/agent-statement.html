@@ -140,6 +140,9 @@
         let offices = [];   // GET /api/offices (PS2-B2: "para nereye çıktı"; koda gömülmez)
         // payments.payment_method ile AYNI beş değer (H7 tek sözlük). Tek yerde tanımlı.
         const PAYOUT_METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];
+        // SEM-02 / LED-02: para birimleri TABLODAN; hesaplar ledger'dan (null = migration öncesi → alan gizli).
+        let currencies = [];
+        let ledgerAccounts = null;
 
         document.addEventListener('DOMContentLoaded', async () => {
             const token = localStorage.getItem('token');
@@ -147,11 +150,31 @@
             AGENT_ID = new URLSearchParams(window.location.search).get('agent_id');
             if (!AGENT_ID) { showAgentPicker(); return; }
             await loadOffices();   // dropdown/kolon verisi (fail-soft)
+            await loadLedgerRefs(); // para birimi + hesap (fail-soft)
             loadStatement();
         });
 
         // GET /api/offices — contract-detail.html:255 loadOffices deseni. FAIL-SOFT.
         // Ofis listesi frontend'de sabit DEĞİL — tablodan gelir (X-1).
+        async function loadLedgerRefs() {
+            try {
+                const c = await leenaFetch(`${API_URL}/ledger/currencies`);
+                if (c.ok) currencies = (await c.json()).map(x => x.code);
+                const a = await leenaFetch(`${API_URL}/ledger/accounts`);
+                if (a.ok) ledgerAccounts = await a.json();
+            } catch (err) {
+                if (err.status === 401 || err.status === 403) return;
+            }
+        }
+        // Yalnız seçili para birimindeki aktif hesaplar. Boş = ödeyen ofisin varsayılan hesabı.
+        function fillPayoutAccounts() {
+            const f = document.querySelector('.payout-form');
+            if (!f || !f.account_id || !ledgerAccounts) return;
+            f.account_id.innerHTML = ['<option value="">— office default —</option>']
+                .concat(ledgerAccounts.filter(a => a.currency === f.currency.value)
+                    .map(a => `<option value="${a.id}">${escapeHtml(a.name)}${a.is_office_default ? ' (default)' : ''}</option>`)).join('');
+        }
+
         async function loadOffices() {
             try {
                 // M2: ad çözümü TÜM ofislerden (kapalı ofis geçmiş payout'ta adını korur);
@@ -250,13 +273,13 @@
                 <div class="card-title">Record payout</div>
                 <form class="payout-form" onsubmit="submitPayout(event)">
                     <label>Amount<input name="amount" type="text" autocomplete="off"></label>
-                    <label>Currency<select name="currency" onchange="lockRateIfEur()">
-                        <option value="EUR">EUR</option><option value="USD">USD</option><option value="TRY">TRY</option>
-                        <option value="MAD">MAD</option><option value="NGN">NGN</option><option value="KES">KES</option>
+                    <label>Currency<select name="currency" onchange="lockRateIfEur(); fillPayoutAccounts()">
+                        ${currencies.map(c => `<option value="${c}">${c}</option>`).join('')}
                     </select></label>
                     <label>Exchange rate<input name="exchange_rate" type="text" value="1" disabled autocomplete="off"></label>
                     <label>Office *<select name="paid_office_id">${officeOpts}</select></label>
                     <label>Method<select name="payout_method">${methodOpts}</select></label>
+                    ${ledgerAccounts ? '<label>Account<select name="account_id"></select></label>' : ''}
                     <label>Payout date<input name="payout_date" type="date" value="${today}"></label>
                     <label>Notes<input name="notes" type="text" autocomplete="off"></label>
                     <button class="btn btn-primary" type="submit">Save payout</button>
@@ -264,6 +287,7 @@
             </div>`;
 
             document.getElementById('content').innerHTML = stats + table + form;
+            fillPayoutAccounts();
         }
 
         function payoutRow(p, reversedIds) {
@@ -306,6 +330,8 @@
                 paid_office_id: f.paid_office_id.value || null,   // boş → null (X-1)
                 payout_method: f.payout_method.value || null,     // boş → null (X-2)
             };
+            // L-4: yalnız seçildiyse gönderilir (boşken gövde eski formla birebir).
+            if (f.account_id && f.account_id.value) body.account_id = f.account_id.value;
             await postPayout(body, f.querySelector('button[type=submit]'));
         }
 
@@ -339,6 +365,9 @@
                     return;
                 }
                 if (typeof showToast === 'function') showToast('Payout saved', 'success');
+                let saved = null;
+                try { saved = await res.json(); } catch (_) {}
+                if (saved && saved.warning && typeof showToast === 'function') showToast(saved.warning, 'warning');
                 loadStatement();   // re-fetch; no client-side totalling (D2)
             } catch (err) {
                 if (err.status === 401 || err.status === 403) return;

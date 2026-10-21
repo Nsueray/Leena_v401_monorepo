@@ -23,6 +23,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
+const ledger = require('../utils/ledger');
 
 // LEENA contracts.status whitelist (migration 012 CHECK ile aynı — convert 'Active' yazar)
 const CONTRACT_STATUSES = ['Active', 'On Hold', 'Transferred', 'Cancelled'];
@@ -556,7 +557,12 @@ function isValidDate(s) {
 
 // ----------------------------------------------------------------------------
 // POST /api/contracts/:id/payments
-// Body: amount, currency, exchange_rate, payment_method, payment_date, notes?
+// Body: amount, currency, exchange_rate, payment_method, payment_date, notes?,
+//       account_id?, payer?   (Paket 1 L-4 — ikisi de OPSİYONEL)
+// Ledger (036-040 uygulandıysa): hesap = açık hesap → ofisin varsayılan hesabı → yok.
+// Hesap YOKSA 400 DEĞİL (KAPI-2 şartı): ödeme hesapsız yazılır, yanıtta `warning`.
+// Hesap varsa aynı transaction'da gelir hareketi (tutar kopyalanmaz — LED-04).
+// Yanıt: { payment, ledger_entry_id, warning } — eski istemci yalnız `payment` okur.
 // ----------------------------------------------------------------------------
 router.post('/:id/payments', authMiddleware, async (req, res) => {
   const { id } = req.params;
@@ -615,6 +621,10 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
   const schedule_item_id = (b.schedule_item_id != null && b.schedule_item_id !== '')
     ? b.schedule_item_id : null;
 
+  // L-4: payer — kırpılır; boş → NULL (038 CHECK boş metni zaten reddeder).
+  const payer = (typeof b.payer === 'string' && b.payer.trim() !== '') ? b.payer.trim() : null;
+  const account_in = (b.account_id != null && b.account_id !== '') ? b.account_id : null;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -660,12 +670,32 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
       }
     }
 
+    // L-4: hesap çözümü (utils/ledger.js tek kural). Şema yoksa (deploy → migration arası)
+    // eski davranış BİREBİR: hesap/payer yazılmaz, hareket yok.
+    const ledgerReady = await ledger.ledgerSchemaReady(client);
+    let account = null;
+    let warning = null;
+    if (ledgerReady) {
+      const ra = await ledger.resolveAccount(client, {
+        organizerId: req.organizer_id, accountId: account_in, officeId: received_office_id,
+        currency, what: 'payment',
+      });
+      if (ra.error) {
+        await client.query('ROLLBACK').catch(() => {});
+        return res.status(400).json({ error: ra.error });
+      }
+      account = ra.account;
+      warning = ra.warning;
+    } else if (account_in != null || payer != null) {
+      warning = 'Ledger is not available yet — account and payer were not saved.';
+    }
+
     const result = await client.query(
       `INSERT INTO payments (
          organizer_id, contract_id, amount, currency, exchange_rate,
          amount_eur, payment_method, payment_date, notes, created_by, received_office_id,
-         schedule_item_id
-       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+         schedule_item_id${ledgerReady ? ', account_id, payer' : ''}
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12${ledgerReady ? ',$13,$14' : ''})
        RETURNING *`,
       [
         req.organizer_id,
@@ -681,11 +711,20 @@ router.post('/:id/payments', authMiddleware, async (req, res) => {
                 // yalnız organizer_id veriyor) → Faz 4 kimlik birleşmesinde dolar
         received_office_id,
         schedule_item_id,
-      ]
+      ].concat(ledgerReady ? [account ? account.id : null, payer] : [])
     );
 
+    let ledger_entry_id = null;
+    if (account) {
+      ledger_entry_id = await ledger.insertSourceEntry(client, {
+        organizerId: req.organizer_id, accountId: account.id, kind: 'payment',
+        sourceId: result.rows[0].id, direction: 'in', entryDate: b.payment_date,
+        createdBy: ledger.requestUserId(req),
+      });
+    }
+
     await client.query('COMMIT');
-    return res.status(201).json({ payment: result.rows[0] });
+    return res.status(201).json({ payment: result.rows[0], ledger_entry_id, warning });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     const mapped = mapWriteError(err);
@@ -809,16 +848,20 @@ router.post('/:id/payments/:paymentId/reverse', authMiddleware, async (req, res)
 
     const notes = `Reversal of payment #${orig.id} (${orig.amount} ${orig.currency})`;
 
+    // L-4: hesap + payer orijinalden DEVRALINIR (TAH-01 deseni) — şema varsa.
+    const ledgerReady = await ledger.ledgerSchemaReady(client);
+    const extraCols = ledgerReady ? ', account_id, payer' : '';
+
     // Kopyalama + işaret çevrimi tek INSERT ... SELECT içinde (numeric korunur).
     const result = await client.query(
       `INSERT INTO payments (
          organizer_id, contract_id, amount, currency, exchange_rate,
          amount_eur, payment_method, payment_date, notes, created_by,
-         reverses_payment_id, received_office_id, schedule_item_id
+         reverses_payment_id, received_office_id, schedule_item_id${extraCols}
        )
        SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
               -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
-              id, received_office_id, schedule_item_id
+              id, received_office_id, schedule_item_id${extraCols}
          FROM payments
         WHERE id = $1
        RETURNING *`,
@@ -827,8 +870,21 @@ router.post('/:id/payments/:paymentId/reverse', authMiddleware, async (req, res)
       [orig.id, notes]
     );
 
+    // Ters hareket YALNIZ orijinalin hareketi varsa (ledger öncesi ödeme → hareket yok).
+    let ledger_entry_id = null;
+    if (ledgerReady) {
+      const origEntry = await ledger.findSourceEntry(client, 'payment', orig.id);
+      if (origEntry) {
+        ledger_entry_id = await ledger.insertSourceEntry(client, {
+          organizerId: req.organizer_id, accountId: origEntry.account_id, kind: 'payment',
+          sourceId: result.rows[0].id, direction: 'out', entryDate: null,   // = CURRENT_DATE (ters satırla aynı)
+          reversesEntryId: origEntry.id, createdBy: ledger.requestUserId(req),
+        });
+      }
+    }
+
     await client.query('COMMIT');
-    return res.status(201).json({ payment: result.rows[0] });
+    return res.status(201).json({ payment: result.rows[0], ledger_entry_id });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     const mapped = mapWriteError(err);
@@ -949,21 +1005,29 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
       [source.id]
     );
 
+    // L-4: hesap + payer iki satıra da DEVRALINIR (TAH-01 deseni). Kaynak ödemenin hareketi
+    // varsa aynı hesapta, devir gününde iki hareket yazılır: kapama (kaynağın hareketini
+    // tersler) + kopya (yeni giriş) → hesap bakiyesi DEĞİŞMEZ, hesap ↔ hareket eşitliği korunur.
+    const ledgerReady = await ledger.ledgerSchemaReady(client);
+    const extraCols = ledgerReady ? ', account_id, payer' : '';
+    const actor = ledger.requestUserId(req);
+
     for (const row of carry.rows) {
       // 1) Kaynakta kapama satırı — 3a-4 INSERT..SELECT deseni birebir.
       // TAH-04: schedule_item_id kaynağın item'ından DEVRALINIR (reversal deseni) →
       // net sıfırlama kaynağın taksidinde gerçekleşir.
-      await client.query(
+      const closing = await client.query(
         `INSERT INTO payments (
            organizer_id, contract_id, amount, currency, exchange_rate,
            amount_eur, payment_method, payment_date, notes, created_by,
-           reverses_payment_id, received_office_id, schedule_item_id
+           reverses_payment_id, received_office_id, schedule_item_id${extraCols}
          )
          SELECT organizer_id, contract_id, -amount, currency, exchange_rate,
                 -amount_eur, payment_method, CURRENT_DATE, $2, NULL,
-                id, received_office_id, schedule_item_id
+                id, received_office_id, schedule_item_id${extraCols}
            FROM payments
-          WHERE id = $1`,
+          WHERE id = $1
+         RETURNING id`,
         [row.id, `Transferred to ${newAf} (payment #${row.id})`]
       );
 
@@ -973,19 +1037,35 @@ router.post('/:id/transfer', authMiddleware, async (req, res) => {
       // Klon planı sonradan üretilince kullanıcı elle eşleştirir.
       // ⚠️ OFS-05 SINIFI BORÇ: aynı schedule_item_id devralma kuralı reversal + transfer
       // bloklarında AYRI yazılıyor (ortak kod yok) — kural değişirse İKİ yer de güncellenir.
-      await client.query(
+      const copy = await client.query(
         `INSERT INTO payments (
            organizer_id, contract_id, amount, currency, exchange_rate,
            amount_eur, payment_method, payment_date, notes, created_by,
-           received_office_id
+           received_office_id${extraCols}
          )
          SELECT organizer_id, $2, amount, currency, exchange_rate,
                 amount_eur, payment_method, payment_date, $3, NULL,
-                received_office_id
+                received_office_id${extraCols}
            FROM payments
-          WHERE id = $1`,
+          WHERE id = $1
+         RETURNING id`,
         [row.id, newContract.id, `Transferred from ${source.af_number} (payment #${row.id})`]
       );
+
+      if (ledgerReady) {
+        const srcEntry = await ledger.findSourceEntry(client, 'payment', row.id);
+        if (srcEntry) {
+          await ledger.insertSourceEntry(client, {
+            organizerId: req.organizer_id, accountId: srcEntry.account_id, kind: 'payment',
+            sourceId: closing.rows[0].id, direction: 'out', entryDate: null,
+            reversesEntryId: srcEntry.id, createdBy: actor,
+          });
+          await ledger.insertSourceEntry(client, {
+            organizerId: req.organizer_id, accountId: srcEntry.account_id, kind: 'payment',
+            sourceId: copy.rows[0].id, direction: 'in', entryDate: null, createdBy: actor,
+          });
+        }
+      }
     }
 
     await client.query(

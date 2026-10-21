@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Finance · Transfers</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<link rel="stylesheet" href="styles/ledger.css">
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+
+<script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='transfers';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="ledger-ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  // L-2 (LED-06): transfer = tek olay + iki bağlı hareket. Düzeltme = ters transfer (silme yok).
+  var L = window.ui2L, root = document.getElementById('lg-root');
+  var state = { accounts: [], transfers: [], expos: [] };
+
+  function accById(id) { return state.accounts.find(function (a) { return String(a.id) === String(id); }); }
+  function accLabel(a) { return a.name + ' (' + a.currency + ')'; }
+
+  function form() {
+    return '<form class="lg-form" id="tr-form">' +
+      '<label class="field"><span class="label">From</span><select class="input" name="from_account_id" required>' +
+        L.options(state.accounts, function (a) { return a.id; }, accLabel, '', '—') + '</select></label>' +
+      '<label class="field"><span class="label">To</span><select class="input" name="to_account_id" required>' +
+        L.options(state.accounts, function (a) { return a.id; }, accLabel, '', '—') + '</select></label>' +
+      '<label class="field"><span class="label">Date</span><input class="input" type="date" name="transfer_date" value="' + L.today() + '" required></label>' +
+      '<label class="field"><span class="label">Amount out</span><input class="input" name="amount" required></label>' +
+      '<label class="field"><span class="label">FX → EUR (out)</span><input class="input" name="exchange_rate" value="1" required></label>' +
+      '<label class="field xc" style="display:none"><span class="label">Amount in</span><input class="input" name="amount_in"></label>' +
+      '<label class="field xc" style="display:none"><span class="label">FX → EUR (in)</span><input class="input" name="exchange_rate_in"></label>' +
+      '<label class="field"><span class="label">Expo (optional)</span><select class="input" name="expo_id">' +
+        L.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, '', '—') + '</select></label>' +
+      '<label class="field"><span class="label">Notes</span><input class="input" name="notes"></label>' +
+      '<button class="btn btn-primary" type="submit">Record transfer</button>' +
+    '</form><div class="lg-msg" id="tr-msg"></div>' +
+    '<div class="card-pad lg-note">Same currency: one amount, both legs equal — record bank fees as an expense. Different currencies: both amounts and both rates are frozen as entered.</div>';
+  }
+
+  function list() {
+    if (!state.transfers.length) return '<div class="lg-empty">No transfers yet.</div>';
+    var rows = state.transfers.map(function (t) {
+      var act = t.reverses_transfer_id ? '<span class="lg-tag">reversal of #' + t.reverses_transfer_id + '</span>'
+        : t.reversed_by_transfer_id ? '<span class="lg-tag">reversed</span>'
+        : '<button class="btn btn-ghost" data-rev="' + t.id + '">Reverse</button>';
+      return '<tr><td>#' + t.id + '</td><td>' + L.esc(t.transfer_date) + '</td>' +
+        '<td>' + L.esc(t.from_account) + '</td><td class="num">' + L.money(t.amount_out, t.currency_out) + '</td>' +
+        '<td>' + L.esc(t.to_account) + '</td><td class="num">' + L.money(t.amount_in, t.currency_in) + '</td>' +
+        '<td class="num">' + L.eur(t.eur_out) + (t.eur_in !== t.eur_out ? ' → ' + L.eur(t.eur_in) : '') + '</td>' +
+        '<td>' + L.dash(t.notes) + (t.expo_name ? '<div class="lg-note">' + L.esc(t.expo_name) + '</div>' : '') + '</td>' +
+        '<td>' + act + '</td></tr>';
+    }).join('');
+    return '<div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Date</th><th>From</th><th class="num">Out</th>' +
+      '<th>To</th><th class="num">In</th><th class="num">EUR</th><th>Notes</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function render() {
+    root.innerHTML = '<div class="lg-head"><div><h1>Transfers</h1><div class="sub">between accounts · one event, two linked entries</div></div></div>' +
+      '<div class="lg-stack">' +
+        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">New transfer</span></div>' + form() + '</div>' +
+        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Recent transfers</span>' +
+          '<span class="card-eyebrow">corrections are reversals</span></div>' + list() + '</div>' +
+      '</div>';
+  }
+
+  // Para birimleri farklıysa ikinci tutar/kur alanları açılır; EUR hesabın kuru 1'e kilitlenir.
+  function sync() {
+    var f = document.getElementById('tr-form');
+    if (!f) return;
+    var a = accById(f.from_account_id.value), b = accById(f.to_account_id.value);
+    var cross = a && b && a.currency !== b.currency;
+    Array.prototype.forEach.call(f.querySelectorAll('.xc'), function (el) { el.style.display = cross ? '' : 'none'; });
+    if (a && a.currency === 'EUR') f.exchange_rate.value = '1';
+    f.exchange_rate.readOnly = !!(a && a.currency === 'EUR');
+    if (cross && b.currency === 'EUR') f.exchange_rate_in.value = '1';
+    if (!cross) { f.amount_in.value = ''; f.exchange_rate_in.value = ''; }
+  }
+
+  function load() {
+    if (!L.guard(root)) return;
+    Promise.all([L.api('GET', '/api/ledger/accounts'), L.api('GET', '/api/ledger/transfers'), L.api('GET', '/api/expos')])
+      .then(function (r) {
+        if (r[0].status !== 200) { L.httpError(root, r[0], 'accounts'); return; }
+        state.accounts = r[0].body; state.transfers = r[1].body || []; state.expos = Array.isArray(r[2].body) ? r[2].body : [];
+        render(); sync();
+      }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+  }
+
+  root.addEventListener('change', function (e) { if (e.target.closest('#tr-form')) sync(); });
+  root.addEventListener('submit', function (e) {
+    e.preventDefault();
+    L.api('POST', '/api/ledger/transfers', L.formJson(e.target)).then(function (r) {
+      if (r.status === 201) load(); else L.say(document.getElementById('tr-msg'), r.body && r.body.error, 'error');
+    });
+  });
+  root.addEventListener('click', function (e) {
+    var b = e.target.closest('button[data-rev]');
+    if (!b) return;
+    if (!confirm('Reverse transfer #' + b.getAttribute('data-rev') + '? Both legs are mirrored with today\'s date.')) return;
+    L.api('POST', '/api/ledger/transfers/' + b.getAttribute('data-rev') + '/reverse').then(function (r) {
+      if (r.status === 201) load(); else alert(r.body && r.body.error);
+    });
+  });
+
+  L.ready(load);
+})();
+</script>
+</body>
+</html>

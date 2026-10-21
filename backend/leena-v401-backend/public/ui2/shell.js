@@ -24,11 +24,15 @@
   // (War Room·Expos·Ledger·Contracts·Commissions·Reports) — kaçındığımız tekrar.
   // Burada tek kaynaktan üretilir; ekran yalnız hangi öğenin aktif olduğunu bildirir.
   // KURAL: yalnız GERÇEK ekranı olan öğe listelenir ("gösterilemeyen görünmez").
-  // Bugün Finance'ta tek gerçek ekran var (Contract); yapı ikinciyi taşımaya hazır —
-  // ikinci ekran gelince buraya bir satır eklenir, ekran kodu değişmez.
+  // Paket 1 (ledger L-1…L-6): beş gerçek ekran eklendi (hesap ekstresi Accounts'un altında).
   var UI2_SUBNAV = {
     finance: [
-      { key: 'contract', label: 'Contracts', href: 'finance-contract.html' },
+      { key: 'contract',  label: 'Contracts',   href: 'finance-contract.html' },
+      { key: 'summary',   label: 'Summary',     href: 'finance-summary.html' },
+      { key: 'accounts',  label: 'Accounts',    href: 'finance-accounts.html' },
+      { key: 'transfers', label: 'Transfers',   href: 'finance-transfers.html' },
+      { key: 'expenses',  label: 'Expenses',    href: 'finance-expenses.html' },
+      { key: 'budget',    label: 'Expo budget', href: 'finance-budget.html' },
     ],
     sales: [],
     operations: [],
