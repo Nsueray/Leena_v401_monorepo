@@ -22,11 +22,16 @@
 (function () {
   'use strict';
   // L-3 (LED-08): onay YOK; gider değiştirilemez olaydır, düzeltme ters giderdir.
+  // P1b-1 (Suer ilkesi): karşı taraf serbest metin DEĞİL — tedarikçi listeden seçilir
+  // (datalist) ya da "New supplier" kısayoluyla kayıt açılır. Eski satırların metni görünür kalır.
   var L = window.ui2L, root = document.getElementById('lg-root');
   var METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];   // SEM-01 (tek sözlük)
-  var state = { accounts: [], ref: null, expos: [], list: [], filter: { expo_id: L.qs('expo_id') || '', from: L.qs('from') || '', to: L.qs('to') || '' } };
+  var state = { accounts: [], ref: null, expos: [], list: [], suppliers: null, opts: null, drafts: null,
+                filter: { expo_id: L.qs('expo_id') || '', from: L.qs('from') || '', to: L.qs('to') || '' } };
 
   function accById(id) { return state.accounts.find(function (a) { return String(a.id) === String(id); }); }
+  function supLabel(s) { return s.name + ' (' + s.country_code + ')'; }
+  function supByLabel(v) { return (state.suppliers || []).find(function (s) { return supLabel(s) === v; }); }
   function types() {
     var out = [];
     (state.ref ? state.ref.expense_categories : []).forEach(function (c) {
@@ -49,11 +54,31 @@
         L.options(METHODS, function (m) { return m; }, function (m) { return m; }, 'bank_transfer') + '</select></label>' +
       '<label class="field"><span class="label">Expo (empty = overhead)</span><select class="input" name="expo_id">' +
         L.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Counterparty</span><input class="input" name="counterparty"></label>' +
+      supplierField() +
       '<label class="field"><span class="label">Document link (Drive)</span><input class="input" name="document_url" placeholder="https://"></label>' +
       '<label class="field"><span class="label">Notes</span><input class="input" name="notes"></label>' +
       '<button class="btn btn-primary" type="submit">Record expense</button>' +
-    '</form><div class="lg-msg" id="ex-msg"></div>';
+    '</form><div class="lg-msg" id="ex-msg"></div>' + newSupplierForm();
+  }
+
+  // Tedarikçi: listeden seçim (datalist). Listede yoksa kısayolla kayıt açılır — serbest metin yok.
+  function supplierField() {
+    if (state.suppliers == null) return '';   // 041 öncesi: alan yok (gider tedarikçisiz kaydedilir)
+    return '<label class="field"><span class="label">Supplier (optional)</span>' +
+      '<input class="input" name="supplier_pick" list="sup-list" placeholder="type to search…" autocomplete="off">' +
+      '<datalist id="sup-list">' + state.suppliers.map(function (s) { return '<option value="' + L.esc(supLabel(s)) + '">'; }).join('') +
+      '</datalist></label>' +
+      '<button class="btn btn-ghost" type="button" id="new-sup-btn">+ New supplier</button>';
+  }
+  function newSupplierForm() {
+    if (!state.opts) return '';
+    return '<form class="lg-form" id="sup-form">' +
+      '<label class="field"><span class="label">New supplier name</span><input class="input" name="name" required></label>' +
+      '<label class="field"><span class="label">Type</span><select class="input" name="supplier_type">' +
+        L.options(state.opts.types, function (t) { return t; }, function (t) { return t; }, 'supplier') + '</select></label>' +
+      '<label class="field"><span class="label">Country</span><select class="input" name="country_code" required>' +
+        L.options(state.opts.countries, function (c) { return c.code; }, function (c) { return c.name; }, '', '—') + '</select></label>' +
+      '<button class="btn btn-secondary" type="submit">Add supplier</button></form><div class="lg-msg" id="sup-msg"></div>';
   }
 
   function list() {
@@ -74,17 +99,29 @@
         '<td class="num' + (Number(x.amount) < 0 ? ' lg-neg' : '') + '">' + L.money(x.amount, x.currency) + '</td>' +
         '<td class="num">' + L.eur(x.amount_eur) + '</td>' +
         '<td>' + L.esc(x.account_name) + '</td><td>' + L.dash(x.expo_name) + '</td>' +
-        '<td>' + L.dash(x.counterparty) + (x.document_url ? ' · <a href="' + L.esc(x.document_url) + '" target="_blank" rel="noopener">doc</a>' : '') + '</td>' +
+        '<td>' + party(x) + (x.document_url ? ' · <a href="' + L.esc(x.document_url) + '" target="_blank" rel="noopener">doc</a>' : '') + '</td>' +
         '<td>' + act + '</td></tr>';
     }).join('');
     return flt + '<div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Date</th><th>Category / type</th>' +
-      '<th class="num">Amount</th><th class="num">EUR</th><th>Account</th><th>Expo</th><th>Counterparty</th><th></th>' +
+      '<th class="num">Amount</th><th class="num">EUR</th><th>Account</th><th>Expo</th><th>Supplier</th><th></th>' +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+  // Tedarikçi kaydı varsa bağlantı; yoksa eski (Paket 1) serbest metin, "text" etiketiyle.
+  function party(x) {
+    if (x.supplier_id) return '<a href="finance-supplier.html?supplier=' + x.supplier_id + '">' + L.esc(x.supplier_name) + '</a>';
+    return x.counterparty ? L.esc(x.counterparty) + '<span class="lg-tag">text</span>' : '—';
+  }
+
+  function links() {
+    if (state.suppliers == null && state.drafts == null) return '';
+    return '<div class="lg-links">' +
+      (state.suppliers != null ? '<a href="finance-suppliers.html">Suppliers →</a>' : '') +
+      (state.drafts != null ? '<a href="finance-drafts.html">Pending drafts (' + state.drafts + ') →</a>' : '') + '</div>';
   }
 
   function render() {
     root.innerHTML = '<div class="lg-head"><div><h1>Expenses</h1><div class="sub">no approval step · corrections are reversals · ' +
-      state.list.length + ' shown</div></div></div><div class="lg-stack">' +
+      state.list.length + ' shown</div></div>' + links() + '</div><div class="lg-stack">' +
       '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">New expense</span>' +
         '<span class="card-eyebrow">currency = the account\'s currency</span></div>' + form() + '</div>' +
       '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Expenses</span></div>' + list() + '</div></div>';
@@ -106,10 +143,14 @@
     if (f.from) q.push('from=' + encodeURIComponent(f.from));
     if (f.to) q.push('to=' + encodeURIComponent(f.to));
     Promise.all([L.api('GET', '/api/ledger/accounts'), L.api('GET', '/api/ledger/reference'), L.api('GET', '/api/expos'),
-                 L.api('GET', '/api/ledger/expenses' + (q.length ? '?' + q.join('&') : ''))])
+                 L.api('GET', '/api/ledger/expenses' + (q.length ? '?' + q.join('&') : '')),
+                 L.api('GET', '/api/ledger/suppliers'), L.api('GET', '/api/expense-drafts?status=pending')])
       .then(function (r) {
         if (r[0].status !== 200) { L.httpError(root, r[0], 'accounts'); return; }
         state.accounts = r[0].body; state.ref = r[1].body; state.expos = Array.isArray(r[2].body) ? r[2].body : []; state.list = r[3].body || [];
+        // 503 = 041/042 henüz uygulanmadı → tedarikçi alanı / taslak bağlantısı görünmez.
+        state.suppliers = r[4].status === 200 ? r[4].body : null;
+        state.drafts = r[5].status === 200 ? r[5].body.length : null;
         render(); sync();
       }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
   }
@@ -119,11 +160,41 @@
     e.preventDefault();
     var f = e.target, b = L.formJson(f);
     if (f.id === 'flt') { state.filter = { expo_id: b.expo_id || '', from: b.from || '', to: b.to || '' }; load(); return; }
+    if (f.id === 'sup-form') {
+      L.api('POST', '/api/ledger/suppliers', b).then(function (r) {
+        if (r.status !== 201) { L.say(document.getElementById('sup-msg'), r.body && r.body.error, 'error'); return; }
+        var keep = L.formJson(document.getElementById('ex-form'));
+        state.suppliers.push(r.body); state.opts = null; render(); sync();
+        var ef = document.getElementById('ex-form');
+        Object.keys(keep).forEach(function (k) { if (ef[k] && ef[k].type !== 'checkbox') ef[k].value = keep[k]; });
+        ef.supplier_pick.value = supLabel(r.body);
+      });
+      return;
+    }
+    if (b.supplier_pick) {
+      var s = supByLabel(b.supplier_pick);
+      if (!s) { L.say(document.getElementById('ex-msg'), 'Pick a supplier from the list, or add it with "+ New supplier".', 'error'); return; }
+      b.supplier_id = s.id;
+    }
+    delete b.supplier_pick;
     L.api('POST', '/api/ledger/expenses', b).then(function (r) {
       if (r.status === 201) load(); else L.say(document.getElementById('ex-msg'), r.body && r.body.error, 'error');
     });
   });
   root.addEventListener('click', function (e) {
+    if (e.target.id === 'new-sup-btn') {
+      var keep = L.formJson(document.getElementById('ex-form'));
+      L.api('GET', '/api/ledger/suppliers/options').then(function (r) {
+        if (r.status !== 200) { L.say(document.getElementById('ex-msg'), r.body && r.body.error, 'error'); return; }
+        state.opts = r.body; render(); sync();
+        var ef = document.getElementById('ex-form');
+        Object.keys(keep).forEach(function (k) { if (ef[k] && ef[k].type !== 'checkbox') ef[k].value = keep[k]; });
+        var sf = document.getElementById('sup-form');
+        if (keep.supplier_pick && !supByLabel(keep.supplier_pick)) sf.name.value = keep.supplier_pick;
+        sf.name.focus();
+      });
+      return;
+    }
     var b = e.target.closest('button[data-rev]');
     if (!b) return;
     if (!confirm('Reverse expense #' + b.getAttribute('data-rev') + '? A negative expense is recorded today.')) return;

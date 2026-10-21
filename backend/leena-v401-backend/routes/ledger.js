@@ -12,6 +12,8 @@
 //   POST /expenses  · GET /expenses  · POST /expenses/:id/reverse       (L-3, LED-08)
 //   GET  /budgets/:expoId · POST /budgets/:expoId · POST /budgets/:expoId/lock   (L-5, LED-09)
 //   GET  /summary                       → nakit / alacak / komisyon / owner cari (L-6, RAP-01)
+//   GET  /suppliers · GET /suppliers/options · POST /suppliers · PUT /suppliers/:id
+//   GET  /suppliers/:id/history         → tedarikçi ödeme geçmişi, ledger'dan türetilir (P1b-1)
 //
 // ── HÜKÜMLER ──
 // - Bakiye SAKLANMAZ (D2): her okuma `ledger_lines` view'inden türetir (039, tek türetme yeri).
@@ -27,24 +29,14 @@ const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { SLICE_CTES } = require('../utils/commissionSlices');
 const ledger = require('../utils/ledger');
-const { round2, isValidDate } = ledger;
+const { round2, isValidDate, trimOrNull, isIntLike, parseMoney, activeAccount, expoOfOrganizer } = ledger;
 
-const METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];   // SEM-01 / LED-01
 const ACCOUNT_TYPES = ['bank', 'cash', 'virtual'];                                // LED-03
 
 // Deploy → migration arası (42P01): ödeme formunun para birimi listesi BOŞ kalmasın diye
 // eski arayüz listesi (contract-detail.html:228 eski hali) döner. 040 her yerde uygulanınca
 // bu satır silinir (SEM-02 sayacı: arayüzde 0 kopya, burada 1 geçici yedek).
 const PRE_MIGRATION_CURRENCIES = ['EUR', 'USD', 'TRY', 'MAD', 'NGN', 'KES'];
-
-function trimOrNull(v) {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim();
-  return s === '' ? null : s;
-}
-function isIntLike(v) {
-  return v != null && v !== '' && /^\d+$/.test(String(v));
-}
 
 // 23505 / 23503 / 23514 → anlamlı HTTP (contracts.js mapWriteError deseni)
 function mapWriteError(err) {
@@ -61,6 +53,9 @@ function mapWriteError(err) {
     if (err.constraint === 'uq_expo_budgets_active' || err.constraint === 'expo_budgets_expo_revision_key') {
       return { status: 409, body: { error: 'The budget changed meanwhile — reload and try again.' } };
     }
+    if (err.constraint === 'uq_suppliers_org_name_country') {
+      return { status: 409, body: { error: 'A supplier with this name already exists in this country.' } };
+    }
     return { status: 409, body: { error: 'Duplicate value violates a unique constraint.' } };
   }
   if (err.code === '23503') return { status: 400, body: { error: 'Referenced record does not exist.' } };
@@ -72,33 +67,6 @@ function fail(res, err, what) {
   if (m) return res.status(m.status).json(m.body);
   console.error(`Ledger ${what} failed:`, err);
   return res.status(500).json({ error: `Failed to ${what}.` });
-}
-
-// Tutar + kur doğrulaması (contracts.js POST /:id/payments guard'larıyla aynı kurallar).
-function parseMoney(b, { amountKey = 'amount', rateKey = 'exchange_rate', currency }) {
-  const amount = Number(b[amountKey]);
-  if (b[amountKey] == null || b[amountKey] === '' || !isFinite(amount) || amount <= 0) {
-    return { error: `${amountKey} must be a number greater than 0.` };
-  }
-  const rate = Number(b[rateKey]);
-  if (b[rateKey] == null || b[rateKey] === '' || !isFinite(rate) || rate <= 0) {
-    return { error: `${rateKey} must be a number greater than 0.` };
-  }
-  if (currency === 'EUR' && rate !== 1) return { error: `${rateKey} must be 1 when currency is EUR.` };
-  return { amount, rate, amount_eur: round2(amount * rate) };
-}
-
-async function activeAccount(db, organizerId, id) {
-  if (!isIntLike(id)) return null;
-  const r = await db.query(
-    'SELECT id, name, currency, account_type, office_id, is_active FROM accounts WHERE id = $1 AND organizer_id = $2',
-    [id, organizerId]);
-  return r.rows[0] || null;
-}
-async function expoOfOrganizer(db, organizerId, expoId) {
-  if (!isIntLike(expoId)) return null;
-  const r = await db.query('SELECT id, name FROM expos WHERE id = $1 AND organizer_id = $2', [expoId, organizerId]);
-  return r.rows[0] || null;
 }
 
 // Ledger dışında kalan tahsilat / payout sayacı (RAP-02 — dışlanan sessizce kaybolmaz).
@@ -357,6 +325,11 @@ router.get('/accounts/:id/statement', async (req, res) => {
     const acc = await pool.query(`${ACCOUNT_LIST_SQL} AND a.id = $2`, [req.organizer_id, req.params.id]);
     if (!acc.rows.length) return res.status(404).json({ error: 'Account not found' });
     const account = acc.rows[0];
+    // P1b-1: gider satırında tedarikçi adı (041 sonrası; öncesinde kolon yok → NULL).
+    const sup = await ledger.featureReady(pool, 'suppliers');
+    const supCol = sup ? 'sp.id AS supplier_id, sp.name AS supplier_name' : 'NULL::int AS supplier_id, NULL::text AS supplier_name';
+    const supJoin = sup ? `LEFT JOIN expenses xe ON xe.id = l.expense_id
+         LEFT JOIN suppliers sp          ON sp.id = xe.supplier_id` : '';
 
     // Yürüyen bakiye TÜM geçmiş üzerinden pencerelenir, sonra tarih süzülür → açılış dahil.
     const lines = await pool.query(
@@ -375,7 +348,7 @@ router.get('/accounts/:id/statement', async (req, res) => {
               l.reverses_entry_id, (SELECT r.id FROM ledger_entries r WHERE r.reverses_entry_id = l.id) AS reversed_by_entry_id,
               l.payment_id, l.contract_id, l.af_number, l.company_name, l.payer,
               l.payout_id, sa.name AS agent_name,
-              l.expense_id, et.name AS expense_type, ec.name AS expense_category, l.counterparty,
+              l.expense_id, et.name AS expense_type, ec.name AS expense_category, l.counterparty, ${supCol},
               l.transfer_id, oa.name AS counter_account_name,
               ex.name AS expo_name, l.notes
          FROM l
@@ -385,6 +358,7 @@ router.get('/accounts/:id/statement', async (req, res) => {
          LEFT JOIN expos ex              ON ex.id = l.expo_id
          LEFT JOIN ledger_entries ol     ON ol.transfer_id = l.transfer_id AND ol.id <> l.id
          LEFT JOIN accounts oa           ON oa.id = ol.account_id
+         ${supJoin}
         WHERE ($3::date IS NULL OR l.entry_date >= $3) AND ($4::date IS NULL OR l.entry_date <= $4)
         ORDER BY l.entry_date, l.id`,
       [req.organizer_id, req.params.id, from, to]);
@@ -538,53 +512,18 @@ router.post('/transfers/:id/reverse', async (req, res) => {
 // ============================================================================
 // GİDERLER (L-3, LED-08) — onaysız, değişmez; her gider → hareket (çıkış)
 // ============================================================================
+// Doğrulama + yazım utils/ledger.js createExpense'te (taslak kabulü de AYNI yolu çağırır).
+// counterparty metni API'de kabul edilmeye devam eder (mevcut davranış); ui2 formu artık
+// tedarikçi SEÇTİRİR (Suer ilkesi), serbest metin göndermez.
 router.post('/expenses', async (req, res) => {
-  const b = req.body || {};
-  if (!isIntLike(b.expense_type_id)) return res.status(400).json({ error: 'expense_type_id is required.' });
-  if (!isIntLike(b.account_id)) return res.status(400).json({ error: 'account_id is required.' });
-  if (!isValidDate(b.expense_date)) return res.status(400).json({ error: 'expense_date is required and must be a valid YYYY-MM-DD date.' });
-  if (!METHODS.includes(b.payment_method)) return res.status(400).json({ error: `payment_method must be one of: ${METHODS.join(', ')}` });
-  const document_url = trimOrNull(b.document_url);
-  if (document_url && !/^https?:\/\//i.test(document_url)) return res.status(400).json({ error: 'document_url must start with http:// or https://' });
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const acc = await activeAccount(client, req.organizer_id, b.account_id);
-    if (!acc) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'invalid account' }); }
-    if (!acc.is_active) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'account is inactive' }); }
-    // Para birimi = hesabın para birimi (LED-11 önerisi); verildiyse eşleşmeli.
-    const currency = b.currency ? String(b.currency).trim().toUpperCase() : acc.currency;
-    if (currency !== acc.currency) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: `account currency (${acc.currency}) does not match expense currency (${currency})` });
-    }
-    const m = parseMoney(b, { currency });
-    if (m.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: m.error }); }
-    const ty = await client.query(
-      `SELECT t.id FROM expense_types t JOIN expense_categories c ON c.id = t.category_id
-        WHERE t.id = $1 AND t.organizer_id = $2 AND t.is_active AND c.is_active`, [b.expense_type_id, req.organizer_id]);
-    if (!ty.rows.length) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'invalid or inactive expense type' }); }
-    let expo = null;
-    if (b.expo_id != null && b.expo_id !== '') {
-      expo = await expoOfOrganizer(client, req.organizer_id, b.expo_id);
-      if (!expo) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'invalid expo' }); }
-    }
-    const actor = ledger.requestUserId(req);
-    const e = await client.query(
-      `INSERT INTO expenses (organizer_id, expense_type_id, amount, currency, exchange_rate, amount_eur,
-                             account_id, expo_id, counterparty, expense_date, payment_method, notes,
-                             document_url, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-      [req.organizer_id, b.expense_type_id, m.amount, currency, m.rate, m.amount_eur, acc.id,
-       expo ? expo.id : null, trimOrNull(b.counterparty), b.expense_date, b.payment_method,
-       trimOrNull(b.notes), document_url, actor]);
-    const entryId = await ledger.insertSourceEntry(client, {
-      organizerId: req.organizer_id, accountId: acc.id, kind: 'expense', sourceId: e.rows[0].id,
-      direction: 'out', entryDate: b.expense_date, createdBy: actor,
-    });
+    const r = await ledger.createExpense(client, {
+      organizerId: req.organizer_id, body: req.body, actor: ledger.requestUserId(req) });
+    if (r.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: r.error }); }
     await client.query('COMMIT');
-    res.status(201).json({ expense: e.rows[0], ledger_entry_id: entryId });
+    res.status(201).json({ expense: r.expense, ledger_entry_id: r.ledger_entry_id });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
     return fail(res, err, 'create expense');
@@ -598,23 +537,29 @@ router.get('/expenses', async (req, res) => {
   if ((from && !isValidDate(from)) || (to && !isValidDate(to))) return res.status(400).json({ error: 'from/to must be YYYY-MM-DD dates.' });
   const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 100, 1), 1000);
   try {
+    // P1b-1: tedarikçi kolonları ve süzgeci yalnız 041 uygulandıysa (öncesinde yanıt Paket 1 şeklinde).
+    const sup = await ledger.featureReady(pool, 'suppliers');
     const r = await pool.query(
       `SELECT e.id, to_char(e.expense_date, 'YYYY-MM-DD') AS expense_date, e.amount, e.currency, e.exchange_rate, e.amount_eur,
               e.payment_method, e.counterparty, e.notes, e.document_url, e.reverses_expense_id,
               (SELECT x.id FROM expenses x WHERE x.reverses_expense_id = e.id) AS reversed_by_expense_id,
               e.expense_type_id, t.name AS expense_type, c.id AS category_id, c.name AS category,
               e.account_id, a.name AS account_name, e.expo_id, ex.name AS expo_name
+              ${sup ? ', e.supplier_id, s.name AS supplier_name' : ''}
          FROM expenses e
          JOIN expense_types t      ON t.id = e.expense_type_id
          JOIN expense_categories c ON c.id = t.category_id
          JOIN accounts a           ON a.id = e.account_id
          LEFT JOIN expos ex        ON ex.id = e.expo_id
+         ${sup ? 'LEFT JOIN suppliers s ON s.id = e.supplier_id' : ''}
         WHERE e.organizer_id = $1
           AND ($2::int IS NULL OR e.expo_id = $2)
           AND ($3::date IS NULL OR e.expense_date >= $3) AND ($4::date IS NULL OR e.expense_date <= $4)
+          ${sup ? 'AND ($6::int IS NULL OR e.supplier_id = $6)' : ''}
         ORDER BY e.expense_date DESC, e.id DESC
         LIMIT $5`,
-      [req.organizer_id, isIntLike(expo_id) ? Number(expo_id) : null, from || null, to || null, limit]);
+      [req.organizer_id, isIntLike(expo_id) ? Number(expo_id) : null, from || null, to || null, limit]
+        .concat(sup ? [isIntLike(req.query.supplier_id) ? Number(req.query.supplier_id) : null] : []));
     res.json(r.rows);
   } catch (err) {
     console.error('Error fetching expenses:', err);
@@ -634,13 +579,15 @@ router.post('/expenses/:id/reverse', async (req, res) => {
     const already = await client.query('SELECT 1 FROM expenses WHERE reverses_expense_id = $1', [o.rows[0].id]);
     if (already.rows.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Expense already reversed.' }); }
     const actor = ledger.requestUserId(req);
+    // Tedarikçi de devralınır (041 sonrası) → tedarikçi geçmişinde gider + tersi net sıfır.
+    const sup = (await ledger.featureReady(client, 'suppliers')) ? ', supplier_id' : '';
     const r = await client.query(
       `INSERT INTO expenses (organizer_id, expense_type_id, amount, currency, exchange_rate, amount_eur,
                              account_id, expo_id, counterparty, expense_date, payment_method, notes,
-                             document_url, reverses_expense_id, created_by)
+                             document_url, reverses_expense_id, created_by${sup})
        SELECT organizer_id, expense_type_id, -amount, currency, exchange_rate, -amount_eur,
               account_id, expo_id, counterparty, CURRENT_DATE, payment_method, $2,
-              document_url, id, $3
+              document_url, id, $3${sup}
          FROM expenses WHERE id = $1 RETURNING *`,
       [o.rows[0].id, `Reversal of expense #${o.rows[0].id}`, actor]);
     const origEntry = await ledger.findSourceEntry(client, 'expense', o.rows[0].id);
@@ -655,6 +602,171 @@ router.post('/expenses/:id/reverse', async (req, res) => {
     return fail(res, err, 'reverse expense');
   } finally {
     client.release();
+  }
+});
+
+// ============================================================================
+// TEDARİKÇİLER (P1b-1) — para karşı tarafı kaydı; silinmez, pasiflenir; geçmiş TÜRETİLİR (D2)
+// ============================================================================
+// 041 uygulanmadıysa (deploy → migrate arası) bu uçlar 503 — gider akışı tedarikçisiz sürer.
+async function needSuppliers(req, res, next) {
+  try {
+    if (await ledger.featureReady(pool, 'suppliers')) return next();
+    return res.status(503).json({ error: 'Suppliers are not migrated yet (run scripts/migrate.js).' });
+  } catch (err) { return next(err); }
+}
+
+// Gövde doğrulaması. partial = PUT (yalnız gönderilen alanlar). Döner { fields } | { error }.
+async function supplierFields(db, b, partial) {
+  const f = {};
+  const has = (k) => Object.prototype.hasOwnProperty.call(b, k);
+  if (!partial || has('name')) {
+    f.name = trimOrNull(b.name);
+    if (!f.name) return { error: 'name is required.' };
+  }
+  if (!partial || has('supplier_type')) {
+    if (!ledger.SUPPLIER_TYPES.includes(b.supplier_type)) {
+      return { error: `supplier_type must be one of: ${ledger.SUPPLIER_TYPES.join(', ')}` };
+    }
+    f.supplier_type = b.supplier_type;
+  }
+  if (!partial || has('country_code')) {
+    const cc = trimOrNull(b.country_code);
+    if (!cc || !/^[A-Za-z]{2}$/.test(cc)) return { error: 'country_code is required (2-letter code).' };
+    const c = await db.query('SELECT 1 FROM core_countries WHERE code = $1', [cc.toUpperCase()]);
+    if (!c.rows.length) return { error: 'unknown country' };
+    f.country_code = cc.toUpperCase();
+  }
+  if (has('office_id')) {
+    if (b.office_id == null || b.office_id === '') f.office_id = null;
+    else {
+      if (!isIntLike(b.office_id)) return { error: 'invalid office' };
+      const o = await db.query('SELECT 1 FROM offices WHERE id = $1 AND is_active', [b.office_id]);
+      if (!o.rows.length) return { error: 'invalid office' };
+      f.office_id = Number(b.office_id);
+    }
+  }
+  if (has('tax_number')) f.tax_number = trimOrNull(b.tax_number);
+  if (has('notes')) f.notes = trimOrNull(b.notes);
+  if (partial && has('is_active')) {
+    if (typeof b.is_active !== 'boolean') return { error: 'is_active must be boolean.' };
+    f.is_active = b.is_active;
+  }
+  return { fields: f };
+}
+
+const SUPPLIER_LIST_SQL = `
+  SELECT s.id, s.name, s.supplier_type, s.country_code, cc.name AS country_name,
+         s.office_id, o.name AS office_name, s.tax_number, s.notes, s.is_active, s.created_at,
+         COALESCE(h.n, 0)::int AS expense_count,
+         COALESCE(h.paid_eur, 0)::numeric(14,2) AS paid_eur,
+         to_char(h.last_date, 'YYYY-MM-DD') AS last_expense_date
+    FROM suppliers s
+    JOIN core_countries cc ON cc.code = s.country_code
+    LEFT JOIN offices o    ON o.id = s.office_id
+    LEFT JOIN LATERAL (
+      SELECT count(*) FILTER (WHERE l.reverses_entry_id IS NULL) AS n,
+             -SUM(l.signed_amount_eur) AS paid_eur, max(l.entry_date) AS last_date
+        FROM ledger_lines l JOIN expenses e ON e.id = l.expense_id
+       WHERE e.supplier_id = s.id
+    ) h ON TRUE
+   WHERE s.organizer_id = $1`;
+
+router.get('/suppliers/options', needSuppliers, async (req, res) => {
+  try {
+    const c = await pool.query('SELECT code, name FROM core_countries ORDER BY name');
+    res.json({ types: ledger.SUPPLIER_TYPES, countries: c.rows });
+  } catch (err) {
+    console.error('Error fetching supplier options:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ?q= → ad benzerliğine göre sıralı (score) — taslak eşleşmesiyle AYNI fonksiyon.
+router.get('/suppliers', needSuppliers, async (req, res) => {
+  const all = req.query.include_inactive === '1';
+  const q = trimOrNull(req.query.q);
+  try {
+    const r = await pool.query(`${SUPPLIER_LIST_SQL} ${all ? '' : 'AND s.is_active'}
+      ORDER BY s.is_active DESC, lower(s.name), s.country_code`, [req.organizer_id]);
+    if (!q) return res.json(r.rows);
+    const m = await ledger.matchSuppliers(pool, req.organizer_id, q, { limit: 20, includeInactive: all });
+    res.json(m.map(x => ({ ...r.rows.find(s => s.id === x.id), score: x.score })).filter(x => x.id));
+  } catch (err) {
+    console.error('Error fetching suppliers:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/suppliers', needSuppliers, async (req, res) => {
+  try {
+    const v = await supplierFields(pool, req.body || {}, false);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const f = v.fields;
+    const r = await pool.query(
+      `INSERT INTO suppliers (organizer_id, name, supplier_type, country_code, office_id, tax_number, notes, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+      [req.organizer_id, f.name, f.supplier_type, f.country_code, f.office_id === undefined ? null : f.office_id,
+       f.tax_number === undefined ? null : f.tax_number, f.notes === undefined ? null : f.notes, ledger.requestUserId(req)]);
+    res.status(201).json(r.rows[0]);
+  } catch (err) { return fail(res, err, 'create supplier'); }
+});
+
+// Silme YOK (pasifleme). Geçmiş giderler FK ile bağlı kalır; ad düzeltmesi geçmişte de görünür.
+router.put('/suppliers/:id', needSuppliers, async (req, res) => {
+  if (!isIntLike(req.params.id)) return res.status(404).json({ error: 'Supplier not found' });
+  try {
+    const v = await supplierFields(pool, req.body || {}, true);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const keys = Object.keys(v.fields);
+    if (!keys.length) return res.status(400).json({ error: 'Nothing to update.' });
+    const r = await pool.query(
+      `UPDATE suppliers SET ${keys.map((k, i) => `${k} = $${i + 3}`).join(', ')}
+        WHERE id = $1 AND organizer_id = $2 RETURNING *`,
+      [req.params.id, req.organizer_id, ...keys.map(k => v.fields[k])]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Supplier not found' });
+    res.json(r.rows[0]);
+  } catch (err) { return fail(res, err, 'update supplier'); }
+});
+
+// Ödeme geçmişi = o tedarikçinin gider hareketleri (ledger_lines → expenses.supplier_id);
+// ters kayıt aynı tedarikçiyle → net. Saklanmaz (D2), tarih aralığı süzgeci.
+router.get('/suppliers/:id/history', needSuppliers, async (req, res) => {
+  const from = req.query.from || null;
+  const to = req.query.to || null;
+  if ((from && !isValidDate(from)) || (to && !isValidDate(to))) {
+    return res.status(400).json({ error: 'from/to must be YYYY-MM-DD dates.' });
+  }
+  if (!isIntLike(req.params.id)) return res.status(404).json({ error: 'Supplier not found' });
+  try {
+    const s = await pool.query(`${SUPPLIER_LIST_SQL} AND s.id = $2`, [req.organizer_id, req.params.id]);
+    if (!s.rows.length) return res.status(404).json({ error: 'Supplier not found' });
+    const lines = await pool.query(
+      `SELECT l.id, to_char(l.entry_date, 'YYYY-MM-DD') AS entry_date, l.direction,
+              l.amount, l.currency, l.exchange_rate, l.amount_eur, l.signed_amount, l.signed_amount_eur,
+              l.reverses_entry_id, (SELECT r.id FROM ledger_entries r WHERE r.reverses_entry_id = l.id) AS reversed_by_entry_id,
+              l.expense_id, e.reverses_expense_id, et.name AS expense_type, ec.name AS expense_category,
+              l.account_id, a.name AS account_name, ex.name AS expo_name, l.notes, e.document_url
+         FROM ledger_lines l
+         JOIN expenses e            ON e.id = l.expense_id
+         JOIN expense_types et      ON et.id = e.expense_type_id
+         JOIN expense_categories ec ON ec.id = et.category_id
+         JOIN accounts a            ON a.id = l.account_id
+         LEFT JOIN expos ex         ON ex.id = l.expo_id
+        WHERE l.organizer_id = $1 AND e.supplier_id = $2
+          AND ($3::date IS NULL OR l.entry_date >= $3) AND ($4::date IS NULL OR l.entry_date <= $4)
+        ORDER BY l.entry_date, l.id`,
+      [req.organizer_id, req.params.id, from, to]);
+    const paid = round2(lines.rows.reduce((sum, l) => sum - Number(l.signed_amount_eur), 0));
+    res.json({
+      supplier: s.rows[0], from, to,
+      paid_eur: paid.toFixed(2),                 // aralıkta (EUR, girişte donmuş kurla — RAP-01)
+      entries: lines.rows.length,
+      lines: lines.rows,
+    });
+  } catch (err) {
+    console.error('Error building supplier history:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

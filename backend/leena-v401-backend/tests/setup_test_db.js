@@ -35,6 +35,9 @@ const RUNNER_ONLY_FROM = 36;
 // İkinci DB: canlının Paket 1 ÖNCESİ şeması (≤ 035) — "deploy migration'dan önce" testleri
 // (tests/test_ledger.js) ve runner'ın gerçek dosyalarla dry-run'ı (tests/test_migrate.js).
 const PREMIG_MAX = 35;
+// Üçüncü DB: canlının Paket 1b ÖNCESİ şeması (≤ 040) — tests/test_ledger_p1b_premig.js ve
+// runner'ın Paket 1b dry-run'ı (tests/test_migrate.js R15-R17).
+const P1_MAX = 40;
 
 const CONN = process.env.TEST_DATABASE_URL || 'postgresql://postgres@localhost:5432/ell_comm_test';
 
@@ -63,6 +66,9 @@ const adminUrl = adminU.toString();
 const premigName = `${dbName}_premig`;
 const premigU = new URL(CONN);
 premigU.pathname = '/' + premigName;
+const p1Name = `${dbName}_p1`;
+const p1U = new URL(CONN);
+p1U.pathname = '/' + p1Name;
 
 async function buildDb(name, conn, maxNum) {
   // (1) Admin: DB düşür + yeniden yarat → idempotent (her koşuda sıfırdan).
@@ -126,4 +132,5 @@ async function buildDb(name, conn, maxNum) {
 (async () => {
   await buildDb(dbName, CONN, Infinity);
   await buildDb(premigName, premigU.toString(), PREMIG_MAX);
+  await buildDb(p1Name, p1U.toString(), P1_MAX);
 })().catch(e => { console.error('KURULUM HATASI:', e.message); process.exit(1); });

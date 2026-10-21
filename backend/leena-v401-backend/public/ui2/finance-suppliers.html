@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Finance · Suppliers</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<link rel="stylesheet" href="styles/ledger.css">
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+
+<script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='expenses';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="ledger-ui.js"></script>
+<script>
+(function () {
+  'use strict';
+  // P1b-1: tedarikçi (para karşı tarafı) kaydı. Silinmez, pasiflenir. Toplamlar SUNUCUDA
+  // ledger'dan türetilir (D2) — istemci hesaplamaz.
+  var L = window.ui2L, root = document.getElementById('lg-root');
+  var state = { list: [], opts: null, offices: [], q: L.qs('q') || '', all: L.qs('all') === '1' };
+
+  function table() {
+    if (!state.list.length) return '<div class="lg-empty">' + (state.q ? 'No supplier matches "' + L.esc(state.q) + '".' : 'No suppliers yet — add the first one below.') + '</div>';
+    var rows = state.list.map(function (s) {
+      return '<tr class="lg-row" data-id="' + s.id + '">' +
+        '<td><a href="finance-supplier.html?supplier=' + s.id + '">' + L.esc(s.name) + '</a>' +
+          (s.is_active ? '' : '<span class="lg-tag">inactive</span>') + (s.score != null ? '<span class="lg-tag">match ' + L.esc(s.score) + '</span>' : '') + '</td>' +
+        '<td>' + L.chip(s.supplier_type) + '</td>' +
+        '<td>' + L.esc(s.country_name) + '</td><td>' + L.dash(s.office_name) + '</td><td>' + L.dash(s.tax_number) + '</td>' +
+        '<td class="num">' + L.esc(s.expense_count) + '</td><td class="num">' + L.eur(s.paid_eur) + '</td>' +
+        '<td>' + L.dash(s.last_expense_date) + '</td>' +
+        '<td><button class="btn btn-ghost" data-act="toggle" data-id="' + s.id + '" data-active="' + s.is_active + '">' +
+          (s.is_active ? 'Deactivate' : 'Activate') + '</button></td></tr>';
+    }).join('');
+    return '<div class="table-wrap"><table class="table"><thead><tr><th>Supplier</th><th>Type</th><th>Country</th><th>Office</th>' +
+      '<th>Tax no.</th><th class="num">Expenses</th><th class="num">Paid (EUR)</th><th>Last</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  function searchForm() {
+    return '<form class="lg-form" id="flt"><label class="field"><span class="label">Search by name</span>' +
+      '<input class="input" name="q" value="' + L.esc(state.q) + '"></label>' +
+      '<label class="field"><span class="label">Inactive</span><span><input type="checkbox" name="all"' + (state.all ? ' checked' : '') + '> include</span></label>' +
+      '<button class="btn btn-secondary" type="submit">Filter</button></form>';
+  }
+
+  function newForm() {
+    return '<form class="lg-form" id="new-form">' +
+      '<label class="field"><span class="label">Name</span><input class="input" name="name" required></label>' +
+      '<label class="field"><span class="label">Type</span><select class="input" name="supplier_type">' +
+        L.options(state.opts.types, function (t) { return t; }, function (t) { return t; }, 'supplier') + '</select></label>' +
+      '<label class="field"><span class="label">Country</span><select class="input" name="country_code" required>' +
+        L.options(state.opts.countries, function (c) { return c.code; }, function (c) { return c.name; }, '', '—') + '</select></label>' +
+      '<label class="field"><span class="label">Office (optional)</span><select class="input" name="office_id">' +
+        L.options(state.offices, function (o) { return o.id; }, function (o) { return o.name; }, '', '— none —') + '</select></label>' +
+      '<label class="field"><span class="label">Tax number (optional)</span><input class="input" name="tax_number"></label>' +
+      '<label class="field"><span class="label">Notes</span><input class="input" name="notes"></label>' +
+      '<button class="btn btn-primary" type="submit">Add supplier</button></form><div class="lg-msg" id="new-msg"></div>';
+  }
+
+  function card(title, eyebrow, inner) {
+    return '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">' + L.esc(title) + '</span>' +
+      (eyebrow ? '<span class="card-eyebrow">' + L.esc(eyebrow) + '</span>' : '') + '</div>' + inner + '</div>';
+  }
+
+  function render() {
+    root.innerHTML = '<div class="lg-head"><div><h1>Suppliers</h1><div class="sub">money counterparties · ' + state.list.length +
+      ' shown · totals derived from ledger entries</div></div><div class="lg-links"><a href="finance-expenses.html">← Expenses</a></div></div>' +
+      '<div class="lg-stack">' +
+        card('Suppliers', 'Never deleted — deactivate instead', searchForm() + table()) +
+        card('Add supplier', 'Type is not an expo-partner role — this is who we pay', newForm()) +
+      '</div>';
+  }
+
+  function load() {
+    if (!L.guard(root)) return;
+    var qs = [];
+    if (state.q) qs.push('q=' + encodeURIComponent(state.q));
+    if (state.all) qs.push('include_inactive=1');
+    Promise.all([L.api('GET', '/api/ledger/suppliers' + (qs.length ? '?' + qs.join('&') : '')),
+                 L.api('GET', '/api/ledger/suppliers/options'), L.api('GET', '/api/offices')])
+      .then(function (r) {
+        if (r[0].status !== 200) { L.httpError(root, r[0], 'suppliers'); return; }
+        state.list = r[0].body; state.opts = r[1].body; state.offices = Array.isArray(r[2].body) ? r[2].body.filter(function (o) { return o.is_active !== false; }) : [];
+        render();
+      }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+  }
+
+  root.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var f = e.target, b = L.formJson(f);
+    if (f.id === 'flt') { state.q = b.q || ''; state.all = !!b.all; load(); return; }
+    L.api('POST', '/api/ledger/suppliers', b).then(function (r) {
+      if (r.status === 201) load(); else L.say(document.getElementById('new-msg'), r.body && r.body.error, 'error');
+    });
+  });
+  root.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-act="toggle"]');
+    if (btn) {
+      e.stopPropagation();
+      L.api('PUT', '/api/ledger/suppliers/' + btn.getAttribute('data-id'), { is_active: btn.getAttribute('data-active') !== 'true' })
+        .then(function (r) { if (r.status === 200) load(); else alert(r.body && r.body.error); });
+      return;
+    }
+    if (e.target.closest('a')) return;
+    var tr = e.target.closest('tr.lg-row');
+    if (tr) window.location.href = 'finance-supplier.html?supplier=' + encodeURIComponent(tr.getAttribute('data-id'));
+  });
+
+  L.ready(load);
+})();
+</script>
+</body>
+</html>
