@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node tests/test_cash_forecast.js && node tests/test_agent_office.js && node tests/test_payouts.js && node tests/test_commissions.js && node tests/test_schedule.js && node tests/test_offices.js && node tests/test_users.js && node tests/test_line_item_immutable.js && node tests/test_ui2_current_user.js",
+    "test": "node tests/test_cash_forecast.js && node tests/test_agent_office.js && node tests/test_payouts.js && node tests/test_commissions.js && node tests/test_schedule.js && node tests/test_offices.js && node tests/test_users.js && node tests/test_line_item_immutable.js && node tests/test_ui2_current_user.js && node tests/test_boot_guards.js",
     "test:setup": "node tests/setup_test_db.js"
   },
   "keywords": [],
