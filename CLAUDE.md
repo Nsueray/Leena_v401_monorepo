@@ -1115,3 +1115,31 @@ Lessons learned (operational rules):
 - **L1 — SendGrid sends to invalid-DNS test domains:** `@leena-test.local`-style fake-domain bulk inserts trigger MX lookup → deferred → 72h retry → hard bounce. Reputation risk. Mitigations: (a) plus-addressing on real mailbox (`suer+test1@elan-expo.com`); (b) pre-add fake domain to SendGrid suppression before bulk send; (c) SendGrid sandbox mode for simulation. *Candidate ELL_RULES.md cross-system rule — pending Suer decision.*
 - **L2 — PostgreSQL string match apostrophe types:** `'` (ASCII U+0027) and `'` (typographic U+2019) are distinct codepoints. Form inputs often autocorrect to typographic. SQL hardcoded strings WILL NOT match — derive byte-exact value from DB via subquery (this sprint's 76-visitor split SQL relied on this).
 - **L3 — Render Shell vs external DB access:** Render Shell uses `$DATABASE_INTERNAL_URL`. External access requires IP whitelist via Render Dashboard → leena_v401_db → Inbound IP Rules — update when Suer's IP changes.
+
+_(eski yer: v4.0.8 → "Campaign results funnel (commit `6d798ab`)" alt bölümü; 2026-10-21 Paket 1 ön işiyle arşivden geri taşındı)_
+
+**Attribution honesty — deliberate, do not "simplify" away:**
+- the checked-in row reads *"campaign recipients who checked in"*, never ROI framing, and the
+  tab states it is an **upper bound on attribution** — someone who would have attended anyway
+  still appears
+- until the target expo opens it reads *"target expo not yet open"*; `expoOpen` defaults to
+  **false** when the date is unknown, so a pre-fair 0 is never rendered as a measured zero
+- an amber banner names the base while rows are still pending
+
+**`42703` fallback — deploy-before-migration ordering.** Both read paths catch PostgreSQL
+`42703` (`undefined_column`) and re-run with `delivered_count` as `NULL::int`, so shipping the
+code before the migration degrades to the live count instead of 500-ing. Verified on production
+against the un-migrated schema. Same legacy-fallback pattern as migration 006 in
+`routes/reactivation.js`. **Use this pattern for any read that references a fresh column.**
+
+_(eski yer: v4.0.11 → "Act 2 — the wrong hotfix (commit `5794e2a`)" alt bölümü; 2026-10-21 Paket 1 ön işiyle arşivden geri taşındı)_
+
+**Lesson worth recording: `EXPLAIN` before optimizing.** I had the read-only DB
+access to check this in 30 seconds and skipped it because the correlation
+"looked slow." Two hours of debug + a wasted deploy is what that habit costs.
+
+_(eski yer: v4.0.2+ → **Test Email Cleanup (14 May 2026)**; 2026-10-21 Paket 1 ön işiyle arşivden geri taşındı)_
+
+- **Two-phase migration pattern proven and adopted as the template for future cleanup migrations:**
+  1. Phase 1 — dry run: `sed 's/^COMMIT;$/ROLLBACK;/' migrations/NNN.sql | psql $DATABASE_INTERNAL_URL` — runs every DELETE, prints row counts, rolls back at end. Any FK violation or syntax error surfaces here, zero risk to production data.
+  2. Phase 2 — real run: `psql $DATABASE_INTERNAL_URL -f migrations/NNN.sql` — same file, but COMMIT instead of ROLLBACK at end.

@@ -813,19 +813,9 @@ Stats tab. Percentages are always **of delivered, never of recipients**, and cap
 on production: per-row form **1,219-1,575 ms** on the 26k campaign vs **248-275 ms** for the
 aggregate form, identical results, and flat with recipient count.
 
-**Attribution honesty — deliberate, do not "simplify" away:**
-- the checked-in row reads *"campaign recipients who checked in"*, never ROI framing, and the
-  tab states it is an **upper bound on attribution** — someone who would have attended anyway
-  still appears
-- until the target expo opens it reads *"target expo not yet open"*; `expoOpen` defaults to
-  **false** when the date is unknown, so a pre-fair 0 is never rendered as a measured zero
-- an amber banner names the base while rows are still pending
+> ↪ **Attribution honesty — deliberate, do not "simplify" away:** bölümü CLAUDE.md'ye taşındı (2026-10-21) → "Versiyon Geçmişinden Ayrılıp Burada Kalanlar" bölümü.
 
-**`42703` fallback — deploy-before-migration ordering.** Both read paths catch PostgreSQL
-`42703` (`undefined_column`) and re-run with `delivered_count` as `NULL::int`, so shipping the
-code before the migration degrades to the live count instead of 500-ing. Verified on production
-against the un-migrated schema. Same legacy-fallback pattern as migration 006 in
-`routes/reactivation.js`. **Use this pattern for any read that references a fresh column.**
+> ↪ **`42703` fallback — deploy-before-migration ordering.** paragrafı CLAUDE.md'ye taşındı (2026-10-21) → "Versiyon Geçmişinden Ayrılıp Burada Kalanlar" bölümü.
 
 #### Migration 029 — `email_campaigns.delivered_count` (applied to production 19 Aug)
 
@@ -1039,9 +1029,7 @@ execute in **~9 ms** — the PG planner is smart enough to turn the correlated
 the hotfix.** The rewrite is functionally correct but addressed a bottleneck
 that did not exist.
 
-**Lesson worth recording: `EXPLAIN` before optimizing.** I had the read-only DB
-access to check this in 30 seconds and skipped it because the correlation
-"looked slow." Two hours of debug + a wasted deploy is what that habit costs.
+> ↪ **Lesson worth recording: `EXPLAIN` before optimizing.** paragrafı CLAUDE.md'ye taşındı (2026-10-21) → "Versiyon Geçmişinden Ayrılıp Burada Kalanlar" bölümü.
 
 #### Act 3 — the real fix (commit `90e2999`)
 
@@ -1290,9 +1278,7 @@ Reactivation monitor open backlog (post-fair):
 - Rows affected: 46 visitors + ~389 related rows across 10 tables (campaign_recipients, conference_certificates, exhibitor_leads, reactivation_tokens, visitor_event_status, email_queue, email_logs, email_events via CASCADE, checkins via CASCADE).
 - **First cleanup-pattern migration in this repo.** Migrations 001-006 are schema-only; 007 is the first data-only / pre-fair-housekeeping migration. Wrapped in a single transaction with explicit pre-cleanup of all RESTRICT FKs before the visitors DELETE.
 - **Audit gap surfaced + caught by dry-run:** initial FK audit (13 May "delete capability" analysis) only mapped FKs pointing TO `visitors.id` and missed inbound FKs on the intermediate tables. Specifically `email_queue.campaign_recipient_id → campaign_recipients(id)` is a RESTRICT FK that blocked the first dry-run. Fix added a new STEP 1 in the migration to clean those email_queue rows before STEP 2 deletes campaign_recipients. No data harmed — transaction rolled back cleanly.
-- **Two-phase migration pattern proven and adopted as the template for future cleanup migrations:**
-  1. Phase 1 — dry run: `sed 's/^COMMIT;$/ROLLBACK;/' migrations/NNN.sql | psql $DATABASE_INTERNAL_URL` — runs every DELETE, prints row counts, rolls back at end. Any FK violation or syntax error surfaces here, zero risk to production data.
-  2. Phase 2 — real run: `psql $DATABASE_INTERNAL_URL -f migrations/NNN.sql` — same file, but COMMIT instead of ROLLBACK at end.
+> ↪ **Two-phase migration pattern** maddesi (iki alt adımıyla) CLAUDE.md'ye taşındı (2026-10-21) → "Versiyon Geçmişinden Ayrılıp Burada Kalanlar" bölümü.
 - Apply this template to upcoming post-fair cleanup work: country pollution (44 distinct strings → ~33 canonical, audit 14 May), conference topic variants beyond what `conferenceCleanup.js` can handle (see ADR-021 + post-fair TODO).
 - Verification post-execute: `SELECT COUNT(*) FROM visitors_test_backup_20260514` → 46; all four `remaining_*` validation counters → 0.
 
