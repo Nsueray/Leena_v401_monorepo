@@ -1,8 +1,9 @@
 // MIGRATION RUNNER (Paket 1 P1-0) testi — scripts/migrate.js.
 //  (a) Fixture senaryoları: ell_comm_test içinde geçici ŞEMALARDA (search_path) — boş / yarım /
 //      tam / kayıtlı-dosyasız / boşluk / çakışma / sıra dışı / atomiklik / kilit / 036+ koruması.
-//  (b) GERÇEK dosyalar: ell_comm_test_premig (şema ≤ 035, canlının hali) üzerinde dry-run;
-//      sonra onun KOPYASINDA gerçek CLI (PG* env) ile dry-run → apply → tekrar → DUR.
+//  (b) GERÇEK dosyalar (Paket 1 kümesine, ≤ 040, dondurulmuş): ell_comm_test_premig (şema ≤ 035) üzerinde dry-run;
+//      sonra onun KOPYASINDA CLI (PG* env) ile dry-run → apply → tekrar → DUR.
+//  (c) Paket 1b: ell_comm_test_p1 (şema ≤ 040) üzerinde gerçek migrations/ + gerçek CLI.
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -15,6 +16,23 @@ const dbUrl = (name) => { const u = new URL(MAIN); u.pathname = '/' + name; retu
 const MAIN_NAME = decodeURIComponent(MAIN.pathname.replace(/^\//, ''));
 const PREMIG = MAIN_NAME + '_premig';
 const COPY = MAIN_NAME + '_premig_run';
+const P1 = MAIN_NAME + '_p1';             // şema ≤ 040 (Paket 1 canlıda, Paket 1b öncesi)
+const COPY_P1 = MAIN_NAME + '_p1_run';
+
+// (b) bölümünün R9-R14'ü Paket 1 GEÇİŞİNİN (035 → 040) provasıdır: dosya kümesi o pakete
+// DONDURULUR — gerçek dosyaların ≤ 040 kopyası + runner'ın birebir kopyası (CLI aynı kodla
+// koşar). Böylece sonraki paketlerin dosyaları bu provanın beklentisini değiştirmez.
+// Paket 1b geçişi (040 → 042) R15-R17'de, gerçek migrations/ dizini üzerinde.
+const FROZEN = fs.mkdtempSync(path.join(os.tmpdir(), 'ell-mig-p1-'));
+fs.mkdirSync(path.join(FROZEN, 'migrations'));
+fs.mkdirSync(path.join(FROZEN, 'scripts'));
+for (const f of fs.readdirSync(M.MIGRATIONS_DIR)) {
+  if (/^\d{3}/.test(f) && parseInt(f, 10) <= 40) fs.copyFileSync(path.join(M.MIGRATIONS_DIR, f), path.join(FROZEN, 'migrations', f));
+}
+fs.copyFileSync(path.join(BE, 'scripts/migrate.js'), path.join(FROZEN, 'scripts/migrate.js'));
+fs.symlinkSync(path.join(BE, 'node_modules'), path.join(FROZEN, 'node_modules'), 'dir');
+const FROZEN_MIG = path.join(FROZEN, 'migrations');
+const FROZEN_CLI = path.join(FROZEN, 'scripts/migrate.js');
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log('  ✅ ' + n)) : (fail++, console.log('  ❌ ' + n + (d !== undefined ? ' → ' + d : ''))); };
@@ -42,7 +60,7 @@ async function seedRegistry(c, versions) {
   await c.query(M.REGISTRY_DDL);
   for (const v of versions) await c.query('INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NULL)', [v]);
 }
-function cli(db, args, extraEnv = {}) {
+function cli(db, args, extraEnv = {}, script = FROZEN_CLI) {
   const u = new URL(dbUrl(db));
   const env = Object.assign({}, process.env, {
     PGHOST: u.hostname, PGPORT: u.port || '5432', PGUSER: decodeURIComponent(u.username || 'postgres'),
@@ -50,7 +68,7 @@ function cli(db, args, extraEnv = {}) {
   }, extraEnv);
   delete env.EXPECTED_DB_NAME;
   if (extraEnv.EXPECTED_DB_NAME) env.EXPECTED_DB_NAME = extraEnv.EXPECTED_DB_NAME;
-  const r = spawnSync(process.execPath, [path.join(BE, 'scripts/migrate.js'), ...args], { env, encoding: 'utf8', cwd: BE });
+  const r = spawnSync(process.execPath, [script, ...args], { env, encoding: 'utf8', cwd: BE });
   return { code: r.status, out: (r.stdout || '') + (r.stderr || '') };
 }
 
@@ -142,7 +160,7 @@ function cli(db, args, extraEnv = {}) {
     const regCount = (await p.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n;
     const notices = [];
     p.on('notice', n => notices.push(n.message));
-    const pd = await M.run(p, { dryRun: true });
+    const pd = await M.run(p, { dryRun: true, dir: FROZEN_MIG });
     const leftover = await rel(p, 'ledger_entries');
     ok('R9 GERÇEK dosyalar --dry-run (37 kayıt, canlı şekli): bekleyen TAM 036-040 · uygulandı + ROLLBACK · iz kalmadı',
       regCount === 37 && pd.status === 'dry_run' &&
@@ -182,12 +200,52 @@ function cli(db, args, extraEnv = {}) {
     const admin2 = new Client({ connectionString: dbUrl('postgres') }); await admin2.connect();
     await admin2.query(`DROP DATABASE IF EXISTS ${COPY}`); await admin2.end();
 
+    // ══ (c) Paket 1b geçişi — GERÇEK migrations/ + gerçek CLI, canlı şekli ≤ 040 (42 kayıt) ══
+    console.log('\n── Runner: Paket 1b (şema ≤ 040, canlının Paket 1 sonrası hali) ──');
+    p = new Client({ connectionString: dbUrl(P1) }); await p.connect();
+    // Canlı + staging ölçümü (21 Eki): 42 kayıt = 42 dosya (≤ 040). Test DB'si 029-031'i DIŞLAR ve
+    // 016'yı kaydetmez → aynı kayıt kümesi elle kurulur (R9 gerekçesi).
+    for (const f of M.listMigrationFiles().files.filter(x => x.num <= 40)) {
+      await p.query('INSERT INTO schema_migrations (version, applied_at) VALUES ($1, NULL) ON CONFLICT DO NOTHING', [f.version]);
+    }
+    const reg1 = (await p.query('SELECT count(*)::int n FROM schema_migrations')).rows[0].n;
+    const n1 = [];
+    p.on('notice', n => n1.push(n.message));
+    const d1 = await M.run(p, { dryRun: true });
+    const left1 = [await rel(p, 'suppliers'), await rel(p, 'expense_drafts')];
+    ok('R15 Paket 1b --dry-run (42 kayıt, canlı şekli): bekleyen TAM 041-042 · uygulandı + ROLLBACK · iz kalmadı · DUR yok',
+      reg1 === 42 && d1.status === 'dry_run' && d1.applied.join() === '041_suppliers,042_expense_drafts' &&
+      d1.problems.length === 0 && !left1[0] && !left1[1], JSON.stringify([reg1, d1.status, d1.applied, d1.problems, left1]));
+    ok('R16 dry-run NOTICE: 041 mevcut gider satırlarını sayar, supplier_id hepsinde NULL', n1.some(n => /^041: expenses \d+ rows — supplier_id NULL/.test(n)),
+      JSON.stringify(n1));
+    await p.end();
+    const admin3 = new Client({ connectionString: dbUrl('postgres') }); await admin3.connect();
+    await admin3.query(`DROP DATABASE IF EXISTS ${COPY_P1}`);
+    await admin3.query(`CREATE DATABASE ${COPY_P1} TEMPLATE ${P1}`);
+    await admin3.end();
+    const REAL_CLI = path.join(BE, 'scripts/migrate.js');
+    const q1Dry = cli(COPY_P1, ['--dry-run'], {}, REAL_CLI);
+    const q1Apply = cli(COPY_P1, [], {}, REAL_CLI);
+    const q1Again = cli(COPY_P1, [], {}, REAL_CLI);
+    p = new Client({ connectionString: dbUrl(COPY_P1) }); await p.connect();
+    const after1 = (await p.query(`SELECT count(*)::int n, count(*) FILTER (WHERE version >= '041' AND applied_at IS NOT NULL)::int dated,
+        to_regclass('public.suppliers') IS NOT NULL AS sup, to_regclass('public.expense_drafts') IS NOT NULL AS dr
+        FROM schema_migrations`)).rows[0];
+    await p.end();
+    ok('R17 gerçek CLI: "DRY-RUN OK: 2" → "COMMIT: 2" → "Nothing to apply" · 44 kayıt (041-042 tarihli) · iki tablo var',
+      q1Dry.code === 0 && /DRY-RUN OK: 2 migration/.test(q1Dry.out) && q1Apply.code === 0 && /COMMIT: 2 migration/.test(q1Apply.out) &&
+      q1Again.code === 0 && /Nothing to apply/.test(q1Again.out) && after1.n === 44 && after1.dated === 2 && after1.sup && after1.dr,
+      JSON.stringify([q1Dry.code, q1Apply.code, q1Again.code, after1, q1Apply.out.slice(-200)]));
+    const admin4 = new Client({ connectionString: dbUrl('postgres') }); await admin4.connect();
+    await admin4.query(`DROP DATABASE IF EXISTS ${COPY_P1}`); await admin4.end();
+
     console.log(`\n═══ MIGRATE RUNNER SONUÇ: ${pass} geçti, ${fail} başarısız ═══\n`);
   } catch (e) { console.error('TEST HATASI:', e); fail++; }
   finally {
     const c = new Client({ connectionString: dbUrl(MAIN_NAME) }); await c.connect();
     for (const s of schemas) await c.query(`DROP SCHEMA IF EXISTS ${s} CASCADE`).catch(() => {});
     await c.end();
+    fs.rmSync(FROZEN, { recursive: true, force: true });
     process.exit(fail === 0 ? 0 : 1);
   }
 })();

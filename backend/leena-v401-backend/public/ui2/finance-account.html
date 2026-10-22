@@ -30,7 +30,9 @@
       return 'Payment · ' + L.dash(l.af_number) + ' · ' + L.dash(l.company_name) + (l.payer ? ' · payer ' + L.esc(l.payer) : '');
     }
     if (l.entry_type === 'payout') return 'Commission payout · ' + L.dash(l.agent_name);
-    if (l.entry_type === 'expense') return L.dash(l.expense_category) + ' / ' + L.dash(l.expense_type) + (l.counterparty ? ' · ' + L.esc(l.counterparty) : '');
+    if (l.entry_type === 'expense') return L.dash(l.expense_category) + ' / ' + L.dash(l.expense_type) +
+      (l.supplier_id ? ' · <a href="finance-supplier.html?supplier=' + l.supplier_id + '">' + L.esc(l.supplier_name) + '</a>'
+        : l.counterparty ? ' · ' + L.esc(l.counterparty) : '');
     return 'Transfer ' + (l.direction === 'out' ? 'to ' : 'from ') + L.dash(l.counter_account_name);
   }
 

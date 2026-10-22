@@ -88,6 +88,8 @@ let cashForecastRoutes;
 try { cashForecastRoutes = require('./routes/cashForecast'); console.log('✓ Cash forecast routes loaded'); } catch (err) { console.error('✗ Failed to load cash forecast routes:', err.message); }
 let ledgerRoutes;
 try { ledgerRoutes = require('./routes/ledger'); console.log('✓ Ledger routes loaded'); } catch (err) { console.error('✗ Failed to load ledger routes:', err.message); }
+let expenseDraftRoutes;
+try { expenseDraftRoutes = require('./routes/expenseDrafts'); console.log('✓ Expense draft routes loaded'); } catch (err) { console.error('✗ Failed to load expense draft routes:', err.message); }
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -164,6 +166,7 @@ if (payoutRoutes) app.use('/api/agents', payoutRoutes); // ✅ PAYOUT P1 agent p
 if (officeRoutes) app.use('/api/offices', officeRoutes); // ✅ PS1 offices reference (read-only)
 if (cashForecastRoutes) app.use('/api/cash-forecast', cashForecastRoutes); // ✅ PS3-B cash forecast (office x due, EUR, derived)
 if (ledgerRoutes) app.use('/api/ledger', ledgerRoutes); // ✅ Paket 1 ledger: accounts, transfers, expenses, budgets, summary
+if (expenseDraftRoutes) app.use('/api/expense-drafts', expenseDraftRoutes); // ✅ Paket 1b: expense drafts (AI/import/manual → human accept)
 if (callcenterRoutes) app.use('/api/callcenter', callcenterRoutes); // ✅ Call-center dialer (isolated module — Stage 2, skeleton only)
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---

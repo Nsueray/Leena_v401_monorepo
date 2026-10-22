@@ -17,8 +17,8 @@ Başka bir DB/host için bu değişkeni ver. Dosyalarda literal host/şifre yokt
 
 ## Koşum
 ```
-npm run test:setup     # ell_comm_test + ell_comm_test_premig'i SIFIRDAN kurar (idempotent)
-npm test               # package.json zinciri — 14 suite, 269 test (2026-10-21, PG14.18 ve PG17.10)
+npm run test:setup     # ell_comm_test + _premig + _p1'i SIFIRDAN kurar (idempotent)
+npm test               # package.json zinciri — 17 suite, 316 test (2026-10-21 Paket 1b, PG14.18 ve PG17.10)
 ```
 `test:setup` idempotenttir: `DROP DATABASE IF EXISTS` + `CREATE` → art arda koşulabilir.
 
@@ -26,6 +26,11 @@ npm test               # package.json zinciri — 14 suite, 269 test (2026-10-21
 `applyMigrationFile` yoluyla) ve `ell_comm_test_premig` (≤ 035 = canlının Paket 1 öncesi şeması —
 "deploy migration'dan önce" testleri ve runner'ın gerçek dosyalarla dry-run'ı).
 Ledger suite'leri: `test_ledger.js` · `test_ledger_premig.js` · `test_migrate.js` · `test_ui2_ledger_pages.js`.
+
+**Üçüncü DB (Paket 1b, 2026-10-21):** `ell_comm_test_p1` (≤ 040 = canlının Paket 1 sonrası, 1b öncesi şeması).
+Paket 1b suite'leri: `test_ledger_p1b.js` (tedarikçi + gider taslağı + TABAN) · `test_ledger_p1b_premig.js`
+(yeni kod + ≤ 040 şema) · `test_ui2_p1b_pages.js`. `test_migrate.js` R9-R14 Paket 1 geçişinin provasıdır ve
+dosya kümesi ≤ 040'a DONDURULUR (beklentiler aynen); R15-R17 Paket 1b geçişi (gerçek migrations/).
 
 ## Ne kuruluyor
 - **Stub tablolar** (migration'larda yok, FK hedefi): `expos` (1-5, organizer_id=1),
