@@ -273,6 +273,9 @@ const suerId = async () => (await pool.query('SELECT id FROM users WHERE email=$
         // Paket 1: CASCADE ledger tablolarına da iner (users FK'leri); ledger değişmezlik
         // trigger'ı da B10'dan ÖNCE reddederdi → aynı gerekçeyle yalnız burada açık.
         await tc.query("SET LOCAL ell.allow_ledger_reset = 'on'");
+        // Paket 2: CASCADE davet / şablon / denetim tablolarına da iner (users FK'leri); onların
+        // TRUNCATE koruması da B10'dan ÖNCE reddederdi → aynı gerekçeyle yalnız burada açık.
+        await tc.query("SET LOCAL ell.allow_user_admin_reset = 'on'");
         await tc.query('TRUNCATE users CASCADE');
       } catch (e) { truncRejected = /B10/.test(e.message); truncMsg = e.message.slice(0, 60); }
       finally { await tc.query('ROLLBACK').catch(() => {}); tc.release(); }

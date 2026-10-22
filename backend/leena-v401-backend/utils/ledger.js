@@ -47,7 +47,7 @@ function parseMoney(b, { amountKey = 'amount', rateKey = 'exchange_rate', curren
 async function activeAccount(db, organizerId, id) {
   if (!isIntLike(id)) return null;
   const r = await db.query(
-    'SELECT id, name, currency, account_type, office_id, is_active FROM accounts WHERE id = $1 AND organizer_id = $2',
+    'SELECT id, name, currency, account_type, office_id, is_active, created_by::text AS created_by FROM accounts WHERE id = $1 AND organizer_id = $2',
     [id, organizerId]);
   return r.rows[0] || null;
 }
@@ -179,7 +179,9 @@ async function findSourceEntry(db, kind, sourceId) {
 // POST /api/ledger/expenses ve taslak kabulü (routes/expenseDrafts.js) bunu çağırır.
 // Çağıran transaction içindedir (BEGIN/COMMIT onda). Döner: { error } ya da
 // { expense, ledger_entry_id }. Hata sırası ve metinleri Paket 1 ucuyla birebir.
-async function createExpense(db, { organizerId, body, actor = null }) {
+// canUseAccount (Paket 2, isteğe bağlı): yetki kapsamı denetimi — hesap bulununca çağrılır;
+// false → { error, code: 'OUT_OF_SCOPE' } (çağıran 409 döner). Verilmezse eski davranış.
+async function createExpense(db, { organizerId, body, actor = null, canUseAccount = null }) {
   const b = body || {};
   if (!isIntLike(b.expense_type_id)) return { error: 'expense_type_id is required.' };
   if (!isIntLike(b.account_id)) return { error: 'account_id is required.' };
@@ -190,6 +192,7 @@ async function createExpense(db, { organizerId, body, actor = null }) {
 
   const acc = await activeAccount(db, organizerId, b.account_id);
   if (!acc) return { error: 'invalid account' };
+  if (canUseAccount && !canUseAccount(acc)) return { error: 'This record is outside your permission scope.', code: 'OUT_OF_SCOPE' };
   if (!acc.is_active) return { error: 'account is inactive' };
   // Para birimi = hesabın para birimi (LED-11); verildiyse eşleşmeli.
   const currency = b.currency ? String(b.currency).trim().toUpperCase() : acc.currency;

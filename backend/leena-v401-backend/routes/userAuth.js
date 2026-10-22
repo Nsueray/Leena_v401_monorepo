@@ -18,10 +18,19 @@
 //   401/403'te oturumu siler (leena-fetch.js:63-71); eski oturum korunur.
 // - Şifre uzunluk kuralı: register ile AYNI (routes/auth.js:88, en az 6).
 // - bcrypt maliyeti register ile AYNI (routes/auth.js:98, 10).
+// - Paket 2: /me etkin yetki özetini de döner (043–045 uygulandıysa; değilse eski şekil) —
+//   ui2 menüsü (ui2CanSee) bunu okur; güvenlik sınırı sunucudadır (requirePermission).
+// - Paket 2 davet kabulü (kimlik doğrulamasız, token POST gövdesinde — URL'de değil):
+//   POST /invite/check · POST /invite/accept. Geçersiz / kullanılmış / iptal / süresi geçmiş /
+//   pasif kullanıcı / şifresi zaten olan → hepsi AYNI 400 + aynı mesaj (hangisi olduğu sızmaz).
+//   Kabul: şifre yazılır, password_must_change=false, davet used_at (tek kullanım, FOR UPDATE).
 const express = require('express');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const pool = require('../utils/db');
+const perms = require('../utils/permissions');
+const inv = require('../utils/invites');
+const { writeAudit } = require('../utils/audit');
 
 const router = express.Router();
 
@@ -109,7 +118,7 @@ router.get('/me', requireUserSession, async (req, res) => {
     );
     const u = result.rows[0];
     if (!u || !u.is_active) return res.sendStatus(401);
-    return res.json({
+    const out = {
       user_id: u.id,
       name: displayNameOf(u),
       display_name: u.display_name,
@@ -118,7 +127,17 @@ router.get('/me', requireUserSession, async (req, res) => {
       is_owner: u.is_owner,
       password_must_change: u.password_must_change,
       session: 'user',
-    });
+    };
+    if (await perms.permissionsReady(pool)) {
+      const x = (await pool.query(
+        `SELECT u.organizer_id, u.office_id, o.name AS office_name, u.role_id, r.name AS role_name
+           FROM users u LEFT JOIN offices o ON o.id = u.office_id LEFT JOIN roles r ON r.id = u.role_id
+          WHERE u.id = $1`, [u.id])).rows[0];
+      out.office = x.office_id == null ? null : { id: x.office_id, name: x.office_name };
+      out.role = x.role_id == null ? null : { id: x.role_id, name: x.role_name };
+      out.permissions = await perms.permissionSummary(pool, { id: u.id, organizer_id: x.organizer_id, is_owner: u.is_owner, role_id: x.role_id });
+    }
+    return res.json(out);
   } catch (err) {
     console.error('User me failed:', err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -157,6 +176,73 @@ router.post('/change-password', requireUserSession, async (req, res) => {
   } catch (err) {
     console.error('Change password failed:', err);
     return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ── Davet kabulü (Paket 2 P2-1) ─────────────────────────────────────────────
+// Tek sorgu: token özeti → açık + süresi geçmemiş davet + aktif + şifresiz kullanıcı.
+const OPEN_INVITE_SQL = `
+  SELECT i.id, i.organizer_id, i.user_id::text AS user_id, u.email, u.display_name
+    FROM user_invites i JOIN users u ON u.id = i.user_id
+   WHERE i.token_hash = $1 AND i.used_at IS NULL AND i.revoked_at IS NULL AND i.expires_at > now()
+     AND u.is_active AND u.password_hash IS NULL`;
+
+async function invitesReady() {
+  return perms.permissionsReady(pool);
+}
+function tokenOf(req) {
+  const t = req.body && req.body.token;
+  return typeof t === 'string' && t.length >= 20 && t.length <= 200 ? t : null;
+}
+
+router.post('/invite/check', async (req, res) => {
+  try {
+    if (!(await invitesReady())) return res.status(503).json({ error: 'Invitations are not available yet.' });
+    const tok = tokenOf(req);
+    if (!tok) return res.status(400).json(inv.INVALID_INVITE);
+    const r = await pool.query(OPEN_INVITE_SQL, [inv.hashToken(tok)]);
+    if (!r.rows.length) return res.status(400).json(inv.INVALID_INVITE);
+    return res.json({ email: r.rows[0].email, display_name: r.rows[0].display_name, min_password_length: MIN_PASSWORD_LENGTH });
+  } catch (err) {
+    console.error('Invite check failed:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/invite/accept', async (req, res) => {
+  const password = typeof (req.body && req.body.password) === 'string' ? req.body.password : '';
+  const nameIn = typeof (req.body && req.body.display_name) === 'string' ? req.body.display_name.trim() : '';
+  let client = null;
+  try {
+    if (!(await invitesReady())) return res.status(503).json({ error: 'Invitations are not available yet.' });
+    const tok = tokenOf(req);
+    if (!tok) return res.status(400).json(inv.INVALID_INVITE);
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      return res.status(400).json({ error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` });
+    }
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const r = await client.query(`${OPEN_INVITE_SQL} FOR UPDATE OF i`, [inv.hashToken(tok)]);
+    if (!r.rows.length) { await client.query('ROLLBACK'); return res.status(400).json(inv.INVALID_INVITE); }
+    const i = r.rows[0];
+    const hash = await bcrypt.hash(password, BCRYPT_COST);
+    const upd = await client.query(
+      `UPDATE users SET password_hash = $2, password_must_change = false,
+              display_name = COALESCE($3, display_name)
+        WHERE id = $1 AND password_hash IS NULL AND is_active`,
+      [i.user_id, hash, nameIn === '' ? null : nameIn]);
+    if (upd.rowCount !== 1) { await client.query('ROLLBACK'); return res.status(400).json(inv.INVALID_INVITE); }
+    await client.query('UPDATE user_invites SET used_at = now() WHERE id = $1', [i.id]);
+    await writeAudit(client, { organizerId: i.organizer_id, actor: i.user_id, action: 'user.invite_accept',
+      targetType: 'user', targetId: i.user_id, diff: { invite_id: i.id } });
+    await client.query('COMMIT');
+    return res.json({ success: true, email: i.email });
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    console.error('Invite accept failed:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    if (client) client.release();
   }
 });
 

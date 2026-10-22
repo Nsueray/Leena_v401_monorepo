@@ -1,5 +1,6 @@
-// tests/test_ui2_p1b_pages.js — Paket 1b ui2 ekranları (DB YOK). Ekranlar Expenses altında yaşar
-// (subnav'a öğe EKLENMEDİ — Paket 1'in 6'lı subnav testi aynen geçer); oraya sayfa içi bağlantıyla gidilir.
+// tests/test_ui2_p1b_pages.js — Paket 1b ui2 ekranları (DB YOK). Paket 1b'de Expenses altında yaşıyordu
+// (sayfa içi bağlantı); Paket 2'de (Sentez 22 Eki, K-G) Suppliers + Drafts subnav'a girdi → P1'in aktif
+// öğe beklentisi 'expenses' → kendi anahtarları ('suppliers' / 'drafts'). Sayfa içi bağlantılar KALDI (P3).
 const path = require('path');
 const fs = require('fs');
 const PUB = path.join(__dirname, '..', 'public');
@@ -16,9 +17,10 @@ for (const p of PAGES) {
   if (!fs.existsSync(path.join(UI2, p))) { bad.push(p + ' yok'); continue; }
   const s = read(p);
   const order = ['/leena-fetch.js', 'shell.js', 'ledger-ui.js'].map(x => s.indexOf(`src="${x}"`));
-  if (!/UI2_ACTIVE='finance'/.test(s) || !/UI2_SUBACTIVE='expenses'/.test(s) || order.some(i => i < 0) || !(order[0] < order[1] && order[1] < order[2])) bad.push(p);
+  const sub = p === 'finance-drafts.html' ? 'drafts' : 'suppliers';
+  if (!/UI2_ACTIVE='finance'/.test(s) || !new RegExp(`UI2_SUBACTIVE='${sub}'`).test(s) || order.some(i => i < 0) || !(order[0] < order[1] && order[1] < order[2])) bad.push(p);
 }
-ok('P1 3 yeni ekran var · Finance > Expenses altında · script sırası leena-fetch → shell → ledger-ui', bad.length === 0, JSON.stringify(bad));
+ok('P1 3 yeni ekran var · Finance altında, subnav\'da KENDİ öğeleri (Paket 2) · script sırası leena-fetch → shell → ledger-ui', bad.length === 0, JSON.stringify(bad));
 
 const exp = read('finance-expenses.html');
 ok('P2 (Suer ilkesi) gider formunda serbest metin karşı taraf alanı YOK · tedarikçi datalist\'ten seçilir + "New supplier" kısayolu',

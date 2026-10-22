@@ -15,8 +15,10 @@
 // - Tedarikçi eşleşmesi ÖNERİDİR (OFS-05): sunucu supplier_match_* yazar; giderin tedarikçisi
 //   kabul gövdesindeki supplier_id'dir — gövdede yoksa gider tedarikçisiz doğar (otomatik atama YOK).
 // - YZ-02: yapay zeka istemcisi şirket hesabının oturumuyla gelir (bugün Owner token'ı;
-//   is_ai bayrağı YOK — "servis kullanıcısı" kararı Paket 2'de). Yetki: oturum (authMiddleware);
-//   Paket 2'de requirePermission takılır.
+//   is_ai bayrağı YOK — "servis kullanıcısı" kararı Paket 2'de).
+// - Paket 2 KAPI: okuma expense_drafts.read · yazma expense_drafts.write · kabul/ret
+//   expense_drafts.approve. Kapsam KABULDE hesap üzerinden (gider orada doğar — ledger kuralı);
+//   taslak yazımı ve ret para hareketi yazmaz → kapsam denetlenmez (yalnız izin).
 // ----------------------------------------------------------------------------
 const express = require('express');
 const router = express.Router();
@@ -24,6 +26,7 @@ const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const ledger = require('../utils/ledger');
 const { trimOrNull, isIntLike, isValidDate, METHODS } = ledger;
+const perms = require('../utils/permissions');
 
 const SOURCES = ['ai', 'import', 'manual'];
 const STATUSES = ['pending', 'accepted', 'rejected'];
@@ -107,7 +110,7 @@ router.use(async (req, res, next) => {
   } catch (err) { return next(err); }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', perms.requirePermission('expense_drafts.write'), async (req, res) => {
   const b = req.body || {};
   if (!SOURCES.includes(b.source)) return res.status(400).json({ error: `source must be one of: ${SOURCES.join(', ')}` });
   const p = parseDraft(b);
@@ -133,7 +136,7 @@ router.post('/', async (req, res) => {
   } catch (err) { return fail(res, err, 'create'); }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', perms.requirePermission('expense_drafts.read'), async (req, res) => {
   const status = req.query.status || 'pending';
   if (status !== 'all' && !STATUSES.includes(status)) return res.status(400).json({ error: 'status must be pending, accepted, rejected or all.' });
   const comp = req.query.completeness || null;
@@ -154,7 +157,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', perms.requirePermission('expense_drafts.read'), async (req, res) => {
   if (!isIntLike(req.params.id)) return res.status(404).json({ error: 'Draft not found' });
   try {
     const r = await pool.query(`${DRAFT_SELECT} AND d.id = $2`, [req.organizer_id, req.params.id]);
@@ -169,7 +172,7 @@ router.get('/:id', async (req, res) => {
 // Kabul: taslak alanları + gövde (insanın tamamladığı/düzelttiği değerler, supplier_id seçimi)
 // → createExpense (POST /api/ledger/expenses ile AYNI doğrulama) → taslak accepted + expense_id.
 // Hata → 400, taslak pending kalır (tek transaction).
-router.post('/:id/accept', async (req, res) => {
+router.post('/:id/accept', perms.requirePermission('expense_drafts.approve'), async (req, res) => {
   if (!isIntLike(req.params.id)) return res.status(404).json({ error: 'Draft not found' });
   const b = req.body || {};
   const client = await pool.connect();
@@ -187,8 +190,9 @@ router.post('/:id/accept', async (req, res) => {
     for (const k of EXPENSE_FIELDS) body[k] = Object.prototype.hasOwnProperty.call(b, k) ? b[k] : dr[k];
     body.supplier_id = b.supplier_id;
     const actor = ledger.requestUserId(req);
-    const e = await ledger.createExpense(client, { organizerId: req.organizer_id, body, actor });
-    if (e.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: e.error }); }
+    const e = await ledger.createExpense(client, { organizerId: req.organizer_id, body, actor,
+      canUseAccount: (a) => perms.checkScope(req, { office_id: a.office_id, created_by: a.created_by }) });
+    if (e.error) { await client.query('ROLLBACK'); return res.status(e.code === 'OUT_OF_SCOPE' ? 409 : 400).json(e.code ? perms.OUT_OF_SCOPE : { error: e.error }); }
     await client.query(
       `UPDATE expense_drafts SET status = 'accepted', expense_id = $2, reviewed_by = $3, reviewed_at = now()
         WHERE id = $1`, [dr.id, e.expense.id, actor]);
@@ -204,7 +208,7 @@ router.post('/:id/accept', async (req, res) => {
 });
 
 // Ret: yalnız durum + kim/ne zaman; satır silinmez, ledger'a dokunulmaz.
-router.post('/:id/reject', async (req, res) => {
+router.post('/:id/reject', perms.requirePermission('expense_drafts.approve'), async (req, res) => {
   if (!isIntLike(req.params.id)) return res.status(404).json({ error: 'Draft not found' });
   try {
     const r = await pool.query(

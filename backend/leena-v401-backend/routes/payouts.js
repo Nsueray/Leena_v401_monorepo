@@ -16,6 +16,7 @@ const pool = require('../utils/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { SLICE_CTES } = require('../utils/commissionSlices');
 const ledger = require('../utils/ledger');
+const perms = require('../utils/permissions');
 
 // round2 / isValidDate — contracts.js:546-555 emsali birebir.
 function round2(n) {
@@ -54,12 +55,12 @@ function mapWriteError(err) {
 // hareketi varsa aynı hesapta ters hareket; istemcinin account_id'si yok sayılır (TAH-01).
 // Hesap commission_payouts'ta SAKLANMAZ — hareket satırında yaşar (tablo değişmedi).
 // ----------------------------------------------------------------------------
-router.post('/:id/payouts', authMiddleware, async (req, res) => {
+// Paket 2 KAPI: payouts.write (utils/permissions.js). Kapsam = ödeyen ofis (normal: istemcinin
+// doğrulanmış ofisi · reversal: orijinalden devralınan). commission_payouts.created_by integer
+// (organizer) olduğundan own/team kapsamı payout'ta eşleşmez → yalnız office / all geçer.
+router.post('/:id/payouts', authMiddleware, perms.requirePermission('payouts.write'), async (req, res) => {
   const { id } = req.params;
   const b = req.body || {};
-
-  // TODO Faz 4: role gate (B21-B42 user_permissions matrisi). Bugün organizer-scope
-  // + geçerli JWT yeterli (single-tenant, iç ekip).
 
   const isReversal = b.reverses_payout_id != null;
 
@@ -167,6 +168,10 @@ router.post('/:id/payouts', authMiddleware, async (req, res) => {
     // W-3: reversal → orijinalden devral; normal → doğrulanmış istemci değeri.
     const finalOffice = isReversal ? tgtRow.paid_office_id : paidOfficeIn;
     const finalMethod = isReversal ? tgtRow.payout_method : payoutMethodIn;
+    if (!perms.checkScope(req, { office_id: finalOffice, created_by: null })) {
+      await client.query('ROLLBACK').catch(() => {});
+      return res.status(409).json(perms.OUT_OF_SCOPE);
+    }
 
     // L-4: hesap çözümü (utils/ledger.js tek kural) — yalnız normal payout'ta.
     const ledgerReady = await ledger.ledgerSchemaReady(client);

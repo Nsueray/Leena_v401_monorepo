@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<title>ELIZA — Accept invitation</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/signal.css">
+<link rel="stylesheet" href="styles/themes.css">
+<style>
+  /* Ekrana özgü düzen — görsel sistem signal.css'ten (login.html ile aynı iskelet). */
+  .ul-main { padding: 64px 24px; max-width: 400px; margin: 0 auto; }
+  .ul-main h1 { font-family:var(--font-display); font-weight:600; font-size:22px; margin:0 0 6px; color:var(--ink); }
+  .ul-sub { margin:0 0 20px; color:var(--muted); font-size:13px; }
+  .ul-form { display:grid; gap:14px; }
+  .ul-msg { min-height:18px; font-size:13px; color:var(--dang); }
+  .ul-note { font-size:12px; color:var(--muted); }
+</style>
+</head>
+<body>
+<!-- Kimlik doğrulamasız sayfa: shell.js / leena-fetch BİLEREK yüklenmez. Token URL FRAGMENT'ında
+     (#token=…) gelir → sunucuya / erişim loguna / Referer'a gitmez (B20); POST gövdesiyle gönderilir. -->
+<main class="ul-main">
+  <div class="card card-pad">
+    <div id="step-check"><h1>Accept invitation</h1><p class="ul-sub">Checking your invitation…</p></div>
+
+    <div id="step-set" hidden>
+      <h1>Set your password</h1>
+      <p class="ul-sub">Invitation for <strong id="inv-email"></strong>. The link works once.</p>
+      <form class="ul-form" id="setForm" autocomplete="off">
+        <div class="field"><label class="label" for="dname">Your name (optional)</label>
+          <input class="input" id="dname" type="text" autocomplete="name"></div>
+        <div class="field"><label class="label" for="new1">New password</label>
+          <input class="input" id="new1" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="field"><label class="label" for="new2">Repeat new password</label>
+          <input class="input" id="new2" type="password" autocomplete="new-password" minlength="6" required></div>
+        <div class="ul-msg" id="setMsg"></div>
+        <button class="btn btn-primary btn-block" type="submit">Set password</button>
+        <div class="ul-note" id="minNote">At least 6 characters.</div>
+      </form>
+    </div>
+
+    <div id="step-bad" hidden>
+      <h1>Invitation not valid</h1>
+      <p class="ul-sub" id="badMsg"></p>
+      <a class="btn btn-secondary btn-block" href="login.html">Go to sign in</a>
+    </div>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var token = (new URLSearchParams(location.hash.replace(/^#/, ''))).get('token') || '';
+  // Token adres çubuğundan silinir (geçmişe / ekran paylaşımına kalmasın); bellekte tutulur.
+  try { history.replaceState(null, '', location.pathname); } catch (e) { /* fail-soft */ }
+
+  function post(url, body) {
+    return fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (j) { return { status: res.status, body: j }; });
+      });
+  }
+  function show(id) {
+    ['step-check', 'step-set', 'step-bad'].forEach(function (s) { document.getElementById(s).hidden = s !== id; });
+  }
+  function bad(msg) {
+    document.getElementById('badMsg').textContent = msg || 'This invitation link is invalid or has expired. Ask for a new invitation.';
+    show('step-bad');
+  }
+
+  if (!token) { bad(); return; }
+  post('/api/user-auth/invite/check', { token: token }).then(function (r) {
+    if (r.status !== 200) { bad(r.body && r.body.error); return; }
+    document.getElementById('inv-email').textContent = r.body.email;
+    if (r.body.display_name) document.getElementById('dname').value = r.body.display_name;
+    if (r.body.min_password_length) document.getElementById('minNote').textContent = 'At least ' + r.body.min_password_length + ' characters.';
+    show('step-set');
+    document.getElementById('new1').focus();
+  }).catch(function () { bad('Could not reach the server. Please retry.'); });
+
+  document.getElementById('setForm').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var msg = document.getElementById('setMsg'); msg.textContent = '';
+    var n1 = document.getElementById('new1').value, n2 = document.getElementById('new2').value;
+    if (n1 !== n2) { msg.textContent = 'Passwords do not match.'; return; }
+    post('/api/user-auth/invite/accept', {
+      token: token, password: n1, display_name: document.getElementById('dname').value
+    }).then(function (r) {
+      if (r.status !== 200) { msg.textContent = (r.body && r.body.error) || ('Could not set the password (HTTP ' + r.status + ').'); return; }
+      window.location.href = 'login.html?invited=1&email=' + encodeURIComponent(r.body.email);
+    }).catch(function () { msg.textContent = 'Could not reach the server. Please retry.'; });
+  });
+})();
+</script>
+</body>
+</html>

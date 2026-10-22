@@ -96,10 +96,38 @@
         document.getElementById('cur').value = document.getElementById('password').value;
         document.getElementById('new1').focus();
       } else {
-        window.location.href = PANEL;
+        storeAccessThen(function () { window.location.href = PANEL; });
       }
     }).catch(function () { msg.textContent = 'Could not reach the server. Please retry.'; });
   });
+
+  // Paket 2: etkin yetki özeti (/me) ui2User kaydına yazılır → ilk ekranın menüsü doğru açılır
+  // (shell.js her sayfada ayrıca tazeler). Hata olursa yine de devam edilir (fail-soft).
+  function storeAccessThen(done) {
+    fetch('/api/user-auth/me', { headers: { Authorization: 'Bearer ' + token } })
+      .then(function (res) { return res.status === 200 ? res.json() : null; })
+      .then(function (me) {
+        if (!me) return;
+        var rec = JSON.parse(localStorage.getItem('ui2User') || 'null');
+        if (!rec) return;
+        rec.perms = me.permissions || null; rec.role = me.role || null; rec.office = me.office || null;
+        localStorage.setItem('ui2User', JSON.stringify(rec));
+      })
+      .catch(function () { /* fail-soft */ })
+      .then(done, done);
+  }
+
+  // Davet kabulünden dönüş: /ui2/login.html?email=…&invited=1 → e-posta dolu, bilgi notu.
+  (function () {
+    var q = new URLSearchParams(location.search);
+    if (q.get('email')) document.getElementById('email').value = q.get('email');
+    if (q.get('invited') === '1') {
+      var m = document.getElementById('loginMsg');
+      m.style.color = 'var(--pos)';
+      m.textContent = 'Your password is set — sign in to continue.';
+      document.getElementById('password').focus();
+    }
+  })();
 
   document.getElementById('changeForm').addEventListener('submit', function (e) {
     e.preventDefault();
@@ -111,7 +139,7 @@
       new_password: n1
     }, token).then(function (r) {
       if (r.status !== 200) { msg.textContent = r.body.error || ('Change failed (HTTP ' + r.status + ').'); return; }
-      window.location.href = PANEL;
+      storeAccessThen(function () { window.location.href = PANEL; });
     }).catch(function () { msg.textContent = 'Could not reach the server. Please retry.'; });
   });
 })();

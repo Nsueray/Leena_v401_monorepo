@@ -13,7 +13,10 @@ const jwt = require(path.join(BE, 'node_modules/jsonwebtoken'));
 const app = express(); app.use(express.json());
 app.use('/api/agents', require(path.join(BE, 'routes/payouts.js')));
 app.use('/api/offices', require(path.join(BE, 'routes/offices.js')));
-const TOKEN = jwt.sign({ organizer_id: 1 }, process.env.JWT_SECRET);
+// Paket 2 (fixture): payout yazımı kapılı (payouts.write) — eski token (user_id YOK) 409 köprüsü
+// alır. Suite'in aktörü Owner kullanıcı oturumu; token sunucu açılınca (Owner id DB'den) kurulur.
+// Kapının kendisi tests/test_users_admin.js'te ölçülür.
+let TOKEN = null;
 const PORT = 45933;
 
 let pass = 0, fail = 0;
@@ -56,6 +59,8 @@ const stmt = (ag) => call('GET', `/api/agents/${ag}/statement`);
 
 const server = app.listen(PORT, async () => {
   try {
+    const own = (await pool.query('SELECT id FROM users WHERE organizer_id = 1 AND is_owner AND is_active LIMIT 1')).rows[0];
+    TOKEN = jwt.sign({ organizer_id: 1, user_id: own.id }, process.env.JWT_SECRET);
     const turkey = await officeId('Turkey');
     const po = (ag, extra) => payout(ag, Object.assign({ paid_office_id: turkey }, extra));
 

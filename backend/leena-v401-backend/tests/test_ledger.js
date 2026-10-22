@@ -22,7 +22,7 @@ const PORT = 45977;
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log('  ✅ ' + n)) : (fail++, console.log('  ❌ ' + n + (d !== undefined ? ' → ' + d : ''))); };
 let TOKEN = jwt.sign({ organizer_id: 1 }, process.env.JWT_SECRET);   // klasik (organizer) oturum
-let OWNER = null, STAFF = null;                                     // ui2 (users) oturumları
+let OWNER = null, STAFF = null, CLASSIC = null;                     // ui2 (users) oturumları · klasik
 async function call(method, url, body, token = TOKEN) {
   const opts = { method, headers: { Authorization: `Bearer ${token}` } };
   if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
@@ -77,6 +77,13 @@ const server = app.listen(PORT, async () => {
     if (!st) st = await q1("INSERT INTO users (organizer_id,email,is_owner) VALUES (1,'ledger-staff@x.com',false) RETURNING id");
     OWNER = jwt.sign({ organizer_id: 1, user_id: own.id, email: 'owner' }, process.env.JWT_SECRET);
     STAFF = jwt.sign({ organizer_id: 1, user_id: st.id, email: 'staff' }, process.env.JWT_SECRET);
+    // Paket 2 (fixture): yazma uçları kapılı — eski token (user_id YOK) 409 köprüsü alır. Suite'in
+    // varsayılan aktörü Owner kullanıcı oturumu; klasik oturum yalnız onu ölçen satırda (CLASSIC).
+    // STAFF bütçe yazabilen (Finance şablonu) ama Owner OLMAYAN kullanıcıdır — B2/B3 kilit kuralını
+    // (OWNER_REQUIRED) ölçmeye devam eder. Kapının kendisi tests/test_users_admin.js'te.
+    await pool.query("UPDATE users SET role_id = (SELECT id FROM roles WHERE organizer_id = 1 AND name = 'Finance') WHERE id = $1", [st.id]);
+    CLASSIC = TOKEN;
+    TOKEN = OWNER;
     await reset();
 
     // ══ L-1 — hesaplar + referans (LED-02 / LED-03 / D2) ══
@@ -279,7 +286,7 @@ const server = app.listen(PORT, async () => {
       b1.status === 201 && g1.body.active.revision === 1 && offRow && offRow.budget_eur === '110.00' && offRow.actual_eur === '50.00' && offRow.variance_eur === '60.00' &&
       rentRow && rentRow.actual_eur === '20.00', JSON.stringify([b1.status, b1.body && b1.body.error, offRow, rentRow]));
     const lkStaff = await call('POST', '/api/ledger/budgets/1/lock', undefined, STAFF);
-    const lkOrg = await call('POST', '/api/ledger/budgets/1/lock');
+    const lkOrg = await call('POST', '/api/ledger/budgets/1/lock', undefined, CLASSIC);
     const lkOwn = await call('POST', '/api/ledger/budgets/1/lock', undefined, OWNER);
     const lkTwice = await call('POST', '/api/ledger/budgets/1/lock', undefined, OWNER);
     // Owner değil → 409 OWNER_REQUIRED (403 DEĞİL: leena-fetch 401/403'te oturumu siler — G45).

@@ -20,8 +20,12 @@
 // - Değişmezlik (LED-05/06/08): UPDATE/DELETE endpoint'i YOK; düzeltme = ters kayıt.
 // - Kur girişte donar (RAP-01): amount_eur = round2(amount × exchange_rate), sunucu otoritesi.
 // - Organizer scope her sorguda; yeni tablolar bileşik FK ile kiracıya kilitli (036).
-// - Rol gate YOK (Faz 4): "kim girebilir" yetki matrisi işidir (LED-08/09). İSTİSNA: bütçe
-//   kilidi Owner'a özgüdür (LED-09) → users.is_owner (ui2 oturumu gerekir).
+// - Paket 2 KAPI (KAPI-2): YAZMA uçları requirePermission(kod) ile kapılı (utils/permissions.js,
+//   tek çözümleme yeri); OKUMA uçları kapısız (menü gizleme ui2'de, UX). Kapsam LEDGER'da HESAP
+//   üzerinden denetlenir: ofis = hesabın ofisi, own/team = hesabı açan. Ofis boyutu olmayan
+//   kayıtlar (referans veri, bütçe) yalnız 'all' kapsamla yazılır. Eski token (user_id YOK) kapılı
+//   uçta 409 NOT_USER_SESSION. Bütçe KİLİDİ Owner'a özgü kalır (LED-09/15; kapı DEĞİL, kural) +
+//   denetim kaydı (045).
 // ----------------------------------------------------------------------------
 const express = require('express');
 const router = express.Router();
@@ -30,6 +34,17 @@ const authMiddleware = require('../middleware/authMiddleware');
 const { SLICE_CTES } = require('../utils/commissionSlices');
 const ledger = require('../utils/ledger');
 const { round2, isValidDate, trimOrNull, isIntLike, parseMoney, activeAccount, expoOfOrganizer } = ledger;
+const perms = require('../utils/permissions');
+const { writeAudit } = require('../utils/audit');
+
+// Paket 2 kapıları. Hedef kayıt: ledger'da hesap ({ office_id, created_by }).
+const gate = perms.requirePermission;
+const acctTarget = (a) => ({ office_id: a.office_id, created_by: a.created_by });
+const NO_OFFICE = { office_id: null, created_by: null };
+// Ofis boyutu olmayan kayıtlar (referans, bütçe) → yalnız 'all' kapsam (kapı eski davranıştaysa geçer).
+function scopeAll(req, res, next) {
+  return perms.checkScope(req, NO_OFFICE) ? next() : res.status(409).json(perms.OUT_OF_SCOPE);
+}
 
 const ACCOUNT_TYPES = ['bank', 'cash', 'virtual'];                                // LED-03
 
@@ -115,7 +130,7 @@ router.get('/currencies', async (req, res) => {
   }
 });
 
-router.post('/currencies', async (req, res) => {
+router.post('/currencies', gate('reference.write'), scopeAll, async (req, res) => {
   const code = trimOrNull(req.body && req.body.code);
   if (!code || !/^[A-Za-z]{3}$/.test(code)) return res.status(400).json({ error: 'code must be a 3-letter ISO code.' });
   try {
@@ -158,7 +173,7 @@ router.get('/reference', async (req, res) => {
   }
 });
 
-router.post('/expense-categories', async (req, res) => {
+router.post('/expense-categories', gate('reference.write'), scopeAll, async (req, res) => {
   const name = trimOrNull(req.body && req.body.name);
   if (!name) return res.status(400).json({ error: 'name is required.' });
   try {
@@ -169,7 +184,7 @@ router.post('/expense-categories', async (req, res) => {
   } catch (err) { return fail(res, err, 'add expense category'); }
 });
 
-router.post('/expense-types', async (req, res) => {
+router.post('/expense-types', gate('reference.write'), scopeAll, async (req, res) => {
   const b = req.body || {};
   const name = trimOrNull(b.name);
   if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -183,7 +198,7 @@ router.post('/expense-types', async (req, res) => {
   } catch (err) { return fail(res, err, 'add expense type'); }
 });
 
-router.post('/income-categories', async (req, res) => {
+router.post('/income-categories', gate('reference.write'), scopeAll, async (req, res) => {
   const name = trimOrNull(req.body && req.body.name);
   if (!name) return res.status(400).json({ error: 'name is required.' });
   try {
@@ -196,7 +211,7 @@ router.post('/income-categories', async (req, res) => {
 
 // Silme YOK (REQ:1728 "deactivation, not deletion"): yalnız ad / is_active.
 const REF_TABLES = { 'expense-categories': 'expense_categories', 'expense-types': 'expense_types', 'income-categories': 'income_categories' };
-router.put('/reference/:kind/:id', async (req, res) => {
+router.put('/reference/:kind/:id', gate('reference.write'), scopeAll, async (req, res) => {
   const table = REF_TABLES[req.params.kind];
   if (!table) return res.status(404).json({ error: 'Unknown reference kind.' });
   const b = req.body || {};
@@ -247,7 +262,7 @@ router.get('/accounts', async (req, res) => {
   }
 });
 
-router.post('/accounts', async (req, res) => {
+router.post('/accounts', gate('ledger.write'), async (req, res) => {
   const b = req.body || {};
   const name = trimOrNull(b.name);
   if (!name) return res.status(400).json({ error: 'name is required.' });
@@ -266,6 +281,7 @@ router.post('/accounts', async (req, res) => {
   if (is_office_default && (office_id == null || b.account_type === 'virtual')) {
     return res.status(400).json({ error: 'an office default account needs an office and must be bank or cash.' });
   }
+  if (!perms.checkScope(req, { office_id, created_by: ledger.requestUserId(req) })) return res.status(409).json(perms.OUT_OF_SCOPE);
   try {
     const cur = await pool.query(
       'SELECT 1 FROM currencies WHERE organizer_id = $1 AND code = $2 AND is_active', [req.organizer_id, currency.toUpperCase()]);
@@ -289,7 +305,7 @@ router.post('/accounts', async (req, res) => {
 });
 
 // Kimlik alanları (para birimi / tür / ofis / kişi) DEĞİŞMEZ — yeni hesap açılır (036 trigger'ı da reddeder).
-router.put('/accounts/:id', async (req, res) => {
+router.put('/accounts/:id', gate('ledger.write'), async (req, res) => {
   const b = req.body || {};
   for (const k of ['currency', 'account_type', 'office_id', 'person_id']) {
     if (b[k] !== undefined) return res.status(400).json({ error: `${k} cannot change — open a new account instead.` });
@@ -300,6 +316,11 @@ router.put('/accounts/:id', async (req, res) => {
     if (b[k] !== undefined && typeof b[k] !== 'boolean') return res.status(400).json({ error: `${k} must be boolean.` });
   }
   try {
+    if (req.access) {
+      const cur = await activeAccount(pool, req.organizer_id, req.params.id);
+      if (!cur) return res.status(404).json({ error: 'Account not found' });
+      if (!perms.checkScope(req, acctTarget(cur))) return res.status(409).json(perms.OUT_OF_SCOPE);
+    }
     const r = await pool.query(
       `UPDATE accounts SET name = COALESCE($3, name), is_active = COALESCE($4, is_active),
               is_office_default = COALESCE($5, is_office_default),
@@ -393,7 +414,7 @@ router.get('/accounts/:id/statement', async (req, res) => {
 // Body: from_account_id, to_account_id, transfer_date, amount, exchange_rate,
 //       amount_in? + exchange_rate_in? (YALNIZ para birimleri farklıysa zorunlu), notes?, expo_id?
 // Aynı para birimi: bacaklar eşit (masraf ayrı gider — LED-11 önerisi).
-router.post('/transfers', async (req, res) => {
+router.post('/transfers', gate('ledger.write'), async (req, res) => {
   const b = req.body || {};
   if (!isValidDate(b.transfer_date)) return res.status(400).json({ error: 'transfer_date is required and must be a valid YYYY-MM-DD date.' });
   if (!isIntLike(b.from_account_id) || !isIntLike(b.to_account_id)) return res.status(400).json({ error: 'from_account_id and to_account_id are required.' });
@@ -405,6 +426,7 @@ router.post('/transfers', async (req, res) => {
     const from = await activeAccount(client, req.organizer_id, b.from_account_id);
     const to = await activeAccount(client, req.organizer_id, b.to_account_id);
     if (!from || !to) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'invalid account' }); }
+    if (!perms.checkScope(req, acctTarget(from), acctTarget(to))) { await client.query('ROLLBACK'); return res.status(409).json(perms.OUT_OF_SCOPE); }
     if (!from.is_active || !to.is_active) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'account is inactive' }); }
 
     const out = parseMoney(b, { currency: from.currency });
@@ -477,7 +499,7 @@ router.get('/transfers', async (req, res) => {
 
 // Ters transfer: yeni olay + iki bacak, her bacak orijinali AYNEN tersler (tutar/kur/EUR
 // kopya — yeniden hesap yok, 018 gerekçesi). Tarih = bugün (ödeme reversal emsali).
-router.post('/transfers/:id/reverse', async (req, res) => {
+router.post('/transfers/:id/reverse', gate('ledger.write'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -486,6 +508,10 @@ router.post('/transfers/:id/reverse', async (req, res) => {
     if (t.rows[0].reverses_transfer_id != null) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Cannot reverse a reversal.' }); }
     const already = await client.query('SELECT 1 FROM transfers WHERE reverses_transfer_id = $1', [t.rows[0].id]);
     if (already.rows.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Transfer already reversed.' }); }
+    const legAccts = (await client.query(
+      `SELECT a.office_id, a.created_by::text AS created_by FROM ledger_entries le JOIN accounts a ON a.id = le.account_id
+        WHERE le.transfer_id = $1`, [t.rows[0].id])).rows;
+    if (!perms.checkScope(req, ...legAccts.map(acctTarget))) { await client.query('ROLLBACK'); return res.status(409).json(perms.OUT_OF_SCOPE); }
     const actor = ledger.requestUserId(req);
     const rt = await client.query(
       `INSERT INTO transfers (organizer_id, transfer_date, notes, reverses_transfer_id, created_by)
@@ -515,13 +541,14 @@ router.post('/transfers/:id/reverse', async (req, res) => {
 // Doğrulama + yazım utils/ledger.js createExpense'te (taslak kabulü de AYNI yolu çağırır).
 // counterparty metni API'de kabul edilmeye devam eder (mevcut davranış); ui2 formu artık
 // tedarikçi SEÇTİRİR (Suer ilkesi), serbest metin göndermez.
-router.post('/expenses', async (req, res) => {
+router.post('/expenses', gate('ledger.write'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const r = await ledger.createExpense(client, {
-      organizerId: req.organizer_id, body: req.body, actor: ledger.requestUserId(req) });
-    if (r.error) { await client.query('ROLLBACK'); return res.status(400).json({ error: r.error }); }
+      organizerId: req.organizer_id, body: req.body, actor: ledger.requestUserId(req),
+      canUseAccount: (a) => perms.checkScope(req, acctTarget(a)) });
+    if (r.error) { await client.query('ROLLBACK'); return res.status(r.code === 'OUT_OF_SCOPE' ? 409 : 400).json(r.code ? perms.OUT_OF_SCOPE : { error: r.error }); }
     await client.query('COMMIT');
     res.status(201).json({ expense: r.expense, ledger_entry_id: r.ledger_entry_id });
   } catch (err) {
@@ -569,7 +596,7 @@ router.get('/expenses', async (req, res) => {
 
 // Ters gider: negatif kopya (tutar/kur/EUR SQL'de işaret çevrimi — 018 gerekçesi), bugün;
 // hareket aynı hesaba giriş olarak, orijinal hareketi tersler.
-router.post('/expenses/:id/reverse', async (req, res) => {
+router.post('/expenses/:id/reverse', gate('ledger.write'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -578,6 +605,8 @@ router.post('/expenses/:id/reverse', async (req, res) => {
     if (o.rows[0].reverses_expense_id != null) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Cannot reverse a reversal.' }); }
     const already = await client.query('SELECT 1 FROM expenses WHERE reverses_expense_id = $1', [o.rows[0].id]);
     if (already.rows.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'Expense already reversed.' }); }
+    const oAcc = await activeAccount(client, req.organizer_id, o.rows[0].account_id);
+    if (!oAcc || !perms.checkScope(req, acctTarget(oAcc))) { await client.query('ROLLBACK'); return res.status(409).json(perms.OUT_OF_SCOPE); }
     const actor = ledger.requestUserId(req);
     // Tedarikçi de devralınır (041 sonrası) → tedarikçi geçmişinde gider + tersi net sıfır.
     const sup = (await ledger.featureReady(client, 'suppliers')) ? ', supplier_id' : '';
@@ -698,11 +727,14 @@ router.get('/suppliers', needSuppliers, async (req, res) => {
   }
 });
 
-router.post('/suppliers', needSuppliers, async (req, res) => {
+router.post('/suppliers', needSuppliers, gate('suppliers.write'), async (req, res) => {
   try {
     const v = await supplierFields(pool, req.body || {}, false);
     if (v.error) return res.status(400).json({ error: v.error });
     const f = v.fields;
+    if (!perms.checkScope(req, { office_id: f.office_id === undefined ? null : f.office_id, created_by: ledger.requestUserId(req) })) {
+      return res.status(409).json(perms.OUT_OF_SCOPE);
+    }
     const r = await pool.query(
       `INSERT INTO suppliers (organizer_id, name, supplier_type, country_code, office_id, tax_number, notes, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
@@ -713,13 +745,21 @@ router.post('/suppliers', needSuppliers, async (req, res) => {
 });
 
 // Silme YOK (pasifleme). Geçmiş giderler FK ile bağlı kalır; ad düzeltmesi geçmişte de görünür.
-router.put('/suppliers/:id', needSuppliers, async (req, res) => {
+router.put('/suppliers/:id', needSuppliers, gate('suppliers.write'), async (req, res) => {
   if (!isIntLike(req.params.id)) return res.status(404).json({ error: 'Supplier not found' });
   try {
     const v = await supplierFields(pool, req.body || {}, true);
     if (v.error) return res.status(400).json({ error: v.error });
     const keys = Object.keys(v.fields);
     if (!keys.length) return res.status(400).json({ error: 'Nothing to update.' });
+    if (req.access) {
+      const cur = (await pool.query('SELECT office_id, created_by::text AS created_by FROM suppliers WHERE id = $1 AND organizer_id = $2',
+        [req.params.id, req.organizer_id])).rows[0];
+      if (!cur) return res.status(404).json({ error: 'Supplier not found' });
+      const targets = [cur];
+      if (keys.includes('office_id')) targets.push({ office_id: v.fields.office_id, created_by: cur.created_by });
+      if (!perms.checkScope(req, ...targets)) return res.status(409).json(perms.OUT_OF_SCOPE);
+    }
     const r = await pool.query(
       `UPDATE suppliers SET ${keys.map((k, i) => `${k} = $${i + 3}`).join(', ')}
         WHERE id = $1 AND organizer_id = $2 RETURNING *`,
@@ -842,7 +882,7 @@ router.get('/budgets/:expoId', async (req, res) => {
 
 // Yeni revizyon (PLN-05): aktif varsa superseded damgalanır. Aktif KİLİTLİYSE yalnız Owner.
 // Body: income_target_eur?, notes?, lines: [{ category_id, expense_type_id?, amount_eur, notes? }]
-router.post('/budgets/:expoId', async (req, res) => {
+router.post('/budgets/:expoId', gate('budget.write'), scopeAll, async (req, res) => {
   const b = req.body || {};
   const lines = Array.isArray(b.lines) ? b.lines : [];
   let target = null;
@@ -901,19 +941,32 @@ router.post('/budgets/:expoId', async (req, res) => {
 });
 
 // Kilit: yalnız Owner (LED-09), yalnız aktif + kilitsiz revizyonda; tek yönlü damga.
+// Paket 2 P2-4: kilit olayı denetim kaydına AYNI transaction'da yazılır (045 yoksa atlanır).
 router.post('/budgets/:expoId/lock', async (req, res) => {
+  let client = null;
   try {
     if (!(await ledger.requestIsOwner(pool, req))) {
       return res.status(409).json({ error: 'Only the Owner can lock a budget (sign in through ui2).', code: 'OWNER_REQUIRED' });
     }
-    const r = await pool.query(
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const actor = ledger.requestUserId(req);
+    const r = await client.query(
       `UPDATE expo_budgets SET locked_at = now(), locked_by = $3
         WHERE organizer_id = $1 AND expo_id = $2 AND superseded_at IS NULL AND locked_at IS NULL
         RETURNING *`,
-      [req.organizer_id, req.params.expoId, ledger.requestUserId(req)]);
-    if (!r.rows.length) return res.status(409).json({ error: 'No unlocked active budget revision for this expo.' });
+      [req.organizer_id, req.params.expoId, actor]);
+    if (!r.rows.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'No unlocked active budget revision for this expo.' }); }
+    await writeAudit(client, { organizerId: req.organizer_id, actor, action: 'budget.lock', targetType: 'expo_budget',
+      targetId: r.rows[0].id, diff: { expo_id: r.rows[0].expo_id, revision: r.rows[0].revision } });
+    await client.query('COMMIT');
     res.json({ budget: r.rows[0] });
-  } catch (err) { return fail(res, err, 'lock budget'); }
+  } catch (err) {
+    if (client) await client.query('ROLLBACK').catch(() => {});
+    return fail(res, err, 'lock budget');
+  } finally {
+    if (client) client.release();
+  }
 });
 
 // ============================================================================
