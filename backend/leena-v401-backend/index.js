@@ -90,6 +90,9 @@ let ledgerRoutes;
 try { ledgerRoutes = require('./routes/ledger'); console.log('✓ Ledger routes loaded'); } catch (err) { console.error('✗ Failed to load ledger routes:', err.message); }
 let expenseDraftRoutes;
 try { expenseDraftRoutes = require('./routes/expenseDrafts'); console.log('✓ Expense draft routes loaded'); } catch (err) { console.error('✗ Failed to load expense draft routes:', err.message); }
+let userRoutes;
+try { userRoutes = require('./routes/users'); console.log('✓ User management routes loaded'); } catch (err) { console.error('✗ Failed to load user management routes:', err.message); }
+if (process.env.INVITE_ECHO === '1') console.warn('⚠️ INVITE_ECHO=1 — invite links are returned in API responses and logged (staging only; never set in production)');
 try { visitorRoutes = require('./routes/visitors'); console.log('✓ Visitor routes loaded'); } catch (err) { console.error('✗ Failed to load visitor routes:', err.message); }
 try { formRoutes = require('./routes/forms'); console.log('✓ Form routes loaded'); } catch (err) { console.error('✗ Failed to load form routes:', err.message); }
 try { checkinRoutes = require('./routes/checkins'); console.log('✓ Checkin routes loaded'); } catch (err) { console.error('✗ Failed to load checkin routes:', err.message); }
@@ -167,6 +170,7 @@ if (officeRoutes) app.use('/api/offices', officeRoutes); // ✅ PS1 offices refe
 if (cashForecastRoutes) app.use('/api/cash-forecast', cashForecastRoutes); // ✅ PS3-B cash forecast (office x due, EUR, derived)
 if (ledgerRoutes) app.use('/api/ledger', ledgerRoutes); // ✅ Paket 1 ledger: accounts, transfers, expenses, budgets, summary
 if (expenseDraftRoutes) app.use('/api/expense-drafts', expenseDraftRoutes); // ✅ Paket 1b: expense drafts (AI/import/manual → human accept)
+if (userRoutes) app.use('/api/users', userRoutes); // ✅ Paket 2: user management + permission matrix (invite, active/inactive, roles, overrides)
 if (callcenterRoutes) app.use('/api/callcenter', callcenterRoutes); // ✅ Call-center dialer (isolated module — Stage 2, skeleton only)
 
 // --- EXTRA ROUTE for /api/templates (for form-builder dropdown) ---

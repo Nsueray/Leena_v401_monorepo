@@ -54,8 +54,10 @@
         root.innerHTML = table([
           ['Name', dash(u.display_name)],
           ['Email', dash(u.email)],
-          ['Role', dash(u.display_role)],
+          ['Role', dash((u.role && u.role.name) || u.display_role)],
           ['Owner', yesno(u.is_owner)],
+          ['Office', dash(u.office && u.office.name)],
+          ['Access', u.permissions ? (u.permissions.owner ? 'Everything (Owner)' : dash((u.permissions.areas || []).join(', '))) : '—'],
           ['Session type', 'User'],
           ['Password change required', yesno(u.password_must_change)]
         ]);

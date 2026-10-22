@@ -20,7 +20,7 @@ const PORT = 45999;
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log('  ✅ ' + n)) : (fail++, console.log('  ❌ ' + n + (d !== undefined ? ' → ' + d : ''))); };
-const TOKEN = jwt.sign({ organizer_id: 1 }, process.env.JWT_SECRET);   // klasik (organizer) oturum
+let TOKEN = jwt.sign({ organizer_id: 1 }, process.env.JWT_SECRET);   // klasik (organizer) oturum
 let OWNER = null;                                                     // ui2 (users) oturumu — YZ-02: istemci bununla gelir
 async function call(method, url, body, token = TOKEN) {
   const opts = { method, headers: { Authorization: `Bearer ${token}` } };
@@ -56,6 +56,9 @@ const server = app.listen(PORT, async () => {
     let own = await q1('SELECT id FROM users WHERE organizer_id=1 AND is_owner AND is_active LIMIT 1');
     if (!own) own = await q1("INSERT INTO users (organizer_id,email,is_owner,display_role) VALUES (1,'owner-p1b@x.com',true,'Owner') RETURNING id");
     OWNER = jwt.sign({ organizer_id: 1, user_id: own.id, email: 'owner' }, process.env.JWT_SECRET);
+    // Paket 2 (fixture): yazma uçları kapılı — eski token 409 köprüsü alır; suite'in varsayılan
+    // aktörü Owner kullanıcı oturumu. Kapının kendisi tests/test_users_admin.js'te.
+    TOKEN = OWNER;
     const B = (await call('POST', '/api/ledger/accounts', { name: 'TR Bank EUR', account_type: 'bank', currency: 'EUR', office_id: turkey, is_office_default: true })).body.id;
     const T = (await call('POST', '/api/ledger/accounts', { name: 'TR Bank TRY', account_type: 'bank', currency: 'TRY', office_id: turkey })).body.id;
     const ref = (await call('GET', '/api/ledger/reference')).body;

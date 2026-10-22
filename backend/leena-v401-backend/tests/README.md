@@ -17,8 +17,8 @@ Başka bir DB/host için bu değişkeni ver. Dosyalarda literal host/şifre yokt
 
 ## Koşum
 ```
-npm run test:setup     # ell_comm_test + _premig + _p1'i SIFIRDAN kurar (idempotent)
-npm test               # package.json zinciri — 17 suite, 316 test (2026-10-21 Paket 1b, PG14.18 ve PG17.10)
+npm run test:setup     # ell_comm_test + _premig + _p1 + _p1b'yi SIFIRDAN kurar (idempotent)
+npm test               # package.json zinciri — 20 suite, 379 test (2026-10-22 Paket 2, PG14.18 ve PG17.10)
 ```
 `test:setup` idempotenttir: `DROP DATABASE IF EXISTS` + `CREATE` → art arda koşulabilir.
 
@@ -31,6 +31,17 @@ Ledger suite'leri: `test_ledger.js` · `test_ledger_premig.js` · `test_migrate.
 Paket 1b suite'leri: `test_ledger_p1b.js` (tedarikçi + gider taslağı + TABAN) · `test_ledger_p1b_premig.js`
 (yeni kod + ≤ 040 şema) · `test_ui2_p1b_pages.js`. `test_migrate.js` R9-R14 Paket 1 geçişinin provasıdır ve
 dosya kümesi ≤ 040'a DONDURULUR (beklentiler aynen); R15-R17 Paket 1b geçişi (gerçek migrations/).
+
+**Dördüncü DB (Paket 2, 2026-10-22):** `ell_comm_test_p1b` (≤ 042 = canlının Paket 1b sonrası, Paket 2 öncesi şeması).
+Paket 2 suite'leri: `test_users_admin.js` (aktiflik · yetki çözümlemesi · DB korumaları · kapı + kapsam · davet ·
+pasifleştirme · B10/B32 · denetim · regresyon · TABAN) · `test_users_premig.js` (yeni kod + ≤ 042 şema) ·
+`test_ui2_p2_pages.js` (menü etkin yetkiyi okur, Admin ekranları, davet sayfası). `test_migrate.js` R15-R17 aynı
+gerekçeyle ≤ 042'ye DONDURULDU; R18-R21 Paket 2 geçişi (gerçek migrations/; R21 043'ün veri değiştiren bağ adımı).
+**email_queue stub'ı** (Paket 2): davet e-postası transactional satır olarak yazıldığı için girer (YON-09) —
+kolonlar canlı ölçümü, FK'lerden yalnız organizers.
+**Fixture notu (Paket 2):** yazma uçları kapılı (eski token → 409 köprü) → `test_ledger` / `test_ledger_p1b` /
+`test_payouts`'un varsayılan aktörü Owner kullanıcı oturumu; assertion'lar değişmedi. Kapının kendisi
+`test_users_admin.js`'te.
 
 ## Ne kuruluyor
 - **Stub tablolar** (migration'larda yok, FK hedefi): `expos` (1-5, organizer_id=1),

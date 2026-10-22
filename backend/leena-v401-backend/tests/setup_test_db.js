@@ -38,6 +38,9 @@ const PREMIG_MAX = 35;
 // Üçüncü DB: canlının Paket 1b ÖNCESİ şeması (≤ 040) — tests/test_ledger_p1b_premig.js ve
 // runner'ın Paket 1b dry-run'ı (tests/test_migrate.js R15-R17).
 const P1_MAX = 40;
+// Dördüncü DB: canlının Paket 2 ÖNCESİ şeması (≤ 042) — tests/test_users_premig.js ve
+// runner'ın Paket 2 dry-run'ı (tests/test_migrate.js R18-R21).
+const P1B_MAX = 42;
 
 const CONN = process.env.TEST_DATABASE_URL || 'postgresql://postgres@localhost:5432/ell_comm_test';
 
@@ -69,6 +72,9 @@ premigU.pathname = '/' + premigName;
 const p1Name = `${dbName}_p1`;
 const p1U = new URL(CONN);
 p1U.pathname = '/' + p1Name;
+const p1bName = `${dbName}_p1b`;
+const p1bU = new URL(CONN);
+p1bU.pathname = '/' + p1bName;
 
 async function buildDb(name, conn, maxNum) {
   // (1) Admin: DB düşür + yeniden yarat → idempotent (her koşuda sıfırdan).
@@ -98,6 +104,15 @@ async function buildDb(name, conn, maxNum) {
     id serial PRIMARY KEY, email text UNIQUE NOT NULL)`);
   await c.query(`INSERT INTO organizers (id, email) VALUES (1, 'suer@elan-expo.com')`);
   await c.query(`SELECT setval('organizers_id_seq', 1, true)`);
+  // email_queue stub — Paket 2: davet e-postası transactional satır olarak buraya yazılır
+  // (utils/invites.js). Test edilen kod bu tabloya YAZDIĞI için girer (YON-09). Kolonlar canlı
+  // ölçümü (22 Eki, information_schema); FK'lerden yalnız organizers (diğer hedefler stub'da yok).
+  await c.query(`CREATE TABLE email_queue (
+    id serial PRIMARY KEY, organizer_id integer REFERENCES organizers(id) ON DELETE CASCADE,
+    expo_id integer, visitor_id integer, template_id integer, status text DEFAULT 'pending',
+    try_count integer DEFAULT 0, last_try timestamptz, created_at timestamptz DEFAULT now(),
+    recipient_email varchar, subject text, html_content text, sent_at timestamptz, error_message text,
+    campaign_id integer, campaign_step_id integer, campaign_recipient_id integer, email_event_id integer)`);
 
   // (3) Migration'lar — migrations/ dizininden, 012'den sıralı, DIŞLA hariç.
   //     Her biri kendi tx'inde (dosyalarda BEGIN/COMMIT yok).
@@ -133,4 +148,5 @@ async function buildDb(name, conn, maxNum) {
   await buildDb(dbName, CONN, Infinity);
   await buildDb(premigName, premigU.toString(), PREMIG_MAX);
   await buildDb(p1Name, p1U.toString(), P1_MAX);
+  await buildDb(p1bName, p1bU.toString(), P1B_MAX);
 })().catch(e => { console.error('KURULUM HATASI:', e.message); process.exit(1); });
