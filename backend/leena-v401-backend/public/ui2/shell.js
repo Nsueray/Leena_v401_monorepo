@@ -1,58 +1,41 @@
 /**
- * ui2 shell — TEK KAYNAK: nav + kimlik + yetki kancası.
+ * ui2 shell — nav + kimlik + yetki kancası.
  * Yüklenme: <script src="/leena-fetch.js"></script> SONRA <script src="shell.js"></script>
  *
- * Neden tek dosya: nav içeriği YALNIZ burada yaşar (30 dosyada menü tekrarı hatasını
- * önler). Kimlik ve yetki de tek noktadan sorulur — ekran kodu bunları ÇAĞIRIR,
- * kendi çözmez. Bugün cevaplar sabit (kullanıcı sistemi + rol motoru YOK, ölçüldü
- * 2026-08-04); Faz 4'te aynı fonksiyonlar users / user_permissions'ı okur, EKRAN
- * KODU DEĞİŞMEZ. Rol motoru TAKLİT EDİLMEZ — sahte "yetki gerekli" ekranı yok.
+ * NAV TEK KAYNAK = nav.json (UI-02). Bu dosya nav içeriği TAŞIMAZ, yalnız okur: üst sekmeler
+ * (domains), alt menü grupları (groups) ve öğeler (items; status live | placeholder, permission kodu).
+ * Menü değişikliği yalnız nav.json'da. Üst çubuk + alt menü işaretlemesi burada (tek yer); sayfa
+ * gövdesindeki bileşenler components.js'te.
+ * Kimlik ve yetki tek noktadan sorulur — ekran kodu bunları ÇAĞIRIR, kendi çözmez. Yetki SUNUCUDA
+ * çözülür (Paket 2, utils/permissions.js); burası yalnız /me özetini okur — rol motoru TAKLİT EDİLMEZ.
  */
 (function () {
   'use strict';
 
-  // ── Domain tanımı — TEK KAYNAK. Menü değişikliği yalnız burada. ──
-  // Alt-etiket brief :32-34: Sales(liffy) · Operations(leena) · Finance(yok).
-  // Paket 2: 'admin' (kullanıcı yönetimi) YALNIZ users oturumunda ve yetkiyle görünür (userOnly) —
-  // klasik oturumda nav eskisi gibi 3 sekme (K-G: eski davranış değişmez).
-  var UI2_DOMAINS = [
-    { key: 'sales',      main: 'Sales',      sub: 'liffy', href: 'sales.html' },
-    { key: 'operations', main: 'Operations', sub: 'leena', href: 'operations.html' },
-    { key: 'finance',    main: 'Finance',    sub: '',      href: 'finance-contract.html' },
-    { key: 'admin',      main: 'Admin',      sub: '',      href: 'admin-users.html', userOnly: true },
-  ];
+  var NAV_URL = '/ui2/nav.json';
+  // window.ui2NavData: nav.json içeriği (ui2LoadNav doldurur; test ortamı hazır veriyle koyar).
+  function nav() { return window.ui2NavData || null; }
+  function domainOf(key) {
+    var n = nav();
+    return n ? n.domains.filter(function (d) { return d.id === key; })[0] : undefined;
+  }
+  function itemOf(id) {
+    var n = nav();
+    return n ? n.items.filter(function (x) { return x.id === id; })[0] : undefined;
+  }
 
-  // ── Alt-nav (subnav) — TEK KAYNAK, domain'e göre. ──
-  // Emsal: tasarımda her Finance mockup'ı AYNI subnav'ı kendi içine KOPYALIYOR
-  // (War Room·Expos·Ledger·Contracts·Commissions·Reports) — kaçındığımız tekrar.
-  // Burada tek kaynaktan üretilir; ekran yalnız hangi öğenin aktif olduğunu bildirir.
-  // KURAL: yalnız GERÇEK ekranı olan öğe listelenir ("gösterilemeyen görünmez").
-  // Paket 1 (ledger L-1…L-6): beş gerçek ekran eklendi (hesap ekstresi Accounts'un altında).
-  // Paket 2 (K-G): Suppliers + Drafts SONA eklendi (eski 6 öğe yerinde, sırası aynı). `perm` = öğeyi
-  // gösteren okuma izni — yalnız users oturumunda okunur (menü UX; güvenlik sınırı sunucuda).
-  var UI2_SUBNAV = {
-    finance: [
-      { key: 'contract',  label: 'Contracts',   href: 'finance-contract.html',  perm: 'contracts.read' },
-      { key: 'summary',   label: 'Summary',     href: 'finance-summary.html',   perm: 'ledger.read' },
-      { key: 'accounts',  label: 'Accounts',    href: 'finance-accounts.html',  perm: 'ledger.read' },
-      { key: 'transfers', label: 'Transfers',   href: 'finance-transfers.html', perm: 'ledger.read' },
-      { key: 'expenses',  label: 'Expenses',    href: 'finance-expenses.html',  perm: 'ledger.read' },
-      { key: 'budget',    label: 'Expo budget', href: 'finance-budget.html',    perm: 'budget.read' },
-      { key: 'suppliers', label: 'Suppliers',   href: 'finance-suppliers.html', perm: 'suppliers.read' },
-      { key: 'drafts',    label: 'Drafts',      href: 'finance-drafts.html',    perm: 'expense_drafts.read' },
-    ],
-    sales: [],
-    operations: [],
-    admin: [
-      { key: 'users',     label: 'Users',       href: 'admin-users.html',       perm: 'users.read' },
-    ],
+  window.ui2LoadNav = function () {
+    if (nav()) return Promise.resolve(nav());
+    return fetch(NAV_URL, { credentials: 'same-origin' }).then(function (res) {
+      if (!res.ok) throw new Error('nav.json HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) { window.ui2NavData = data; return data; });
   };
 
   // ── KİMLİK — TEK NOKTA. "Kullanıcı kim?" ──
   // Faz 4 dilim 2 (SEM-05): SENKRON kalır. ui2 login (users) ile girildiyse 'ui2User'
   // kaydını okur — yalnız kayıt ŞU ANKİ token'a aitse (token_tail eşleşmesi). Aksi hâlde
   // eski davranış (klasik login: 'organizer' / 'organizerId'). Fetch YOK.
-  // Ekran kodu bunu çağırır, kullanıcıyı kendi çözmez.
   window.ui2CurrentUser = function () {
     try {
       var u = JSON.parse(localStorage.getItem('ui2User') || 'null');
@@ -73,10 +56,9 @@
 
   // ── YETKİ — TEK NOKTA. "Bu kullanıcı X'i görebilir mi?" ──
   // Paket 2: users oturumunda etkin yetki özetini okur (GET /api/user-auth/me → ui2User.perms;
-  // sunucu çözümler, istemci yalnız okur). SENKRON kalır (SEM-05): özet önbellekten okunur, sayfa
-  // açılışında arka planda tazelenir. Özet yoksa (klasik oturum / henüz okunmadı / migration
-  // öncesi) ESKİ davranış: TRUE — yalnız yeni 'admin' alanı (userOnly) gizli. Ekran kodu DEĞİŞMEZ.
-  // İkinci argüman (isteğe bağlı): tek bir izin kodu ('ledger.read' gibi).
+  // sunucu çözümler, istemci yalnız okur). SENKRON kalır (SEM-05). Özet yoksa (klasik oturum /
+  // henüz okunmadı / migration öncesi) ESKİ davranış: TRUE — yalnız userOnly alan (Admin) gizli.
+  // İkinci argüman (isteğe bağlı): tek bir izin kodu (nav.json öğesinin `permission` alanı).
   function ui2Access() {
     var u = window.ui2CurrentUser();
     if (u.session !== 'user') return null;
@@ -89,12 +71,24 @@
     var acc = ui2Access();
     if (!acc) {
       if (permCode) return true;
-      var d = UI2_DOMAINS.filter(function (x) { return x.key === domainKey; })[0];
+      var d = domainOf(domainKey);
       return !(d && d.userOnly);
     }
     if (acc.owner) return true;
     if (permCode) return !!(acc.codes && acc.codes[permCode]);
     return (acc.areas || []).indexOf(domainKey) !== -1;
+  };
+
+  // Giriş hedefi (UI-06 asgarisi: ui2 girişi → Finance özet). Finance görünmüyorsa ilk görünen alan.
+  window.ui2Landing = function () {
+    var n = nav();
+    if (!n) return 'whoami.html';
+    var order = [n.landing].concat(n.domains.map(function (d) { return d.id; }));
+    for (var i = 0; i < order.length; i++) {
+      var d = domainOf(order[i]);
+      if (d && window.ui2CanSee(d.id)) return d.path;
+    }
+    return 'whoami.html';
   };
 
   // ── AUTH kapısı — mevcut leenaFetch deseni (token localStorage['token']). ──
@@ -114,50 +108,79 @@
       .replace(/"/g, '&quot;');
   }
 
-  // ── NAV render — tasarım (signal.css) sınıflarını kullanır: .topnav/.domain-tabs/... ──
+  // Sayfa domain'ini bildirmediyse (yer-tutucu sayfası) aktif öğenin domain'i kullanılır.
+  function activeDomain(activeKey, subKey) {
+    if (activeKey) return activeKey;
+    var it = subKey ? itemOf(subKey) : null;
+    return it ? it.domain : null;
+  }
+
+  // ── NAV render — üst sekmeler nav.json `domains`'ten (sıra = dosyadaki sıra). ──
   window.ui2RenderNav = function (activeKey) {
     var mount = document.getElementById('ui2-nav');
     if (!mount) return;
+    var n = nav();
     var user = window.ui2CurrentUser();
     var initials = (user.name || 'U').trim().slice(0, 2).toUpperCase();
-
-    // Yalnız görülebilir domain'ler (yetki tek noktadan; bugün hepsi TRUE).
-    var tabs = UI2_DOMAINS.filter(function (d) { return window.ui2CanSee(d.key); }).map(function (d) {
-      var isActive = d.key === activeKey ? ' active' : '';
-      var onclick = d.key === activeKey ? '' : " onclick=\"location.href='" + d.href + "'\"";
-      return '<button class="domain-tab' + isActive + '"' + onclick + '>' +
-             '<span class="d-main">' + esc(d.main) + '</span>' +
-             '<span class="d-sub">' + (d.sub ? esc(d.sub) : '&nbsp;') + '</span></button>';
-    }).join('');
+    var brand = '<a class="brand" href="index.html"><span class="eliza-mark">' +
+      '<span class="eliza-glyph"><i></i><i></i><i></i></span>' +
+      '<span class="eliza-word on-dark">ELIZA</span></span></a>';
+    var tabs = n
+      ? n.domains.filter(function (d) { return window.ui2CanSee(d.id); }).map(function (d) {
+          var isActive = d.id === activeKey ? ' active' : '';
+          var onclick = d.id === activeKey ? '' : " onclick=\"location.href='" + d.path + "'\"";
+          return '<button class="domain-tab' + isActive + '"' + onclick + '>' +
+                 '<span class="d-main">' + esc(d.label) + '</span>' +
+                 '<span class="d-sub">' + (d.sub ? esc(d.sub) : '&nbsp;') + '</span></button>';
+        }).join('')
+      : '<span class="ui-nav-error">Navigation unavailable — reload the page.</span>';
 
     mount.outerHTML =
-      '<nav class="topnav" id="ui2-nav">' +
-        '<div class="brand"><div class="eliza-mark">' +
-          '<span class="eliza-glyph"><i></i><i></i><i></i></span>' +
-          '<span class="eliza-word on-dark">ELIZA</span></div></div>' +
+      '<nav class="topnav" id="ui2-nav">' + brand +
         '<div class="domain-tabs">' + tabs + '</div>' +
         '<div class="spacer"></div>' +
         '<div class="nav-right">' +
-          '<div class="avatar" style="background:var(--ink-2)" title="' + esc(user.name) + '">' + esc(initials) + '</div>' +
+          '<a class="avatar" href="whoami.html" title="' + esc(user.name) + '">' + esc(initials) + '</a>' +
         '</div>' +
       '</nav>';
   };
 
-  // ── SUBNAV render — TEK KAYNAK. Mount #ui2-subnav olan sayfalarda çalışır. ──
-  // Yetki tek noktadan: görülemeyen domain'in subnav'ı da çıkmaz (bugün hepsi TRUE).
+  // ── SUBNAV render — nav.json `groups` + `items`. Mount #ui2-subnav olan sayfalarda çalışır. ──
+  // Öğe görünürlüğü: domain görünür + öğenin `permission`'ı (ui2CanSee). `parent` taşıyan öğe
+  // menüde ayrı satır DEĞİL; o sayfadayken ebeveyni etkin görünür. Yer-tutucu öğe ölü bağlantı
+  // değildir: yer-tutucu ekranına gider ("soon" işaretli).
   window.ui2RenderSubnav = function (domainKey, activeSubKey) {
     var mount = document.getElementById('ui2-subnav');
     if (!mount) return;
-    var items = (UI2_SUBNAV[domainKey] || []).filter(function (it) { return !it.perm || window.ui2CanSee(domainKey, it.perm); });
-    if (!window.ui2CanSee(domainKey) || items.length === 0) {
+    var n = nav();
+    if (!n) return;                   // nav.json henüz gelmedi — yüklenince çizilir
+    domainKey = activeDomain(domainKey, activeSubKey);
+    var act = itemOf(activeSubKey);
+    var activeId = act ? (act.parent || act.id) : activeSubKey;
+    var groups = n.groups.filter(function (g) { return g.domain === domainKey; }).map(function (g) {
+      var items = n.items.filter(function (it) {
+        return it.domain === domainKey && it.group === g.id && !it.parent &&
+               (!it.permission || window.ui2CanSee(domainKey, it.permission));
+      });
+      return { g: g, items: items };
+    }).filter(function (x) { return x.items.length; });
+    if (!window.ui2CanSee(domainKey) || groups.length === 0) {
       mount.outerHTML = '';           // öğe yoksa subbar hiç görünmez (boş çubuk bırakma)
       return;
     }
-    var links = items.map(function (it) {
-      var cls = it.key === activeSubKey ? ' class="active"' : '';
-      return '<a' + cls + ' href="' + esc(it.href) + '">' + esc(it.label) + '</a>';
+    var html = groups.map(function (x) {
+      var label = groups.length > 1 ? '<span class="subnav-glabel">' + esc(x.g.label) + '</span>' : '';
+      return '<div class="subnav-group" data-group="' + esc(x.g.id) + '">' + label + x.items.map(function (it) {
+        if (it.status === 'placeholder') {
+          var cls = it.id === activeId ? 'ph active' : 'ph';
+          return '<a class="' + cls + '" href="' + esc(it.path) + '" title="Not in ui2 yet">' + esc(it.label) +
+                 ' <span class="subnav-soon">soon</span></a>';
+        }
+        var a = it.id === activeId ? ' class="active"' : '';
+        return '<a' + a + ' href="' + esc(it.path) + '">' + esc(it.label) + '</a>';
+      }).join('') + '</div>';
     }).join('');
-    mount.outerHTML = '<div class="subbar" id="ui2-subnav"><nav class="subnav">' + links + '</nav></div>';
+    mount.outerHTML = '<div class="subbar" id="ui2-subnav"><nav class="subnav">' + html + '</nav></div>';
   };
 
   // ── Etkin yetki tazeleme (Paket 2) — users oturumunda sayfa açılışında bir kez. ──
@@ -184,14 +207,16 @@
     }).catch(function () { /* fail-soft: menü önbellekle kalır */ });
   };
 
-  // ── Oto-init: token kapısı + nav + subnav. Sayfa UI2_ACTIVE / UI2_SUBACTIVE bildirir. ──
+  // ── Oto-init: token kapısı + nav.json + nav + subnav. Sayfa UI2_ACTIVE / UI2_SUBACTIVE bildirir. ──
+  function renderAll() {
+    var sub = window.UI2_SUBACTIVE || null;
+    var dom = activeDomain(window.UI2_ACTIVE || null, sub);
+    window.ui2RenderNav(dom);
+    window.ui2RenderSubnav(dom, sub);
+  }
   document.addEventListener('DOMContentLoaded', function () {
     if (!requireAuth()) return;
-    window.ui2RenderNav(window.UI2_ACTIVE || null);
-    window.ui2RenderSubnav(window.UI2_ACTIVE || null, window.UI2_SUBACTIVE || null);
-    window.ui2RefreshAccess(function () {
-      window.ui2RenderNav(window.UI2_ACTIVE || null);
-      window.ui2RenderSubnav(window.UI2_ACTIVE || null, window.UI2_SUBACTIVE || null);
-    });
+    window.ui2LoadNav().then(renderAll, function () { renderAll(); });   // hata → "Navigation unavailable"
+    window.ui2RefreshAccess(function () { renderAll(); });
   });
 })();

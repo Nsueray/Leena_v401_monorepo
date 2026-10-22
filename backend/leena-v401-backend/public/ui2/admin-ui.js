@@ -1,18 +1,19 @@
 /**
- * ui2 Admin ekranlarının ortak yardımcıları (Paket 2). Yükleme: leena-fetch.js + shell.js + ledger-ui.js'ten SONRA.
- * İskelet — cila yok. Yetki SUNUCUDA denetlenir; burası yalnız yanıtı okunur metne çevirir.
+ * ui2 Admin ekranlarının ortak yardımcıları (Paket 2). Yükleme: leena-fetch.js + shell.js + components.js +
+ * ledger-ui.js'ten SONRA. İşaretleme components.js'ten (UI-03). Yetki SUNUCUDA denetlenir; burası yalnız
+ * yanıtı okunur metne çevirir.
  */
 (function () {
   'use strict';
-  var L = window.ui2L;
+  var C = window.ui2C;
   var A = window.ui2A = {};
 
-  var STATUS = { active: ['chip-pos', 'active'], invited: ['chip-info', 'invited'],
-                 invite_expired: ['chip-warn', 'invite expired'], no_password: ['chip-warn', 'no password'],
-                 inactive: ['chip-neutral', 'inactive'] };
+  var STATUS = { active: ['pos', 'active'], invited: ['info', 'invited'],
+                 invite_expired: ['warn', 'invite expired'], no_password: ['warn', 'no password'],
+                 inactive: ['neutral', 'inactive'] };
   A.statusChip = function (s) {
-    var x = STATUS[s] || ['chip-neutral', s];
-    return '<span class="chip ' + x[0] + '">' + L.esc(x[1]) + '</span>';
+    var x = STATUS[s] || ['neutral', s];
+    return C.chip(x[1], x[0]);
   };
 
   // Kapı yanıtları (409 + kod) — 403 kullanılmaz (G45: leena-fetch 401/403'te oturumu siler).
@@ -23,8 +24,9 @@
     if (b.code === 'PERMISSION_REQUIRED') return 'You do not have permission for this (' + (b.permission || 'unknown') + ').';
     return b.error || ('Request failed (HTTP ' + r.status + ').');
   };
+  // 409 (yetki / oturum türü) bilgi durumudur; diğer her şey hata.
   A.httpError = function (root, r, what) {
-    root.innerHTML = '<div class="lg-empty">' + L.esc(r.status === 200 ? 'Could not load ' + what + '.' : A.errorText(r)) + '</div>';
+    root.innerHTML = C.state(r.status === 409 ? 'empty' : 'error', r.status === 200 ? 'Could not load ' + what + '.' : A.errorText(r));
   };
 
   // Bağlanabilir internal temsilciler; e-postası TEK temsilciyle eşleşirse o seçili gelir (öneri).
@@ -36,7 +38,7 @@
     if (currentId != null && !list.some(function (a) { return String(a.id) === String(currentId); })) {
       list.unshift({ id: currentId, name: currentName || ('#' + currentId), email: '', is_active: true });
     }
-    return L.options(list, function (a) { return a.id; }, function (a) {
+    return C.options(list, function (a) { return a.id; }, function (a) {
       return a.name + (a.email ? ' — ' + a.email : '') + (a.is_active ? '' : ' (inactive)') +
         (hits.length === 1 && String(a.id) === String(hits[0].id) && currentId == null ? '  ← email match' : '');
     }, pick, '— no link —');
@@ -44,10 +46,9 @@
 
   // Davet sonucu: e-posta kuyruğa yazıldı; INVITE_ECHO açıksa (yalnız staging) link de gösterilir.
   A.showInviteResult = function (msgEl, linkEl, inv) {
-    L.say(msgEl, 'Invitation queued for ' + inv.email + ' — expires ' + String(inv.expires_at).replace('T', ' ').slice(0, 16) + ' UTC.', 'ok');
+    C.say(msgEl, 'Invitation queued for ' + inv.email + ' — expires ' + String(inv.expires_at).replace('T', ' ').slice(0, 16) + ' UTC.', 'ok');
     if (linkEl) linkEl.innerHTML = inv.invite_url
-      ? '<div class="lg-msg" style="color:var(--warn)">INVITE_ECHO is on (staging only) — invitation link:<br>' +
-        '<input class="input" style="width:100%;font-family:var(--font-mono);font-size:12px" readonly value="' + L.esc(inv.invite_url) + '"></div>'
+      ? C.callout('INVITE_ECHO is on (staging only) — invitation link:<br>' + C.input({ readonly: true, value: inv.invite_url }, { mono: true }), 'warn')
       : '';
   };
 })();

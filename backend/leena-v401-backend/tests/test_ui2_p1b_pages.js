@@ -49,9 +49,13 @@ ok(`P4 kullanılan /api/ledger kökleri (${usedL.size}) ve /api/expense-drafts u
   deadL.length === 0 && deadD.length === 0 && usedL.has('suppliers') && usedD.size === 4, JSON.stringify([[...usedL], deadL, [...usedD], deadD]));
 
 const dr = read('finance-drafts.html');
-const css = read('styles/ledger.css');
-ok('P5 taslak ekranı eksik alanı KIRMIZI gösterir (liste "missing" + formda çerçeve) · stiller ledger.css\'te tanımlı',
-  /lg-miss/.test(dr) && /lg-missing/.test(dr) && /\.lg-miss\s*\{[^}]*--dang/.test(css) && /\.lg-missing[^{]*\{[^}]*--dang/.test(css));
+// UI-0 (UI-03): işaretleme components.js'e taşındı, ledger.css signal.css'e birleşti → aynı ölçüm bileşen API'si üzerinden:
+// sayfa "missing" rozetini (C.missing) ve formda kırmızı çerçeveyi (missing: seçeneği → .ui-missing) kullanır; stiller signal.css'te.
+const css = read('styles/signal.css');
+const comp = read('components.js');
+ok('P5 taslak ekranı eksik alanı KIRMIZI gösterir (liste "missing" + formda çerçeve) · stiller signal.css\'te tanımlı (UI-0: ledger.css birleşti)',
+  /C\.missing\(\)/.test(dr) && /missing: miss\(d, k\)/.test(dr) && /class="ui-miss">missing</.test(comp) && /ui-missing/.test(comp) &&
+  /\.ui-miss\s*\{[^}]*--dang/.test(css) && /\.ui-missing[^{]*\{[^}]*--dang/.test(css));
 ok('P6 (OFS-05) kabul formunda tedarikçi SEÇMELİ ve "— no supplier —" seçeneği var (öneri atama değil)',
   /name="supplier_id"/.test(dr) && /— no supplier —/.test(dr) && /supplier_match_id/.test(dr));
 ok('P7 tedarikçi detayı geçmişi SUNUCUDAN alır (istemci toplamaz) · tarih süzgeci var',

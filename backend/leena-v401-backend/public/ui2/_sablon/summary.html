@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="/ui2/">
+<title>ELIZA — Summary cards template</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/signal.css">
+</head>
+<body>
+<!-- ŞABLON (UI-03): sahte veri, API çağrısı YOK. <base href="/ui2/"> → bağlantılar ve betikler /ui2/ köklü. -->
+<div id="ui2-nav"></div>
+<main class="ui-main" id="ui-root"></main>
+
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE='tpl-summary';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.ui2C, root = document.getElementById('ui-root');
+  var STATES = ['data', 'empty', 'loading', 'error'];
+  var state = new URLSearchParams(location.search).get('state');
+  if (STATES.indexOf(state) < 0) state = 'data';
+  function switcher(page) {
+    return C.links(STATES.map(function (s) { return { href: '_sablon/' + page + '?state=' + s, label: (s === state ? '● ' : '') + s }; })
+      .concat([{ href: '_sablon/index.html', label: 'All templates' }]));
+  }
+  var body;
+  if (state === 'loading') body = C.state('loading');
+  else if (state === 'error') body = C.state('error', 'Could not load the summary (HTTP 500).');
+  else if (state === 'empty') body = C.stats([
+      { label: 'Total cash', value: C.eur('0.00'), note: 'no accounts yet', href: '_sablon/list.html?state=empty' },
+      { label: 'Open receivables', value: C.eur('0.00'), note: '0 records', href: '_sablon/list.html?state=empty' }
+    ]) + C.section({ body: C.state('empty', 'Nothing recorded yet.') });
+  else body =
+    C.stats([
+      { label: 'Total cash (bank + cash)', value: C.eur('12345.67'), href: '_sablon/list.html' },
+      { label: 'Open receivables', value: C.eur('8900.00'), note: '4 records', href: '_sablon/list.html' },
+      { label: 'Payable', value: C.eur('321.00'), note: '2 people', href: '_sablon/list.html' },
+      { label: 'Owner current account', value: C.eur('-50.00'), neg: true, note: 'negative = company owes the owner', href: '_sablon/detail.html' }
+    ]) +
+    C.stats([
+      { label: 'Revenue (pair)', value: C.pair('5600.00', 'TRY', '160.00'), note: 'transaction currency + EUR', href: '_sablon/detail.html' },
+      { label: 'Without a link', value: C.eur('1.00'), note: 'a card without href is not clickable' }
+    ]);
+  root.innerHTML = C.page({ title: 'Summary cards template', sub: 'Özet kartları · fake data · state: ' + state, aside: switcher('summary.html') }) + body;
+})();
+</script>
+</body>
+</html>

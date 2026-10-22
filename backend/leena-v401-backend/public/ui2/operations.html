@@ -5,19 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Operations</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
 </head>
 <body>
 <div id="ui2-nav"></div>
-
-<main class="wrap" style="padding:48px 24px;max-width:720px;margin:0 auto">
-  <h1 style="margin:0 0 8px">Operations <span style="font-size:14px;font-weight:400;color:var(--muted)">· leena</span></h1>
-  <p style="color:var(--muted)">Bu alan henüz boş. Ekranlar dilim dilim eklenecek.</p>
-</main>
+<main class="ui-main narrow" id="ui-root"></main>
 
 <script>window.UI2_ACTIVE='operations';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  // Boş-durum ekranı (UI-06 asgarisi): sekme ölü bağlantı değildir; alanın ui2 ekranı henüz yok.
+  var C = window.ui2C;
+  document.getElementById('ui-root').innerHTML =
+    C.page({ titleHtml: C.esc('Operations') + C.subTitle('leena') }) +
+    C.section({ body: C.state('empty', 'This area has no ui2 screens yet. They will be added in later releases.', { title: 'Nothing here yet' }) });
+})();
+</script>
 </body>
 </html>

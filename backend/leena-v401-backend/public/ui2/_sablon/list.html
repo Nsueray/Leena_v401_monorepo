@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="/ui2/">
+<title>ELIZA — List template</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/signal.css">
+</head>
+<body>
+<!-- ŞABLON (UI-03): sahte veri, API çağrısı YOK. <base href="/ui2/"> → bağlantılar ve betikler /ui2/ köklü. -->
+<div id="ui2-nav"></div>
+<main class="ui-main" id="ui-root"></main>
+
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE='tpl-list';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.ui2C, root = document.getElementById('ui-root');
+  var STATES = ['data', 'empty', 'loading', 'error'];
+  var state = new URLSearchParams(location.search).get('state');
+  if (STATES.indexOf(state) < 0) state = 'data';
+  function switcher(page) {
+    return C.links(STATES.map(function (s) { return { href: '_sablon/' + page + '?state=' + s, label: (s === state ? '● ' : '') + s }; })
+      .concat([{ href: '_sablon/index.html', label: 'All templates' }]));
+  }
+  // Sahte kayıtlar — gerçek veri DEĞİL.
+  var ROWS = [
+    { ref: 'EX-0001', name: 'Example Co. Alpha', status: 'Active', amount: '1250.00', cur: 'TRY', eur: '35.71' },
+    { ref: 'EX-0002', name: 'Sample Trading Ltd', status: 'On Hold', amount: '480.00', cur: 'EUR', eur: '480.00' },
+    { ref: 'EX-0003', name: 'Demo Industries', status: 'Cancelled', amount: '-90.00', cur: 'USD', eur: '-83.10' },
+    { ref: 'EX-0004', name: 'Placeholder Group (a long name that wraps on a phone screen)', status: 'Active', amount: '15000.00', cur: 'NGN', eur: '9.12' }
+  ];
+  var TONE = { 'Active': 'primary', 'On Hold': 'warn', 'Cancelled': 'dang' };
+  var filter = C.form({ id: 'flt', fields: [
+    C.field('Search', C.input('name="q" placeholder="name or reference"')),
+    C.field('Status', C.select('name="status"', C.options(['Active', 'On Hold', 'Cancelled'], function (x) { return x; }, function (x) { return x; }, '', 'all')))
+  ], actions: [C.button('Filter', { submit: true })] });
+  var body = state === 'loading' ? C.state('loading')
+    : state === 'error' ? C.state('error', 'Could not load records (HTTP 500).')
+    : C.list({ rows: state === 'empty' ? [] : ROWS, empty: 'No records match this filter.',
+        href: function () { return '_sablon/detail.html'; },
+        columns: [
+          { label: 'Ref', cell: function (r) { return '<a href="_sablon/detail.html">' + C.esc(r.ref) + '</a>'; } },
+          { label: 'Name', cell: function (r) { return C.esc(r.name); } },
+          { label: 'Status', cell: function (r) { return C.chip(r.status, TONE[r.status]); } },
+          { label: 'Amount · EUR', num: true, neg: function (r) { return Number(r.amount) < 0; }, cell: function (r) { return C.pair(r.amount, r.cur, r.eur); } },
+          { label: '', cell: function () { return C.button('Action', { kind: 'ghost' }); } }
+        ] });
+  root.innerHTML = C.page({ title: 'List template', sub: 'Liste · fake data · state: ' + state, aside: switcher('list.html') }) +
+    C.stack([
+      C.section({ title: 'Records', eyebrow: 'a row opens the detail template', body: filter + body }),
+      C.section({ title: 'Rules', body: C.lines([
+        'Only components.js writes markup: C.list({ columns, rows, href, empty }).',
+        'Each cell carries data-label — at 640 px and below every row becomes a card; the page never scrolls sideways.',
+        'Money in Finance is always a pair: transaction currency + the EUR value the server sent (C.pair). The page never computes EUR.'
+      ]) })
+    ]);
+})();
+</script>
+</body>
+</html>

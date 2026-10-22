@@ -5,86 +5,85 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Finance · Supplier</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
-<link rel="stylesheet" href="styles/ledger.css">
 </head>
 <body>
 <div id="ui2-nav"></div>
 <div id="ui2-subnav"></div>
-<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+<main class="ui-main" id="ui-root"></main>
 
 <script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='suppliers';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
 <script src="ledger-ui.js"></script>
 <script>
 (function () {
   'use strict';
   // P1b-1: tedarikçi detayı + ödeme geçmişi. Geçmiş = bu tedarikçinin gider hareketleri,
   // ledger'dan SUNUCUDA türetilir (D2); ters kayıtlar netler. Tarih aralığı süzgeci.
-  var L = window.ui2L, root = document.getElementById('lg-root');
+  var C = window.ui2C, L = window.ui2L, root = document.getElementById('ui-root');
   var id = L.qs('supplier');
   var state = { h: null, opts: null, offices: [], from: L.qs('from') || '', to: L.qs('to') || '' };
+  function self(x) { return x; }
 
   function editForm(s) {
-    return '<form class="lg-form" id="edit-form">' +
-      '<label class="field"><span class="label">Name</span><input class="input" name="name" value="' + L.esc(s.name) + '" required></label>' +
-      '<label class="field"><span class="label">Type</span><select class="input" name="supplier_type">' +
-        L.options(state.opts.types, function (t) { return t; }, function (t) { return t; }, s.supplier_type) + '</select></label>' +
-      '<label class="field"><span class="label">Country</span><select class="input" name="country_code">' +
-        L.options(state.opts.countries, function (c) { return c.code; }, function (c) { return c.name; }, s.country_code) + '</select></label>' +
-      '<label class="field"><span class="label">Office</span><select class="input" name="office_id">' +
-        L.options(state.offices, function (o) { return o.id; }, function (o) { return o.name; }, s.office_id == null ? '' : s.office_id, '— none —') + '</select></label>' +
-      '<label class="field"><span class="label">Tax number</span><input class="input" name="tax_number" value="' + L.esc(s.tax_number || '') + '"></label>' +
-      '<label class="field"><span class="label">Notes</span><input class="input" name="notes" value="' + L.esc(s.notes || '') + '"></label>' +
-      '<button class="btn btn-secondary" type="submit">Save</button></form><div class="lg-msg" id="edit-msg"></div>';
+    return C.form({ id: 'edit-form', msg: 'edit-msg', fields: [
+      C.field('Name', C.input('name="name" value="' + C.esc(s.name) + '" required')),
+      C.field('Type', C.select('name="supplier_type"', C.options(state.opts.types, self, self, s.supplier_type))),
+      C.field('Country', C.select('name="country_code"',
+        C.options(state.opts.countries, function (c) { return c.code; }, function (c) { return c.name; }, s.country_code))),
+      C.field('Office', C.select('name="office_id"',
+        C.options(state.offices, function (o) { return o.id; }, function (o) { return o.name; }, s.office_id == null ? '' : s.office_id, '— none —'))),
+      C.field('Tax number', C.input('name="tax_number" value="' + C.esc(s.tax_number || '') + '"')),
+      C.field('Notes', C.input('name="notes" value="' + C.esc(s.notes || '') + '"'))
+    ], actions: [C.button('Save', { submit: true })] });
   }
 
   function history(h) {
-    var flt = '<form class="lg-form" id="flt">' +
-      '<label class="field"><span class="label">From</span><input class="input" type="date" name="from" value="' + L.esc(state.from) + '"></label>' +
-      '<label class="field"><span class="label">To</span><input class="input" type="date" name="to" value="' + L.esc(state.to) + '"></label>' +
-      '<button class="btn btn-secondary" type="submit">Filter</button></form>';
-    if (!h.lines.length) return flt + '<div class="lg-empty">No expenses for this supplier in this range.</div>';
-    var rows = h.lines.map(function (l) {
-      var tag = l.reverses_expense_id ? '<span class="lg-tag">reversal of #' + l.reverses_expense_id + '</span>'
-        : l.reversed_by_entry_id ? '<span class="lg-tag">reversed</span>' : '';
-      return '<tr><td>' + L.esc(l.entry_date) + '</td><td>#' + L.esc(l.expense_id) + tag + '</td>' +
-        '<td>' + L.esc(l.expense_category) + ' / ' + L.esc(l.expense_type) + '</td>' +
-        '<td class="num">' + L.money(l.amount, l.currency) + '</td>' +
-        '<td class="num' + (Number(l.signed_amount_eur) > 0 ? '' : ' lg-neg') + '">' + L.eur(l.signed_amount_eur) + '</td>' +
-        '<td><a href="finance-account.html?account=' + l.account_id + '">' + L.esc(l.account_name) + '</a></td>' +
-        '<td>' + L.dash(l.expo_name) + '</td><td>' + L.dash(l.notes) +
-          (l.document_url ? ' · <a href="' + L.esc(l.document_url) + '" target="_blank" rel="noopener">doc</a>' : '') + '</td></tr>';
-    }).join('');
-    return flt + '<div class="table-wrap"><table class="table"><thead><tr><th>Date</th><th>Expense</th><th>Category / type</th>' +
-      '<th class="num">Amount</th><th class="num">EUR (signed)</th><th>Paid from</th><th>Expo</th><th>Notes</th></tr></thead><tbody>' +
-      rows + '</tbody></table></div>';
+    var flt = C.form({ id: 'flt', fields: [
+      C.field('From', C.input('type="date" name="from" value="' + C.esc(state.from) + '"')),
+      C.field('To', C.input('type="date" name="to" value="' + C.esc(state.to) + '"'))
+    ], actions: [C.button('Filter', { submit: true })] });
+    return flt + C.list({ rows: h.lines, empty: 'No expenses for this supplier in this range.', columns: [
+      { label: 'Date', cell: function (l) { return C.esc(l.entry_date); } },
+      { label: 'Expense', cell: function (l) {
+        return '#' + C.esc(l.expense_id) + (l.reverses_expense_id ? C.tag('reversal of #' + l.reverses_expense_id)
+          : l.reversed_by_entry_id ? C.tag('reversed') : ''); } },
+      { label: 'Category / type', cell: function (l) { return C.esc(l.expense_category) + ' / ' + C.esc(l.expense_type); } },
+      { label: 'Amount · EUR (signed)', num: true, neg: function (l) { return !(Number(l.signed_amount_eur) > 0); },
+        cell: function (l) { return C.pair(l.amount, l.currency, l.signed_amount_eur); } },
+      { label: 'Paid from', cell: function (l) { return '<a href="finance-account.html?account=' + l.account_id + '">' + C.esc(l.account_name) + '</a>'; } },
+      { label: 'Expo', cell: function (l) { return C.dash(l.expo_name); } },
+      { label: 'Notes', cell: function (l) {
+        return C.dash(l.notes) + (l.document_url ? ' · <a href="' + C.esc(l.document_url) + '" target="_blank" rel="noopener">doc</a>' : ''); } }
+    ] });
   }
 
   function render() {
     var h = state.h, s = h.supplier;
     root.innerHTML =
-      '<div class="lg-head"><div><h1>' + L.esc(s.name) + (s.is_active ? '' : '<span class="lg-tag">inactive</span>') + '</h1>' +
-        '<div class="sub">' + L.esc(s.supplier_type) + ' · ' + L.esc(s.country_name) + (s.office_name ? ' · ' + L.esc(s.office_name) : '') +
-        (s.tax_number ? ' · tax no. ' + L.esc(s.tax_number) : '') + '</div></div>' +
-        '<div class="lg-links"><a href="finance-suppliers.html">← Suppliers</a><a href="finance-expenses.html">Expenses</a></div></div>' +
-      '<div class="lg-strip">' +
-        '<div class="lg-ms"><div class="l">Paid in range</div><div class="v">' + L.eur(h.paid_eur) + '</div><div class="n">' + h.entries + ' entries</div></div>' +
-        '<div class="lg-ms"><div class="l">Paid all time</div><div class="v">' + L.eur(s.paid_eur) + '</div><div class="n">' + s.expense_count + ' expenses</div></div>' +
-      '</div>' +
-      '<div class="lg-stack">' +
-        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Payment history</span>' +
-          '<span class="card-eyebrow">derived from ledger entries · reversals net out</span></div>' + history(h) + '</div>' +
-        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Supplier record</span>' +
-          '<span class="card-eyebrow">never deleted — deactivate from the list</span></div>' + editForm(s) + '</div>' +
-      '</div>';
+      C.page({ titleHtml: C.esc(s.name) + (s.is_active ? '' : C.tag('inactive')),
+        sub: s.supplier_type + ' · ' + s.country_name + (s.office_name ? ' · ' + s.office_name : '') + (s.tax_number ? ' · tax no. ' + s.tax_number : ''),
+        aside: C.links(['<a href="finance-suppliers.html">← Suppliers</a>', '<a href="finance-expenses.html">Expenses</a>']) }) +
+      C.stats([
+        { label: 'Paid in range', value: C.eur(h.paid_eur), note: h.entries + ' entries', href: '#history' },
+        { label: 'Paid all time', value: C.eur(s.paid_eur), note: s.expense_count + ' expenses', href: '#history' }
+      ]) +
+      C.stack([
+        C.section({ id: 'history', title: 'Payment history', eyebrow: 'derived from ledger entries · reversals net out', body: history(h) }),
+        C.section({ title: 'Supplier record', eyebrow: 'never deleted — deactivate from the list', body: editForm(s) })
+      ]);
   }
 
   function load() {
     if (!L.guard(root)) return;
-    if (!id) { root.innerHTML = '<div class="lg-empty">No supplier selected. <a href="finance-suppliers.html">Open the list</a>.</div>'; return; }
+    if (!id) {
+      root.innerHTML = C.state('empty', 'No supplier selected. ', { html: '<a href="finance-suppliers.html">Open the list</a>.' });
+      return;
+    }
+    L.loading(root);
     var q = [];
     if (state.from) q.push('from=' + encodeURIComponent(state.from));
     if (state.to) q.push('to=' + encodeURIComponent(state.to));
@@ -94,7 +93,7 @@
         if (r[0].status !== 200) { L.httpError(root, r[0], 'supplier'); return; }
         state.h = r[0].body; state.opts = r[1].body; state.offices = Array.isArray(r[2].body) ? r[2].body : [];
         render();
-      }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+      }).catch(function () { L.offline(root); });
   }
 
   root.addEventListener('submit', function (e) {
@@ -104,7 +103,7 @@
     // Boş bırakılan isteğe bağlı alanlar temizlenir (formJson boşları atlar).
     ['office_id', 'tax_number', 'notes'].forEach(function (k) { if (!(k in b)) b[k] = null; });
     L.api('PUT', '/api/ledger/suppliers/' + encodeURIComponent(id), b).then(function (r) {
-      if (r.status === 200) load(); else L.say(document.getElementById('edit-msg'), r.body && r.body.error, 'error');
+      if (r.status === 200) load(); else C.say(document.getElementById('edit-msg'), r.body && r.body.error, 'error');
     });
   });
 

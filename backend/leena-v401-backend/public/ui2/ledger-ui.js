@@ -1,17 +1,14 @@
 /**
- * ui2 ledger ekranlarının ortak yardımcıları (Paket 1). Yükleme: leena-fetch.js + shell.js'ten SONRA.
- * İskelet — cila yok. Sayılar sunucudan geldiği gibi gösterilir; istemci bakiye HESAPLAMAZ (D2, RAP-02).
+ * ui2 Finance ekranlarının ortak VERİ yardımcıları (Paket 1). Yükleme: leena-fetch.js + shell.js +
+ * components.js'ten SONRA. İşaretleme üretmez — görsel her şey components.js'te (UI-03); burada
+ * yalnız API sarmalı, form okuma, yetki/hata durumunun bileşene bağlanması ve tür → ton eşlemesi.
+ * Sayılar sunucudan geldiği gibi gösterilir; istemci bakiye HESAPLAMAZ (D2, RAP-02).
  */
 (function () {
   'use strict';
+  var C = window.ui2C;
   var L = window.ui2L = {};
 
-  L.esc = function (s) {
-    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-  };
-  L.dash = function (v) { return (v == null || v === '') ? '—' : L.esc(v); };
-  L.money = function (v, cur) { return (v == null || v === '') ? '—' : (cur ? L.esc(cur) + ' ' : '') + L.esc(v); };
-  L.eur = function (v) { return (v == null || v === '') ? '—' : '€' + L.esc(v); };
   // Yerel takvim günü (YYYY-MM-DD) — tarih alanlarının varsayılanı.
   L.today = function () {
     var d = new Date();
@@ -31,25 +28,11 @@
     });
   };
 
-  L.options = function (list, valueOf, labelOf, selected, emptyLabel) {
-    var out = emptyLabel != null ? ['<option value="">' + L.esc(emptyLabel) + '</option>'] : [];
-    (list || []).forEach(function (x) {
-      var v = String(valueOf(x));
-      out.push('<option value="' + L.esc(v) + '"' + (String(selected) === v ? ' selected' : '') + '>' + L.esc(labelOf(x)) + '</option>');
-    });
-    return out.join('');
-  };
+  // Hesap / hareket / tedarikçi türü → rozet tonu (eşleme burada, rozetin kendisi components.js'te).
+  var TYPE_TONE = { bank: 'info', cash: 'pos', virtual: 'signal',
+                    income: 'pos', expense: 'warn', payout: 'warn', transfer: 'neutral', refund: 'dang' };
+  L.chip = function (t) { return C.chip(t, TYPE_TONE[t] || 'neutral'); };
 
-  var TYPE_CHIP = { bank: 'chip-info', cash: 'chip-pos', virtual: 'chip-signal',
-                    income: 'chip-pos', expense: 'chip-warn', payout: 'chip-warn', transfer: 'chip-neutral', refund: 'chip-dang' };
-  L.chip = function (t) { return '<span class="chip ' + (TYPE_CHIP[t] || 'chip-neutral') + '">' + L.esc(t) + '</span>'; };
-
-  // Form mesajı (inline) — toast yok; hata/uyarı aynı yerde, okunur kalır.
-  L.say = function (el, msg, kind) {
-    if (!el) return;
-    el.textContent = msg || '';
-    el.style.color = kind === 'error' ? 'var(--dang)' : kind === 'warn' ? 'var(--warn)' : 'var(--pos)';
-  };
   L.formJson = function (form) {
     var o = {};
     Array.prototype.forEach.call(form.elements, function (el) {
@@ -62,7 +45,7 @@
 
   L.guard = function (root) {
     if (typeof window.ui2CanSee === 'function' && !window.ui2CanSee('finance')) {
-      root.innerHTML = '<div class="lg-empty">You do not have access to Finance.</div>';
+      root.innerHTML = C.state('empty', 'You do not have access to Finance.');
       return false;
     }
     return true;
@@ -71,8 +54,10 @@
   L.httpError = function (root, r, what) {
     var msg = r.status === 503 ? 'Ledger is not migrated yet — run scripts/migrate.js.'
       : 'Could not load ' + what + ' (HTTP ' + r.status + (r.body && r.body.error ? ': ' + r.body.error : '') + ').';
-    root.innerHTML = '<div class="lg-empty">' + L.esc(msg) + '</div>';
+    root.innerHTML = C.state('error', msg);
   };
+  L.offline = function (root) { root.innerHTML = C.state('error', 'Could not reach the server. Please retry.'); };
+  L.loading = function (root) { root.innerHTML = C.state('loading'); };
 
   L.ready = function (fn) {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn); else fn();

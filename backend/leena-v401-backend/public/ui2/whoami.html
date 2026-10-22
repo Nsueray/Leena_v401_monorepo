@@ -5,66 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Who is signed in</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
-<style>
-  .wh-main { padding: 18px 24px 40px; max-width: 720px; margin: 0 auto; }
-  .wh-main h1 { font-family:var(--font-display); font-weight:600; font-size:22px; margin:0 0 16px; color:var(--ink); }
-  .wh-empty { padding:22px; color:var(--muted); font-size:13px; text-align:center; }
-</style>
 </head>
 <body>
 <div id="ui2-nav"></div>
 
-<main class="wh-main">
-  <h1>Who is signed in</h1>
-  <div class="card" style="overflow:hidden" id="wh-root"><div class="wh-empty">Loading…</div></div>
-</main>
+<main class="ui-main narrow" id="ui-root"></main>
 
-<script>window.UI2_ACTIVE=null;</script>
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE='whoami';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
 <script>
 (function () {
   'use strict';
-  // READ-ONLY panel. Tek GET: /api/user-auth/me. Buton/form yok.
-  var root = document.getElementById('wh-root');
-  function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-  function dash(v){ return (v==null||v==='') ? '—' : esc(v); }
+  // READ-ONLY panel (Detay şablonu). Tek GET: /api/user-auth/me. Buton/form yok.
+  var C = window.ui2C, root = document.getElementById('ui-root');
   function yesno(v){ return v ? 'Yes' : 'No'; }
-
-  function table(rows){
-    return '<table class="table"><tbody>' + rows.map(function(r){
-      return '<tr><th style="width:40%">'+esc(r[0])+'</th><td>'+r[1]+'</td></tr>';
-    }).join('') + '</tbody></table>';
-  }
+  function show(body){ root.innerHTML = C.page({ title: 'Who is signed in' }) + C.section({ body: body }); }
 
   function load(){
+    show(C.state('loading'));
     window.leenaFetch('/api/user-auth/me').then(function(res){
       if (res.status === 409) {
         // Eski /login.html oturumu — token'da user_id yok. Oturum korunur.
-        root.innerHTML = table([
+        show(C.detail([
           ['Session type', 'Organizer (classic sign-in)'],
-          ['User account', '— <span style="color:var(--muted)">sign in via ui2/login.html to see the user</span>']
-        ]);
+          ['User account', '— ' + C.muted('sign in via ui2/login.html to see the user')]
+        ]));
         return;
       }
-      if (!res.ok) { root.innerHTML = '<div class="wh-empty">Could not load (HTTP '+res.status+').</div>'; return; }
+      if (!res.ok) { show(C.state('error', 'Could not load (HTTP '+res.status+').')); return; }
       return res.json().then(function(u){
-        root.innerHTML = table([
-          ['Name', dash(u.display_name)],
-          ['Email', dash(u.email)],
-          ['Role', dash((u.role && u.role.name) || u.display_role)],
+        show(C.detail([
+          ['Name', C.dash(u.display_name)],
+          ['Email', C.dash(u.email)],
+          ['Role', C.dash((u.role && u.role.name) || u.display_role)],
           ['Owner', yesno(u.is_owner)],
-          ['Office', dash(u.office && u.office.name)],
-          ['Access', u.permissions ? (u.permissions.owner ? 'Everything (Owner)' : dash((u.permissions.areas || []).join(', '))) : '—'],
+          ['Office', C.dash(u.office && u.office.name)],
+          ['Access', u.permissions ? (u.permissions.owner ? 'Everything (Owner)' : C.dash((u.permissions.areas || []).join(', '))) : '—'],
           ['Session type', 'User'],
           ['Password change required', yesno(u.password_must_change)]
-        ]);
+        ]));
       });
     }).catch(function(err){
       if (err && err.status === 401) { window.location.href = '/ui2/login.html'; return; }
-      root.innerHTML = '<div class="wh-empty">Could not reach the server. Please retry.</div>';
+      show(C.state('error', 'Could not reach the server. Please retry.'));
     });
   }
 

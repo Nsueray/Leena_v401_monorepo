@@ -8,6 +8,10 @@ const BE = path.join(__dirname, '..');
 const UI2 = path.join(BE, 'public/ui2');
 const read = (f) => fs.readFileSync(path.join(UI2, f), 'utf8');
 const SHELL = read('shell.js');
+// UI-0 (UI-02): nav TEK KAYNAK nav.json — tarayıcıda shell.js fetch eder; burada aynı veri hazır verilir (fixture).
+const NAV = JSON.parse(read('nav.json'));
+// Finance menü öğeleri (alt sayfa hariç) — beklenen sayılar nav.json'dan türetilir ("sayı testi silinir", UI-02).
+const FIN_MENU = NAV.items.filter(it => it.domain === 'finance' && !it.parent);
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log('  ✅ ' + n)) : (fail++, console.log('  ❌ ' + n + (d !== undefined ? ' → ' + d : ''))); };
@@ -28,6 +32,7 @@ function render(st, domain, sub) {
   const ctx = { window: w, localStorage: ls, JSON, document: { addEventListener() {}, getElementById: (id) => mounts[id] || null } };
   vm.createContext(ctx);
   vm.runInContext(SHELL, ctx);
+  w.ui2NavData = NAV;
   w.ui2RenderNav(domain); w.ui2RenderSubnav(domain, sub);
   const tabs = [...(mounts['ui2-nav'].outerHTML || '').matchAll(/<span class="d-main">([^<]+)<\/span>/g)].map(m => m[1]);
   const subs = [...(mounts['ui2-subnav'].outerHTML || '').matchAll(/href="([^"]+)"/g)].map(m => m[1]);
@@ -39,17 +44,19 @@ const codes = (list, scope = 'all') => Object.fromEntries(list.map(c => [c, scop
 
 console.log('\n── shell.js: menü etkin yetkiyi okur (K-G) ──');
 const c = render(store('classic'), 'finance', 'accounts');
-ok('S1 klasik oturum: nav ESKİSİ GİBİ 3 sekme (Admin YOK) · Finance subnav\'ın 8 öğesi görünür (öğe gizleme yalnız users oturumunda)',
-  JSON.stringify(c.tabs) === '["Sales","Operations","Finance"]' && c.subs.length === 8, JSON.stringify([c.tabs, c.subs]));
+ok('S1 klasik oturum: nav ESKİSİ GİBİ 3 sekme (Admin YOK) · Finance subnav\'ın TÜM öğeleri görünür (öğe gizleme yalnız users oturumunda)',
+  JSON.stringify(c.tabs) === '["Sales","Operations","Finance"]' && c.subs.length === FIN_MENU.length, JSON.stringify([c.tabs, c.subs]));
 const old = render(store(null), 'finance', 'accounts');
-ok('S2 users oturumu ama özet henüz yok (Paket 2 öncesi kayıt / /me gelmedi): eski davranış — 3 sekme, 8 öğe',
-  JSON.stringify(old.tabs) === '["Sales","Operations","Finance"]' && old.subs.length === 8, JSON.stringify([old.tabs, old.subs]));
+ok('S2 users oturumu ama özet henüz yok (Paket 2 öncesi kayıt / /me gelmedi): eski davranış — 3 sekme, tüm öğeler',
+  JSON.stringify(old.tabs) === '["Sales","Operations","Finance"]' && old.subs.length === FIN_MENU.length, JSON.stringify([old.tabs, old.subs]));
 const fin = render(store({ owner: false, codes: codes(FIN), areas: ['finance'] }), 'finance', 'accounts');
-ok('S3 Finance kullanıcısı: yalnız Finance sekmesi (Sales / Operations / Admin GİZLİ) · 8 Finance öğesi',
-  JSON.stringify(fin.tabs) === '["Finance"]' && fin.subs.length === 8, JSON.stringify([fin.tabs, fin.subs]));
-const om = render(store({ owner: false, codes: codes(['ledger.read', 'suppliers.read', 'expense_drafts.read', 'contracts.read'], 'office'), areas: ['finance'] }), 'finance', 'accounts');
-ok('S4 öğe izni yoksa öğe görünmez: budget.read yok → "Expo budget" subnav\'da YOK, diğerleri var',
-  !om.subs.includes('finance-budget.html') && om.subs.includes('finance-accounts.html') && om.subs.length === 7, JSON.stringify(om.subs));
+ok('S3 Finance kullanıcısı: yalnız Finance sekmesi (Sales / Operations / Admin GİZLİ) · tüm Finance öğeleri (şablonda hepsinin izni var)',
+  JSON.stringify(fin.tabs) === '["Finance"]' && fin.subs.length === FIN_MENU.length && FIN_MENU.every(it => FIN.includes(it.permission)), JSON.stringify([fin.tabs, fin.subs]));
+const OM_CODES = ['ledger.read', 'suppliers.read', 'expense_drafts.read', 'contracts.read'];
+const om = render(store({ owner: false, codes: codes(OM_CODES, 'office'), areas: ['finance'] }), 'finance', 'accounts');
+ok('S4 öğe izni yoksa öğe görünmez: budget.read yok → "Expo budget" subnav\'da YOK, diğerleri var (commissions.read yok → yer-tutucu Commissions/Agents da YOK)',
+  !om.subs.includes('finance-budget.html') && om.subs.includes('finance-accounts.html') && !om.subs.some(h => /placeholder\.html/.test(h)) &&
+  om.subs.length === FIN_MENU.filter(it => OM_CODES.includes(it.permission)).length, JSON.stringify(om.subs));
 const own = render(store({ owner: true, codes: {}, areas: [] }), 'admin', 'users');
 ok('S5 Owner: 4 sekme (Admin dahil) · Admin subnav\'ı Users',
   JSON.stringify(own.tabs) === '["Sales","Operations","Finance","Admin"]' && JSON.stringify(own.subs) === '["admin-users.html"]', JSON.stringify([own.tabs, own.subs]));

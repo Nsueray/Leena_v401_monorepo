@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Admin · Users</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
-<link rel="stylesheet" href="styles/ledger.css">
 </head>
 <body>
 <div id="ui2-nav"></div>
 <div id="ui2-subnav"></div>
-<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+<main class="ui-main" id="ui-root"></main>
 
 <script>window.UI2_ACTIVE='admin'; window.UI2_SUBACTIVE='users';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
 <script src="ledger-ui.js"></script>
 <script src="admin-ui.js"></script>
 <script>
@@ -24,63 +24,56 @@
   'use strict';
   // P2-1: kullanıcı listesi + davet. Durum (active / invited / invite_expired / inactive) sunucuda
   // türetilir; yetki sunucuda denetlenir (bu ekran yalnız gösterir). Şablon seçimi permissions.write ister.
-  var L = window.ui2L, A = window.ui2A, root = document.getElementById('lg-root');
+  var C = window.ui2C, L = window.ui2L, A = window.ui2A, root = document.getElementById('ui-root');
   var state = { users: [], opts: null, lastInvite: null };
+  function userHref(u) { return 'admin-user.html?user=' + encodeURIComponent(u.id); }
 
   function table() {
-    if (!state.users.length) return '<div class="lg-empty">No users.</div>';
-    var rows = state.users.map(function (u) {
-      return '<tr class="lg-row" data-id="' + L.esc(u.id) + '">' +
-        '<td><a href="admin-user.html?user=' + encodeURIComponent(u.id) + '">' + L.esc(u.display_name || u.email) + '</a>' +
-          (u.is_owner ? '<span class="lg-tag">owner</span>' : '') + '</td>' +
-        '<td>' + L.esc(u.email) + '</td><td>' + L.dash(u.role_name) + '</td><td>' + L.dash(u.office_name) + '</td>' +
-        '<td>' + L.dash(u.sales_agent_name) + '</td><td>' + A.statusChip(u.status) + '</td></tr>';
-    }).join('');
-    return '<div class="table-wrap"><table class="table"><thead><tr><th>User</th><th>Email</th><th>Role</th><th>Office</th>' +
-      '<th>Sales agent</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return C.list({ rows: state.users, empty: 'No users.', href: userHref, columns: [
+      { label: 'User', cell: function (u) { return '<a href="' + userHref(u) + '">' + C.esc(u.display_name || u.email) + '</a>' + (u.is_owner ? C.tag('owner') : ''); } },
+      { label: 'Email', cell: function (u) { return C.esc(u.email); } },
+      { label: 'Role', cell: function (u) { return C.dash(u.role_name); } },
+      { label: 'Office', cell: function (u) { return C.dash(u.office_name); } },
+      { label: 'Sales agent', cell: function (u) { return C.dash(u.sales_agent_name); } },
+      { label: 'Status', cell: function (u) { return A.statusChip(u.status); } }
+    ] });
   }
 
   function inviteForm() {
     var o = state.opts;
-    if (!o.actor.can_write) return '<div class="lg-empty">You can see users but not invite them (needs users.write).</div>';
+    if (!o.actor.can_write) return C.state('empty', 'You can see users but not invite them (needs users.write).');
     var roles = o.roles.filter(function (r) { return !r.owner_template; });
-    return '<form class="lg-form" id="inv-form">' +
-      '<label class="field"><span class="label">Email</span><input class="input" name="email" type="email" required></label>' +
-      '<label class="field"><span class="label">Name (optional)</span><input class="input" name="display_name"></label>' +
-      (o.actor.can_matrix
-        ? '<label class="field"><span class="label">Role</span><select class="input" name="role_id">' +
-            L.options(roles, function (r) { return r.id; }, function (r) { return r.name; }, '', '— no role —') + '</select></label>'
-        : '') +
-      '<label class="field"><span class="label">Office</span><select class="input" name="office_id">' +
-        L.options(o.offices, function (x) { return x.id; }, function (x) { return x.name; }, '', '— none —') + '</select></label>' +
-      '<label class="field"><span class="label">Sales agent link</span><select class="input" name="sales_agent_id" id="inv-agent">' +
-        A.agentOptions(o.agents, '') + '</select></label>' +
-      '<button class="btn btn-primary" type="submit">Send invitation</button></form>' +
-      '<div class="lg-msg" id="inv-msg"></div><div id="inv-link"></div>' +
-      '<div class="lg-note" style="padding:0 16px 14px">The invitation link works once and expires after ' + L.esc(o.invite_ttl_hours) +
-      ' hours. A sales agent whose email matches is suggested — the link is only made if you keep it selected.</div>';
-  }
-
-  function card(title, eyebrow, inner) {
-    return '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">' + L.esc(title) + '</span>' +
-      (eyebrow ? '<span class="card-eyebrow">' + L.esc(eyebrow) + '</span>' : '') + '</div>' + inner + '</div>';
+    return C.form({ id: 'inv-form', msg: 'inv-msg', fields: [
+      C.field('Email', C.input('name="email" type="email" required')),
+      C.field('Name (optional)', C.input('name="display_name"')),
+      o.actor.can_matrix
+        ? C.field('Role', C.select('name="role_id"', C.options(roles, function (r) { return r.id; }, function (r) { return r.name; }, '', '— no role —')))
+        : '',
+      C.field('Office', C.select('name="office_id"', C.options(o.offices, function (x) { return x.id; }, function (x) { return x.name; }, '', '— none —'))),
+      C.field('Sales agent link', C.select('name="sales_agent_id" id="inv-agent"', A.agentOptions(o.agents, '')))
+    ], actions: [C.button('Send invitation', { kind: 'primary', submit: true })] }) +
+      '<div id="inv-link"></div>' +
+      C.text(C.note('The invitation link works once and expires after ' + C.esc(o.invite_ttl_hours) +
+        ' hours. A sales agent whose email matches is suggested — the link is only made if you keep it selected.'));
   }
 
   function render() {
-    root.innerHTML = '<div class="lg-head"><div><h1>Users</h1><div class="sub">' + state.users.length +
-      ' shown · people who sign in · permissions are checked on the server</div></div></div>' +
-      '<div class="lg-stack">' + card('Users', 'Deactivate instead of delete', table()) +
-        card('Invite a user', 'One-time link, emailed', inviteForm()) + '</div>';
+    root.innerHTML = C.page({ title: 'Users', sub: state.users.length + ' shown · people who sign in · permissions are checked on the server' }) +
+      C.stack([
+        C.section({ title: 'Users', eyebrow: 'Deactivate instead of delete', body: table() }),
+        C.section({ title: 'Invite a user', eyebrow: 'One-time link, emailed', body: inviteForm() })
+      ]);
     if (state.lastInvite) A.showInviteResult(document.getElementById('inv-msg'), document.getElementById('inv-link'), state.lastInvite);
   }
 
   function load() {
+    L.loading(root);
     Promise.all([L.api('GET', '/api/users'), L.api('GET', '/api/users/options')]).then(function (r) {
       if (r[0].status !== 200) { A.httpError(root, r[0], 'users'); return; }
       if (r[1].status !== 200) { A.httpError(root, r[1], 'user options'); return; }
       state.users = r[0].body; state.opts = r[1].body;
       render();
-    }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+    }).catch(function () { L.offline(root); });
   }
 
   // E-posta eşleşmesi → temsilci ÖNERİSİ (seçili gelir; kullanıcı değiştirebilir — OFS-05).
@@ -97,14 +90,10 @@
     var b = L.formJson(e.target), msg = document.getElementById('inv-msg');
     L.api('POST', '/api/users/invite', b).then(function (r) {
       if (r.status === 201) { state.lastInvite = { email: r.body.user.email, expires_at: r.body.invite.expires_at, invite_url: r.body.invite_url }; load(); }
-      else L.say(msg, A.errorText(r), 'error');
+      else C.say(msg, A.errorText(r), 'error');
     });
   });
-  root.addEventListener('click', function (e) {
-    if (e.target.closest('a')) return;
-    var tr = e.target.closest('tr.lg-row');
-    if (tr) window.location.href = 'admin-user.html?user=' + encodeURIComponent(tr.getAttribute('data-id'));
-  });
+  // Satır tıklaması → kullanıcı detayı: components.js (data-href).
 
   L.ready(load);
 })();

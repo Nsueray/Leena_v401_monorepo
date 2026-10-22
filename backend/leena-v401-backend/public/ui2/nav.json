@@ -1,0 +1,49 @@
+{
+  "_doc": "ui2 NAV TEK KAYNAK (UI-02). shell.js yalnız okur. Alanlar: id · domain · group · label · path · status (live | placeholder) · permission (Paket 2 kodu; ui2CanSee okur). Ek alanlar: parent (alt sayfa — menüde ayrı öğe değil, ebeveyni etkin yapar) · legacy (yer-tutucu öğenin bugünkü klasik ekranı). domains = üst sekmeler (BM §1, sırası menü sırası); groups = alt menü kümeleri (BM §2/3/4 — Finance: BM v4 §4.1). domain 'shell' = menüde görünmeyen kabuk/giriş/şablon sayfaları (iki yönlü test: ui2'deki her sayfa burada).",
+  "landing": "finance",
+  "domains": [
+    { "id": "sales",      "label": "Sales",      "sub": "liffy", "path": "sales.html",          "status": "placeholder", "permission": "sales.read" },
+    { "id": "operations", "label": "Operations", "sub": "leena", "path": "operations.html",     "status": "placeholder", "permission": "operations.read" },
+    { "id": "finance",    "label": "Finance",    "sub": "",      "path": "finance-summary.html", "status": "live",        "permission": null },
+    { "id": "admin",      "label": "Admin",      "sub": "",      "path": "admin-users.html",     "status": "live",        "permission": "users.read", "userOnly": true }
+  ],
+  "groups": [
+    { "id": "executive",    "domain": "finance", "label": "Executive" },
+    { "id": "contracts",    "domain": "finance", "label": "Contracts" },
+    { "id": "money",        "domain": "finance", "label": "Money" },
+    { "id": "expo-finance", "domain": "finance", "label": "Expo Finance" },
+    { "id": "users",        "domain": "admin",   "label": "Users" }
+  ],
+  "items": [
+    { "id": "summary",         "domain": "finance", "group": "executive",    "label": "Summary",        "path": "finance-summary.html",           "status": "live",        "permission": "ledger.read" },
+
+    { "id": "contract",        "domain": "finance", "group": "contracts",    "label": "Contracts",      "path": "finance-contracts.html",         "status": "live",        "permission": "contracts.read" },
+    { "id": "contract-detail", "domain": "finance", "group": "contracts",    "label": "Contract",       "path": "finance-contract.html",          "status": "live",        "permission": "contracts.read", "parent": "contract" },
+    { "id": "commissions",     "domain": "finance", "group": "contracts",    "label": "Commissions",    "path": "placeholder.html?id=commissions", "status": "placeholder", "permission": "commissions.read", "legacy": "/commissions.html" },
+    { "id": "agents",          "domain": "finance", "group": "contracts",    "label": "Agents",         "path": "placeholder.html?id=agents",      "status": "placeholder", "permission": "commissions.read", "legacy": "/sales-agents.html" },
+
+    { "id": "accounts",        "domain": "finance", "group": "money",        "label": "Accounts",       "path": "finance-accounts.html",          "status": "live",        "permission": "ledger.read" },
+    { "id": "account",         "domain": "finance", "group": "money",        "label": "Statement",      "path": "finance-account.html",           "status": "live",        "permission": "ledger.read", "parent": "accounts" },
+    { "id": "transfers",       "domain": "finance", "group": "money",        "label": "Transfers",      "path": "finance-transfers.html",         "status": "live",        "permission": "ledger.read" },
+    { "id": "expenses",        "domain": "finance", "group": "money",        "label": "Expenses",       "path": "finance-expenses.html",          "status": "live",        "permission": "ledger.read" },
+    { "id": "suppliers",       "domain": "finance", "group": "money",        "label": "Suppliers",      "path": "finance-suppliers.html",         "status": "live",        "permission": "suppliers.read" },
+    { "id": "supplier",        "domain": "finance", "group": "money",        "label": "Supplier",       "path": "finance-supplier.html",          "status": "live",        "permission": "suppliers.read", "parent": "suppliers" },
+    { "id": "drafts",          "domain": "finance", "group": "money",        "label": "Drafts",         "path": "finance-drafts.html",            "status": "live",        "permission": "expense_drafts.read" },
+
+    { "id": "budget",          "domain": "finance", "group": "expo-finance", "label": "Expo budget",    "path": "finance-budget.html",            "status": "live",        "permission": "budget.read" },
+
+    { "id": "users",           "domain": "admin",   "group": "users",        "label": "Users",          "path": "admin-users.html",               "status": "live",        "permission": "users.read" },
+    { "id": "user",            "domain": "admin",   "group": "users",        "label": "User detail",    "path": "admin-user.html",                "status": "live",        "permission": "users.read", "parent": "users" },
+
+    { "id": "home",            "domain": "shell",   "group": null,           "label": "Home",              "path": "index.html",               "status": "live", "permission": null },
+    { "id": "login",           "domain": "shell",   "group": null,           "label": "Sign in",           "path": "login.html",               "status": "live", "permission": null },
+    { "id": "invite",          "domain": "shell",   "group": null,           "label": "Accept invitation", "path": "invite.html",              "status": "live", "permission": null },
+    { "id": "whoami",          "domain": "shell",   "group": null,           "label": "Who is signed in",  "path": "whoami.html",              "status": "live", "permission": null },
+    { "id": "placeholder",     "domain": "shell",   "group": null,           "label": "Not in ui2 yet",    "path": "placeholder.html",         "status": "live", "permission": null },
+    { "id": "templates",       "domain": "shell",   "group": null,           "label": "Templates",         "path": "_sablon/index.html",       "status": "live", "permission": null },
+    { "id": "tpl-list",        "domain": "shell",   "group": null,           "label": "List template",     "path": "_sablon/list.html",        "status": "live", "permission": null, "parent": "templates" },
+    { "id": "tpl-detail",      "domain": "shell",   "group": null,           "label": "Detail template",   "path": "_sablon/detail.html",      "status": "live", "permission": null, "parent": "templates" },
+    { "id": "tpl-form",        "domain": "shell",   "group": null,           "label": "Form template",     "path": "_sablon/form.html",        "status": "live", "permission": null, "parent": "templates" },
+    { "id": "tpl-summary",     "domain": "shell",   "group": null,           "label": "Summary cards template", "path": "_sablon/summary.html", "status": "live", "permission": null, "parent": "templates" }
+  ]
+}

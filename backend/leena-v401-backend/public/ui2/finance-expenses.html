@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Finance · Expenses</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
-<link rel="stylesheet" href="styles/ledger.css">
 </head>
 <body>
 <div id="ui2-nav"></div>
 <div id="ui2-subnav"></div>
-<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+<main class="ui-main" id="ui-root"></main>
 
 <script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='expenses';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
 <script src="ledger-ui.js"></script>
 <script>
 (function () {
@@ -24,14 +24,16 @@
   // L-3 (LED-08): onay YOK; gider değiştirilemez olaydır, düzeltme ters giderdir.
   // P1b-1 (Suer ilkesi): karşı taraf serbest metin DEĞİL — tedarikçi listeden seçilir
   // (datalist) ya da "New supplier" kısayoluyla kayıt açılır. Eski satırların metni görünür kalır.
-  var L = window.ui2L, root = document.getElementById('lg-root');
+  var C = window.ui2C, L = window.ui2L, root = document.getElementById('ui-root');
   var METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];   // SEM-01 (tek sözlük)
   var state = { accounts: [], ref: null, expos: [], list: [], suppliers: null, opts: null, drafts: null,
                 filter: { expo_id: L.qs('expo_id') || '', from: L.qs('from') || '', to: L.qs('to') || '' } };
 
+  function self(x) { return x; }
   function accById(id) { return state.accounts.find(function (a) { return String(a.id) === String(id); }); }
   function supLabel(s) { return s.name + ' (' + s.country_code + ')'; }
   function supByLabel(v) { return (state.suppliers || []).find(function (s) { return supLabel(s) === v; }); }
+  function expoOpts(selected, empty) { return C.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, selected, empty); }
   function types() {
     var out = [];
     (state.ref ? state.ref.expense_categories : []).forEach(function (c) {
@@ -42,89 +44,83 @@
   }
 
   function form() {
-    return '<form class="lg-form" id="ex-form">' +
-      '<label class="field"><span class="label">Category / type</span><select class="input" name="expense_type_id" required>' +
-        L.options(types(), function (t) { return t.id; }, function (t) { return t.label; }, '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Paid from account</span><select class="input" name="account_id" required>' +
-        L.options(state.accounts, function (a) { return a.id; }, function (a) { return a.name + ' (' + a.currency + ')'; }, '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Amount</span><input class="input" name="amount" required></label>' +
-      '<label class="field"><span class="label">FX → EUR</span><input class="input" name="exchange_rate" value="1" required></label>' +
-      '<label class="field"><span class="label">Date</span><input class="input" type="date" name="expense_date" value="' + L.today() + '" required></label>' +
-      '<label class="field"><span class="label">Method</span><select class="input" name="payment_method">' +
-        L.options(METHODS, function (m) { return m; }, function (m) { return m; }, 'bank_transfer') + '</select></label>' +
-      '<label class="field"><span class="label">Expo (empty = overhead)</span><select class="input" name="expo_id">' +
-        L.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, '', '—') + '</select></label>' +
-      supplierField() +
-      '<label class="field"><span class="label">Document link (Drive)</span><input class="input" name="document_url" placeholder="https://"></label>' +
-      '<label class="field"><span class="label">Notes</span><input class="input" name="notes"></label>' +
-      '<button class="btn btn-primary" type="submit">Record expense</button>' +
-    '</form><div class="lg-msg" id="ex-msg"></div>' + newSupplierForm();
+    return C.form({ id: 'ex-form', msg: 'ex-msg', fields: [
+      C.field('Category / type', C.select('name="expense_type_id" required',
+        C.options(types(), function (t) { return t.id; }, function (t) { return t.label; }, '', '—'))),
+      C.field('Paid from account', C.select('name="account_id" required',
+        C.options(state.accounts, function (a) { return a.id; }, function (a) { return a.name + ' (' + a.currency + ')'; }, '', '—'))),
+      C.field('Amount', C.input('name="amount" required')),
+      C.field('FX → EUR', C.input('name="exchange_rate" value="1" required')),
+      C.field('Date', C.input('type="date" name="expense_date" value="' + L.today() + '" required')),
+      C.field('Method', C.select('name="payment_method"', C.options(METHODS, self, self, 'bank_transfer'))),
+      C.field('Expo (empty = overhead)', C.select('name="expo_id"', expoOpts('', '—'))),
+      supplierField(),
+      C.field('Document link (Drive)', C.input('name="document_url" placeholder="https://"')),
+      C.field('Notes', C.input('name="notes"'))
+    ], actions: [C.button('Record expense', { kind: 'primary', submit: true })] }) + newSupplierForm();
   }
 
   // Tedarikçi: listeden seçim (datalist). Listede yoksa kısayolla kayıt açılır — serbest metin yok.
   function supplierField() {
     if (state.suppliers == null) return '';   // 041 öncesi: alan yok (gider tedarikçisiz kaydedilir)
-    return '<label class="field"><span class="label">Supplier (optional)</span>' +
-      '<input class="input" name="supplier_pick" list="sup-list" placeholder="type to search…" autocomplete="off">' +
-      '<datalist id="sup-list">' + state.suppliers.map(function (s) { return '<option value="' + L.esc(supLabel(s)) + '">'; }).join('') +
-      '</datalist></label>' +
-      '<button class="btn btn-ghost" type="button" id="new-sup-btn">+ New supplier</button>';
+    return C.field('Supplier (optional)',
+      C.input('name="supplier_pick" list="sup-list" placeholder="type to search…" autocomplete="off"') +
+      '<datalist id="sup-list">' + state.suppliers.map(function (s) { return '<option value="' + C.esc(supLabel(s)) + '">'; }).join('') + '</datalist>') +
+      C.button('+ New supplier', { kind: 'ghost', attrs: 'id="new-sup-btn"' });
   }
   function newSupplierForm() {
     if (!state.opts) return '';
-    return '<form class="lg-form" id="sup-form">' +
-      '<label class="field"><span class="label">New supplier name</span><input class="input" name="name" required></label>' +
-      '<label class="field"><span class="label">Type</span><select class="input" name="supplier_type">' +
-        L.options(state.opts.types, function (t) { return t; }, function (t) { return t; }, 'supplier') + '</select></label>' +
-      '<label class="field"><span class="label">Country</span><select class="input" name="country_code" required>' +
-        L.options(state.opts.countries, function (c) { return c.code; }, function (c) { return c.name; }, '', '—') + '</select></label>' +
-      '<button class="btn btn-secondary" type="submit">Add supplier</button></form><div class="lg-msg" id="sup-msg"></div>';
+    return C.form({ id: 'sup-form', msg: 'sup-msg', fields: [
+      C.field('New supplier name', C.input('name="name" required')),
+      C.field('Type', C.select('name="supplier_type"', C.options(state.opts.types, self, self, 'supplier'))),
+      C.field('Country', C.select('name="country_code" required',
+        C.options(state.opts.countries, function (c) { return c.code; }, function (c) { return c.name; }, '', '—')))
+    ], actions: [C.button('Add supplier', { submit: true })] });
   }
 
   function list() {
     var f = state.filter;
-    var flt = '<form class="lg-form" id="flt">' +
-      '<label class="field"><span class="label">Expo</span><select class="input" name="expo_id">' +
-        L.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, f.expo_id, 'all') + '</select></label>' +
-      '<label class="field"><span class="label">From</span><input class="input" type="date" name="from" value="' + L.esc(f.from) + '"></label>' +
-      '<label class="field"><span class="label">To</span><input class="input" type="date" name="to" value="' + L.esc(f.to) + '"></label>' +
-      '<button class="btn btn-secondary" type="submit">Filter</button></form>';
-    if (!state.list.length) return flt + '<div class="lg-empty">No expenses for this filter.</div>';
-    var rows = state.list.map(function (x) {
-      var act = x.reverses_expense_id ? '<span class="lg-tag">reversal of #' + x.reverses_expense_id + '</span>'
-        : x.reversed_by_expense_id ? '<span class="lg-tag">reversed</span>'
-        : '<button class="btn btn-ghost" data-rev="' + x.id + '">Reverse</button>';
-      return '<tr><td>#' + x.id + '</td><td>' + L.esc(x.expense_date) + '</td>' +
-        '<td>' + L.esc(x.category) + ' / ' + L.esc(x.expense_type) + '</td>' +
-        '<td class="num' + (Number(x.amount) < 0 ? ' lg-neg' : '') + '">' + L.money(x.amount, x.currency) + '</td>' +
-        '<td class="num">' + L.eur(x.amount_eur) + '</td>' +
-        '<td>' + L.esc(x.account_name) + '</td><td>' + L.dash(x.expo_name) + '</td>' +
-        '<td>' + party(x) + (x.document_url ? ' · <a href="' + L.esc(x.document_url) + '" target="_blank" rel="noopener">doc</a>' : '') + '</td>' +
-        '<td>' + act + '</td></tr>';
-    }).join('');
-    return flt + '<div class="table-wrap"><table class="table"><thead><tr><th>#</th><th>Date</th><th>Category / type</th>' +
-      '<th class="num">Amount</th><th class="num">EUR</th><th>Account</th><th>Expo</th><th>Supplier</th><th></th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var flt = C.form({ id: 'flt', fields: [
+      C.field('Expo', C.select('name="expo_id"', expoOpts(f.expo_id, 'all'))),
+      C.field('From', C.input('type="date" name="from" value="' + C.esc(f.from) + '"')),
+      C.field('To', C.input('type="date" name="to" value="' + C.esc(f.to) + '"'))
+    ], actions: [C.button('Filter', { submit: true })] });
+    return flt + C.list({ rows: state.list, empty: 'No expenses for this filter.', columns: [
+      { label: '#', cell: function (x) { return '#' + x.id; } },
+      { label: 'Date', cell: function (x) { return C.esc(x.expense_date); } },
+      { label: 'Category / type', cell: function (x) { return C.esc(x.category) + ' / ' + C.esc(x.expense_type); } },
+      { label: 'Amount · EUR', num: true, neg: function (x) { return Number(x.amount) < 0; },
+        cell: function (x) { return C.pair(x.amount, x.currency, x.amount_eur); } },
+      { label: 'Account', cell: function (x) { return C.esc(x.account_name); } },
+      { label: 'Expo', cell: function (x) { return C.dash(x.expo_name); } },
+      { label: 'Supplier', cell: function (x) {
+        return party(x) + (x.document_url ? ' · <a href="' + C.esc(x.document_url) + '" target="_blank" rel="noopener">doc</a>' : ''); } },
+      { label: '', cell: function (x) {
+        return x.reverses_expense_id ? C.tag('reversal of #' + x.reverses_expense_id)
+          : x.reversed_by_expense_id ? C.tag('reversed')
+          : C.button('Reverse', { kind: 'ghost', attrs: { 'data-rev': x.id } }); } }
+    ] });
   }
   // Tedarikçi kaydı varsa bağlantı; yoksa eski (Paket 1) serbest metin, "text" etiketiyle.
   function party(x) {
-    if (x.supplier_id) return '<a href="finance-supplier.html?supplier=' + x.supplier_id + '">' + L.esc(x.supplier_name) + '</a>';
-    return x.counterparty ? L.esc(x.counterparty) + '<span class="lg-tag">text</span>' : '—';
+    if (x.supplier_id) return '<a href="finance-supplier.html?supplier=' + x.supplier_id + '">' + C.esc(x.supplier_name) + '</a>';
+    return x.counterparty ? C.esc(x.counterparty) + C.tag('text') : '—';
   }
 
   function links() {
     if (state.suppliers == null && state.drafts == null) return '';
-    return '<div class="lg-links">' +
-      (state.suppliers != null ? '<a href="finance-suppliers.html">Suppliers →</a>' : '') +
-      (state.drafts != null ? '<a href="finance-drafts.html">Pending drafts (' + state.drafts + ') →</a>' : '') + '</div>';
+    return C.links([
+      state.suppliers != null ? '<a href="finance-suppliers.html">Suppliers →</a>' : '',
+      state.drafts != null ? '<a href="finance-drafts.html">Pending drafts (' + state.drafts + ') →</a>' : ''
+    ]);
   }
 
   function render() {
-    root.innerHTML = '<div class="lg-head"><div><h1>Expenses</h1><div class="sub">no approval step · corrections are reversals · ' +
-      state.list.length + ' shown</div></div>' + links() + '</div><div class="lg-stack">' +
-      '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">New expense</span>' +
-        '<span class="card-eyebrow">currency = the account\'s currency</span></div>' + form() + '</div>' +
-      '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Expenses</span></div>' + list() + '</div></div>';
+    root.innerHTML = C.page({ title: 'Expenses', sub: 'no approval step · corrections are reversals · ' + state.list.length + ' shown', aside: links() }) +
+      C.stack([
+        C.section({ title: 'New expense', eyebrow: 'currency = the account\'s currency', body: form() }),
+        C.section({ title: 'Expenses', body: list() })
+      ]);
   }
 
   function sync() {
@@ -138,6 +134,7 @@
 
   function load() {
     if (!L.guard(root)) return;
+    L.loading(root);
     var f = state.filter, q = [];
     if (f.expo_id) q.push('expo_id=' + encodeURIComponent(f.expo_id));
     if (f.from) q.push('from=' + encodeURIComponent(f.from));
@@ -152,7 +149,14 @@
         state.suppliers = r[4].status === 200 ? r[4].body : null;
         state.drafts = r[5].status === 200 ? r[5].body.length : null;
         render(); sync();
-      }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+      }).catch(function () { L.offline(root); });
+  }
+
+  // Formu yeniden çizerken girilen değerleri korur (tedarikçi kısayolu).
+  function restore(keep) {
+    var ef = document.getElementById('ex-form');
+    Object.keys(keep).forEach(function (k) { if (ef[k] && ef[k].type !== 'checkbox') ef[k].value = keep[k]; });
+    return ef;
   }
 
   root.addEventListener('change', function (e) { if (e.target.closest('#ex-form')) sync(); });
@@ -162,33 +166,30 @@
     if (f.id === 'flt') { state.filter = { expo_id: b.expo_id || '', from: b.from || '', to: b.to || '' }; load(); return; }
     if (f.id === 'sup-form') {
       L.api('POST', '/api/ledger/suppliers', b).then(function (r) {
-        if (r.status !== 201) { L.say(document.getElementById('sup-msg'), r.body && r.body.error, 'error'); return; }
+        if (r.status !== 201) { C.say(document.getElementById('sup-msg'), r.body && r.body.error, 'error'); return; }
         var keep = L.formJson(document.getElementById('ex-form'));
         state.suppliers.push(r.body); state.opts = null; render(); sync();
-        var ef = document.getElementById('ex-form');
-        Object.keys(keep).forEach(function (k) { if (ef[k] && ef[k].type !== 'checkbox') ef[k].value = keep[k]; });
-        ef.supplier_pick.value = supLabel(r.body);
+        restore(keep).supplier_pick.value = supLabel(r.body);
       });
       return;
     }
     if (b.supplier_pick) {
       var s = supByLabel(b.supplier_pick);
-      if (!s) { L.say(document.getElementById('ex-msg'), 'Pick a supplier from the list, or add it with "+ New supplier".', 'error'); return; }
+      if (!s) { C.say(document.getElementById('ex-msg'), 'Pick a supplier from the list, or add it with "+ New supplier".', 'error'); return; }
       b.supplier_id = s.id;
     }
     delete b.supplier_pick;
     L.api('POST', '/api/ledger/expenses', b).then(function (r) {
-      if (r.status === 201) load(); else L.say(document.getElementById('ex-msg'), r.body && r.body.error, 'error');
+      if (r.status === 201) load(); else C.say(document.getElementById('ex-msg'), r.body && r.body.error, 'error');
     });
   });
   root.addEventListener('click', function (e) {
     if (e.target.id === 'new-sup-btn') {
       var keep = L.formJson(document.getElementById('ex-form'));
       L.api('GET', '/api/ledger/suppliers/options').then(function (r) {
-        if (r.status !== 200) { L.say(document.getElementById('ex-msg'), r.body && r.body.error, 'error'); return; }
+        if (r.status !== 200) { C.say(document.getElementById('ex-msg'), r.body && r.body.error, 'error'); return; }
         state.opts = r.body; render(); sync();
-        var ef = document.getElementById('ex-form');
-        Object.keys(keep).forEach(function (k) { if (ef[k] && ef[k].type !== 'checkbox') ef[k].value = keep[k]; });
+        restore(keep);
         var sf = document.getElementById('sup-form');
         if (keep.supplier_pick && !supByLabel(keep.supplier_pick)) sf.name.value = keep.supplier_pick;
         sf.name.focus();

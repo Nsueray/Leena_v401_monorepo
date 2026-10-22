@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Admin · User</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
-<link rel="stylesheet" href="styles/ledger.css">
 </head>
 <body>
 <div id="ui2-nav"></div>
 <div id="ui2-subnav"></div>
-<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+<main class="ui-main" id="ui-root"></main>
 
 <script>window.UI2_ACTIVE='admin'; window.UI2_SUBACTIVE='users';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
 <script src="ledger-ui.js"></script>
 <script src="admin-ui.js"></script>
 <script>
@@ -25,113 +25,116 @@
   // P2-1 + P2-2: kullanıcı detayı — profil · aktif/pasif (sebep zorunlu, B12) · davet · şablon +
   // kişi başı yetki (grant + kapsam | revoke). Etkin yetki SUNUCUDA çözülür (utils/permissions.js);
   // bu ekran yalnız gösterir. Kendi kaydında rol/yetki/ofis değiştirilemez (B32); Owner sabittir.
-  var L = window.ui2L, A = window.ui2A, root = document.getElementById('lg-root');
+  var C = window.ui2C, L = window.ui2L, A = window.ui2A, root = document.getElementById('ui-root');
   var id = L.qs('user');
   var st = { d: null, opts: null, lastInvite: null };
 
-  function card(title, eyebrow, inner) {
-    return '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">' + L.esc(title) + '</span>' +
-      (eyebrow ? '<span class="card-eyebrow">' + L.esc(eyebrow) + '</span>' : '') + '</div>' + inner + '</div>';
-  }
-
   function profileCard(u) {
     var o = st.opts, lockOffice = st.d.is_self || !o.actor.can_matrix;
-    return '<form class="lg-form" id="prof-form">' +
-      '<label class="field"><span class="label">Name</span><input class="input" name="display_name" value="' + L.esc(u.display_name || '') + '"></label>' +
-      '<label class="field"><span class="label">Office' + (lockOffice ? ' (needs permissions.write, not on yourself)' : '') + '</span>' +
-        '<select class="input" name="office_id"' + (lockOffice ? ' disabled' : '') + '>' +
-        L.options(o.offices, function (x) { return x.id; }, function (x) { return x.name; }, u.office_id == null ? '' : u.office_id, '— none —') + '</select></label>' +
-      '<label class="field"><span class="label">Sales agent link</span><select class="input" name="sales_agent_id">' +
-        A.agentOptions(o.agents, '', u.sales_agent_id, u.sales_agent_name) + '</select></label>' +
-      (o.actor.can_write ? '<button class="btn btn-primary" type="submit">Save profile</button>' : '') + '</form><div class="lg-msg" id="prof-msg"></div>';
+    return C.form({ id: 'prof-form', msg: 'prof-msg', fields: [
+      C.field('Name', C.input('name="display_name" value="' + C.esc(u.display_name || '') + '"')),
+      C.field('Office' + (lockOffice ? ' (needs permissions.write, not on yourself)' : ''),
+        C.select('name="office_id"' + (lockOffice ? ' disabled' : ''),
+          C.options(o.offices, function (x) { return x.id; }, function (x) { return x.name; }, u.office_id == null ? '' : u.office_id, '— none —'))),
+      C.field('Sales agent link', C.select('name="sales_agent_id"', A.agentOptions(o.agents, '', u.sales_agent_id, u.sales_agent_name)))
+    ], actions: [o.actor.can_write ? C.button('Save profile', { kind: 'primary', submit: true }) : ''] });
   }
 
   function statusCard(u) {
-    if (st.d.is_self) return '<div class="lg-empty">This is you — your own status cannot be changed here.</div>';
-    if (!st.opts.actor.can_write) return '<div class="lg-empty">Status: ' + A.statusChip(u.status) + '</div>';
+    if (st.d.is_self) return C.state('empty', 'This is you — your own status cannot be changed here.');
+    if (!st.opts.actor.can_write) return C.state('empty', 'Status: ', { html: A.statusChip(u.status) });
     if (u.is_active) {
-      return '<form class="lg-form" id="deact-form"><span>' + A.statusChip(u.status) + '</span>' +
-        '<label class="field" style="min-width:320px"><span class="label">Reason (required)</span><input class="input" name="reason" required></label>' +
-        '<button class="btn btn-secondary" type="submit">Deactivate</button></form><div class="lg-msg" id="st-msg"></div>' +
-        '<div class="lg-note" style="padding:0 16px 14px">Deactivation signs the person out everywhere on their next request and cancels open invitations.</div>';
+      return C.form({ id: 'deact-form', msg: 'st-msg', fields: [
+          A.statusChip(u.status),
+          C.field('Reason (required)', C.input('name="reason" required'), { wide: true })
+        ], actions: [C.button('Deactivate', { submit: true })] }) +
+        C.text(C.note('Deactivation signs the person out everywhere on their next request and cancels open invitations.'));
     }
-    return '<form class="lg-form" id="act-form"><span>' + A.statusChip(u.status) + '</span>' +
-      '<label class="field" style="min-width:320px"><span class="label">Reason (optional)</span><input class="input" name="reason"></label>' +
-      '<button class="btn btn-primary" type="submit">Activate</button></form><div class="lg-msg" id="st-msg"></div>';
+    return C.form({ id: 'act-form', msg: 'st-msg', fields: [
+      A.statusChip(u.status),
+      C.field('Reason (optional)', C.input('name="reason"'), { wide: true })
+    ], actions: [C.button('Activate', { kind: 'primary', submit: true })] });
   }
 
   function inviteCard(u) {
-    if (u.has_password) return '<div class="lg-empty">Password set — invitation accepted.</div>';
-    var line = 'Invitation: ' + L.esc(u.invite_state || 'none') + (u.invite_expires_at ? ' · expires ' + L.esc(String(u.invite_expires_at).replace('T', ' ').slice(0, 16)) + ' UTC' : '');
-    return '<div class="lg-form"><span>' + line + '</span>' +
-      (st.opts.actor.can_write && u.is_active ? '<button class="btn btn-secondary" id="resend">Resend invitation</button>' : '') +
-      '</div><div class="lg-msg" id="inv-msg"></div><div id="inv-link"></div>';
+    if (u.has_password) return C.state('empty', 'Password set — invitation accepted.');
+    var line = 'Invitation: ' + C.esc(u.invite_state || 'none') + (u.invite_expires_at ? ' · expires ' + C.esc(String(u.invite_expires_at).replace('T', ' ').slice(0, 16)) + ' UTC' : '');
+    return C.form({ id: 'inv-line', msg: 'inv-msg', fields: [line],
+      actions: [st.opts.actor.can_write && u.is_active ? C.button('Resend invitation', { attrs: 'id="resend"' }) : ''] }) +
+      '<div id="inv-link"></div>';
   }
 
   function matrixCard(u) {
     var o = st.opts, d = st.d;
-    if (u.is_owner) return '<div class="lg-empty">Owner — full access by definition. Role and permissions cannot be changed.</div>';
-    if (d.is_self) return '<div class="lg-empty">This is you — no one can change their own role or permissions (B32).</div>';
+    if (u.is_owner) return C.state('empty', 'Owner — full access by definition. Role and permissions cannot be changed.');
+    if (d.is_self) return C.state('empty', 'This is you — no one can change their own role or permissions (B32).');
     var edit = o.actor.can_matrix;
-    var roleSel = '<form class="lg-form" id="role-form"><label class="field"><span class="label">Role (template)</span>' +
-      '<select class="input" name="role_id"' + (edit ? '' : ' disabled') + '>' +
-      L.options(o.roles.filter(function (r) { return !r.owner_template; }), function (r) { return r.id; }, function (r) { return r.name; },
-        u.role_id == null ? '' : u.role_id, '— no role —') + '</select></label>' +
-      (edit ? '<button class="btn btn-primary" type="submit">Save role</button>' : '') + '</form><div class="lg-msg" id="role-msg"></div>';
+    var roleSel = C.form({ id: 'role-form', msg: 'role-msg', fields: [
+      C.field('Role (template)', C.select('name="role_id"' + (edit ? '' : ' disabled'),
+        C.options(o.roles.filter(function (r) { return !r.owner_template; }), function (r) { return r.id; }, function (r) { return r.name; },
+          u.role_id == null ? '' : u.role_id, '— no role —')))
+    ], actions: [edit ? C.button('Save role', { kind: 'primary', submit: true }) : ''] });
     var fromRole = {}, over = {};
     d.role_permissions.forEach(function (p) { fromRole[p.code] = p.scope; });
     d.overrides.forEach(function (p) { over[p.code] = p; });
-    var rows = o.registry.map(function (p) {
-      var ov = over[p.code], cur = ov ? (ov.effect === 'revoke' ? 'revoke' : 'grant:' + ov.scope) : '';
-      var choices = [{ v: '', t: '— none —' }, { v: 'revoke', t: 'revoke' }].concat(o.scopes.map(function (s) { return { v: 'grant:' + s, t: 'grant · ' + s }; }));
-      return '<tr><td><code>' + L.esc(p.code) + '</code><div class="lg-note">' + L.esc(p.description) + '</div></td><td>' + L.esc(p.area) + '</td>' +
-        '<td>' + L.dash(fromRole[p.code]) + '</td>' +
-        '<td>' + (edit ? '<select class="input" data-code="' + L.esc(p.code) + '">' +
-          L.options(choices, function (c) { return c.v; }, function (c) { return c.t; }, cur) + '</select>' : L.dash(cur)) + '</td>' +
-        '<td>' + (d.effective.codes[p.code] ? '<strong>' + L.esc(d.effective.codes[p.code]) + '</strong>' : '—') + '</td></tr>';
-    }).join('');
-    return roleSel + '<div class="table-wrap"><table class="table"><thead><tr><th>Permission</th><th>Area</th><th>From role</th>' +
-      '<th>Per-user override</th><th>Effective</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      (edit ? '<form class="lg-form" id="ov-form"><label class="field" style="min-width:320px"><span class="label">Reason for override changes (optional)</span>' +
-        '<input class="input" name="reason"></label><button class="btn btn-primary" type="submit">Save overrides</button></form>' : '') +
-      '<div class="lg-msg" id="ov-msg"></div>';
+    var cur = function (p) { var ov = over[p.code]; return ov ? (ov.effect === 'revoke' ? 'revoke' : 'grant:' + ov.scope) : ''; };
+    var choices = [{ v: '', t: '— none —' }, { v: 'revoke', t: 'revoke' }].concat(o.scopes.map(function (s) { return { v: 'grant:' + s, t: 'grant · ' + s }; }));
+    var matrix = C.list({ rows: o.registry, empty: 'No permissions registered.', columns: [
+      { label: 'Permission', cell: function (p) { return '<code>' + C.esc(p.code) + '</code>' + C.note(C.esc(p.description)); } },
+      { label: 'Area', cell: function (p) { return C.esc(p.area); } },
+      { label: 'From role', cell: function (p) { return C.dash(fromRole[p.code]); } },
+      { label: 'Per-user override', cell: function (p) {
+        return edit ? C.select({ 'data-code': p.code }, C.options(choices, function (c) { return c.v; }, function (c) { return c.t; }, cur(p))) : C.dash(cur(p)); } },
+      { label: 'Effective', cell: function (p) { return d.effective.codes[p.code] ? '<strong>' + C.esc(d.effective.codes[p.code]) + '</strong>' : '—'; } }
+    ] });
+    return roleSel + matrix +
+      (edit ? C.form({ id: 'ov-form', msg: 'ov-msg', fields: [C.field('Reason for override changes (optional)', C.input('name="reason"'), { wide: true })],
+        actions: [C.button('Save overrides', { kind: 'primary', submit: true })] }) : '');
   }
 
   function historyCard() {
     var h = st.d.history;
     if (!h) return '';
-    var rows = h.length ? h.map(function (e) {
-      return '<tr><td>' + L.esc(String(e.created_at).replace('T', ' ').slice(0, 16)) + '</td><td><code>' + L.esc(e.action) + '</code></td>' +
-        '<td>' + L.dash(e.actor_name) + '</td><td>' + L.dash(e.reason) + '</td><td><code style="font-size:11px">' + L.esc(JSON.stringify(e.diff)) + '</code></td></tr>';
-    }).join('') : '<tr><td colspan="5" class="lg-empty">No events yet.</td></tr>';
-    return card('History', 'Audit log · Owner only', '<div class="table-wrap"><table class="table"><thead><tr><th>When (UTC)</th><th>Event</th>' +
-      '<th>By</th><th>Reason</th><th>Change</th></tr></thead><tbody>' + rows + '</tbody></table></div>');
+    return C.section({ title: 'History', eyebrow: 'Audit log · Owner only', body: C.list({ rows: h, empty: 'No events yet.', columns: [
+      { label: 'When (UTC)', cell: function (e) { return C.esc(String(e.created_at).replace('T', ' ').slice(0, 16)); } },
+      { label: 'Event', cell: function (e) { return '<code>' + C.esc(e.action) + '</code>'; } },
+      { label: 'By', cell: function (e) { return C.dash(e.actor_name); } },
+      { label: 'Reason', cell: function (e) { return C.dash(e.reason); } },
+      { label: 'Change', cell: function (e) { return '<code>' + C.esc(JSON.stringify(e.diff)) + '</code>'; } }
+    ] }) });
   }
 
   function render() {
     var u = st.d.user;
-    root.innerHTML = '<div class="lg-head"><div><h1>' + L.esc(u.display_name || u.email) + (u.is_owner ? ' <span class="lg-tag">owner</span>' : '') +
-      '</h1><div class="sub">' + L.esc(u.email) + ' · ' + L.esc(u.role_name || 'no role') + ' · ' + L.esc(u.office_name || 'no office') + '</div></div>' +
-      '<div class="lg-links"><a href="admin-users.html">← Users</a></div></div>' +
-      '<div class="lg-stack">' + card('Profile', '', profileCard(u)) + card('Status', 'Deactivate instead of delete', statusCard(u)) +
-        card('Invitation', '', inviteCard(u)) + card('Role & permissions', 'Effective = role + per-user overrides', matrixCard(u)) + historyCard() + '</div>';
+    root.innerHTML =
+      C.page({ titleHtml: C.esc(u.display_name || u.email) + (u.is_owner ? ' ' + C.tag('owner') : ''),
+        sub: u.email + ' · ' + (u.role_name || 'no role') + ' · ' + (u.office_name || 'no office'),
+        aside: C.links(['<a href="admin-users.html">← Users</a>']) }) +
+      C.stack([
+        C.section({ title: 'Profile', body: profileCard(u) }),
+        C.section({ title: 'Status', eyebrow: 'Deactivate instead of delete', body: statusCard(u) }),
+        C.section({ title: 'Invitation', body: inviteCard(u) }),
+        C.section({ title: 'Role & permissions', eyebrow: 'Effective = role + per-user overrides', body: matrixCard(u) }),
+        historyCard()
+      ]);
     if (st.lastInvite) A.showInviteResult(document.getElementById('inv-msg'), document.getElementById('inv-link'), st.lastInvite);
   }
 
   function load() {
-    if (!id) { root.innerHTML = '<div class="lg-empty">Missing user parameter.</div>'; return; }
+    if (!id) { root.innerHTML = C.state('error', 'Missing user parameter.'); return; }
+    L.loading(root);
     Promise.all([L.api('GET', '/api/users/' + encodeURIComponent(id)), L.api('GET', '/api/users/options')]).then(function (r) {
       if (r[0].status !== 200) { A.httpError(root, r[0], 'the user'); return; }
       if (r[1].status !== 200) { A.httpError(root, r[1], 'user options'); return; }
       st.d = r[0].body; st.opts = r[1].body;
       render();
-    }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+    }).catch(function () { L.offline(root); });
   }
 
   function after(msgId, okText) {
     return function (r) {
-      if (r.status === 200 || r.status === 201) { load(); if (okText) setTimeout(function () { L.say(document.getElementById(msgId), okText, 'ok'); }, 300); }
-      else L.say(document.getElementById(msgId), A.errorText(r), 'error');
+      if (r.status === 200 || r.status === 201) { load(); if (okText) setTimeout(function () { C.say(document.getElementById(msgId), okText, 'ok'); }, 300); }
+      else C.say(document.getElementById(msgId), A.errorText(r), 'error');
     };
   }
 
@@ -161,10 +164,10 @@
         else if (v === 'revoke') calls.push(L.api('PUT', url, { effect: 'revoke', reason: b.reason || undefined }));
         else calls.push(L.api('PUT', url, { effect: 'grant', scope: v.split(':')[1], reason: b.reason || undefined }));
       });
-      if (!calls.length) { L.say(document.getElementById('ov-msg'), 'Nothing changed.', 'warn'); return; }
+      if (!calls.length) { C.say(document.getElementById('ov-msg'), 'Nothing changed.', 'warn'); return; }
       Promise.all(calls).then(function (rs) {
         var bad = rs.filter(function (r) { return r.status !== 200; });
-        if (bad.length) { L.say(document.getElementById('ov-msg'), A.errorText(bad[0]), 'error'); return; }
+        if (bad.length) { C.say(document.getElementById('ov-msg'), A.errorText(bad[0]), 'error'); return; }
         load();
       });
     }
@@ -173,7 +176,7 @@
     if (e.target.id !== 'resend') return;
     L.api('POST', '/api/users/' + encodeURIComponent(id) + '/invite').then(function (r) {
       if (r.status === 201) { st.lastInvite = { email: st.d.user.email, expires_at: r.body.invite.expires_at, invite_url: r.body.invite_url }; load(); }
-      else L.say(document.getElementById('inv-msg'), A.errorText(r), 'error');
+      else C.say(document.getElementById('inv-msg'), A.errorText(r), 'error');
     });
   });
 
