@@ -21,8 +21,9 @@
 <script>
 (function () {
   'use strict';
-  // Menüdeki yer-tutucu öğe ölü bağlantı değildir: buraya gelir. Metin nav.json'dan (etiket, grup,
-  // bugünkü klasik ekran = `legacy`). ui2 ekranı ayrı paketin işidir (Commissions & Agents: UI-1 adayı).
+  // Menüdeki yer-tutucu öğe ölü bağlantı değildir: buraya gelir. Metin nav.json'dan (etiket, grup;
+  // legacy=true ise path = bugünkü klasik ekran — GEÇİCİ köprü, bağlantı yalnız nav.json'dan). ui2 ekranı
+  // ayrı paketin işidir (Commissions & Agents: UI-1 adayı).
   var C = window.ui2C, root = document.getElementById('ui-root');
   var id = window.UI2_SUBACTIVE;
   root.innerHTML = C.state('loading');
@@ -34,7 +35,7 @@
       var g = nav.groups.filter(function (x) { return x.id === it.group; })[0];
       root.innerHTML = C.page({ title: it.label, sub: (g ? g.label + ' · ' : '') + 'not in ui2 yet' }) +
         C.section({ body: C.state('empty', 'This screen is not in ui2 yet.', { title: it.label,
-          html: it.legacy ? '<br><a href="' + C.esc(it.legacy) + '">Open the classic screen →</a>' : '' }) });
+          html: it.legacy === true ? '<br><a href="' + C.esc(it.path) + '">Open the classic screen →</a>' : '' }) });
     }, function () { root.innerHTML = C.state('error', 'Navigation unavailable — reload the page.'); });
   });
 })();
