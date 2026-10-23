@@ -46,7 +46,7 @@ ANLATILMAZ — kaynakları aşağıdadır.
 
 ### Test
 - `npm run test:setup && npm test` (backend/leena-v401-backend) —
-  beklenen **416/416** (2026-10-22 Paket UI-0 ölçümü; Paket 2: 379; Paket 1b: 316; Paket 1: 269; eski "67/67" bayattı — o tek suite'in sayısıydı).
+  beklenen **418/418** (2026-10-23 Paket UI-0b ölçümü; UI-0: 416; Paket 2: 379; Paket 1b: 316; Paket 1: 269; eski "67/67" bayattı — o tek suite'in sayısıydı).
 - Testler `tests/` altında yaşar. Test mantığı/assertion değiştirilmez;
   kapsam genişletme AYRI dilim işidir.
 
@@ -257,8 +257,7 @@ backend/leena-v401-backend/
 │   ├── checkin-reports.html        # Check-in analytics dashboard (Charts, CSV export)
 │   ├── lead-scan.html              # Exhibitor lead scanner (public, mobil, kamera QR)
 │   ├── import.html
-│   ├── register.html               # Organizer kayıt
-│   ├── expo-create.html            # Expo oluşturma
+│   ├── expo-create.html            # Expo oluşturma (gelen link yalnız dashboard.html; description + logo_url yalnız burada)
 │   ├── form-public.html            # Public form submit sayfası
 │   ├── badge-print.html            # Badge print sayfası
 │   ├── checkin-import.html         # Checkin import sayfası
@@ -274,9 +273,11 @@ backend/leena-v401-backend/
 │   │   ├── stands.js              # Stand CRUD, detail panel, stats
 │   │   └── toolbar.js             # Tool selection, hall/version dropdowns
 │   └── assets/                     # Logo vb.
-# ⚠️ public/ altında *.backup.html ve eski varyantlar (dashboard.html,
-#    admin-dashboard.html, main-panel.html) mevcut, aktif olarak kullanılmıyor.
-#    login_new.html sadece login.html'e redirect yapar (eski bookmark uyumu).
+# ⚠️ 2026-10-23 (UI-0b, Sentez envanter hükmü): 11 ölü sayfa SİLİNDİ — admin-dashboard.html,
+#    login_new.html, register.html, email_templates/modern-default.html ve 7 *.backup.html.
+#    Eski varyantlar dashboard.html + main-panel.html KALDI: hiçbir HTML'in yüklemediği
+#    public/js/common.js hâlâ onlara link veriyor (silme kuralı: ad araması 0 olmalı).
+#    Kayıt: docs/audits/SAYFA_ENVANTERI_2026-10-23.md + ell-docs defteri.
 └── uploads/                    # Kullanıcı yüklemeleri
 ```
 
@@ -845,8 +846,10 @@ login.html → dashboard_new.html (expo seç) → main-panel-v2.html (expo dashb
 **Sayfa rolleri:**
 - `login.html` — Login + Register (Gen 4 modern UI). Token varsa → dashboard_new.html'e auto-redirect
 - `dashboard_new.html` — Expo seçim sayfası. selectedExpoId'yi temizler, expo listesi gösterir, seçince main-panel-v2'ye gider
-- `main-panel-v2.html` — Ana expo dashboard. selectedExpoId zorunlu, yoksa → dashboard_new.html
-- `login_new.html` — Sadece login.html'e redirect (eski bookmark uyumu)
+- `main-panel-v2.html` — Ana expo dashboard. selectedExpoId zorunlu, yoksa → dashboard_new.html.
+  Sidebar Finance bölümünün son satırı "ELIZA Finance (new)" → `/ui2/` (2026-10-23, UI-0b KAPI-1; YALNIZ bu
+  sayfada — diğer sidebar'lara eklenmedi). Eski arayüzden ui2'ye tek kod içi link.
+- ~~`login_new.html`~~ — 2026-10-23 silindi (gelen link 0; eski yer imi artık 404)
 
 **Redirect kuralları:**
 - Token yoksa → `login.html` (tüm admin sayfalar)

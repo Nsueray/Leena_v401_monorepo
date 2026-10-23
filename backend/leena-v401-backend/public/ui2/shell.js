@@ -171,9 +171,11 @@
     var html = groups.map(function (x) {
       var label = groups.length > 1 ? '<span class="subnav-glabel">' + esc(x.g.label) + '</span>' : '';
       return '<div class="subnav-group" data-group="' + esc(x.g.id) + '">' + label + x.items.map(function (it) {
-        if (it.status === 'placeholder') {
+        if (it.status === 'placeholder') {      // yer-tutucu ekranına gider (yolu nav.json'da); klasik köprü (legacy) oradan
           var cls = it.id === activeId ? 'ph active' : 'ph';
-          return '<a class="' + cls + '" href="' + esc(it.path) + '" title="Not in ui2 yet">' + esc(it.label) +
+          var ph = itemOf('placeholder');
+          var href = ph ? ph.path + '?id=' + encodeURIComponent(it.id) : it.path;
+          return '<a class="' + cls + '" href="' + esc(href) + '" title="Not in ui2 yet">' + esc(it.label) +
                  ' <span class="subnav-soon">soon</span></a>';
         }
         var a = it.id === activeId ? ' class="active"' : '';

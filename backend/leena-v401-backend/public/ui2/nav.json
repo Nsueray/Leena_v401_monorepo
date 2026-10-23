@@ -1,5 +1,5 @@
 {
-  "_doc": "ui2 NAV TEK KAYNAK (UI-02). shell.js yalnız okur. Alanlar: id · domain · group · label · path · status (live | placeholder) · permission (Paket 2 kodu; ui2CanSee okur). Ek alanlar: parent (alt sayfa — menüde ayrı öğe değil, ebeveyni etkin yapar) · legacy (yer-tutucu öğenin bugünkü klasik ekranı). domains = üst sekmeler (BM §1, sırası menü sırası); groups = alt menü kümeleri (BM §2/3/4 — Finance: BM v4 §4.1). domain 'shell' = menüde görünmeyen kabuk/giriş/şablon sayfaları (iki yönlü test: ui2'deki her sayfa burada).",
+  "_doc": "ui2 NAV TEK KAYNAK (UI-02). shell.js yalnız okur. Alanlar: id · domain · group · label · path · status (live | placeholder) · permission (Paket 2 kodu; ui2CanSee okur). Ek alanlar: parent (alt sayfa — menüde ayrı öğe değil, ebeveyni etkin yapar) · legacy (true = GEÇİCİ köprü: path ui2 dışındaki klasik ekran; öğe status=placeholder, menü placeholder.html?id=<id>'e gider, klasik ekran bağlantısı yalnız buradan — Sentez 23 Eki) · landing (giriş alanı) · domain userOnly (yalnız ui2 oturumu). domains = üst sekmeler (BM §1, sırası menü sırası); groups = alt menü kümeleri (BM §2/3/4 — Finance: BM v4 §4.1). domain 'shell' = menüde görünmeyen kabuk/giriş/şablon sayfaları (iki yönlü test: ui2'deki her sayfa burada).",
   "landing": "finance",
   "domains": [
     { "id": "sales",      "label": "Sales",      "sub": "liffy", "path": "sales.html",          "status": "placeholder", "permission": "sales.read" },
@@ -19,8 +19,8 @@
 
     { "id": "contract",        "domain": "finance", "group": "contracts",    "label": "Contracts",      "path": "finance-contracts.html",         "status": "live",        "permission": "contracts.read" },
     { "id": "contract-detail", "domain": "finance", "group": "contracts",    "label": "Contract",       "path": "finance-contract.html",          "status": "live",        "permission": "contracts.read", "parent": "contract" },
-    { "id": "commissions",     "domain": "finance", "group": "contracts",    "label": "Commissions",    "path": "placeholder.html?id=commissions", "status": "placeholder", "permission": "commissions.read", "legacy": "/commissions.html" },
-    { "id": "agents",          "domain": "finance", "group": "contracts",    "label": "Agents",         "path": "placeholder.html?id=agents",      "status": "placeholder", "permission": "commissions.read", "legacy": "/sales-agents.html" },
+    { "id": "commissions",     "domain": "finance", "group": "contracts",    "label": "Commissions",    "path": "/commissions.html",              "status": "placeholder", "permission": "commissions.read", "legacy": true },
+    { "id": "agents",          "domain": "finance", "group": "contracts",    "label": "Agents",         "path": "/sales-agents.html",             "status": "placeholder", "permission": "commissions.read", "legacy": true },
 
     { "id": "accounts",        "domain": "finance", "group": "money",        "label": "Accounts",       "path": "finance-accounts.html",          "status": "live",        "permission": "ledger.read" },
     { "id": "account",         "domain": "finance", "group": "money",        "label": "Statement",      "path": "finance-account.html",           "status": "live",        "permission": "ledger.read", "parent": "accounts" },

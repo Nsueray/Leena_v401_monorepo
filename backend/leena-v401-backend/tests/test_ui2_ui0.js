@@ -2,6 +2,7 @@
 // N: nav.json TEK KAYNAK + iki yönlü test (UI-02) · G: giriş → Finance özet, Sales/Operations boş-durum (UI-06)
 // K: bileşenler YALNIZ components.js'ten — sayfada kopya bileşen = KIRMIZI; para çifti; özet kartı (UI-03)
 // H: tokens — ui2'de tokens.css dışında sabit renk 0 (UI-04) · T: /ui2/_sablon/ dört şablon × üç durum.
+// E: envanter uygulaması (UI-0b, Sentez 23 Eki) — eski arayüzden ui2'ye tek link · silinen ölü sayfalar geri gelmez.
 // Gerçek shell.js / components.js vm içinde koşulur (test_ui2_current_user deseni). Rakamların ekranda
 // birebir görünmesi DB'li testte: tests/test_ui2_ui0_render.js.
 const path = require('path');
@@ -72,9 +73,12 @@ for (const d of NAV.domains) {
 }
 ok(`N1 nav.json şeması: her öğede id · domain · group · label · path · status (live|placeholder) · permission; id tekil; grup/ebeveyn/domain tutarlı; izin kodları 044 kayıt defterinde (${REGISTRY.length} kod)`,
   schemaBad.length === 0 && REGISTRY.length >= 18, JSON.stringify(schemaBad));
-const NAV_PATHS = NAV.items.map(it => strip(it.path)).concat(NAV.domains.map(d => strip(d.path)));
-const deadNav = [...new Set(NAV_PATHS)].filter(p => !fs.existsSync(path.join(UI2, p)));
-ok(`N2 iki yönlü (a): nav'daki her yol VAR (${new Set(NAV_PATHS).size} yol)`, deadNav.length === 0, JSON.stringify(deadNav));
+// legacy=true öğenin yolu ui2 DIŞINDAKİ klasik ekrandır (köprü, Sentez 23 Eki) → public/ altında aranır.
+const LEGACY_PATHS = NAV.items.filter(it => it.legacy === true).map(it => strip(it.path));
+const NAV_PATHS = NAV.items.filter(it => it.legacy !== true).map(it => strip(it.path)).concat(NAV.domains.map(d => strip(d.path)));
+const deadNav = [...new Set(NAV_PATHS)].filter(p => !fs.existsSync(path.join(UI2, p)))
+  .concat(LEGACY_PATHS.filter(p => !p.startsWith('/') || !fs.existsSync(path.join(PUB, p))));
+ok(`N2 iki yönlü (a): nav'daki her yol VAR (${new Set(NAV_PATHS).size} ui2 yolu + ${LEGACY_PATHS.length} klasik köprü yolu)`, deadNav.length === 0, JSON.stringify(deadNav));
 const notInNav = HTML.filter(f => !NAV_PATHS.includes(f));
 ok(`N3 iki yönlü (b): ui2'deki her sayfa nav'da (${HTML.length} HTML, alt klasörler dahil)`, notInNav.length === 0 && HTML.length >= 25, JSON.stringify(notInNav));
 const fg = NAV.groups.filter(g => g.domain === 'finance');
@@ -100,16 +104,24 @@ const leaked = NAV.items.filter(it => it.domain !== 'shell').flatMap(it => [stri
 ok('N6 shell.js YALNIZ OKUR: nav içeriği (yol / etiket) shell.js\'te yok · kaynak /ui2/nav.json',
   leaked.length === 0 && /NAV_URL = '\/ui2\/nav\.json'/.test(SHELL) && !/UI2_SUBNAV|UI2_DOMAINS/.test(SHELL), JSON.stringify(leaked));
 const ph = NAV.items.filter(it => it.status === 'placeholder');
-const phBad = ph.filter(it => it.path !== 'placeholder.html?id=' + it.id || (it.legacy && !fs.existsSync(path.join(PUB, it.legacy))));
+// Köprü (Sentez 23 Eki, 🔶1): legacy === true (boolean) + status=placeholder + path = public/ altında VAR olan klasik ekran;
+// legacy'siz yer-tutucunun yolu placeholder.html?id=<id>. Klasik bağlantı sayfaya gömülmez — sayfa it.path'i nav.json'dan okur.
+const phBad = ph.filter(it => (it.legacy !== undefined && it.legacy !== true) ||
+  (it.legacy === true ? !(it.path.startsWith('/') && !it.path.startsWith('/ui2/') && fs.existsSync(path.join(PUB, strip(it.path))))
+                      : it.path !== 'placeholder.html?id=' + it.id));
 const phPage = read('placeholder.html');
-ok(`N7 yer-tutucu öğeler (${ph.length}) ölü bağlantı değil: placeholder.html?id=<id> · bugünkü klasik ekran (legacy) VAR · sayfa öğeyi nav.json'dan okur`,
-  ph.length >= 2 && phBad.length === 0 && /UI2_SUBACTIVE=new URLSearchParams\(location\.search\)\.get\('id'\)/.test(phPage) && /ui2LoadNav\(\)/.test(phPage) && /C\.state\('empty'/.test(phPage),
+const legacyItems = NAV.items.filter(it => it.legacy !== undefined);
+ok(`N7 yer-tutucu öğeler (${ph.length}) ölü bağlantı değil · köprü öğeleri legacy=true + status=placeholder, yolu ui2 dışındaki VAR olan klasik ekran · klasik bağlantı yalnız nav.json'dan (sayfa it.path okur, gömülü yol yok)`,
+  ph.length >= 2 && phBad.length === 0 && legacyItems.every(it => it.status === 'placeholder') &&
+  ['commissions', 'agents'].every(id => ITEM[id].legacy === true) &&
+  /UI2_SUBACTIVE=new URLSearchParams\(location\.search\)\.get\('id'\)/.test(phPage) && /ui2LoadNav\(\)/.test(phPage) && /C\.state\('empty'/.test(phPage) &&
+  /it\.legacy === true \? '<br><a href="' \+ C\.esc\(it\.path\)/.test(phPage) && !LEGACY_PATHS.some(p => phPage.includes(p)),
   JSON.stringify(phBad.map(x => x.id)));
 const { w: wc, mounts: mc } = loadShell(CLASSIC);
 wc.ui2RenderNav('finance'); wc.ui2RenderSubnav('finance', 'summary');
 const placeholderLinks = [...(mc['ui2-subnav'].outerHTML || '').matchAll(/<a class="ph[^"]*" href="([^"]+)"[^>]*>/g)].map(m => m[1]);
-ok('N8 yer-tutucu öğe menüde "soon" işaretli ve yer-tutucu ekranına gider (canlı öğeden ayırt edilir)',
-  JSON.stringify(placeholderLinks) === JSON.stringify(ph.filter(x => x.domain === 'finance').map(x => x.path)) && /subnav-soon/.test(mc['ui2-subnav'].outerHTML),
+ok('N8 yer-tutucu öğe menüde "soon" işaretli ve yer-tutucu ekranına gider (yolu nav.json\'daki placeholder öğesinden; canlı öğeden ayırt edilir)',
+  JSON.stringify(placeholderLinks) === JSON.stringify(ph.filter(x => x.domain === 'finance').map(x => ITEM.placeholder.path + '?id=' + x.id)) && /subnav-soon/.test(mc['ui2-subnav'].outerHTML),
   JSON.stringify(placeholderLinks));
 
 console.log('\n── G: giriş → Finance özet · Sales/Operations boş-durum (UI-06) ──');
@@ -223,6 +235,25 @@ for (const [f, re] of Object.entries(TPL)) {
 }
 ok('T1 dört şablon (Liste · Detay · Form · Özet kartları) kendi bileşeniyle, sahte veriyle (API çağrısı yok), üç durumu (?state=empty|loading|error) ile · /ui2/_sablon/index.html dizini',
   tplBad.length === 0 && fs.existsSync(path.join(UI2, '_sablon/index.html')) && /_sablon\/' \+ t\.id/.test(read('_sablon/index.html')), JSON.stringify(tplBad));
+
+console.log('\n── E: envanter uygulaması (UI-0b, Sentez 23 Eki) ──');
+// KAPI-1 tek satır: eski arayüzden ui2'ye kod içi link YALNIZ main-panel-v2 Finance bölümünde, tek satır; bölümün
+// mevcut 5 linki aynı sırada (EMS menüsüne başka dokunuş yok).
+const legacyFiles = walk(PUB, p => /\.(html|js|css)$/.test(p) && !p.startsWith(UI2 + path.sep)).map(p => path.relative(PUB, p).split(path.sep).join('/'));
+const toUi2 = legacyFiles.flatMap(f => fs.readFileSync(path.join(PUB, f), 'utf8').split('\n').map((l, i) => [f, i + 1, l]))
+  .filter(([, , l]) => /ui2\//.test(l));
+const mp = fs.readFileSync(path.join(PUB, 'main-panel-v2.html'), 'utf8');
+const finSec = (mp.match(/<div class="nav-section-title">Finance<\/div>([\s\S]*?)<\/div>/) || [])[1] || '';
+const finLinks = [...finSec.matchAll(/href="([^"]+)"/g)].map(m => m[1]);
+ok('E1 KAPI-1: eski arayüzden ui2\'ye tek kod içi link — main-panel-v2 Finance bölümünün son satırı "ELIZA Finance (new)" → /ui2/ · bölümün mevcut 5 linki aynı sırada',
+  toUi2.length === 1 && toUi2[0][0] === 'main-panel-v2.html' && /href="\/ui2\/"[^>]*>.*<span>ELIZA Finance \(new\)<\/span>/.test(toUi2[0][2]) &&
+  JSON.stringify(finLinks) === JSON.stringify(['contract-list.html', 'sales-agents.html', 'commissions.html', 'cash-forecast.html', 'offices.html', '/ui2/']),
+  JSON.stringify([toUi2.map(x => x[0] + ':' + x[1]), finLinks]));
+// SİL (envanter ölü adayları): silinen dosyaların ADI burada bilerek yazılmaz — Sentez kuralı "ad araması backend + public'te 0"
+// bu testin kendisini de kapsar. Desenle korunur: public/ altında yedek (*.backup.html) yok, email_templates/ dizini yok.
+const backups = walk(PUB, p => /\.backup\.html$/.test(p)).map(p => path.relative(PUB, p));
+ok('E2 public/ altında yedek sayfa (*.backup.html) yok · email_templates/ dizini yok (silinen ölü sayfalar geri gelmez; ad listesi ve grep kanıtı defterde)',
+  backups.length === 0 && !fs.existsSync(path.join(PUB, 'email_templates')), JSON.stringify(backups));
 
 console.log(`\n═══ UI2 UI-0 SONUÇ: ${pass} geçti, ${fail} başarısız ═══\n`);
 process.exit(fail === 0 ? 0 : 1);

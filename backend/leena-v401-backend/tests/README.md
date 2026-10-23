@@ -47,7 +47,10 @@ kolonlar canlı ölçümü, FK'lerden yalnız organizers.
 - `test_ui2_ui0.js` (DB YOK): nav.json şeması + **iki yönlü nav testi** (nav'daki her yol var · ui2'deki her sayfa nav'da) ·
   Finance 4 grup · giriş → Finance özet · Sales/Operations boş-durum · **bileşen-kopya testi** (sayfada ham tablo/form/düğme,
   bileşen sınıfı, `style=` = KIRMIZI) · para çifti · özet kartı · üç durum · liste `data-label` · tokens.css dışında sabit renk 0 ·
-  tanımsız token 0 · dört şablon × üç durum.
+  tanımsız token 0 · dört şablon × üç durum. **UI-0b (2026-10-23):** köprü öğeleri `legacy=true` + `status=placeholder`,
+  klasik ekran bağlantısı yalnız nav.json'dan (N2/N7/N8) · E1 eski arayüzden ui2'ye tek link (main-panel-v2 Finance
+  bölümü) · E2 public/ altında `*.backup.html` yok + `email_templates/` yok (silinen adlar testte bilerek yazılmaz:
+  "ad araması backend + public'te 0" kuralı testi de kapsar; ad listesi + grep kanıtı defterde).
 - `test_ui2_ui0_render.js` (test DB): `helpers/ui0Seed.js` tohumu (TABAN dahil) → her ui2 ekranı `helpers/ui2Render.js` ile
   tarayıcısız çizilir → API'nin her rakamı ekran metninde AYNEN (kabul 8, contract sr earned €342.00).
 - `ui0_compare.js` — zincirde DEĞİL (Playwright + Chromium ister): taşıma öncesi (`BEFORE_REF`, varsayılan `ce670ab`) /
