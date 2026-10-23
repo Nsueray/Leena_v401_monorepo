@@ -1,0 +1,177 @@
+/* ============================================================
+   ELIZA ui2 — TOKENS (UI-04): TEK dosya — renk · yazı · boşluk.
+   Sabit renk değeri (hex / rgba) YALNIZ burada yaşar; sayfa, bileşen ve
+   signal.css yalnız var(--…) okur (test_ui2_ui0 grep ile ölçer).
+   Tema: html[data-theme="…"] (sayfa başındaki tek satırlık betik koyar;
+   tema DEĞİŞTİRİCİ UI-0 kapsamı dışı). Kaynak: tasarım setinin (45 HTML)
+   styles/signal.css :root + styles/themes.css — repo kopyasıyla bayt-bayt aynı.
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;450;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+/* ---------- Tema-bağımsız tokenlar ---------- */
+:root {
+  /* Yazı */
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-ui: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --fs-micro: 10px;   /* mono etiket / eyebrow / rozet */
+  --fs-xs: 11px;      /* alan etiketi */
+  --fs-sm: 12px;      /* not, ikincil metin */
+  --fs-md: 13px;      /* tablo, düğme, alt menü */
+  --fs-base: 14px;    /* gövde */
+  --fs-lg: 15px;      /* sekme */
+  --fs-xl: 18px;      /* marka */
+  --fs-h1: 22px;      /* sayfa başlığı */
+  --fs-stat: 22px;    /* özet kartı değeri */
+  --lh-tight: 1.1;
+  --lh-base: 1.45;
+  --ls-caps: .1em;    /* büyük harf mono etiket aralığı */
+
+  /* Boşluk */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-10: 40px;
+  --sp-16: 64px;
+
+  /* Yerleşim */
+  --nav-h: 60px;
+  --page-max: 1180px;
+  --page-narrow: 720px;
+  --page-auth: 400px;
+  --gutter: 24px;
+  --gutter-sm: 16px;
+
+  /* Köşe + gölge */
+  --r-xs: 4px;
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-pill: 100px;
+  --shadow-sm: 0 1px 2px rgba(14,23,38,.06), 0 1px 1px rgba(14,23,38,.04);
+  --shadow-md: 0 4px 14px rgba(14,23,38,.08), 0 1px 3px rgba(14,23,38,.05);
+  --shadow-lg: 0 18px 50px rgba(14,23,38,.16);
+
+  /* Koyu zemin üstü + sabit vurgu (eskiden signal.css'te sabit hex'ti) */
+  --on-primary: #fff;     /* birincil düğme metni, logo çubukları */
+  --on-cmd: #fff;         /* koyu üst çubukta etkin sekme / marka */
+  --cmd-hover: #e7edf6;   /* koyu üst çubukta sekme hover */
+  --line-strong: #c5cedb; /* ikincil düğme hover çerçevesi */
+}
+
+/* ---------- VERMILLION · varsayılan · Japanese editorial ---------- */
+:root,
+html[data-theme="vermillion"] {
+  --bg:        #f5f1e8;
+  --bg-2:      #ebe5d6;
+  --surface:   #fffefa;
+  --surface-2: #f9f5ea;
+  --ink:       #1a1714;
+  --ink-2:     #403a34;
+  --muted:     #736b60;
+  --faint:     #a8a092;
+  --line:      #e8e0d0;
+  --line-2:    #f1ebdd;
+
+  --cmd:       #211a16;
+  --cmd-2:     #2e2620;
+  --cmd-line:  #403730;
+  --cmd-ink:   #e3d8c8;
+  --cmd-faint: #988c7a;
+
+  --primary:   #d8402c;   /* vermillion — yapısal */
+  --primary-d: #b22e1d;
+  --primary-l: #fbe5df;
+  --signal:    #e0612a;   /* warm ember — canlı / vurgu */
+  --signal-d:  #b8470f;
+  --signal-l:  #fce9dd;
+
+  --berry:     #1f7a5e;   /* jade — ikincil */
+  --berry-d:   #155c46;
+  --berry-l:   #e0f0e9;
+
+  --pos:  #1f7a5e;  --pos-l:  #e0f0e9;
+  --warn: #c2860c;  --warn-l: #f8efd5;
+  --dang: #b32238;  --dang-l: #f8e3e6;
+  --info: #d8402c;  --info-l: #fbe5df;
+}
+
+/* ---------- COBALT · ikinci tema · vivid cool ---------- */
+html[data-theme="cobalt"] {
+  --bg:        #eef1f7;
+  --bg-2:      #dfe6f0;
+  --surface:   #ffffff;
+  --surface-2: #f5f8fc;
+  --ink:       #0d1b2e;
+  --ink-2:     #33445c;
+  --muted:     #637186;
+  --faint:     #9aa7ba;
+  --line:      #dbe2ec;
+  --line-2:    #e9eef5;
+
+  --cmd:       #0b2552;
+  --cmd-2:     #123069;
+  --cmd-line:  #1d3f82;
+  --cmd-ink:   #bdd1f1;
+  --cmd-faint: #6783b3;
+
+  --primary:   #1f5fe0;   /* electric blue — yapısal */
+  --primary-d: #1549b8;
+  --primary-l: #e4edfd;
+  --signal:    #ff5a4d;   /* coral — canlı / vurgu */
+  --signal-d:  #d63a2f;
+  --signal-l:  #ffe7e4;
+
+  --berry:     #7b34d8;   /* violet — ikincil */
+  --berry-d:   #5e23ad;
+  --berry-l:   #efe6fb;
+
+  --pos:  #119a5b;  --pos-l:  #e0f3ea;
+  --warn: #cf8a00;  --warn-l: #fbf0d6;
+  --dang: #e23b34;  --dang-l: #fde7e5;
+  --info: #1f5fe0;  --info-l: #e4edfd;
+}
+
+/* ---------- SIGNAL · eski :root paleti (Direction A) ----------
+   UI-0 öncesi signal.css'in :root değerleri. Varsayılan tema betiği her sayfada
+   'vermillion' koyduğu için bugün görünmez; data-theme="signal" verilirse eskisi
+   gibi çalışsın diye korunur (K-G: eski davranış değişmez). */
+html[data-theme="signal"] {
+  --bg:        #f2efe9;
+  --bg-2:      #e9e3da;
+  --surface:   #ffffff;
+  --surface-2: #faf7f2;
+  --ink:       #211c2e;
+  --ink-2:     #463f54;
+  --muted:     #756d80;
+  --faint:     #a79fac;
+  --line:      #e5ded4;
+  --line-2:    #efe9e1;
+
+  --cmd:       #181231;
+  --cmd-2:     #221a40;
+  --cmd-line:  #332a55;
+  --cmd-ink:   #cfc7de;
+  --cmd-faint: #837a9b;
+
+  --primary:   #4538c9;
+  --primary-d: #362aa3;
+  --primary-l: #ecebfb;
+  --signal:    #e8631c;
+  --signal-d:  #b1480c;
+  --signal-l:  #fceee2;
+
+  --berry:     #8a2b40;
+  --berry-d:   #6f1f31;
+  --berry-l:   #f7e7eb;
+
+  --pos:  #1f8757;  --pos-l:  #e4f3eb;
+  --warn: #a8780a;  --warn-l: #f9efd6;
+  --dang: #c63a37;  --dang-l: #fbe8e7;
+  --info: #4538c9;  --info-l: #ecebfb;
+}

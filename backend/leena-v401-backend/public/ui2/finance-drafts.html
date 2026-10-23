@@ -5,30 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Finance · Expense drafts</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
-<link rel="stylesheet" href="styles/ledger.css">
 </head>
 <body>
 <div id="ui2-nav"></div>
 <div id="ui2-subnav"></div>
-<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+<main class="ui-main" id="ui-root"></main>
 
 <script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='drafts';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
 <script src="ledger-ui.js"></script>
 <script>
 (function () {
   'use strict';
   // P1b-3 (LED-19, YZ-01): yapay zeka / içe aktarım / elle TASLAK yazar; gider yalnız burada,
   // insan "Accept" deyince doğar (mevcut gider yolu, aynı doğrulama). Taslak ledger'a yazmaz.
-  // Eksik alanlar kırmızı. Tedarikçi önerisi ÖNERİDİR — kabulde insan seçer (OFS-05).
-  var L = window.ui2L, root = document.getElementById('lg-root');
+  // Eksik alanlar kırmızı (C.missing / missing:). Tedarikçi önerisi ÖNERİDİR — kabulde insan seçer (OFS-05).
+  // Taslak tutarının EUR karşılığı YOK (henüz kayıt değil, sunucu çevirmez) → tek birimli `money`.
+  var C = window.ui2C, L = window.ui2L, root = document.getElementById('ui-root');
   var METHODS = ['bank_transfer', 'cash', 'cheque', 'credit_card', 'other'];   // SEM-01 (tek sözlük)
   var state = { list: [], accounts: [], ref: null, expos: [], suppliers: [], open: null,
                 status: L.qs('status') || 'pending', completeness: L.qs('completeness') || '' };
 
+  function self(x) { return x; }
   function types() {
     var out = [];
     (state.ref ? state.ref.expense_categories : []).forEach(function (c) {
@@ -37,108 +39,101 @@
     });
     return out;
   }
+  function typeOpts(sel) { return C.options(types(), function (t) { return t.id; }, function (t) { return t.label; }, sel, '—'); }
+  function accOpts(sel) { return C.options(state.accounts, function (a) { return a.id; }, function (a) { return a.name + ' (' + a.currency + ')'; }, sel, '—'); }
   function miss(d, k) { return (d.missing_fields || []).indexOf(k) >= 0; }
-  function cell(d, k, html) { return miss(d, k) ? '<span class="lg-miss">missing</span>' : html; }
+  function cell(d, k, html) { return miss(d, k) ? C.missing() : html; }
 
   function filters() {
-    return '<form class="lg-form" id="flt">' +
-      '<label class="field"><span class="label">Status</span><select class="input" name="status">' +
-        L.options(['pending', 'accepted', 'rejected', 'all'], function (s) { return s; }, function (s) { return s; }, state.status) + '</select></label>' +
-      '<label class="field"><span class="label">Fields</span><select class="input" name="completeness">' +
-        L.options([{ v: 'missing', l: 'with missing fields' }, { v: 'complete', l: 'complete' }], function (x) { return x.v; }, function (x) { return x.l; }, state.completeness, 'all') +
-        '</select></label><button class="btn btn-secondary" type="submit">Filter</button></form>';
+    return C.form({ id: 'flt', fields: [
+      C.field('Status', C.select('name="status"', C.options(['pending', 'accepted', 'rejected', 'all'], self, self, state.status))),
+      C.field('Fields', C.select('name="completeness"',
+        C.options([{ v: 'missing', l: 'with missing fields' }, { v: 'complete', l: 'complete' }], function (x) { return x.v; }, function (x) { return x.l; }, state.completeness, 'all')))
+    ], actions: [C.button('Filter', { submit: true })] });
   }
 
   function table() {
-    if (!state.list.length) return '<div class="lg-empty">No drafts for this filter.</div>';
-    var rows = state.list.map(function (d) {
-      var sup = d.supplier_match_id
-        ? L.esc(d.supplier_match_name) + ' <span class="lg-tag">suggested ' + L.esc(d.supplier_match_score) + '</span>'
-        : (d.supplier_name ? L.esc(d.supplier_name) + ' <span class="lg-tag">no match</span>' : '—');
-      var act = d.status === 'pending' ? '<button class="btn btn-ghost" data-open="' + d.id + '">Review</button>'
-        : d.status === 'accepted' ? 'expense #' + L.esc(d.expense_id) : 'rejected';
-      return '<tr><td>#' + d.id + ' ' + L.chip(d.source) + '</td>' +
-        '<td>' + cell(d, 'expense_date', L.esc(d.expense_date)) + '</td>' +
-        '<td>' + cell(d, 'expense_type_id', L.esc(d.expense_category) + ' / ' + L.esc(d.expense_type)) + '</td>' +
-        '<td class="num">' + cell(d, 'amount', L.money(d.amount, d.currency || d.account_currency)) + '</td>' +
-        '<td class="num">' + cell(d, 'exchange_rate', L.esc(d.exchange_rate)) + '</td>' +
-        '<td>' + cell(d, 'account_id', L.esc(d.account_name)) + '</td>' +
-        '<td>' + cell(d, 'payment_method', L.esc(d.payment_method)) + '</td>' +
-        '<td>' + sup + '</td><td>' + L.dash(d.confidence_note) + '</td>' +
-        '<td>' + act + '</td></tr>' + (state.open === d.id ? '<tr><td colspan="10">' + review(d) + '</td></tr>' : '');
-    }).join('');
-    return '<div class="table-wrap"><table class="table"><thead><tr><th>Draft</th><th>Date</th><th>Category / type</th>' +
-      '<th class="num">Amount</th><th class="num">FX → EUR</th><th>Account</th><th>Method</th><th>Supplier</th><th>Confidence</th><th></th>' +
-      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    return C.list({ rows: state.list, empty: 'No drafts for this filter.',
+      after: function (d) { return state.open === d.id ? review(d) : ''; },
+      columns: [
+        { label: 'Draft', cell: function (d) { return '#' + d.id + ' ' + L.chip(d.source); } },
+        { label: 'Date', cell: function (d) { return cell(d, 'expense_date', C.esc(d.expense_date)); } },
+        { label: 'Category / type', cell: function (d) { return cell(d, 'expense_type_id', C.esc(d.expense_category) + ' / ' + C.esc(d.expense_type)); } },
+        { label: 'Amount', num: true, cell: function (d) { return cell(d, 'amount', C.money(d.amount, d.currency || d.account_currency)); } },
+        { label: 'FX → EUR', num: true, cell: function (d) { return cell(d, 'exchange_rate', C.esc(d.exchange_rate)); } },
+        { label: 'Account', cell: function (d) { return cell(d, 'account_id', C.esc(d.account_name)); } },
+        { label: 'Method', cell: function (d) { return cell(d, 'payment_method', C.esc(d.payment_method)); } },
+        { label: 'Supplier', cell: function (d) {
+          return d.supplier_match_id ? C.esc(d.supplier_match_name) + ' ' + C.tag('suggested ' + d.supplier_match_score)
+            : (d.supplier_name ? C.esc(d.supplier_name) + ' ' + C.tag('no match') : '—'); } },
+        { label: 'Confidence', cell: function (d) { return C.dash(d.confidence_note); } },
+        { label: '', cell: function (d) {
+          return d.status === 'pending' ? C.button('Review', { kind: 'ghost', attrs: { 'data-open': d.id } })
+            : d.status === 'accepted' ? 'expense #' + C.esc(d.expense_id) : 'rejected'; } }
+      ] });
   }
 
   // Kabul formu: taslak değerleriyle dolu; eksik alanlar kırmızı çerçeveli. Tedarikçi seçimi insanındır.
   function review(d) {
-    var m = function (k) { return miss(d, k) ? ' lg-missing' : ''; };
+    var m = function (k) { return { missing: miss(d, k) }; };
     var supOpts = state.suppliers.map(function (s) { return { id: s.id, label: s.name + ' (' + s.country_code + ')' }; });
-    return '<form class="lg-form" id="acc-form" data-id="' + d.id + '">' +
-      '<label class="field"><span class="label">Category / type</span><select class="input' + m('expense_type_id') + '" name="expense_type_id">' +
-        L.options(types(), function (t) { return t.id; }, function (t) { return t.label; }, d.expense_type_id || '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Paid from account</span><select class="input' + m('account_id') + '" name="account_id">' +
-        L.options(state.accounts, function (a) { return a.id; }, function (a) { return a.name + ' (' + a.currency + ')'; }, d.account_id || '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Amount</span><input class="input' + m('amount') + '" name="amount" value="' + L.esc(d.amount || '') + '"></label>' +
-      '<label class="field"><span class="label">FX → EUR</span><input class="input' + m('exchange_rate') + '" name="exchange_rate" value="' + L.esc(d.exchange_rate || '') + '"></label>' +
-      '<label class="field"><span class="label">Date</span><input class="input' + m('expense_date') + '" type="date" name="expense_date" value="' + L.esc(d.expense_date || '') + '"></label>' +
-      '<label class="field"><span class="label">Method</span><select class="input' + m('payment_method') + '" name="payment_method">' +
-        L.options(METHODS, function (x) { return x; }, function (x) { return x; }, d.payment_method || '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Expo</span><select class="input" name="expo_id">' +
-        L.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, d.expo_id || '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Supplier' + (d.supplier_name ? ' (draft says: ' + L.esc(d.supplier_name) + ')' : '') + '</span>' +
-        '<select class="input" name="supplier_id">' +
-        L.options(supOpts, function (s) { return s.id; }, function (s) { return s.label; }, d.supplier_match_id || '', '— no supplier —') + '</select></label>' +
-      '<label class="field"><span class="label">Document link</span><input class="input" name="document_url" value="' + L.esc(d.document_url || '') + '"></label>' +
-      '<label class="field"><span class="label">Notes</span><input class="input" name="notes" value="' + L.esc(d.notes || '') + '"></label>' +
-      '<button class="btn btn-primary" type="submit">Accept → record expense</button>' +
-      '<button class="btn btn-ghost" type="button" data-reject="' + d.id + '">Reject</button>' +
-      '</form><div class="lg-msg" id="acc-msg"></div>';
+    return C.form({ id: 'acc-form', msg: 'acc-msg', attrs: { 'data-id': d.id }, fields: [
+      C.field('Category / type', C.select('name="expense_type_id"', typeOpts(d.expense_type_id || ''), m('expense_type_id'))),
+      C.field('Paid from account', C.select('name="account_id"', accOpts(d.account_id || ''), m('account_id'))),
+      C.field('Amount', C.input('name="amount" value="' + C.esc(d.amount || '') + '"', m('amount'))),
+      C.field('FX → EUR', C.input('name="exchange_rate" value="' + C.esc(d.exchange_rate || '') + '"', m('exchange_rate'))),
+      C.field('Date', C.input('type="date" name="expense_date" value="' + C.esc(d.expense_date || '') + '"', m('expense_date'))),
+      C.field('Method', C.select('name="payment_method"', C.options(METHODS, self, self, d.payment_method || '', '—'), m('payment_method'))),
+      C.field('Expo', C.select('name="expo_id"', C.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, d.expo_id || '', '—'))),
+      C.field('Supplier' + (d.supplier_name ? ' (draft says: ' + d.supplier_name + ')' : ''),
+        C.select('name="supplier_id"', C.options(supOpts, function (s) { return s.id; }, function (s) { return s.label; }, d.supplier_match_id || '', '— no supplier —'))),
+      C.field('Document link', C.input('name="document_url" value="' + C.esc(d.document_url || '') + '"')),
+      C.field('Notes', C.input('name="notes" value="' + C.esc(d.notes || '') + '"'))
+    ], actions: [
+      C.button('Accept → record expense', { kind: 'primary', submit: true }),
+      C.button('Reject', { kind: 'ghost', attrs: { 'data-reject': d.id } })
+    ] });
   }
 
   function newDraft() {
-    return '<form class="lg-form" id="new-form">' +
-      '<label class="field"><span class="label">Category / type</span><select class="input" name="expense_type_id">' +
-        L.options(types(), function (t) { return t.id; }, function (t) { return t.label; }, '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Account</span><select class="input" name="account_id">' +
-        L.options(state.accounts, function (a) { return a.id; }, function (a) { return a.name + ' (' + a.currency + ')'; }, '', '—') + '</select></label>' +
-      '<label class="field"><span class="label">Amount</span><input class="input" name="amount"></label>' +
-      '<label class="field"><span class="label">Date</span><input class="input" type="date" name="expense_date"></label>' +
-      '<label class="field"><span class="label">Supplier</span><input class="input" name="supplier_name" list="sup-names" autocomplete="off">' +
-        '<datalist id="sup-names">' + state.suppliers.map(function (s) { return '<option value="' + L.esc(s.name) + '">'; }).join('') + '</datalist></label>' +
-      '<label class="field"><span class="label">Notes</span><input class="input" name="notes"></label>' +
-      '<button class="btn btn-secondary" type="submit">Save draft</button></form><div class="lg-msg" id="new-msg"></div>';
+    return C.form({ id: 'new-form', msg: 'new-msg', fields: [
+      C.field('Category / type', C.select('name="expense_type_id"', typeOpts(''))),
+      C.field('Account', C.select('name="account_id"', accOpts(''))),
+      C.field('Amount', C.input('name="amount"')),
+      C.field('Date', C.input('type="date" name="expense_date"')),
+      C.field('Supplier', C.input('name="supplier_name" list="sup-names" autocomplete="off"') +
+        '<datalist id="sup-names">' + state.suppliers.map(function (s) { return '<option value="' + C.esc(s.name) + '">'; }).join('') + '</datalist>'),
+      C.field('Notes', C.input('name="notes"'))
+    ], actions: [C.button('Save draft', { submit: true })] });
   }
 
   function render() {
-    root.innerHTML = '<div class="lg-head"><div><h1>Expense drafts</h1><div class="sub">drafts never touch the ledger · an expense is born only on Accept · ' +
-      state.list.length + ' shown</div></div><div class="lg-links"><a href="finance-expenses.html">← Expenses</a></div></div>' +
-      '<div class="lg-stack">' +
-        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Pending review</span>' +
-          '<span class="card-eyebrow">missing fields in red · supplier suggestions are not assigned automatically</span></div>' + filters() + table() + '</div>' +
-        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">New draft (manual)</span>' +
-          '<span class="card-eyebrow">partial entry — complete it later on review</span></div>' + newDraft() + '</div>' +
-      '</div>';
+    root.innerHTML =
+      C.page({ title: 'Expense drafts', sub: 'drafts never touch the ledger · an expense is born only on Accept · ' + state.list.length + ' shown',
+        aside: C.links(['<a href="finance-expenses.html">← Expenses</a>']) }) +
+      C.stack([
+        C.section({ title: 'Pending review', eyebrow: 'missing fields in red · supplier suggestions are not assigned automatically', body: filters() + table() }),
+        C.section({ title: 'New draft (manual)', eyebrow: 'partial entry — complete it later on review', body: newDraft() })
+      ]);
   }
 
   function load() {
     if (!L.guard(root)) return;
+    L.loading(root);
     var q = ['status=' + encodeURIComponent(state.status)];
     if (state.completeness) q.push('completeness=' + encodeURIComponent(state.completeness));
     Promise.all([L.api('GET', '/api/expense-drafts?' + q.join('&')), L.api('GET', '/api/ledger/accounts'),
                  L.api('GET', '/api/ledger/reference'), L.api('GET', '/api/expos'), L.api('GET', '/api/ledger/suppliers')])
       .then(function (r) {
         if (r[0].status !== 200) {
-          root.innerHTML = '<div class="lg-empty">' + L.esc(r[0].status === 503 ? 'Expense drafts are not migrated yet — run scripts/migrate.js.'
-            : 'Could not load drafts (HTTP ' + r[0].status + ').') + '</div>';
+          root.innerHTML = C.state('error', r[0].status === 503 ? 'Expense drafts are not migrated yet — run scripts/migrate.js.'
+            : 'Could not load drafts (HTTP ' + r[0].status + ').');
           return;
         }
         state.list = r[0].body; state.accounts = r[1].body || []; state.ref = r[2].body;
         state.expos = Array.isArray(r[3].body) ? r[3].body : []; state.suppliers = r[4].status === 200 ? r[4].body : [];
         render();
-      }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+      }).catch(function () { L.offline(root); });
   }
 
   root.addEventListener('submit', function (e) {
@@ -148,7 +143,7 @@
     if (f.id === 'new-form') {
       b.source = 'manual';
       L.api('POST', '/api/expense-drafts', b).then(function (r) {
-        if (r.status === 201) load(); else L.say(document.getElementById('new-msg'), r.body && r.body.error, 'error');
+        if (r.status === 201) load(); else C.say(document.getElementById('new-msg'), r.body && r.body.error, 'error');
       });
       return;
     }
@@ -157,7 +152,7 @@
       ['expo_id', 'supplier_id', 'document_url', 'notes'].forEach(function (k) { if (!(k in b)) b[k] = null; });
       L.api('POST', '/api/expense-drafts/' + f.getAttribute('data-id') + '/accept', b).then(function (r) {
         if (r.status === 201) { state.open = null; load(); }
-        else L.say(document.getElementById('acc-msg'), r.body && r.body.error, 'error');
+        else C.say(document.getElementById('acc-msg'), r.body && r.body.error, 'error');
       });
     }
   });

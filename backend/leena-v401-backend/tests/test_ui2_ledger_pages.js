@@ -6,6 +6,8 @@ const vm = require('vm');
 const PUB = path.join(__dirname, '..', 'public');
 const UI2 = path.join(PUB, 'ui2');
 const SHELL = fs.readFileSync(path.join(UI2, 'shell.js'), 'utf8');
+// UI-0 (UI-02): nav TEK KAYNAK nav.json — tarayıcıda shell.js fetch eder; burada aynı veri hazır verilir (fixture).
+const NAV = JSON.parse(fs.readFileSync(path.join(UI2, 'nav.json'), 'utf8'));
 
 let pass = 0, fail = 0;
 const ok = (n, c, d) => { c ? (pass++, console.log('  ✅ ' + n)) : (fail++, console.log('  ❌ ' + n + (d !== undefined ? ' → ' + d : ''))); };
@@ -16,6 +18,7 @@ function renderSubnav(domain, active) {
     document: { addEventListener() {}, getElementById: (id) => (id === 'ui2-subnav' ? mount : null) } };
   vm.createContext(ctx);
   vm.runInContext(SHELL, ctx);
+  ctx.window.ui2NavData = NAV;
   ctx.window.ui2RenderSubnav(domain, active);
   return mount.outerHTML;
 }
@@ -23,13 +26,15 @@ function renderSubnav(domain, active) {
 console.log('\n── ui2 ledger ekranları ──');
 const html = renderSubnav('finance', 'accounts');
 const links = [...html.matchAll(/<a( class="active")? href="([^"]+)">([^<]+)<\/a>/g)].map(m => ({ active: !!m[1], href: m[2], label: m[3] }));
-// Paket 2 (Sentez 22 Eki + K-G: "eski davranış değişmez, ekleme geriye uyumlu ve testli"): Suppliers +
-// Drafts subnav'ın SONUNA eklendi → beklenen sayı 6 → 8; Paket 1'in 6 öğesi AYNI sırada yerinde.
-const P1_SUBNAV = ['finance-contract.html', 'finance-summary.html', 'finance-accounts.html', 'finance-transfers.html', 'finance-expenses.html', 'finance-budget.html'];
-ok('U1 Finance subnav: Contracts ilk sırada (eski öğe yerinde) + 5 yeni ekran, aktif öğe işaretli · Paket 2: Paket 1 öğeleri aynı sırada, Suppliers + Drafts sonda',
-  links.length === 8 && links[0].href === 'finance-contract.html' && links.filter(l => l.active).map(l => l.label).join() === 'Accounts' &&
-  P1_SUBNAV.every((h, i) => links[i].href === h) && links[6].href === 'finance-suppliers.html' && links[7].href === 'finance-drafts.html',
-  JSON.stringify(links));
+// UI-0 (Sentez 22 Eki, UI-02): "6 öğe" SAYI testi SİLİNDİ (Paket 2'de 8'e çıkmıştı). Yerine yapı ölçülür: Finance alt menüsü
+// nav.json'dan, 4 grup Executive · Contracts · Money · Expo Finance (UI-01); Paket 1 ekranları kendi gruplarında; aktif öğe işaretli.
+const GROUPS = [...html.matchAll(/<div class="subnav-group" data-group="([^"]+)">/g)].map(m => m[1]);
+const inGroup = (g, href) => new RegExp('data-group="' + g + '">(?:(?!subnav-group).)*href="' + href.replace('.', '\\.') + '"').test(html);
+ok('U1 Finance subnav nav.json\'dan 4 grup (Executive · Contracts · Money · Expo Finance) · Paket 1 ekranları kendi grubunda · aktif öğe Accounts',
+  JSON.stringify(GROUPS) === '["executive","contracts","money","expo-finance"]' && inGroup('executive', 'finance-summary.html') &&
+  inGroup('contracts', 'finance-contracts.html') && ['finance-accounts.html', 'finance-transfers.html', 'finance-expenses.html'].every(h => inGroup('money', h)) &&
+  inGroup('expo-finance', 'finance-budget.html') && links.filter(l => l.active).map(l => l.label).join() === 'Accounts',
+  JSON.stringify([GROUPS, links]));
 const missing = links.filter(l => !fs.existsSync(path.join(UI2, l.href))).map(l => l.href);
 ok('U2 "gösterilemeyen görünmez": her subnav bağlantısının dosyası VAR', missing.length === 0, JSON.stringify(missing));
 ok('U3 Sales / Operations subnav değişmedi (boş → çubuk yok)', renderSubnav('sales', null) === '' && renderSubnav('operations', null) === '');
@@ -44,7 +49,8 @@ for (const p of PAGES) {
   const subKey = { contract: 'contract' }[sub] || sub;
   if (!/UI2_ACTIVE='finance'/.test(s) || !links.some(l => l.href.includes(subKey)) || order.some(i => i < 0) || !(order[0] < order[1] && order[1] < order[2])) bad.push(p);
 }
-ok('U4 6 ekranın hepsi: Finance + subnav\'da var olan aktif öğe · script sırası leena-fetch → shell → ledger-ui', bad.length === 0 && keys.length === 8, JSON.stringify(bad));
+// UI-0: sayı parçası (keys.length === 8) silindi — UI-02 "sayı testi silinir"; bağlantıların varlığı U2'de, iki yönlü nav test_ui2_ui0'da.
+ok('U4 6 ekranın hepsi: Finance + subnav\'da var olan aktif öğe · script sırası leena-fetch → shell → ledger-ui', bad.length === 0 && keys.length > 0, JSON.stringify(bad));
 
 // Ekranların çağırdığı /api/ledger uçları router'da VAR mı (ölü bağlantı yok).
 const ROUTER = fs.readFileSync(path.join(__dirname, '..', 'routes/ledger.js'), 'utf8');

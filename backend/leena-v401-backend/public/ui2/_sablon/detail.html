@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="/ui2/">
+<title>ELIZA — Detail template</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/signal.css">
+</head>
+<body>
+<!-- ŞABLON (UI-03): sahte veri, API çağrısı YOK. <base href="/ui2/"> → bağlantılar ve betikler /ui2/ köklü. -->
+<div id="ui2-nav"></div>
+<main class="ui-main" id="ui-root"></main>
+
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE='tpl-detail';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.ui2C, root = document.getElementById('ui-root');
+  var STATES = ['data', 'empty', 'loading', 'error'];
+  var state = new URLSearchParams(location.search).get('state');
+  if (STATES.indexOf(state) < 0) state = 'data';
+  function switcher(page) {
+    return C.links(STATES.map(function (s) { return { href: '_sablon/' + page + '?state=' + s, label: (s === state ? '● ' : '') + s }; })
+      .concat([{ href: '_sablon/index.html', label: 'All templates' }]));
+  }
+  var ITEMS = [
+    { what: 'Sample item one', qty: '2', amount: '300.00', cur: 'EUR', eur: '300.00' },
+    { what: 'Sample item two', qty: '1', amount: '5000.00', cur: 'TRY', eur: '142.86' }
+  ];
+  var head = C.page({ titleHtml: C.esc('Example Co. Alpha'), sub: 'EX-0001 · Sample Expo 2099 · 2099-01-01', aside: C.chip('Active', 'primary') + ' ' + switcher('detail.html') });
+  var body;
+  if (state === 'loading') body = C.state('loading');
+  else if (state === 'error') body = C.state('error', 'Could not load the record (HTTP 500).');
+  else if (state === 'empty') body = C.state('empty', 'Record #0 not found.', { html: ' <a href="_sablon/list.html">Open the list</a>.' });
+  else body =
+    C.stats([
+      { label: 'Revenue', value: C.pair('5600.00', 'TRY', '160.00'), note: 'EUR booked at the record rate', href: '#items' },
+      { label: 'Paid', value: C.eur('100.00'), href: '#items' },
+      { label: 'Balance', value: C.eur('60.00'), href: '#items' }
+    ]) +
+    C.stack([
+      C.section({ title: 'Details', body: C.detail([
+        ['Reference', 'EX-0001'], ['Owner', C.esc('Sample Person')], ['Office', '—'], ['Created', '2099-01-01']
+      ]) }),
+      C.section({ id: 'items', title: 'Items', eyebrow: 'Transaction currency + EUR', body: C.list({ rows: ITEMS, empty: 'No items.', columns: [
+        { label: 'Item', cell: function (r) { return C.esc(r.what); } },
+        { label: 'Qty', num: true, cell: function (r) { return C.esc(r.qty); } },
+        { label: 'Amount · EUR', num: true, cell: function (r) { return C.pair(r.amount, r.cur, r.eur); } }
+      ] }) }),
+      C.section({ title: 'Empty sub-list', body: C.list({ rows: [], empty: 'No payments recorded.' }) })
+    ]);
+  root.innerHTML = head + body;
+})();
+</script>
+</body>
+</html>

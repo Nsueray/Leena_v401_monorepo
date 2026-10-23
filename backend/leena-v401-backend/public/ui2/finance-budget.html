@@ -5,112 +5,118 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — Finance · Expo budget</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
-<link rel="stylesheet" href="styles/ledger.css">
 </head>
 <body>
 <div id="ui2-nav"></div>
 <div id="ui2-subnav"></div>
-<main class="lg-main" id="lg-root"><div class="lg-empty">Loading…</div></main>
+<main class="ui-main" id="ui-root"></main>
 
 <script>window.UI2_ACTIVE='finance'; window.UI2_SUBACTIVE='budget';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
 <script src="ledger-ui.js"></script>
 <script>
 (function () {
   'use strict';
   // L-5 (LED-09): bütçe vs gerçekleşen. Gerçekleşen ledger'daki gider hareketlerinden SUNUCUDA türetilir.
   // Her değişiklik yeni revizyon; kilidi Owner atar, kilitliyken yeni revizyonu yalnız Owner yazar.
-  var L = window.ui2L, root = document.getElementById('lg-root');
+  // Bütçe tamamen EUR'dur (girişte EUR) — para çifti gerekmez.
+  var C = window.ui2C, L = window.ui2L, root = document.getElementById('ui-root');
   var expoId = L.qs('expo');
   var state = { expos: [], ref: null, b: null, draft: [] };
 
   function catName(id) { var c = (state.ref.expense_categories || []).find(function (x) { return x.id === Number(id); }); return c ? c.name : '?'; }
   function typesOf(catId) { var c = (state.ref.expense_categories || []).find(function (x) { return x.id === Number(catId); }); return c ? c.types : []; }
+  function typeName(l) { return (typesOf(l.category_id).find(function (t) { return t.id === Number(l.expense_type_id); }) || {}).name; }
 
   function picker() {
-    return '<form class="lg-form" id="pick" style="padding:0"><label class="field"><span class="label">Expo</span><select class="input" name="expo">' +
-      L.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, expoId || '', '— choose —') +
-      '</select></label><button class="btn btn-secondary" type="submit">Open</button></form>';
+    return C.form({ id: 'pick', layout: 'flush', fields: [
+      C.field('Expo', C.select('name="expo"',
+        C.options(state.expos, function (e) { return e.id; }, function (e) { return e.name; }, expoId || '', '— choose —')))
+    ], actions: [C.button('Open', { submit: true })] });
   }
 
   function vsTable(v) {
-    if (!v.by_category.length) return '<div class="lg-empty">No budget lines and no expenses for this expo yet.</div>';
-    var rows = v.by_category.map(function (r) {
-      var over = r.variance_eur != null && Number(r.variance_eur) < 0;
-      return '<tr><td>' + L.esc(r.category) + (r.budget_eur == null ? '<span class="lg-tag">unbudgeted</span>' : '') + '</td>' +
-        '<td class="num">' + L.eur(r.budget_eur) + '</td><td class="num">' + L.eur(r.actual_eur) + '</td>' +
-        '<td class="num' + (over ? ' lg-neg' : '') + '">' + L.eur(r.variance_eur) + '</td></tr>';
-    }).join('');
-    var typeRows = v.by_type.map(function (r) {
-      return '<tr><td class="lg-note">↳ ' + L.esc(r.category) + ' / ' + L.esc(r.expense_type) + '</td><td class="num">' + L.eur(r.budget_eur) +
-        '</td><td class="num">' + L.eur(r.actual_eur) + '</td><td class="num' + (Number(r.variance_eur) < 0 ? ' lg-neg' : '') + '">' + L.eur(r.variance_eur) + '</td></tr>';
-    }).join('');
-    return '<div class="table-wrap"><table class="table"><thead><tr><th>Category</th><th class="num">Budget</th><th class="num">Actual</th>' +
-      '<th class="num">Variance</th></tr></thead><tbody>' + rows + typeRows + '</tbody></table></div>' +
-      '<div class="card-pad lg-note">Actual = expense entries in the ledger for this expo (reversals net out). Unbudgeted actual: €' +
-      L.esc(v.unbudgeted_actual_eur) + '.</div>';
+    var rows = v.by_category.map(function (r) { return { cat: r }; })
+      .concat(v.by_type.map(function (r) { return { type: r }; }));
+    var over = function (x) { var r = x.cat || x.type; return r.variance_eur != null && Number(r.variance_eur) < 0; };
+    if (!v.by_category.length) return C.state('empty', 'No budget lines and no expenses for this expo yet.');
+    return C.list({ rows: rows, columns: [
+      { label: 'Category', cell: function (x) {
+        return x.cat ? C.esc(x.cat.category) + (x.cat.budget_eur == null ? C.tag('unbudgeted') : '')
+          : C.muted('↳ ' + C.esc(x.type.category) + ' / ' + C.esc(x.type.expense_type)); } },
+      { label: 'Budget', num: true, cell: function (x) { return C.eur((x.cat || x.type).budget_eur); } },
+      { label: 'Actual', num: true, cell: function (x) { return C.eur((x.cat || x.type).actual_eur); } },
+      { label: 'Variance', num: true, neg: over, cell: function (x) { return C.eur((x.cat || x.type).variance_eur); } }
+    ] }) +
+    C.text(C.note('Actual = expense entries in the ledger for this expo (reversals net out). Unbudgeted actual: ' +
+      C.eur(v.unbudgeted_actual_eur) + '.'));
   }
 
   function draftEditor() {
     var cats = (state.ref.expense_categories || []).filter(function (c) { return c.is_active; });
-    var rows = state.draft.map(function (l, i) {
-      return '<tr><td>' + L.esc(catName(l.category_id)) + '</td><td>' + (l.expense_type_id ? L.esc((typesOf(l.category_id).find(function (t) { return t.id === Number(l.expense_type_id); }) || {}).name) : '<span class="lg-note">whole category</span>') +
-        '</td><td class="num">€' + L.esc(l.amount_eur) + '</td><td><button class="btn btn-ghost" data-del="' + i + '">Remove</button></td></tr>';
-    }).join('');
-    return '<div class="table-wrap"><table class="table"><thead><tr><th>Category</th><th>Type</th><th class="num">EUR</th><th></th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="4" class="lg-note">No lines — add below.</td></tr>') + '</tbody></table></div>' +
-      '<form class="lg-form" id="line-form">' +
-        '<label class="field"><span class="label">Category</span><select class="input" name="category_id" required>' +
-          L.options(cats, function (c) { return c.id; }, function (c) { return c.name; }, '', '—') + '</select></label>' +
-        '<label class="field"><span class="label">Type (optional)</span><select class="input" name="expense_type_id"><option value="">whole category</option></select></label>' +
-        '<label class="field"><span class="label">Amount EUR</span><input class="input" name="amount_eur" required></label>' +
-        '<button class="btn btn-secondary" type="submit">Add line</button></form>' +
-      '<form class="lg-form" id="rev-form">' +
-        '<label class="field"><span class="label">Income target EUR</span><input class="input" name="income_target_eur" value="' +
-          L.esc(state.b.active && state.b.active.income_target_eur || '') + '"></label>' +
-        '<label class="field"><span class="label">Notes</span><input class="input" name="notes"></label>' +
-        '<button class="btn btn-primary" type="submit">Save as new revision</button></form>' +
-      '<div class="lg-msg" id="rev-msg"></div>';
+    return C.list({ rows: state.draft, empty: 'No lines — add below.', columns: [
+        { label: 'Category', cell: function (l) { return C.esc(catName(l.category_id)); } },
+        { label: 'Type', cell: function (l) { return l.expense_type_id ? C.esc(typeName(l)) : C.muted('whole category'); } },
+        { label: 'EUR', num: true, cell: function (l) { return C.eur(l.amount_eur); } },
+        { label: '', cell: function (l, i) { return C.button('Remove', { kind: 'ghost', attrs: { 'data-del': i } }); } }
+      ] }) +
+      C.form({ id: 'line-form', fields: [
+        C.field('Category', C.select('name="category_id" required',
+          C.options(cats, function (c) { return c.id; }, function (c) { return c.name; }, '', '—'))),
+        C.field('Type (optional)', C.select('name="expense_type_id"', C.options([], null, null, '', 'whole category'))),
+        C.field('Amount EUR', C.input('name="amount_eur" required'))
+      ], actions: [C.button('Add line', { submit: true })] }) +
+      C.form({ id: 'rev-form', msg: 'rev-msg', fields: [
+        C.field('Income target EUR', C.input('name="income_target_eur" value="' +
+          C.esc(state.b.active && state.b.active.income_target_eur || '') + '"')),
+        C.field('Notes', C.input('name="notes"'))
+      ], actions: [C.button('Save as new revision', { kind: 'primary', submit: true })] });
+  }
+
+  function history(v) {
+    return C.list({ rows: v.history, empty: 'No revisions yet.', columns: [
+      { label: 'Revision', cell: function (h) { return 'rev ' + h.revision + (h.superseded_at ? '' : ' ' + C.tag('active')); } },
+      { label: 'Income target', cell: function (h) { return C.eur(h.income_target_eur); } },
+      { label: 'Created', cell: function (h) { return C.dash(h.created_by_name) + ' · ' + C.esc(String(h.created_at).slice(0, 10)); } },
+      { label: 'Lock', cell: function (h) {
+        return h.locked_at ? 'locked ' + C.esc(String(h.locked_at).slice(0, 10)) + ' by ' + C.dash(h.locked_by_name) : '—'; } }
+    ] });
   }
 
   function render() {
     var v = state.b, a = v.active, inc = v.income;
-    var lockTxt = a ? (a.locked_at ? 'locked by ' + L.esc(a.locked_by_name || '?') + ' · ' + L.esc(String(a.locked_at).slice(0, 10)) : 'unlocked') : 'no budget yet';
-    var lockBtn = a && !a.locked_at && v.viewer_is_owner ? '<button class="btn btn-secondary" id="lock-btn">Lock budget (Owner)</button>' : '';
-    var hist = v.history.map(function (h) {
-      return '<tr><td>rev ' + h.revision + (h.superseded_at ? '' : ' <span class="lg-tag">active</span>') + '</td><td>' + L.eur(h.income_target_eur) +
-        '</td><td>' + L.dash(h.created_by_name) + ' · ' + L.esc(String(h.created_at).slice(0, 10)) + '</td><td>' +
-        (h.locked_at ? 'locked ' + L.esc(String(h.locked_at).slice(0, 10)) + ' by ' + L.dash(h.locked_by_name) : '—') + '</td></tr>';
-    }).join('');
+    var lockTxt = a ? (a.locked_at ? 'locked by ' + (a.locked_by_name || '?') + ' · ' + String(a.locked_at).slice(0, 10) : 'unlocked') : 'no budget yet';
+    var lockBtn = a && !a.locked_at && v.viewer_is_owner ? C.button('Lock budget (Owner)', { attrs: 'id="lock-btn"' }) : '';
     root.innerHTML =
-      '<div class="lg-head"><div><h1>Budget · ' + L.esc(v.expo.name) + '</h1><div class="sub">' +
-        (a ? 'revision ' + a.revision + ' · ' : '') + lockTxt + '</div></div>' + picker() + '</div>' +
-      '<div class="lg-strip">' +
-        '<div class="lg-ms"><div class="l">Income target</div><div class="v">' + L.eur(a && a.income_target_eur) + '</div></div>' +
-        '<div class="lg-ms"><div class="l">Income collected</div><div class="v">' + L.eur(inc.income_eur) + '</div><div class="n">' +
-          L.eur(inc.income_in_ledger_eur) + ' in ledger · ' + inc.payments_not_in_ledger + ' payments outside</div></div>' +
-      '</div>' +
-      '<div class="lg-stack">' +
-        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">Budget vs actual (EUR)</span>' + lockBtn + '</div>' + vsTable(v) + '</div>' +
-        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">New revision</span><span class="card-eyebrow">' +
-          (a && a.locked_at ? (v.viewer_is_owner ? 'locked — as Owner your new revision unlocks it' : 'locked — only the Owner can change it') : 'every change is a new revision') +
-          '</span></div>' + draftEditor() + '</div>' +
-        '<div class="card" style="overflow:hidden"><div class="card-head"><span class="card-title">History</span></div>' +
-          (hist ? '<div class="table-wrap"><table class="table"><thead><tr><th>Revision</th><th>Income target</th><th>Created</th><th>Lock</th></tr></thead><tbody>' + hist + '</tbody></table></div>' : '<div class="lg-empty">No revisions yet.</div>') +
-        '</div></div>';
+      C.page({ title: 'Budget · ' + v.expo.name, sub: (a ? 'revision ' + a.revision + ' · ' : '') + lockTxt, aside: picker() }) +
+      C.stats([
+        { label: 'Income target', value: C.eur(a && a.income_target_eur), href: '#revision' },
+        { label: 'Income collected', value: C.eur(inc.income_eur),
+          note: C.eur(inc.income_in_ledger_eur) + ' in ledger · ' + inc.payments_not_in_ledger + ' payments outside', href: '#vs-actual' }
+      ]) +
+      C.stack([
+        C.section({ id: 'vs-actual', title: 'Budget vs actual (EUR)', action: lockBtn, body: vsTable(v) }),
+        C.section({ id: 'revision', title: 'New revision',
+          eyebrow: a && a.locked_at ? (v.viewer_is_owner ? 'locked — as Owner your new revision unlocks it' : 'locked — only the Owner can change it') : 'every change is a new revision',
+          body: draftEditor() }),
+        C.section({ title: 'History', body: history(v) })
+      ]);
   }
 
   function load() {
     if (!L.guard(root)) return;
+    L.loading(root);
     Promise.all([L.api('GET', '/api/expos'), L.api('GET', '/api/ledger/reference')]).then(function (r) {
       state.expos = Array.isArray(r[0].body) ? r[0].body : [];
       if (r[1].status !== 200) { L.httpError(root, r[1], 'reference data'); return; }
       state.ref = r[1].body;
       if (!expoId) {
-        root.innerHTML = '<div class="lg-head"><div><h1>Expo budget</h1><div class="sub">choose an expo</div></div>' + picker() + '</div>';
+        root.innerHTML = C.page({ title: 'Expo budget', sub: 'choose an expo', aside: picker() }) +
+          C.section({ body: C.state('empty', 'Choose an expo above to see its budget.') });
         return;
       }
       return L.api('GET', '/api/ledger/budgets/' + encodeURIComponent(expoId)).then(function (b) {
@@ -119,14 +125,14 @@
         state.draft = (b.body.lines || []).map(function (l) { return { category_id: l.category_id, expense_type_id: l.expense_type_id, amount_eur: l.amount_eur }; });
         render();
       });
-    }).catch(function () { root.innerHTML = '<div class="lg-empty">Could not reach the server. Please retry.</div>'; });
+    }).catch(function () { L.offline(root); });
   }
 
   root.addEventListener('change', function (e) {
     var f = e.target.closest('#line-form');
     if (f && e.target.name === 'category_id') {
-      f.expense_type_id.innerHTML = '<option value="">whole category</option>' +
-        L.options(typesOf(e.target.value).filter(function (t) { return t.is_active; }), function (t) { return t.id; }, function (t) { return t.name; });
+      f.expense_type_id.innerHTML = C.options(typesOf(e.target.value).filter(function (t) { return t.is_active; }),
+        function (t) { return t.id; }, function (t) { return t.name; }, '', 'whole category');
     }
   });
   root.addEventListener('submit', function (e) {
@@ -136,7 +142,7 @@
     if (f.id === 'line-form') { state.draft.push({ category_id: b.category_id, expense_type_id: b.expense_type_id || null, amount_eur: b.amount_eur }); render(); return; }
     if (f.id === 'rev-form') {
       L.api('POST', '/api/ledger/budgets/' + encodeURIComponent(expoId), { income_target_eur: b.income_target_eur, notes: b.notes, lines: state.draft })
-        .then(function (r) { if (r.status === 201) load(); else L.say(document.getElementById('rev-msg'), r.body && r.body.error, 'error'); });
+        .then(function (r) { if (r.status === 201) load(); else C.say(document.getElementById('rev-msg'), r.body && r.body.error, 'error'); });
     }
   });
   root.addEventListener('click', function (e) {

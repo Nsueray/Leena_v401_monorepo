@@ -18,7 +18,7 @@ Başka bir DB/host için bu değişkeni ver. Dosyalarda literal host/şifre yokt
 ## Koşum
 ```
 npm run test:setup     # ell_comm_test + _premig + _p1 + _p1b'yi SIFIRDAN kurar (idempotent)
-npm test               # package.json zinciri — 20 suite, 379 test (2026-10-22 Paket 2, PG14.18 ve PG17.10)
+npm test               # package.json zinciri — 22 suite (2026-10-22 PAKET UI-0; sayı defterde)
 ```
 `test:setup` idempotenttir: `DROP DATABASE IF EXISTS` + `CREATE` → art arda koşulabilir.
 
@@ -42,6 +42,17 @@ kolonlar canlı ölçümü, FK'lerden yalnız organizers.
 **Fixture notu (Paket 2):** yazma uçları kapılı (eski token → 409 köprü) → `test_ledger` / `test_ledger_p1b` /
 `test_payouts`'un varsayılan aktörü Owner kullanıcı oturumu; assertion'lar değişmedi. Kapının kendisi
 `test_users_admin.js`'te.
+
+**PAKET UI-0 (2026-10-22, ui2 arayüz çekirdeği — kütük UI-01..06):**
+- `test_ui2_ui0.js` (DB YOK): nav.json şeması + **iki yönlü nav testi** (nav'daki her yol var · ui2'deki her sayfa nav'da) ·
+  Finance 4 grup · giriş → Finance özet · Sales/Operations boş-durum · **bileşen-kopya testi** (sayfada ham tablo/form/düğme,
+  bileşen sınıfı, `style=` = KIRMIZI) · para çifti · özet kartı · üç durum · liste `data-label` · tokens.css dışında sabit renk 0 ·
+  tanımsız token 0 · dört şablon × üç durum.
+- `test_ui2_ui0_render.js` (test DB): `helpers/ui0Seed.js` tohumu (TABAN dahil) → her ui2 ekranı `helpers/ui2Render.js` ile
+  tarayıcısız çizilir → API'nin her rakamı ekran metninde AYNEN (kabul 8, contract sr earned €342.00).
+- `ui0_compare.js` — zincirde DEĞİL (Playwright + Chromium ister): taşıma öncesi (`BEFORE_REF`, varsayılan `ce670ab`) /
+  sonrası ekran görüntüsü + `<main>` sayı karşılaştırması + 390 px yatay kaydırma ölçümü + uçtan uca ui2 login → Finance özeti.
+  `PW=<playwright modülü> CHROME=<chromium> OUT=<dizin> node tests/ui0_compare.js`
 
 ## Ne kuruluyor
 - **Stub tablolar** (migration'larda yok, FK hedefi): `expos` (1-5, organizer_id=1),

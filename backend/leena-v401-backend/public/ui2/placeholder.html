@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ELIZA — Not in ui2 yet</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/signal.css">
+</head>
+<body>
+<div id="ui2-nav"></div>
+<div id="ui2-subnav"></div>
+<main class="ui-main narrow" id="ui-root"></main>
+
+<!-- Yer-tutucu öğe ekranı (nav.json status=placeholder). Domain'i öğeden türetilir (shell.js). -->
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE=new URLSearchParams(location.search).get('id');</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  // Menüdeki yer-tutucu öğe ölü bağlantı değildir: buraya gelir. Metin nav.json'dan (etiket, grup,
+  // bugünkü klasik ekran = `legacy`). ui2 ekranı ayrı paketin işidir (Commissions & Agents: UI-1 adayı).
+  var C = window.ui2C, root = document.getElementById('ui-root');
+  var id = window.UI2_SUBACTIVE;
+  root.innerHTML = C.state('loading');
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!localStorage.getItem('token')) return;
+    window.ui2LoadNav().then(function (nav) {
+      var it = nav.items.filter(function (x) { return x.id === id && x.status === 'placeholder'; })[0];
+      if (!it) { root.innerHTML = C.state('error', 'Unknown screen.', { html: ' <a href="index.html">Go to ELIZA</a>.' }); return; }
+      var g = nav.groups.filter(function (x) { return x.id === it.group; })[0];
+      root.innerHTML = C.page({ title: it.label, sub: (g ? g.label + ' · ' : '') + 'not in ui2 yet' }) +
+        C.section({ body: C.state('empty', 'This screen is not in ui2 yet.', { title: it.label,
+          html: it.legacy ? '<br><a href="' + C.esc(it.legacy) + '">Open the classic screen →</a>' : '' }) });
+    }, function () { root.innerHTML = C.state('error', 'Navigation unavailable — reload the page.'); });
+  });
+})();
+</script>
+</body>
+</html>

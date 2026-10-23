@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="/ui2/">
+<title>ELIZA — Form template</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/signal.css">
+</head>
+<body>
+<!-- ŞABLON (UI-03): sahte veri, API çağrısı YOK. <base href="/ui2/"> → bağlantılar ve betikler /ui2/ köklü. -->
+<div id="ui2-nav"></div>
+<main class="ui-main" id="ui-root"></main>
+
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE='tpl-form';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.ui2C, root = document.getElementById('ui-root');
+  var STATES = ['data', 'empty', 'loading', 'error'];
+  var state = new URLSearchParams(location.search).get('state');
+  if (STATES.indexOf(state) < 0) state = 'data';
+  function switcher(page) {
+    return C.links(STATES.map(function (s) { return { href: '_sablon/' + page + '?state=' + s, label: (s === state ? '● ' : '') + s }; })
+      .concat([{ href: '_sablon/index.html', label: 'All templates' }]));
+  }
+  function self(x) { return x; }
+  var inline = C.form({ id: 'demo-form', msg: 'demo-msg', fields: [
+    C.field('Name', C.input('name="name" required')),
+    C.field('Type', C.select('name="type"', C.options(['bank', 'cash', 'virtual'], self, self))),
+    C.field('Amount (missing)', C.input('name="amount"', { missing: true })),
+    C.field('Date', C.input('type="date" name="date" value="2099-01-01"')),
+    C.field('Default', C.check('name="is_default"', 'for this currency'))
+  ], actions: [C.button('Save', { kind: 'primary', submit: true }), C.button('Cancel', { kind: 'ghost' })] });
+  var stacked = C.form({ id: 'demo-stacked', layout: 'stacked', msg: 'demo-stacked-msg', fields: [
+    C.field('Email', C.input('type="email" placeholder="name@example.com"')),
+    C.field('Password', C.input('type="password"'))
+  ], actions: [C.button('Sign in', { kind: 'primary', submit: true, block: true }), C.note('At least 6 characters.')] });
+  var body;
+  if (state === 'loading') body = C.section({ title: 'New record', body: C.state('loading') });
+  else if (state === 'error') body = C.section({ title: 'New record', body: C.state('error', 'Could not load the form options (HTTP 500).') });
+  else if (state === 'empty') body = C.section({ title: 'New record', body: C.state('empty', 'No accounts yet — open one first.', { html: ' <a href="_sablon/list.html">Accounts</a>.' }) });
+  else body = C.stack([
+    C.section({ title: 'New record', eyebrow: 'inline form · missing field in red', body: inline }),
+    C.section({ title: 'Stacked form', eyebrow: 'sign-in pages', pad: true, body: stacked })
+  ]);
+  root.innerHTML = C.page({ title: 'Form template', sub: 'Form · fake data · state: ' + state, aside: switcher('form.html') }) + body;
+  if (state === 'data') C.say(document.getElementById('demo-msg'), 'Amount is required (example message — no toast).', 'error');
+  root.addEventListener('submit', function (e) { e.preventDefault(); C.say(document.getElementById('demo-msg'), 'Saved (template — nothing was sent).', 'ok'); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<base href="/ui2/">
+<title>ELIZA — Templates</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/signal.css">
+</head>
+<body>
+<!-- ŞABLON (UI-03): sahte veri, API çağrısı YOK. <base href="/ui2/"> → bağlantılar ve betikler /ui2/ köklü. -->
+<div id="ui2-nav"></div>
+<main class="ui-main" id="ui-root"></main>
+
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE='templates';</script>
+<script src="/leena-fetch.js"></script>
+<script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  var C = window.ui2C, root = document.getElementById('ui-root');
+  var T = [
+    { id: 'list', name: 'List', what: 'Table of records; a row opens its detail. Every cell carries its column label — at 640 px and below rows become cards (no horizontal scroll).' },
+    { id: 'detail', name: 'Detail', what: 'Header + status, summary cards that jump to the records below, key/value block and sub-lists.' },
+    { id: 'form', name: 'Form', what: 'Inline form (filters, entry) and stacked form (sign-in); missing fields in red; one message line, no toasts.' },
+    { id: 'summary', name: 'Summary cards', what: 'One stat-card component; with a link it drills down to the records behind the number (D2). Money in Finance is a currency + EUR pair (RAP-01).' }
+  ];
+  root.innerHTML = C.page({ title: 'Templates', sub: 'UI-03 · four templates · fake data · each in three states (empty / loading / error)' }) +
+    C.section({ title: 'Templates', eyebrow: 'components.js only — pages never write their own markup', body: C.list({
+      rows: T, href: function (t) { return '_sablon/' + t.id + '.html'; },
+      columns: [
+        { label: 'Template', cell: function (t) { return '<a href="_sablon/' + t.id + '.html">' + C.esc(t.name) + '</a>'; } },
+        { label: 'What it is', cell: function (t) { return C.esc(t.what); } },
+        { label: 'States', cell: function (t) {
+          return ['empty', 'loading', 'error'].map(function (s) { return '<a href="_sablon/' + t.id + '.html?state=' + s + '">' + s + '</a>'; }).join(' · '); } }
+      ] }) });
+})();
+</script>
+</body>
+</html>

@@ -5,29 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ELIZA — ui2</title>
 <script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('eliza-theme')||'vermillion');}catch(e){document.documentElement.setAttribute('data-theme','vermillion');}</script>
+<link rel="stylesheet" href="styles/tokens.css">
 <link rel="stylesheet" href="styles/signal.css">
-<link rel="stylesheet" href="styles/themes.css">
 </head>
 <body>
-<!-- Nav TEK KAYNAK shell.js'te. Bu sayfa yalnız mount noktası taşır, nav HTML TAŞIMAZ. -->
+<!-- Nav TEK KAYNAK nav.json (shell.js okur). Bu sayfa yalnız girişi yönlendirir. -->
 <div id="ui2-nav"></div>
+<main class="ui-main narrow" id="ui-root"></main>
 
-<main class="wrap" style="padding:48px 24px;max-width:720px;margin:0 auto">
-  <h1 style="margin:0 0 8px">ELIZA</h1>
-  <p style="margin:0 0 24px;color:var(--muted)">
-    Yeni arayüz iskeleti (ui2). Kabuk yerinde — ekran içeriği dilim dilim gelecek.
-  </p>
-  <p style="font-size:13px;color:var(--muted)">
-    Üstteki alanlardan birini seçin: <strong>Sales</strong>, <strong>Operations</strong>,
-    <strong>Finance</strong>.
-  </p>
-  <p style="font-size:13px"><a href="finance-contracts.html">Finance · Contracts list</a></p>
-  <p style="font-size:13px"><a href="login.html">User sign in</a> · <a href="whoami.html">Who is signed in</a></p>
-</main>
-
-<!-- Aktif domain'i sayfa bildirir; nav'ı shell.js kurar. -->
-<script>window.UI2_ACTIVE=null;</script>
+<script>window.UI2_ACTIVE=null; window.UI2_SUBACTIVE='home';</script>
 <script src="/leena-fetch.js"></script>
 <script src="shell.js"></script>
+<script src="components.js"></script>
+<script>
+(function () {
+  'use strict';
+  // ui2 girişi → Finance özet (UI-06 asgarisi). Hedef nav.json `landing`'den; kullanıcı Finance'ı
+  // göremiyorsa ilk görünen alana (ui2Landing, shell.js). Token yoksa shell.js /login.html'e gönderir.
+  var C = window.ui2C, root = document.getElementById('ui-root');
+  root.innerHTML = C.state('loading', 'Opening ELIZA…');
+  document.addEventListener('DOMContentLoaded', function () {
+    if (!localStorage.getItem('token')) return;
+    window.ui2LoadNav().then(function () { window.location.replace(window.ui2Landing()); },
+      function () { root.innerHTML = C.state('error', 'Navigation unavailable — reload the page.'); });
+  });
+})();
+</script>
 </body>
 </html>
