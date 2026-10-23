@@ -66,6 +66,7 @@ ANLATILMAZ — kaynakları aşağıdadır.
 - **K3 — SUER YAZMAZ, YAPIŞTIRIR.** Yazma/uygulama işi CC'ye veya ilgili
   chat'e gider. Suer'e yalnız kopyala-yapıştır blok ve terminal komutu
   gelir. "Şunu şöyle düzenle" denmez.
+- **K4 — SIR DEĞERİ EKRANA BASILMAZ; MASKELİ OKUMA ZORUNLU** (Sentez 23 Eki): env / `.env` / bağlantı dizesi / ayar dosyası okuyan HER komut değer yerine yalnız ad + uzunluk + ilk 2 karakter basar (sır içeren satırı tool çağrısına da yazma; regex'le değiştir); üçüncü ihlal = dur.
 
 ---
 
